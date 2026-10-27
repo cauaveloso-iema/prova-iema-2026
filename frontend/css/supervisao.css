@@ -1652,6 +1652,57 @@ body {
     }
 }
 
+/* Estilo dos blocos de tipos múltiplos */
+.bloco-tipo-especifico {
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    border-radius: 10px;
+    margin-bottom: 12px;
+    overflow: hidden;
+}
+.bloco-tipo-header {
+    background: linear-gradient(135deg, #0ea5e9, #0284c7);
+    color: white;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.bloco-tipo-body {
+    padding: 14px;
+    background: white;
+}
+.tipo-card.selected {
+    border-color: #0ea5e9 !important;
+    background: #e0f2fe !important;
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2);
+    transform: scale(1.02);
+}
+.tipo-card {
+    transition: all 0.2s ease;
+    cursor: pointer;
+    position: relative;
+}
+.tipo-card.selected::after {
+    content: '✓';
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    width: 18px;
+    height: 18px;
+    background: #0ea5e9;
+    color: white;
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
 /* ===================== COR LARANJA (CARDÁPIO) ===================== */
 .icon-box.bg-orange {
     background: linear-gradient(135deg, #f59e0b, #d97706);

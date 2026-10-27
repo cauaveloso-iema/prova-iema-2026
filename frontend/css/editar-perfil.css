@@ -231,24 +231,13 @@ textarea.form-control {
     min-height: 80px;
 }
 
-/* CORREÇÃO DO SELECT */
 select.form-control {
-    appearance: auto !important;
-    -webkit-appearance: auto !important;
-    -moz-appearance: auto !important;
-    background-color: #ffffff !important;
-    background-image: none !important;
-    padding: 0.75rem 1rem !important;
-    border: 2px solid var(--gray-200) !important;
-    border-radius: 12px !important;
-    color: #1f2937 !important;
-    cursor: pointer;
-    width: 100%;
-}
-
-select.form-control:focus {
-    border-color: var(--primary) !important;
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1) !important;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%236b7280' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    background-size: 12px;
+    padding-right: 2.5rem;
 }
 
 .form-row {

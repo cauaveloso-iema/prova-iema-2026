@@ -2,10 +2,7 @@
 // SUPERVISÃO - SISTEMA DE ATENDIMENTOS
 // Com Filtros, Remarcação, Assinatura via QR Code, Sino e Notificações
 // + MÚLTIPLOS PARTICIPANTES COM ASSINATURA
-// Fluxo de participantes:
-//   PROFESSOR: Perfil → Eixo → Professor do eixo
-//   ALUNO:     Perfil → Turma → Aluno da turma
-//   OUTROS:    Perfil → Usuário direto
+// + MÚLTIPLOS TIPOS DE TAREFA (UNIFICADOS)
 // ============================================
 
 let token = localStorage.getItem('auth_token');
@@ -37,9 +34,13 @@ let __concluidosPorPagina = 10;
 let __concluidosTotal = 0;
 let __concluidosDados = [];
 
-// Cache de perfis de participantes (TTL de 1 minuto)
 let __perfisCache = { dados: null, timestamp: 0 };
-const PERFIS_CACHE_TTL_MS = 60 * 1000; // 1 minuto
+const PERFIS_CACHE_TTL_MS = 60 * 1000;
+
+// ============================================
+// 🆕 MULTI-TIPO: ESTADO GLOBAL
+// ============================================
+let __tiposSelecionados = [];
 
 // ============================================
 // ESTADO DOS PARTICIPANTES DO ATENDIMENTO
@@ -61,7 +62,6 @@ const estadoSessaoAssinatura = {
     }
 };
 
-// Modo assinatura (quando abre via ?assinatura=UUID)
 let sessaoAssinaturaModo = null;
 let sessaoAssinaturaAtual = null;
 let telaCanvas = null;
@@ -118,22 +118,8 @@ function gerarUUID() {
 }
 
 // ============================================
-// 📄 UTILITÁRIO: GERADOR DE CSV PROFISSIONAL
+// 📄 GERADOR DE CSV PROFISSIONAL
 // ============================================
-/**
- * Gera CSV profissional com cabeçalho institucional, metadados, tabela e rodapé.
- *
- * @param {Object} opts
- * @param {string}   opts.titulo        - Título do relatório
- * @param {string}  [opts.subtitulo]    - Subtítulo
- * @param {string}  [opts.setor]        - Setor (default: "Supervisão")
- * @param {Array}    opts.colunas       - [{ label, key, format? }]
- * @param {Array}    opts.registros     - Dados
- * @param {Array<{label, valor}>} [opts.filtros] - Filtros aplicados
- * @param {string}   opts.nomeArquivo   - Nome do arquivo (sem extensão)
- * @param {string}  [opts.observacoes]  - Observações extras
- * @param {Object}  [opts.metricas]     - { label: valor } extras
- */
 function gerarBaixarCSV(opts) {
     const {
         titulo = 'Relatório',
@@ -189,19 +175,15 @@ function gerarBaixarCSV(opts) {
     });
 
     const L = [];
-
-    // 🏛️ Cabeçalho institucional
     L.push(linhaUnica('IEMA PLENO: SÃO LUÍS - CENTRO'));
     L.push(linhaUnica('Sistema de Atendimentos — EducaPleno'));
     L.push(linhaUnica(`Setor: ${setor}`));
     L.push(linhaUnica(''));
 
-    // 📋 Título
     L.push(linhaUnica(titulo.toUpperCase()));
     if (subtitulo) L.push(linhaUnica(subtitulo));
     L.push(linhaUnica(''));
 
-    // 📊 Metadados
     L.push(linhaUnica(`Data de geração: ${dataGeracao}`));
     L.push(linhaUnica(`Total de registros: ${registros.length}`));
 
@@ -226,7 +208,6 @@ function gerarBaixarCSV(opts) {
     L.push(linhaUnica('─'.repeat(40)));
     L.push(linhaUnica(''));
 
-    // 📋 Tabela
     L.push(linhaCabecalho);
     L.push(...linhasDados);
 
@@ -234,7 +215,6 @@ function gerarBaixarCSV(opts) {
     L.push(linhaUnica('─'.repeat(40)));
     L.push(linhaUnica(''));
 
-    // 🖋️ Rodapé
     L.push(linhaUnica('Documento gerado automaticamente pelo EducaPleno'));
     L.push(linhaUnica(`Setor responsável: ${setor}`));
     L.push(linhaUnica(`Gerado em: ${dataGeracao}`));
@@ -628,7 +608,7 @@ async function carregarFotoPerfil() {
 }
 
 // ============================================
-// 1. RELÓGIO EM TEMPO REAL
+// RELÓGIO E MENUS
 // ============================================
 function atualizarRelogio() {
     const elTempo = document.getElementById('relogioTempoReal');
@@ -652,9 +632,6 @@ function atualizarRelogio() {
 setInterval(atualizarRelogio, 1000);
 atualizarRelogio();
 
-// ============================================
-// 2. MENU DO USUÁRIO (Avatar)
-// ============================================
 function toggleUserMenu(event) {
     if (event) event.stopPropagation();
     const dropdown = document.getElementById('userDropdown');
@@ -683,9 +660,6 @@ document.addEventListener('click', function (event) {
     }
 });
 
-// ============================================
-// 4. BOAS-VINDAS E TURNO DINÂMICO
-// ============================================
 function atualizarBoasVindasETurno() {
     const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
     const nomeEl = document.getElementById('headerNomeUsuario');
@@ -718,34 +692,25 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(atualizarBoasVindasETurno, 60000);
 });
 
-// ============================================
-// 5. ABRIR MENU DE NOTIFICAÇÕES PELO AVATAR
-// ============================================
 function abrirMenuNotificacoesSeguro(event) {
     if (event) event.stopPropagation();
 
-    // 1. Fecha o menu do usuário
     const userDropdown = document.getElementById('userDropdown');
     const chevron = document.getElementById('userChevron');
     if (userDropdown) userDropdown.classList.remove('show');
     if (chevron) chevron.style.transform = 'rotate(0deg)';
 
-    // 2. Abre o dropdown do sino
     const notifDropdown = document.getElementById('notificacoesDropdown');
     if (notifDropdown) {
         notifDropdown.classList.add('show');
         notifDropdown.style.display = 'block';
     }
 
-    // 3. Carrega as notificações
     if (typeof carregarTudo === 'function') {
         carregarTudo();
     }
 }
 
-// ============================================
-// 6. FECHAR O SINO (BOTÃO X)
-// ============================================
 function fecharNotificacoes() {
     const dropdown = document.getElementById('notificacoesDropdown');
     if (dropdown) {
@@ -757,7 +722,6 @@ function fecharNotificacoes() {
     if (btn) btn.classList.remove('active');
 }
 
-// Impede que o clique no X se propague
 document.addEventListener('click', function (event) {
     const btnFecharSino = event.target.closest('.notificacoes-header button[onclick*="fecharNotificacoes"]');
     if (btnFecharSino) {
@@ -766,7 +730,6 @@ document.addEventListener('click', function (event) {
     }
 }, true);
 
-// Fecha o sino ao clicar fora dele
 document.addEventListener('click', function (event) {
     const notifDropdown = document.getElementById('notificacoesDropdown');
     const containerSino = document.getElementById('containerSinoOriginal');
@@ -778,17 +741,274 @@ document.addEventListener('click', function (event) {
     }
 });
 
-
 // ============================================================================
-// 🆕 SISTEMA DE PARTICIPANTES DO ATENDIMENTO (NOVO FLUXO)
-// Professor → Eixo → Professor do eixo
-// Aluno     → Turma → Aluno da turma
-// Outros    → Usuário direto
+// 🆕 MULTI-TIPO DE TAREFA — SELEÇÃO MÚLTIPLA UNIFICADA
 // ============================================================================
 
-/**
- * Toggle do checkbox "Mais pessoas participaram?"
- */
+function toggleTipoTarefa(tipo) {
+    if (!tipo) return;
+    
+    const idx = __tiposSelecionados.indexOf(tipo);
+    if (idx >= 0) {
+        __tiposSelecionados.splice(idx, 1);
+    } else {
+        __tiposSelecionados.push(tipo);
+    }
+    
+    document.querySelectorAll('.tipo-card').forEach(c => {
+        const t = c.getAttribute('data-tipo');
+        if (__tiposSelecionados.includes(t)) c.classList.add('selected');
+        else c.classList.remove('selected');
+    });
+    
+    tipoTarefaSelecionado = __tiposSelecionados[0] || null;
+    const hidden = safeGet('tipoTarefaSelecionado');
+    if (hidden) hidden.value = __tiposSelecionados.join(',');
+    
+    renderizarCamposEspecificosMultiplos();
+}
+
+// Compatibilidade com chamadas antigas (onclick="selecionarTipo('x')")
+function selecionarTipo(tipo) {
+    toggleTipoTarefa(tipo);
+}
+
+function renderizarCamposEspecificosMultiplos() {
+    const container = safeGet('camposEspecificos');
+    if (!container) return;
+    
+    if (__tiposSelecionados.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+    
+    const blocos = __tiposSelecionados.map(tipo => {
+        const label = TIPO_LABELS[tipo] || tipo;
+        let htmlTipo = '';
+        
+        switch (tipo) {
+            case 'advertencia_verbal':
+            case 'advertencia_escrita':
+                htmlTipo = `
+                    <div class="mb-3">
+                        <label class="form-label">Testemunhas (separadas por vírgula)</label>
+                        <input type="text" id="detalheTestemunhas_${tipo}" class="form-control" placeholder="Ex: Prof. João, Coord. Maria" data-detalhe-key="testemunhas">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Descrição detalhada do ocorrido</label>
+                        <textarea id="detalheDescricaoOcorrido_${tipo}" class="form-control" rows="2" placeholder="Descreva o que aconteceu..." data-detalhe-key="descricaoOcorrido"></textarea>
+                    </div>`;
+                break;
+            case 'atendimento_responsavel':
+                htmlTipo = `
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Nome do Responsável</label>
+                            <input type="text" id="detalheNomeResponsavel_${tipo}" class="form-control" data-detalhe-key="nomeResponsavel">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Parentesco</label>
+                            <input type="text" id="detalheParentesco_${tipo}" class="form-control" placeholder="Ex: Mãe, Pai, Avó" data-detalhe-key="parentescoResponsavel">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Telefone</label>
+                            <input type="text" id="detalheTelefone_${tipo}" class="form-control" data-detalhe-key="telefoneResponsavel">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Compareceu?</label>
+                            <select id="detalheCompareceu_${tipo}" class="form-select" data-detalhe-key="compareceu">
+                                <option value="true">Sim</option>
+                                <option value="false">Não</option>
+                            </select>
+                        </div>
+                    </div>`;
+                break;
+            case 'atendimento_professor':
+                htmlTipo = `
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Nome do Professor</label>
+                            <input type="text" id="detalheNomeProfessor_${tipo}" class="form-control" data-detalhe-key="nomeProfessor">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Disciplina</label>
+                            <input type="text" id="detalheDisciplina_${tipo}" class="form-control" data-detalhe-key="disciplina">
+                        </div>
+                    </div>`;
+                break;
+            case 'suspensao':
+                htmlTipo = `
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Data Início</label>
+                            <input type="date" id="detalheDataInicioSuspensao_${tipo}" class="form-control" data-detalhe-key="dataInicioSuspensao">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Data Fim</label>
+                            <input type="date" id="detalheDataFimSuspensao_${tipo}" class="form-control" data-detalhe-key="dataFimSuspensao">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Total de Dias</label>
+                            <input type="number" id="detalheDiasSuspensao_${tipo}" class="form-control" min="1" data-detalhe-key="diasSuspensao">
+                        </div>
+                    </div>`;
+                break;
+            case 'encaminhamento':
+                htmlTipo = `
+                    <div class="mb-3">
+                        <label class="form-label">Encaminhado para</label>
+                        <select id="detalheEncaminhadoPara_${tipo}" class="form-select" data-detalhe-key="encaminhadoPara">
+                            <option value="">Selecione...</option>
+                            <option value="Psicólogo">Psicólogo</option>
+                            <option value="Assistente Social">Assistente Social</option>
+                            <option value="Psiquiatra">Psiquiatra</option>
+                            <option value="Conselho Tutelar">Conselho Tutelar</option>
+                            <option value="Outro">Outro</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Motivo do Encaminhamento</label>
+                        <textarea id="detalheMotivoEncaminhamento_${tipo}" class="form-control" rows="2" data-detalhe-key="motivoEncaminhamento"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Agendado para</label>
+                        <input type="date" id="detalheAgendadoPara_${tipo}" class="form-control" data-detalhe-key="agendadoPara">
+                    </div>`;
+                break;
+            case 'outros':
+                htmlTipo = `
+                    <div class="mb-3">
+                        <label class="form-label">Especifique o Tipo de Tarefa <span class="text-danger">*</span></label>
+                        <input type="text" id="detalheTipoTarefaOutros_${tipo}" class="form-control" placeholder="Descreva o tipo..." data-detalhe-key="tipoTarefaOutros">
+                    </div>`;
+                break;
+            default:
+                htmlTipo = '';
+        }
+        
+        if (!htmlTipo) return '';
+        
+        return `
+            <div class="bloco-tipo-especifico" data-tipo-bloco="${tipo}">
+                <div class="bloco-tipo-header">
+                    <i class="fas fa-tag"></i> ${escapeHTML(label)}
+                </div>
+                <div class="bloco-tipo-body">
+                    ${htmlTipo}
+                </div>
+            </div>
+        `;
+    }).filter(Boolean);
+    
+    const htmlExtras = `
+        <div class="mt-3">
+            <div class="mb-3">
+                <label class="form-label">Providências Tomadas</label>
+                <textarea id="detalheProvidencias" class="form-control" rows="2" placeholder="O que já foi feito..."></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Próximos Passos</label>
+                <textarea id="detalheProximosPassos" class="form-control" rows="2" placeholder="O que será feito..."></textarea>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = blocos.join('') + htmlExtras;
+}
+
+function coletarDetalhes() {
+    const detalhes = {};
+    
+    document.querySelectorAll('[data-detalhe-key]').forEach(el => {
+        const key = el.getAttribute('data-detalhe-key');
+        const val = el.value;
+        
+        if (!val) return;
+        
+        if (key === 'compareceu') {
+            detalhes.compareceu = val === 'true';
+        } else if (key === 'diasSuspensao') {
+            const n = parseInt(val);
+            if (!isNaN(n) && n > 0) detalhes.diasSuspensao = n;
+        } else if (['dataInicioSuspensao', 'dataFimSuspensao', 'agendadoPara'].includes(key)) {
+            detalhes[key] = new Date(val);
+        } else if (key === 'testemunhas') {
+            detalhes.testemunhas = val.split(',').map(t => t.trim()).filter(t => t.length > 0);
+        } else {
+            detalhes[key] = val.trim();
+        }
+    });
+    
+    const prov = safeGet('detalheProvidencias');
+    if (prov && prov.value.trim()) detalhes.providenciasTomadas = prov.value.trim();
+    
+    const prox = safeGet('detalheProximosPassos');
+    if (prox && prox.value.trim()) detalhes.proximosPassos = prox.value.trim();
+    
+    return detalhes;
+}
+
+function preencherCamposEspecificosEdicao(tipos, detalhes) {
+    // Limpa antes
+    __tiposSelecionados = Array.isArray(tipos) ? [...tipos] : [];
+    tipoTarefaSelecionado = __tiposSelecionados[0] || null;
+    
+    // Marca visualmente
+    document.querySelectorAll('#editTiposGrid .tipo-card').forEach(c => {
+        const t = c.getAttribute('data-tipo');
+        if (__tiposSelecionados.includes(t)) c.classList.add('selected');
+        else c.classList.remove('selected');
+    });
+    
+    // Renderiza blocos
+    renderizarCamposEspecificosEdicao();
+    
+    // Preenche valores existentes (executa imediatamente — o DOM já existe)
+    if (!detalhes) return;
+    
+    // Preenche TODOS os elementos com o mesmo data-detalhe-key
+    // (garante que "advertencia_verbal" E "advertencia_escrita" recebam os dados)
+    const preencherTodos = (key, valorFormatado) => {
+        const els = document.querySelectorAll(`#editCamposEspecificos [data-detalhe-key="${key}"]`);
+        els.forEach(el => { el.value = valorFormatado; });
+    };
+    
+    // Mapa de tratamento
+    Object.entries(detalhes).forEach(([detKey, valor]) => {
+        if (valor === undefined || valor === null || valor === '') return;
+        if (detKey === 'tiposTarefaAdicionais') return;
+        
+        let valorFormatado = valor;
+        
+        if (Array.isArray(valor)) {
+            valorFormatado = valor.join(', ');
+        } else if (typeof valor === 'boolean') {
+            valorFormatado = valor ? 'true' : 'false';
+        } else if (['dataInicioSuspensao', 'dataFimSuspensao', 'agendadoPara'].includes(detKey)) {
+            try {
+                const d = new Date(valor);
+                if (!isNaN(d.getTime())) valorFormatado = d.toISOString().split('T')[0];
+                else return;
+            } catch(e){ return; }
+        }
+        
+        preencherTodos(detKey, valorFormatado);
+    });
+    
+    // Providências e próximos passos
+    const prov = safeGet('editDetalheProvidencias');
+    if (prov && detalhes.providenciasTomadas) prov.value = detalhes.providenciasTomadas;
+    
+    const prox = safeGet('editDetalheProximosPassos');
+    if (prox && detalhes.proximosPassos) prox.value = detalhes.proximosPassos;
+}
+
+// ============================================================================
+// PARTICIPANTES — CARREGAMENTO (CORRIGIDO: SEMPRE MOSTRA BOTÃO ADICIONAR)
+// ============================================================================
+
 function toggleMaisParticipantes() {
     const check = safeGet('supervisaoMaisParticipantes');
     const container = safeGet('containerParticipantes');
@@ -804,12 +1024,6 @@ function toggleMaisParticipantes() {
     }
 }
 
-/**
- * Carrega perfis disponíveis (sem admins).
- * 
- * Usa cache em memória com TTL de 1 minuto.
- * Para forçar refresh, passe `forceRefresh = true` ou chame `recarregarPerfisParticipantes()`.
- */
 async function carregarPerfisParticipantes(forceRefresh = false) {
     const select = safeGet('participantePerfil');
     if (!select) return;
@@ -819,7 +1033,6 @@ async function carregarPerfisParticipantes(forceRefresh = false) {
                         __perfisCache.dados && 
                         (agora - __perfisCache.timestamp < PERFIS_CACHE_TTL_MS);
     
-    // ─── Usa cache se ainda válido ───
     if (cacheValido) {
         const restante = Math.round((PERFIS_CACHE_TTL_MS - (agora - __perfisCache.timestamp)) / 1000);
         console.log(`📦 [PERFIS] Usando cache (expira em ${restante}s)`);
@@ -828,7 +1041,6 @@ async function carregarPerfisParticipantes(forceRefresh = false) {
         return;
     }
     
-    // ─── Busca do servidor ───
     console.log('🌐 [PERFIS] Buscando do servidor...');
     select.innerHTML = '<option value="">Carregando perfis...</option>';
     select.disabled = true;
@@ -854,9 +1066,6 @@ async function carregarPerfisParticipantes(forceRefresh = false) {
     renderizarSelectPerfis();
 }
 
-/**
- * Renderiza os perfis no select (separado para reuso).
- */
 function renderizarSelectPerfis() {
     const select = safeGet('participantePerfil');
     if (!select) return;
@@ -868,10 +1077,6 @@ function renderizarSelectPerfis() {
     select.disabled = false;
 }
 
-/**
- * Força recarregamento dos perfis (ignora cache).
- * Usado pelo botão de refresh no HTML.
- */
 async function recarregarPerfisParticipantes(event) {
     const btn = event?.target?.closest('button') 
              || document.querySelector('button[onclick*="recarregarPerfisParticipantes"]');
@@ -898,12 +1103,9 @@ async function recarregarPerfisParticipantes(event) {
     }
 }
 
-/**
- * Ao mudar o PERFIL: decide o fluxo.
- * - Professor → mostra select de EIXO
- * - Aluno     → mostra select de TURMA
- * - Outros    → carrega direto os usuários do perfil
- */
+// ============================================================================
+// 🔥 CORRIGIDO: SEMPRE MOSTRA O BOTÃO ADICIONAR PARA TODOS OS PERFIS
+// ============================================================================
 async function carregarUsuariosPorPerfil() {
     const perfil = safeGet('participantePerfil')?.value;
     const selectUsuario = safeGet('participanteUsuario');
@@ -913,16 +1115,15 @@ async function carregarUsuariosPorPerfil() {
     
     if (!selectUsuario) return;
     
-    // Reset
     selectUsuario.innerHTML = '<option value="">Selecione o perfil primeiro...</option>';
     selectUsuario.disabled = true;
     if (rowFiltro) rowFiltro.style.display = 'none';
-    if (selectFiltro) selectFiltro.innerHTML = '<option value="">Selecione...</option>';
+    if (selectFiltro) {
+        selectFiltro.innerHTML = '<option value="">Selecione...</option>';
+        selectFiltro.onchange = null;
+    }
     
     if (!perfil) return;
-    
-    const perfilInfo = __perfisDisponiveis.find(p => p.valor === perfil);
-    const temFiltro = perfilInfo?.temFiltro;
     
     // ==========================================
     // PROFESSOR → EIXO → PROFESSOR DO EIXO
@@ -951,13 +1152,12 @@ async function carregarUsuariosPorPerfil() {
             selectFiltro.innerHTML = '<option value="">Erro ao carregar</option>';
         }
         
-        // Atualiza onchange do filtro para buscar professores do eixo
         selectFiltro.onchange = () => carregarProfessoresDoEixo();
         return;
     }
     
     // ==========================================
-    // ALUNO → TURMA → ALUNOS DA TURMA
+    // ALUNO → TURMA → ALUNO DA TURMA
     // ==========================================
     if (perfil === 'aluno') {
         if (labelFiltro) labelFiltro.textContent = 'Turma';
@@ -983,15 +1183,22 @@ async function carregarUsuariosPorPerfil() {
             selectFiltro.innerHTML = '<option value="">Erro ao carregar</option>';
         }
         
-        // Atualiza onchange do filtro para buscar alunos da turma
         selectFiltro.onchange = () => carregarAlunosDaTurma();
         return;
     }
     
     // ==========================================
-    // OUTROS PERFIS → USUÁRIO DIRETO
+    // 🔥 OUTROS PERFIS → MOSTRA O BOTÃO ADICIONAR DIRETO
     // ==========================================
-    selectUsuario.innerHTML = '<option value="">Carregando...</option>';
+    if (labelFiltro) labelFiltro.textContent = 'Usuário';
+    if (selectFiltro) {
+        selectFiltro.innerHTML = '<option value="">—</option>';
+        selectFiltro.disabled = true;
+    }
+    // 🔥 SEMPRE mostra a row (com botão Adicionar) — mesmo sem filtro
+    if (rowFiltro) rowFiltro.style.display = 'flex';
+    
+    selectUsuario.innerHTML = '<option value="">Carregando usuários...</option>';
     
     try {
         const response = await fetch(`/api/supervisao/usuarios-por-perfil?perfil=${encodeURIComponent(perfil)}`, {
@@ -1025,9 +1232,6 @@ async function carregarUsuariosPorPerfil() {
     }
 }
 
-/**
- * Busca PROFESSORES do EIXO selecionado.
- */
 async function carregarProfessoresDoEixo() {
     const eixo = safeGet('participanteFiltro')?.value;
     const selectUsuario = safeGet('participanteUsuario');
@@ -1074,9 +1278,6 @@ async function carregarProfessoresDoEixo() {
     }
 }
 
-/**
- * Busca ALUNOS da TURMA selecionada.
- */
 async function carregarAlunosDaTurma() {
     const turma = safeGet('participanteFiltro')?.value;
     const selectUsuario = safeGet('participanteUsuario');
@@ -1126,17 +1327,8 @@ async function carregarAlunosDaTurma() {
     }
 }
 
-/**
- * Remove o onchange antigo (mantido para compatibilidade).
- * Não faz nada agora, pois o onchange é setado dentro de carregarUsuariosPorPerfil.
- */
-function onParticipanteUsuarioChange() {
-    // Não faz mais nada - o select de filtro já foi configurado
-}
+function onParticipanteUsuarioChange() { /* no-op */ }
 
-/**
- * Adiciona um participante ao atendimento.
- */
 async function adicionarParticipante() {
     const perfil = safeGet('participantePerfil')?.value;
     const usuarioSelect = safeGet('participanteUsuario');
@@ -1159,13 +1351,11 @@ async function adicionarParticipante() {
         return;
     }
     
-    // Verifica duplicidade
     if (__participantesAtendimento.some(p => p.usuarioId === usuarioId)) {
         notificar('⚠️ Este usuário já foi adicionado!', 'warning');
         return;
     }
     
-    // Valida filtro obrigatório para aluno/professor
     if ((perfil === 'aluno' || perfil === 'professor') && !filtroValor) {
         notificar(`Selecione ${perfil === 'aluno' ? 'a turma' : 'o eixo'}`, 'error');
         return;
@@ -1174,7 +1364,6 @@ async function adicionarParticipante() {
     const participanteId = `part_${++__contadorParticipanteId}_${Date.now()}`;
     const tipoLabel = __perfisDisponiveis.find(p => p.valor === perfil)?.label || perfil;
     
-    // Define turma/eixo com base no perfil
     let turmaFinal = usuarioTurma;
     let eixoFinal = usuarioEixo;
     
@@ -1209,23 +1398,21 @@ async function adicionarParticipante() {
     };
     
     __participantesAtendimento.push(novoParticipante);
-    
     renderizarParticipantesAdicionados();
     
-    // Reset do formulário
     safeGet('participantePerfil').value = '';
     safeGet('participanteUsuario').innerHTML = '<option value="">Selecione o perfil primeiro...</option>';
     safeGet('participanteUsuario').disabled = true;
-    safeGet('rowParticipanteFiltro').style.display = 'none';
-    safeGet('participanteFiltro').innerHTML = '<option value="">Selecione...</option>';
-    safeGet('participanteFiltro').onchange = null;
+    if (safeGet('rowParticipanteFiltro')) safeGet('rowParticipanteFiltro').style.display = 'none';
+    if (safeGet('participanteFiltro')) {
+        safeGet('participanteFiltro').innerHTML = '<option value="">Selecione...</option>';
+        safeGet('participanteFiltro').onchange = null;
+        safeGet('participanteFiltro').disabled = false;
+    }
     
     notificar(`✅ ${usuarioNome} adicionado como participante!`, 'success');
 }
 
-/**
- * Remove um participante.
- */
 async function removerParticipante(participanteId) {
     const index = __participantesAtendimento.findIndex(p => p.id === participanteId);
     if (index === -1) return;
@@ -1246,15 +1433,10 @@ async function removerParticipante(participanteId) {
     }
     
     __participantesAtendimento.splice(index, 1);
-    
     renderizarParticipantesAdicionados();
-    
     notificar(`Participante ${participante.usuarioNome} removido.`, 'info');
 }
 
-/**
- * Limpa todos os participantes.
- */
 async function limparTodosParticipantes() {
     for (const p of __participantesAtendimento) {
         if (p.sessaoId) {
@@ -1273,9 +1455,6 @@ async function limparTodosParticipantes() {
     renderizarParticipantesAdicionados();
 }
 
-/**
- * Renderiza a lista de participantes adicionados.
- */
 function renderizarParticipantesAdicionados() {
     const container = safeGet('listaParticipantesAdicionados');
     if (!container) return;
@@ -1355,9 +1534,6 @@ function renderizarParticipantesAdicionados() {
     }).join('');
 }
 
-/**
- * Toggle da assinatura de um participante.
- */
 async function toggleAssinaturaParticipante(participanteId, precisa) {
     const participante = __participantesAtendimento.find(p => p.id === participanteId);
     if (!participante) return;
@@ -1449,9 +1625,6 @@ async function toggleAssinaturaParticipante(participanteId, precisa) {
     }
 }
 
-/**
- * Abre o modal de assinatura do participante.
- */
 function abrirModalAssinaturaParticipante(participanteId, urlAssinatura) {
     const participante = __participantesAtendimento.find(p => p.id === participanteId);
     if (!participante) return;
@@ -1592,7 +1765,6 @@ async function cancelarAssinaturaParticipante(participanteId) {
     if (check) check.checked = false;
     
     renderizarParticipantesAdicionados();
-    
     notificar('Sessão de assinatura cancelada', 'info');
 }
 
@@ -1641,9 +1813,6 @@ function iniciarPollingAssinaturaParticipante(participanteId, sessaoId) {
     }, 3000);
 }
 
-/**
- * Limpa todos os participantes e cancela sessões.
- */
 function limparParticipantesCompleto() {
     for (const p of __participantesAtendimento) {
         if (p.sessaoId) {
@@ -1680,6 +1849,7 @@ function limparParticipantesCompleto() {
     if (selectFiltro) {
         selectFiltro.innerHTML = '<option value="">Selecione...</option>';
         selectFiltro.onchange = null;
+        selectFiltro.disabled = false;
     }
     
     renderizarParticipantesAdicionados();
@@ -1747,7 +1917,10 @@ function aplicarFiltrosAndamento() {
         );
     }
     if (f.turma) filtrados = filtrados.filter(a => a.alunoTurma === f.turma);
-    if (f.tipo) filtrados = filtrados.filter(a => a.tipoTarefa === f.tipo);
+    if (f.tipo) filtrados = filtrados.filter(a => {
+        const tipos = a.tiposTarefa || [a.tipoTarefa];
+        return tipos.includes(f.tipo);
+    });
     if (f.prioridade) filtrados = filtrados.filter(a => a.prioridade === f.prioridade);
     if (f.gravidade) filtrados = filtrados.filter(a => a.gravidade === f.gravidade);
     if (f.remarcado === 'sim') filtrados = filtrados.filter(a => a.temRemarcacaoPendente);
@@ -1841,9 +2014,6 @@ function popularFiltroTurmasAndamento() {
     if (valorAtual && turmas.includes(valorAtual)) select.value = valorAtual;
 }
 
-// ============================================
-// FILTROS DOS CONCLUÍDOS
-// ============================================
 function configurarFiltrosConcluidos() {
     ['filtroConcluidosBusca', 'filtroConcluidosTipo', 'filtroConcluidosResultado'].forEach(id => {
         const el = safeGet(id);
@@ -1867,9 +2037,6 @@ function limparFiltrosConcluidos() {
     carregarAtendimentosConcluidos(1);
 }
 
-// ============================================
-// LEMBRETES / REMARCAÇÕES
-// ============================================
 async function carregarLembretes() {
     try {
         const response = await fetch('/api/supervisao/remarcacoes/pendentes', {
@@ -1951,7 +2118,6 @@ async function verAtendimento(atendimentoId) {
             });
         }
         
-        // Assinatura do responsável
         let assinaturaHTML = '';
         if (!estaMascarado && a.entrada?.temAssinatura && a.entrada?.assinaturaBase64) {
             assinaturaHTML = `
@@ -1961,7 +2127,6 @@ async function verAtendimento(atendimentoId) {
                 </div>`;
         }
         
-        // Participantes
         let participantesHTML = '';
         if (!estaMascarado && a.entrada?.participantes && a.entrada.participantes.length > 0) {
             participantesHTML = '<div class="section-title">👥 Participantes do Atendimento</div>';
@@ -2170,9 +2335,8 @@ function fecharVerAtendimento() {
     if (modal) modal.hide();
     setTimeout(() => { const el = safeGet('modalVerAtendimento'); if (el) el.remove(); }, 300);
 }
-
 // ============================================
-// EDITAR ATENDIMENTO (COM PARTICIPANTES)
+// EDITAR ATENDIMENTO — COMPLETO COM TODOS OS CAMPOS
 // ============================================
 async function abrirEditarAtendimento(atendimentoId) {
     if (!atendimentoId) return;
@@ -2190,7 +2354,12 @@ async function abrirEditarAtendimento(atendimentoId) {
         
         const a = data.atendimento;
         
-        // Carrega participantes existentes
+        if (a._mascarado) {
+            mostrarNotificacaoInterna('🔒 Acesso restrito\n\nEste atendimento foi criado por outro profissional e não pode ser editado por você.', 'warning');
+            return;
+        }
+        
+        // Preenche participantes existentes
         __participantesAtendimento = (a.entrada?.participantes || []).map((p, idx) => ({
             id: `part_${idx}_${Date.now()}`,
             _id: p.id,
@@ -2210,12 +2379,24 @@ async function abrirEditarAtendimento(atendimentoId) {
             monitoramentoInterval: null
         }));
         
+        // Prepara lista de tipos
+        const tiposDoAtendimento = a.tiposTarefa || [a.tipoTarefa];
+        
         const oldModal = safeGet('modalEditarAtendimento');
         if (oldModal) oldModal.remove();
         
-        const tiposOptions = Object.entries(TIPO_LABELS).map(([key, label]) => 
-            `<option value="${key}" ${a.tipoTarefa === key ? 'selected' : ''}>${label}</option>`
-        ).join('');
+        // Gera cards dos tipos (multi-seleção)
+        const tiposCards = Object.entries(TIPO_LABELS).map(([key, label]) => {
+            const selecionado = tiposDoAtendimento.includes(key);
+            return `
+                <div class="tipo-card ${selecionado ? 'selected' : ''}" 
+                     data-tipo="${key}" 
+                     onclick="toggleTipoTarefaEdicao('${key}')">
+                    <i class="fas ${getIconePorTipo(key)}"></i>
+                    <span>${label}</span>
+                </div>
+            `;
+        }).join('');
         
         const modalHtml = `
             <div class="modal fade" id="modalEditarAtendimento" tabindex="-1">
@@ -2242,10 +2423,14 @@ async function abrirEditarAtendimento(atendimentoId) {
                             </div>
                             
                             <div class="mb-3">
-                                <label class="form-label">Tipo de Tarefa <span class="text-danger">*</span></label>
-                                <select id="editTipoTarefa" class="form-select">
-                                    ${tiposOptions}
-                                </select>
+                                <label class="form-label">Tipos de Tarefa <span class="text-danger">*</span></label>
+                                <small class="text-muted d-block mb-2">
+                                    <i class="fas fa-info-circle"></i> Você pode marcar mais de um tipo. Os campos específicos de cada tipo aparecerão abaixo.
+                                </small>
+                                <div class="tipos-tarefa-grid" id="editTiposGrid">
+                                    ${tiposCards}
+                                </div>
+                                <input type="hidden" id="editTiposSelecionados" value="${tiposDoAtendimento.join(',')}">
                             </div>
                             
                             <div class="mb-3">
@@ -2279,7 +2464,8 @@ async function abrirEditarAtendimento(atendimentoId) {
                                 <textarea id="editObservacoes" class="form-control" rows="2">${escapeHTML(a.entrada?.observacoes || '')}</textarea>
                             </div>
                             
-                            <!-- SEÇÃO DE PARTICIPANTES -->
+                            <div id="editCamposEspecificos"></div>
+                            
                             <div class="checkbox-assinatura-box mb-3" style="background: #f0fdf4; border-color: #86efac;">
                                 <div class="form-check d-flex align-items-start">
                                     <input class="form-check-input" 
@@ -2353,9 +2539,19 @@ async function abrirEditarAtendimento(atendimentoId) {
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         new bootstrap.Modal(safeGet('modalEditarAtendimento')).show();
         
-        // Renderiza participantes existentes
+        // Inicializa estado dos tipos de edição
+        __tiposSelecionados = [...tiposDoAtendimento];
+        
+        // Renderiza + preenche campos específicos (síncrono, sem setTimeout interno)
+        preencherCamposEspecificosEdicao(tiposDoAtendimento, a.detalhes || {});
+        
+        // Renderiza participantes
         renderizarEditParticipantes();
         carregarPerfisEditParticipante();
+        
+        // 🔍 DEBUG
+        console.log('[editar] detalhes recebidos:', a.detalhes);
+        console.log('[editar] tipos:', tiposDoAtendimento);
         
     } catch (error) {
         console.error('Erro:', error);
@@ -2363,8 +2559,274 @@ async function abrirEditarAtendimento(atendimentoId) {
     }
 }
 
+function getIconePorTipo(tipo) {
+    const icones = {
+        'advertencia_verbal': 'fa-comment-dots',
+        'advertencia_escrita': 'fa-file-signature',
+        'atendimento_aluno': 'fa-user-graduate',
+        'atendimento_responsavel': 'fa-users',
+        'atendimento_professor': 'fa-chalkboard-teacher',
+        'suspensao': 'fa-ban',
+        'encaminhamento': 'fa-share',
+        'outros': 'fa-ellipsis-h'
+    };
+    return icones[tipo] || 'fa-tag';
+}
+
+function toggleTipoTarefaEdicao(tipo) {
+    if (!tipo) return;
+    
+    // 1) Salva os valores atuais ANTES de recriar o DOM
+    const valoresAtuais = coletarValoresAtuaisEdicao();
+    
+    const idx = __tiposSelecionados.indexOf(tipo);
+    if (idx >= 0) {
+        __tiposSelecionados.splice(idx, 1);
+    } else {
+        __tiposSelecionados.push(tipo);
+    }
+    
+    document.querySelectorAll('#editTiposGrid .tipo-card').forEach(c => {
+        const t = c.getAttribute('data-tipo');
+        if (__tiposSelecionados.includes(t)) c.classList.add('selected');
+        else c.classList.remove('selected');
+    });
+    
+    const hidden = safeGet('editTiposSelecionados');
+    if (hidden) hidden.value = __tiposSelecionados.join(',');
+    
+    // 2) Recria o DOM
+    renderizarCamposEspecificosEdicao();
+    
+    // 3) Restaura os valores que o usuário já havia digitado
+    restaurarValoresEdicao(valoresAtuais);
+}
+
+// Helper: coleta TODOS os valores atuais digitados na edição
+function coletarValoresAtuaisEdicao() {
+    const valores = {};
+    document.querySelectorAll('#editCamposEspecificos [data-detalhe-key]').forEach(el => {
+        const key = el.getAttribute('data-detalhe-key');
+        if (valores[key] !== undefined && valores[key] !== '') return;
+        if (el.value) valores[key] = el.value;
+    });
+    
+    const prov = safeGet('editDetalheProvidencias');
+    if (prov && prov.value) valores.__providencias = prov.value;
+    
+    const prox = safeGet('editDetalheProximosPassos');
+    if (prox && prox.value) valores.__proximosPassos = prox.value;
+    
+    return valores;
+}
+
+// Helper: restaura os valores salvos no novo DOM
+function restaurarValoresEdicao(valores) {
+    if (!valores || Object.keys(valores).length === 0) return;
+    
+    Object.entries(valores).forEach(([key, val]) => {
+        if (key === '__providencias') {
+            const el = safeGet('editDetalheProvidencias');
+            if (el) el.value = val;
+            return;
+        }
+        if (key === '__proximosPassos') {
+            const el = safeGet('editDetalheProximosPassos');
+            if (el) el.value = val;
+            return;
+        }
+        
+        document.querySelectorAll(`#editCamposEspecificos [data-detalhe-key="${key}"]`).forEach(el => {
+            el.value = val;
+        });
+    });
+}
+
+function renderizarCamposEspecificosEdicao() {
+    const container = safeGet('editCamposEspecificos');
+    if (!container) return;
+    
+    if (__tiposSelecionados.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+    
+    const blocos = __tiposSelecionados.map(tipo => {
+        const label = TIPO_LABELS[tipo] || tipo;
+        let htmlTipo = '';
+        
+        switch (tipo) {
+            case 'advertencia_verbal':
+            case 'advertencia_escrita':
+                htmlTipo = `
+                    <div class="mb-3">
+                        <label class="form-label">Testemunhas (separadas por vírgula)</label>
+                        <input type="text" id="editDetalheTestemunhas_${tipo}" class="form-control" data-detalhe-key="testemunhas">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Descrição detalhada do ocorrido</label>
+                        <textarea id="editDetalheDescricaoOcorrido_${tipo}" class="form-control" rows="2" data-detalhe-key="descricaoOcorrido"></textarea>
+                    </div>`;
+                break;
+            case 'atendimento_responsavel':
+                htmlTipo = `
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Nome do Responsável</label>
+                            <input type="text" id="editDetalheNomeResponsavel_${tipo}" class="form-control" data-detalhe-key="nomeResponsavel">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Parentesco</label>
+                            <input type="text" id="editDetalheParentesco_${tipo}" class="form-control" data-detalhe-key="parentescoResponsavel">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Telefone</label>
+                            <input type="text" id="editDetalheTelefone_${tipo}" class="form-control" data-detalhe-key="telefoneResponsavel">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Compareceu?</label>
+                            <select id="editDetalheCompareceu_${tipo}" class="form-select" data-detalhe-key="compareceu">
+                                <option value="true">Sim</option>
+                                <option value="false">Não</option>
+                            </select>
+                        </div>
+                    </div>`;
+                break;
+            case 'atendimento_professor':
+                htmlTipo = `
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Nome do Professor</label>
+                            <input type="text" id="editDetalheNomeProfessor_${tipo}" class="form-control" data-detalhe-key="nomeProfessor">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Disciplina</label>
+                            <input type="text" id="editDetalheDisciplina_${tipo}" class="form-control" data-detalhe-key="disciplina">
+                        </div>
+                    </div>`;
+                break;
+            case 'suspensao':
+                htmlTipo = `
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Data Início</label>
+                            <input type="date" id="editDetalheDataInicioSuspensao_${tipo}" class="form-control" data-detalhe-key="dataInicioSuspensao">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Data Fim</label>
+                            <input type="date" id="editDetalheDataFimSuspensao_${tipo}" class="form-control" data-detalhe-key="dataFimSuspensao">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Total de Dias</label>
+                            <input type="number" id="editDetalheDiasSuspensao_${tipo}" class="form-control" min="1" data-detalhe-key="diasSuspensao">
+                        </div>
+                    </div>`;
+                break;
+            case 'encaminhamento':
+                htmlTipo = `
+                    <div class="mb-3">
+                        <label class="form-label">Encaminhado para</label>
+                        <select id="editDetalheEncaminhadoPara_${tipo}" class="form-select" data-detalhe-key="encaminhadoPara">
+                            <option value="">Selecione...</option>
+                            <option value="Psicólogo">Psicólogo</option>
+                            <option value="Assistente Social">Assistente Social</option>
+                            <option value="Psiquiatra">Psiquiatra</option>
+                            <option value="Conselho Tutelar">Conselho Tutelar</option>
+                            <option value="Outro">Outro</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Motivo do Encaminhamento</label>
+                        <textarea id="editDetalheMotivoEncaminhamento_${tipo}" class="form-control" rows="2" data-detalhe-key="motivoEncaminhamento"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Agendado para</label>
+                        <input type="date" id="editDetalheAgendadoPara_${tipo}" class="form-control" data-detalhe-key="agendadoPara">
+                    </div>`;
+                break;
+            case 'outros':
+                htmlTipo = `
+                    <div class="mb-3">
+                        <label class="form-label">Especifique o Tipo de Tarefa</label>
+                        <input type="text" id="editDetalheTipoTarefaOutros_${tipo}" class="form-control" data-detalhe-key="tipoTarefaOutros">
+                    </div>`;
+                break;
+            default:
+                htmlTipo = '';
+        }
+        
+        if (!htmlTipo) return '';
+        
+        return `
+            <div class="bloco-tipo-especifico" data-tipo-bloco="${tipo}">
+                <div class="bloco-tipo-header">
+                    <i class="fas fa-tag"></i> ${escapeHTML(label)}
+                </div>
+                <div class="bloco-tipo-body">
+                    ${htmlTipo}
+                </div>
+            </div>
+        `;
+    }).filter(Boolean);
+    
+    const htmlExtras = `
+        <div class="mt-3">
+            <div class="mb-3">
+                <label class="form-label">Providências Tomadas</label>
+                <textarea id="editDetalheProvidencias" class="form-control" rows="2"></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Próximos Passos</label>
+                <textarea id="editDetalheProximosPassos" class="form-control" rows="2"></textarea>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = blocos.join('') + htmlExtras;
+}
+
+function coletarDetalhesEdicao() {
+    const detalhes = {};
+    
+    document.querySelectorAll('#editCamposEspecificos [data-detalhe-key]').forEach(el => {
+        const key = el.getAttribute('data-detalhe-key');
+        const val = el.value;
+        
+        // Campos de tipo "compareceu" (select true/false) sempre são válidos
+        if (key === 'compareceu') {
+            if (val === 'true' || val === 'false') {
+                detalhes.compareceu = val === 'true';
+            }
+            return;
+        }
+        
+        if (!val || !String(val).trim()) return;
+        
+        if (key === 'diasSuspensao') {
+            const n = parseInt(val);
+            if (!isNaN(n) && n > 0) detalhes.diasSuspensao = n;
+        } else if (['dataInicioSuspensao', 'dataFimSuspensao', 'agendadoPara'].includes(key)) {
+            detalhes[key] = new Date(val);
+        } else if (key === 'testemunhas') {
+            detalhes.testemunhas = val.split(',').map(t => t.trim()).filter(t => t.length > 0);
+        } else {
+            detalhes[key] = val.trim();
+        }
+    });
+    
+    const prov = safeGet('editDetalheProvidencias');
+    if (prov && prov.value.trim()) detalhes.providenciasTomadas = prov.value.trim();
+    
+    const prox = safeGet('editDetalheProximosPassos');
+    if (prox && prox.value.trim()) detalhes.proximosPassos = prox.value.trim();
+    
+    return detalhes;
+}
+
 // ============================================
-// FUNÇÕES DO EDITOR DE PARTICIPANTES (mesmo fluxo)
+// EDIÇÃO DE PARTICIPANTES
 // ============================================
 function toggleEditMaisParticipantes() {
     const check = safeGet('editMaisParticipantes');
@@ -2376,9 +2838,24 @@ function toggleEditMaisParticipantes() {
         carregarPerfisEditParticipante();
     } else {
         container.style.display = 'none';
-        limparTodosParticipantes();
+        limparTodosParticipantesEdit();
         renderizarEditParticipantes();
     }
+}
+
+function limparTodosParticipantesEdit() {
+    for (const p of __participantesAtendimento) {
+        if (p.sessaoId) {
+            fetch(`/api/sessoes-assinatura/${p.sessaoId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).catch(e => console.warn(e));
+        }
+        if (p.monitoramentoInterval) {
+            clearInterval(p.monitoramentoInterval);
+        }
+    }
+    __participantesAtendimento = [];
 }
 
 async function carregarPerfisEditParticipante() {
@@ -2405,7 +2882,10 @@ async function carregarUsuariosEditParticipante() {
     selectUsuario.innerHTML = '<option value="">Selecione o perfil primeiro...</option>';
     selectUsuario.disabled = true;
     if (rowFiltro) rowFiltro.style.display = 'none';
-    if (selectFiltro) selectFiltro.innerHTML = '<option value="">Selecione...</option>';
+    if (selectFiltro) {
+        selectFiltro.innerHTML = '<option value="">Selecione...</option>';
+        selectFiltro.onchange = null;
+    }
     
     if (!perfil) return;
     
@@ -2455,7 +2935,14 @@ async function carregarUsuariosEditParticipante() {
         return;
     }
     
-    // OUTROS → usuário direto
+    // 🔥 OUTROS → MOSTRA BOTÃO ADICIONAR DIRETO
+    if (labelFiltro) labelFiltro.textContent = 'Usuário';
+    if (selectFiltro) {
+        selectFiltro.innerHTML = '<option value="">—</option>';
+        selectFiltro.disabled = true;
+    }
+    if (rowFiltro) rowFiltro.style.display = 'flex';
+    
     selectUsuario.innerHTML = '<option value="">Carregando...</option>';
     
     try {
@@ -2630,8 +3117,11 @@ async function adicionarParticipanteEdit() {
     safeGet('editParticipantePerfil').value = '';
     safeGet('editParticipanteUsuario').innerHTML = '<option value="">Selecione o perfil primeiro...</option>';
     safeGet('editParticipanteUsuario').disabled = true;
-    safeGet('editRowParticipanteFiltro').style.display = 'none';
-    safeGet('editParticipanteFiltro').onchange = null;
+    if (safeGet('editRowParticipanteFiltro')) safeGet('editRowParticipanteFiltro').style.display = 'none';
+    if (safeGet('editParticipanteFiltro')) {
+        safeGet('editParticipanteFiltro').onchange = null;
+        safeGet('editParticipanteFiltro').disabled = false;
+    }
     
     notificar(`✅ ${usuarioNome} adicionado!`, 'success');
 }
@@ -2733,7 +3223,6 @@ async function removerParticipanteEdit(participanteId) {
     
     __participantesAtendimento.splice(index, 1);
     renderizarEditParticipantes();
-    
     notificar(`Participante removido.`, 'info');
 }
 
@@ -2744,14 +3233,18 @@ async function toggleAssinaturaParticipanteEdit(participanteId, precisa) {
 
 async function salvarEdicaoAtendimento() {
     const atendimentoId = safeGet('editAtendimentoId')?.value;
-    const tipoTarefa = safeGet('editTipoTarefa')?.value;
     const descricao = (safeGet('editDescricao')?.value || '').trim();
     const gravidade = safeGet('editGravidade')?.value;
     const prioridade = safeGet('editPrioridade')?.value;
     const observacoes = safeGet('editObservacoes')?.value || '';
     
-    if (!tipoTarefa || !descricao) {
-        notificar('Preencha todos os campos obrigatórios', 'error');
+    if (__tiposSelecionados.length === 0) {
+        notificar('Selecione pelo menos um tipo de tarefa', 'error');
+        return;
+    }
+    
+    if (!descricao) {
+        notificar('A descrição é obrigatória', 'error');
         return;
     }
     
@@ -2777,6 +3270,9 @@ async function salvarEdicaoAtendimento() {
         sessaoId: p.sessaoId
     }));
     
+    const detalhesEnviados = coletarDetalhesEdicao();
+    console.log('[salvar edição] detalhes enviados:', detalhesEnviados);
+    
     try {
         const response = await fetch(`/api/supervisao/atendimento/${atendimentoId}`, {
             method: 'PUT',
@@ -2785,7 +3281,12 @@ async function salvarEdicaoAtendimento() {
                 'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({ 
-                tipoTarefa, descricao, gravidade, prioridade, observacoes,
+                tiposTarefa: __tiposSelecionados,
+                descricao, 
+                gravidade, 
+                prioridade, 
+                observacoes,
+                detalhes: detalhesEnviados,
                 participantes: participantesParaEnvio
             })
         });
@@ -2797,7 +3298,7 @@ async function salvarEdicaoAtendimento() {
             
             mostrarToastConcluido('✅ Atendimento atualizado com sucesso!', 'success');
             
-            limparTodosParticipantes();
+            limparParticipantesCompleto();
             
             carregarAtendimentosAtivos();
             carregarDashboard();
@@ -2821,7 +3322,6 @@ async function salvarEdicaoAtendimento() {
 // ============================================================================
 // ASSINATURA VIA QR CODE (RESPONSÁVEL)
 // ============================================================================
-
 async function toggleNecessitaAssinatura(modulo) {
     const check = safeGet('supervisaoNecessitaAssinatura');
     if (!check) return;
@@ -2904,8 +3404,9 @@ function montarSnapshotAtendimento() {
         alunoTurma: currentAluno?.turma,
         alunoCurso: currentAluno?.curso,
         alunoFoto: currentAluno?.fotoPerfil,
-        tipoTarefa: tipoTarefaSelecionado,
-        tipoTarefaLabel: TIPO_LABELS[tipoTarefaSelecionado] || tipoTarefaSelecionado,
+        tiposTarefa: __tiposSelecionados,
+        tipoTarefa: __tiposSelecionados[0],
+        tipoTarefaLabel: __tiposSelecionados.map(t => TIPO_LABELS[t] || t).join(' + '),
         descricao: safeGet('descricao')?.value || '',
         observacoes: safeGet('observacoes')?.value || '',
         gravidade: safeGet('gravidade')?.value || 'media',
@@ -3268,14 +3769,12 @@ function extrairAlunoId(decodedText) {
     return null;
 }
 
-// ============================================
-// MODOS
-// ============================================
 async function setModo(modo) {
     modoAtual = modo;
     safeGet('alunoInfo').style.display = 'none';
     safeGet('formRegistro').style.display = 'none';
     currentAluno = null;
+    __tiposSelecionados = [];
     tipoTarefaSelecionado = null;
     
     if (modo === 'automatico') {
@@ -3296,9 +3795,6 @@ async function setModo(modo) {
     }
 }
 
-// ============================================
-// MODO MANUAL
-// ============================================
 async function carregarTurmasParaManual() {
     try {
         const response = await fetch('/api/supervisao/turmas', {
@@ -3441,13 +3937,11 @@ function exibirAluno(data) {
     safeGet('alunoInfo').scrollIntoView({ behavior: 'smooth' });
 }
 
-// ============================================
-// FORMULÁRIO
-// ============================================
 function mostrarFormRegistro() {
     safeGet('formRegistro').style.display = 'block';
     const tipoInput = safeGet('tipoTarefaSelecionado');
     if (tipoInput) tipoInput.value = '';
+    __tiposSelecionados = [];
     tipoTarefaSelecionado = null;
     document.querySelectorAll('.tipo-card').forEach(c => c.classList.remove('selected'));
     safeGet('descricao').value = '';
@@ -3484,189 +3978,14 @@ function mostrarFormRegistro() {
     limparParticipantesCompleto();
 }
 
-function selecionarTipo(tipo) {
-    if (!tipo) return;
-    tipoTarefaSelecionado = tipo;
-    safeGet('tipoTarefaSelecionado').value = tipo;
-    document.querySelectorAll('.tipo-card').forEach(c => c.classList.remove('selected'));
-    const card = document.querySelector(`.tipo-card[data-tipo="${tipo}"]`);
-    if (card) card.classList.add('selected');
-    renderizarCamposEspecificos(tipo);
-}
-
-function renderizarCamposEspecificos(tipo) {
-    const container = safeGet('camposEspecificos');
-    if (!container) return;
-    let html = '';
-    
-    switch (tipo) {
-        case 'advertencia_verbal':
-        case 'advertencia_escrita':
-            html = `
-                <div class="mb-3">
-                    <label class="form-label">Testemunhas (separadas por vírgula)</label>
-                    <input type="text" id="detalheTestemunhas" class="form-control" placeholder="Ex: Prof. João, Coord. Maria">
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Descrição detalhada do ocorrido</label>
-                    <textarea id="detalheDescricaoOcorrido" class="form-control" rows="3" placeholder="Descreva o que aconteceu..."></textarea>
-                </div>`;
-            break;
-        case 'atendimento_responsavel':
-            html = `
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Nome do Responsável</label>
-                        <input type="text" id="detalheNomeResponsavel" class="form-control">
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Parentesco</label>
-                        <input type="text" id="detalheParentesco" class="form-control" placeholder="Ex: Mãe, Pai, Avó">
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Telefone</label>
-                        <input type="text" id="detalheTelefone" class="form-control">
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Compareceu?</label>
-                        <select id="detalheCompareceu" class="form-select">
-                            <option value="true">Sim</option>
-                            <option value="false">Não</option>
-                        </select>
-                    </div>
-                </div>`;
-            break;
-        case 'atendimento_professor':
-            html = `
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Nome do Professor</label>
-                        <input type="text" id="detalheNomeProfessor" class="form-control">
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Disciplina</label>
-                        <input type="text" id="detalheDisciplina" class="form-control">
-                    </div>
-                </div>`;
-            break;
-        case 'suspensao':
-            html = `
-                <div class="row">
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label">Data Início</label>
-                        <input type="date" id="detalheDataInicioSuspensao" class="form-control">
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label">Data Fim</label>
-                        <input type="date" id="detalheDataFimSuspensao" class="form-control">
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label">Total de Dias</label>
-                        <input type="number" id="detalheDiasSuspensao" class="form-control" min="1">
-                    </div>
-                </div>`;
-            break;
-        case 'encaminhamento':
-            html = `
-                <div class="mb-3">
-                    <label class="form-label">Encaminhado para</label>
-                    <select id="detalheEncaminhadoPara" class="form-select">
-                        <option value="">Selecione...</option>
-                        <option value="Psicólogo">Psicólogo</option>
-                        <option value="Assistente Social">Assistente Social</option>
-                        <option value="Psiquiatra">Psiquiatra</option>
-                        <option value="Conselho Tutelar">Conselho Tutelar</option>
-                        <option value="Outro">Outro</option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Motivo do Encaminhamento</label>
-                    <textarea id="detalheMotivoEncaminhamento" class="form-control" rows="2"></textarea>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Agendado para</label>
-                    <input type="date" id="detalheAgendadoPara" class="form-control">
-                </div>`;
-            break;
-        case 'outros':
-            html = `
-                <div class="mb-3">
-                    <label class="form-label">Especifique o Tipo de Tarefa <span class="text-danger">*</span></label>
-                    <input type="text" id="detalheTipoTarefaOutros" class="form-control" placeholder="Descreva o tipo...">
-                </div>`;
-            break;
-    }
-    
-    html += `
-        <div class="mb-3">
-            <label class="form-label">Providências Tomadas</label>
-            <textarea id="detalheProvidencias" class="form-control" rows="2" placeholder="O que já foi feito..."></textarea>
-        </div>
-        <div class="mb-3">
-            <label class="form-label">Próximos Passos</label>
-            <textarea id="detalheProximosPassos" class="form-control" rows="2" placeholder="O que será feito..."></textarea>
-        </div>`;
-    
-    container.innerHTML = html;
-}
-
-function coletarDetalhes() {
-    const detalhes = {};
-    
-    const testemunhasEl = safeGet('detalheTestemunhas');
-    if (testemunhasEl) {
-        detalhes.testemunhas = testemunhasEl.value.split(',').map(t => t.trim()).filter(t => t.length > 0);
-    }
-    
-    const compareceuEl = safeGet('detalheCompareceu');
-    if (compareceuEl) detalhes.compareceu = compareceuEl.value === 'true';
-    
-    const camposTexto = {
-        'detalheDescricaoOcorrido': 'descricaoOcorrido',
-        'detalheNomeResponsavel': 'nomeResponsavel',
-        'detalheParentesco': 'parentescoResponsavel',
-        'detalheTelefone': 'telefoneResponsavel',
-        'detalheNomeProfessor': 'nomeProfessor',
-        'detalheDisciplina': 'disciplina',
-        'detalheEncaminhadoPara': 'encaminhadoPara',
-        'detalheMotivoEncaminhamento': 'motivoEncaminhamento',
-        'detalheTipoTarefaOutros': 'tipoTarefaOutros',
-        'detalheProvidencias': 'providenciasTomadas',
-        'detalheProximosPassos': 'proximosPassos'
-    };
-    
-    Object.entries(camposTexto).forEach(([elementId, key]) => {
-        const el = safeGet(elementId);
-        if (el && el.value) detalhes[key] = el.value.trim();
-    });
-    
-    const camposData = {
-        'detalheDataInicioSuspensao': 'dataInicioSuspensao',
-        'detalheDataFimSuspensao': 'dataFimSuspensao',
-        'detalheAgendadoPara': 'agendadoPara'
-    };
-    
-    Object.entries(camposData).forEach(([elementId, key]) => {
-        const el = safeGet(elementId);
-        if (el && el.value) detalhes[key] = new Date(el.value);
-    });
-    
-    const diasEl = safeGet('detalheDiasSuspensao');
-    if (diasEl && diasEl.value) {
-        const dias = parseInt(diasEl.value);
-        if (!isNaN(dias) && dias > 0) detalhes.diasSuspensao = dias;
-    }
-    
-    return detalhes;
-}
-
 // ============================================
-// REGISTRAR (COM PARTICIPANTES)
+// REGISTRAR (MÚLTIPLOS TIPOS)
 // ============================================
 async function registrarOcorrencia() {
-    if (!tipoTarefaSelecionado) { notificar('Selecione o tipo de tarefa', 'error'); return; }
+    if (__tiposSelecionados.length === 0) {
+        notificar('Selecione pelo menos um tipo de tarefa', 'error');
+        return;
+    }
     const descricao = (safeGet('descricao')?.value || '').trim();
     if (!descricao) { notificar('Descreva o ocorrido', 'error'); return; }
     if (!currentAluno || !currentAluno.id) { notificar('Nenhum aluno selecionado', 'error'); return; }
@@ -3712,7 +4031,7 @@ async function registrarOcorrencia() {
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({
                 alunoId: currentAluno.id,
-                tipoTarefa: tipoTarefaSelecionado,
+                tiposTarefa: __tiposSelecionados,
                 descricao,
                 observacoes: safeGet('observacoes')?.value || '',
                 gravidade: safeGet('gravidade')?.value || 'media',
@@ -3798,6 +4117,7 @@ function limparTela() {
     safeGet('formRegistro').style.display = 'none';
     currentAluno = null;
     currentAtendimento = null;
+    __tiposSelecionados = [];
     tipoTarefaSelecionado = null;
     
     const sessaoId = estadoSessaoAssinatura.supervisao.sessaoId;
@@ -3827,9 +4147,6 @@ function reiniciarScannerAutomatico() {
     }, 1000);
 }
 
-// ============================================
-// ATENDIMENTOS ATIVOS
-// ============================================
 async function carregarAtendimentosAtivos() {
     const container = safeGet('listaAtendimentosAtivos');
     if (!container) return;
@@ -3916,7 +4233,7 @@ async function atualizarContadorAtendimentosAntigos() {
 }
 
 // ============================================
-// MODAL DE VERIFICAÇÃO DE ATENDIMENTOS >24H
+// MODAL VERIFICAÇÃO 24H
 // ============================================
 async function abrirModalVerificacao24h() {
     try {
@@ -4505,7 +4822,7 @@ async function excluirAtendimento(atendimentoId) {
 }
 
 // ============================================
-// GERENCIAR ATENDIMENTOS CONCLUÍDOS
+// CONCLUÍDOS
 // ============================================
 async function carregarAtendimentosConcluidos(pagina = 1) {
     const container = safeGet('listaConcluidos');
@@ -5065,9 +5382,6 @@ function exportarCSV() {
 
     const tipo = relatorioData.aluno ? 'aluno' : (relatorioData.turma ? 'turma' : 'geral');
 
-    // ============================================
-    // TÍTULO / SUBTÍTULO
-    // ============================================
     let titulo = 'Relatório de Ocorrências';
     let subtitulo = '';
 
@@ -5082,9 +5396,6 @@ function exportarCSV() {
         subtitulo = `${relatorioData.aluno?.nome || ''} — ${relatorioData.aluno?.turma || ''}`;
     }
 
-    // ============================================
-    // COLUNAS
-    // ============================================
     const colunas = [
         {
             label: 'Data do Registro',
@@ -5161,9 +5472,6 @@ function exportarCSV() {
         }
     ];
 
-    // ============================================
-    // FILTROS APLICADOS
-    // ============================================
     const filtros = [];
     const dI = safeGet('dataInicio')?.value;
     const dF = safeGet('dataFim')?.value;
@@ -5172,9 +5480,6 @@ function exportarCSV() {
     if (relatorioData.turma) filtros.push({ label: 'Turma', valor: relatorioData.turma });
     if (relatorioData.aluno?.nome) filtros.push({ label: 'Aluno', valor: relatorioData.aluno.nome });
 
-    // ============================================
-    // MÉTRICAS
-    // ============================================
     const metricas = {};
     if (tipo === 'geral') {
         metricas['Total de ocorrências'] = relatorioData.totalAtendimentos || 0;
@@ -5189,9 +5494,6 @@ function exportarCSV() {
         metricas['Tipos diferentes'] = (relatorioData.estatisticas?.porTipo || []).length;
     }
 
-    // ============================================
-    // GERA E BAIXA
-    // ============================================
     const ok = gerarBaixarCSV({
         titulo,
         subtitulo,
@@ -5325,7 +5627,7 @@ function gerarHTMLRelatorioSupervisao(data) {
 }
 
 // ============================================
-// IMPRESSÃO DE ATENDIMENTO (COM PARTICIPANTES)
+// IMPRESSÃO DE ATENDIMENTO
 // ============================================
 async function imprimirAtendimento(atendimentoId) {
     if (!atendimentoId) return;
@@ -5387,7 +5689,7 @@ function gerarHTMLImpressaoSupervisao(a, qrCodeUrl) {
     `).join('');
     
     let detalhesHTML = '';
-    if (a.entrada?.detalhes && Object.keys(a.entrada.detalhes).length > 0) {
+    if (a.detalhes && Object.keys(a.detalhes).length > 0) {
         const mapa = {
             testemunhas: 'Testemunhas', descricaoOcorrido: 'Descrição', nomeResponsavel: 'Responsável',
             parentescoResponsavel: 'Parentesco', telefoneResponsavel: 'Telefone', compareceu: 'Compareceu',
@@ -5397,7 +5699,7 @@ function gerarHTMLImpressaoSupervisao(a, qrCodeUrl) {
             providenciasTomadas: 'Providências', proximosPassos: 'Próximos Passos'
         };
         const linhas = [];
-        Object.entries(a.entrada.detalhes).forEach(([k, v]) => {
+        Object.entries(a.detalhes).forEach(([k, v]) => {
             if (!v || (Array.isArray(v) && v.length === 0)) return;
             const label = mapa[k] || k;
             let val = v;
@@ -5658,8 +5960,6 @@ async function carregarNotificacoesSistema() {
         });
         const data = await response.json();
         if (data.success) __notificacoesCache = data.notificacoes || [];
-        
-        // ✅ Atualiza os badges após carregar
         atualizarBadgeUnificado();
     } catch (error) {
         console.error('Erro ao carregar notificações:', error);
@@ -5681,8 +5981,6 @@ async function carregarLembretesRemarcacao() {
         }
         const data = await response.json();
         __lembretesCache = (data.success && Array.isArray(data.remarcacoes)) ? data.remarcacoes : [];
-        
-        // ✅ Atualiza os badges após carregar
         atualizarBadgeUnificado();
     } catch (error) {
         __lembretesCache = [];
@@ -5769,26 +6067,16 @@ function renderizarSinoUnificado() {
 async function abrirNotificacao(id, link) {
     try {
         const token = localStorage.getItem('auth_token');
-
-        // 1) Marca como lida
         if (id) {
             try {
                 await fetch(`/api/notificacoes/${id}/lida`, {
                     method: 'PUT',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-            } catch (e) {
-                console.warn('[abrirNotificacao] erro ao marcar como lida:', e);
-            }
+            } catch (e) {}
         }
-
-        // 2) Fecha o dropdown
         fecharNotificacoes();
-
-        // 3) Atualiza badges
         await carregarTudo();
-
-        // 4) Navega se houver link válido
         if (link && link !== '#' && link !== 'null' && link !== 'undefined' && String(link).trim() !== '') {
             window.location.href = link;
         }
@@ -5799,20 +6087,14 @@ async function abrirNotificacao(id, link) {
 }
 
 function atualizarBadgeUnificado() {
-    // 1) Calcula total a partir das variáveis LOCAIS
     let totalNaoLidas = 0;
     let totalLembretes = 0;
     try {
         totalNaoLidas = (__notificacoesCache || []).filter(n => !n.lida).length;
         totalLembretes = (__lembretesCache || []).length;
-    } catch (e) {
-        console.warn('[atualizarBadgeUnificado] erro:', e);
-    }
+    } catch (e) {}
     const total = totalNaoLidas + totalLembretes;
 
-    console.log(`[atualizarBadgeUnificado] 📊 Total: ${total} (${totalNaoLidas} notif + ${totalLembretes} lembretes)`);
-
-    // 2) Badge do sino
     const badgeSino = document.getElementById('notificacoesBadge');
     const btnSino = document.getElementById('notificacoesBtn');
     if (badgeSino) {
@@ -5824,22 +6106,16 @@ function atualizarBadgeUnificado() {
         }
     }
 
-    // 3) 🆕 BADGE NUMÉRICO NO AVATAR (userNotificationBadge)
     const badgeAvatar = document.getElementById('userNotificationBadge');
     if (badgeAvatar) {
         if (total > 0) {
             badgeAvatar.textContent = total > 9 ? '9+' : String(total);
             badgeAvatar.style.setProperty('display', 'flex', 'important');
-            console.log(`[atualizarBadgeUnificado] ✅ Badge avatar exibindo: "${badgeAvatar.textContent}"`);
         } else {
             badgeAvatar.style.setProperty('display', 'none', 'important');
-            console.log('[atualizarBadgeUnificado] Badge avatar ocultado (total = 0)');
         }
-    } else {
-        console.warn('[atualizarBadgeUnificado] ❌ #userNotificationBadge NÃO ENCONTRADO');
     }
 
-    // 4) 🆕 BADGE NO MENU DROPDOWN (menuNotifBadge)
     const badgeMenu = document.getElementById('menuNotifBadge');
     if (badgeMenu) {
         if (total > 0) {
@@ -5850,14 +6126,12 @@ function atualizarBadgeUnificado() {
         }
     }
 
-    // 5) Anel pulsante no trigger
     const trigger = document.getElementById('userTrigger');
     if (trigger) {
         if (total > 0) trigger.classList.add('tem-notificacao');
         else trigger.classList.remove('tem-notificacao');
     }
 
-    // 6) Cor do sino (urgente = vermelho escuro)
     if (badgeSino && total > 0) {
         const temUrgente = (__lembretesCache || []).some(r => calcularNivelAlerta(r).urgente);
         badgeSino.style.background = temUrgente ? '#dc2626' : '#ef4444';
@@ -5949,7 +6223,7 @@ async function mostrarTelaAssinatura(sessaoId) {
                     </div>
                 </div>
                 
-                <div id="telaAssinaturaArea" style="background: white; padding: 15px; display: none; border-radius: 0 0 16px 16px; flex: 1; display: flex; flex-direction: column; min-height: 0;">
+                <div id="telaAssinaturaArea" style="background: white; padding: 15px; display: none; border-radius: 0 0 16px 16px; flex: 1; flex-direction: column; min-height: 0;">
                     <div id="canvasWrapper" style="position: relative; background: white; border: 3px dashed #cbd5e0; border-radius: 16px; overflow: hidden; flex: 1; min-height: 150px; margin-bottom: 12px; touch-action: none;">
                         <canvas id="canvasAssinatura" style="width: 100%; height: 100%; display: block;"></canvas>
                         <div id="placeholder" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #94a3b8; pointer-events: none; width: 100%;">
@@ -6388,6 +6662,8 @@ async function confirmarExclusaoMassa() {
 // EXPORTAR FUNÇÕES GLOBAIS
 // ============================================
 window.selecionarTipo = selecionarTipo;
+window.toggleTipoTarefa = toggleTipoTarefa;
+window.toggleTipoTarefaEdicao = toggleTipoTarefaEdicao;
 window.registrarOcorrencia = registrarOcorrencia;
 window.limparTela = limparTela;
 window.abrirFinalizacao = abrirFinalizacao;
@@ -6463,8 +6739,10 @@ window.verificarAtendimento24h = verificarAtendimento24h;
 window.atualizarContadorAtendimentosAntigos = atualizarContadorAtendimentosAntigos;
 window.formatarTempoAtendimentoFront = formatarTempoAtendimentoFront;
 
-window.abrirExclusaoEmMassa = abrirExclusaoEmMassa;
 window.confirmarExclusaoMassa = confirmarExclusaoMassa;
 
 window.recarregarPerfisParticipantes = recarregarPerfisParticipantes;
 window.renderizarSelectPerfis = renderizarSelectPerfis;
+
+// Toggle dos cards de tipo (chamado por onclick no HTML)
+window.toggleMaisParticipantes = toggleMaisParticipantes;

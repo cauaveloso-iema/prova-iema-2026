@@ -12,20 +12,13 @@ const RemarcacaoSchema = new mongoose.Schema({
   dataRemarcacao: { type: String, required: true },
   horarioRemarcacao: { type: String, required: true },
   
-  // 🔐 Criptografados
   motivoRemarcacao: { 
-    type: String, 
-    required: true, 
-    trim: true,
-    set: criptografar,
-    get: descriptografar
+    type: String, required: true, trim: true,
+    set: criptografar, get: descriptografar
   },
   observacoesRemarcacao: { 
-    type: String, 
-    default: '', 
-    trim: true,
-    set: criptografar,
-    get: descriptografar
+    type: String, default: '', trim: true,
+    set: criptografar, get: descriptografar
   },
   
   status: {
@@ -45,14 +38,86 @@ const RemarcacaoSchema = new mongoose.Schema({
 });
 
 // ============================================
+// 🆕 SUB-SCHEMA: DETALHES (corrige criptografia dupla)
+// ============================================
+const DetalhesSchema = new mongoose.Schema({
+  contextoFamiliar: { type: String, set: criptografar, get: descriptografar },
+  historicoAnterior: { type: String, set: criptografar, get: descriptografar },
+  profissionaisEnvolvidos: { 
+    type: [String],
+    set: (arr) => Array.isArray(arr) ? arr.map(v => v ? criptografar(v) : v) : arr,
+    get: (arr) => Array.isArray(arr) ? arr.map(v => v ? descriptografar(v) : v) : arr
+  },
+  condicaoSocial: { type: String, set: criptografar, get: descriptografar },
+  
+  encaminhadoPara: { type: String, set: criptografar, get: descriptografar },
+  motivoEncaminhamento: { type: String, set: criptografar, get: descriptografar },
+  agendadoPara: Date,
+  
+  tipoIntervencao: { type: String, set: criptografar, get: descriptografar },
+  metodosUtilizados: { type: String, set: criptografar, get: descriptografar },
+  duracaoSessao: Number,
+  
+  modalidadeAtendimento: { type: String, set: criptografar, get: descriptografar },
+  participantesAtendimento: { 
+    type: [String],
+    set: (arr) => Array.isArray(arr) ? arr.map(v => v ? criptografar(v) : v) : arr,
+    get: (arr) => Array.isArray(arr) ? arr.map(v => v ? descriptografar(v) : v) : arr
+  },
+  
+  // Campos específicos de cada tipo (adicionados)
+  motivoEvasao: { type: String, set: criptografar, get: descriptografar },
+  frequenciaFaltas: { type: String, set: criptografar, get: descriptografar },
+  disciplinasAfetadas: { 
+    type: [String],
+    set: (arr) => Array.isArray(arr) ? arr.map(v => v ? criptografar(v) : v) : arr,
+    get: (arr) => Array.isArray(arr) ? arr.map(v => v ? descriptografar(v) : v) : arr
+  },
+  estrategiasMotivacao: { type: String, set: criptografar, get: descriptografar },
+  tipoIndisciplina: { type: String, set: criptografar, get: descriptografar },
+  professoresEnvolvidos: { 
+    type: [String],
+    set: (arr) => Array.isArray(arr) ? arr.map(v => v ? criptografar(v) : v) : arr,
+    get: (arr) => Array.isArray(arr) ? arr.map(v => v ? descriptografar(v) : v) : arr
+  },
+  contextoInsubordinacao: { type: String, set: criptografar, get: descriptografar },
+  tipoSubstancia: { type: String, set: criptografar, get: descriptografar },
+  encaminhamentoTratamento: { type: String, set: criptografar, get: descriptografar },
+  tipoAgressao: { type: String, set: criptografar, get: descriptografar },
+  vitimas: { type: String, set: criptografar, get: descriptografar },
+  notasRecentes: { type: String, set: criptografar, get: descriptografar },
+  disciplinasCriticas: { 
+    type: [String],
+    set: (arr) => Array.isArray(arr) ? arr.map(v => v ? criptografar(v) : v) : arr,
+    get: (arr) => Array.isArray(arr) ? arr.map(v => v ? descriptografar(v) : v) : arr
+  },
+  orgaoEncaminhado: { type: String, set: criptografar, get: descriptografar },
+  participantesIntervencao: { 
+    type: [String],
+    set: (arr) => Array.isArray(arr) ? arr.map(v => v ? criptografar(v) : v) : arr,
+    get: (arr) => Array.isArray(arr) ? arr.map(v => v ? descriptografar(v) : v) : arr
+  },
+  tipoAtendimento: { type: String, set: criptografar, get: descriptografar },
+  duracaoAtendimento: Number,
+  
+  tipoTarefaOutros: { type: String, set: criptografar, get: descriptografar },
+  
+  providenciasTomadas: { type: String, set: criptografar, get: descriptografar },
+  proximosPassos: { type: String, set: criptografar, get: descriptografar },
+  
+  // 🆕 Tipos adicionais (para multi-tipo)
+  tiposTarefaAdicionais: { type: [String], default: [] }
+}, {
+  _id: false,
+  toJSON: { getters: true },
+  toObject: { getters: true }
+});
+
+// ============================================
 // SCHEMA PRINCIPAL
 // ============================================
 const AtendimentoAssistenteSocialSchema = new mongoose.Schema({
-  alunoId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
+  alunoId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   alunoNome: { type: String, required: true },
   alunoMatricula: String,
   alunoTurma: String,
@@ -79,20 +144,8 @@ const AtendimentoAssistenteSocialSchema = new mongoose.Schema({
   
   entrada: {
     dataHora: { type: Date, default: Date.now },
-    
-    // 🔐 Criptografados
-    descricao: { 
-      type: String, 
-      required: true,
-      set: criptografar,
-      get: descriptografar
-    },
-    observacoes: { 
-      type: String,
-      set: criptografar,
-      get: descriptografar
-    },
-    
+    descricao: { type: String, required: true, set: criptografar, get: descriptografar },
+    observacoes: { type: String, set: criptografar, get: descriptografar },
     gravidade: {
       type: String,
       enum: ['baixa', 'media', 'alta', 'critica'],
@@ -100,20 +153,11 @@ const AtendimentoAssistenteSocialSchema = new mongoose.Schema({
     },
     registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     registradoPorNome: String,
-    
-    // 🔐 Criptografado
     assinaturaBase64: {
-      type: String,
-      default: '',
-      set: criptografar,
-      get: descriptografar
+      type: String, default: '',
+      set: criptografar, get: descriptografar
     },
-    
-    temAssinatura: { 
-      type: Boolean, 
-      default: false, 
-      index: true 
-    },
+    temAssinatura: { type: Boolean, default: false, index: true },
     statusAssinatura: {
       type: String,
       enum: ['nao_necessaria', 'pendente', 'assinada'],
@@ -125,37 +169,8 @@ const AtendimentoAssistenteSocialSchema = new mongoose.Schema({
     assinadaPorNome: { type: String, default: null }
   },
   
-  // 🔐 Todos os campos sensíveis criptografados
-  detalhes: {
-    contextoFamiliar: { type: String, set: criptografar, get: descriptografar },
-    historicoAnterior: { type: String, set: criptografar, get: descriptografar },
-    profissionaisEnvolvidos: { 
-      type: [String],
-      set: (arr) => Array.isArray(arr) ? arr.map(criptografar) : arr,
-      get: (arr) => Array.isArray(arr) ? arr.map(descriptografar) : arr
-    },
-    condicaoSocial: { type: String, set: criptografar, get: descriptografar },
-    
-    encaminhadoPara: { type: String, set: criptografar, get: descriptografar },
-    motivoEncaminhamento: { type: String, set: criptografar, get: descriptografar },
-    agendadoPara: Date,
-    
-    tipoIntervencao: { type: String, set: criptografar, get: descriptografar },
-    metodosUtilizados: { type: String, set: criptografar, get: descriptografar },
-    duracaoSessao: Number,
-    
-    modalidadeAtendimento: { type: String, set: criptografar, get: descriptografar },
-    participantesAtendimento: { 
-      type: [String],
-      set: (arr) => Array.isArray(arr) ? arr.map(criptografar) : arr,
-      get: (arr) => Array.isArray(arr) ? arr.map(descriptografar) : arr
-    },
-    
-    tipoTarefaOutros: { type: String, set: criptografar, get: descriptografar },
-    
-    providenciasTomadas: { type: String, set: criptografar, get: descriptografar },
-    proximosPassos: { type: String, set: criptografar, get: descriptografar }
-  },
+  // 🆕 SubSchema real (era objeto inline)
+  detalhes: { type: DetalhesSchema, default: () => ({}) },
   
   saida: {
     dataHora: Date,
@@ -164,45 +179,21 @@ const AtendimentoAssistenteSocialSchema = new mongoose.Schema({
       enum: ['resolvido', 'em_acompanhamento', 'reincidente', 'encaminhado', 'pendente'],
       required: false
     },
-    
-    // 🔐 Criptografados
     resultadoTexto: { type: String, set: criptografar, get: descriptografar },
     observacoesFinais: { type: String, set: criptografar, get: descriptografar },
-    
     registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     registradoPorNome: String
   },
   
-  remarcacoes: {
-    type: [RemarcacaoSchema],
-    default: []
-  },
-  temRemarcacaoPendente: {
-    type: Boolean,
-    default: false
-  },
+  remarcacoes: { type: [RemarcacaoSchema], default: [] },
+  temRemarcacaoPendente: { type: Boolean, default: false },
   
-  // ============================================
-  // 🆕 CONTROLE DE ALERTAS DE 24H
-  // ============================================
-  ultimoAlerta24h: {
-    type: Date,
-    default: null,
-    index: true
-  },
-  totalAlertas24h: {
-    type: Number,
-    default: 0
-  },
-  alerta24hReconhecido: {
-    type: Boolean,
-    default: false
-  },
+  ultimoAlerta24h: { type: Date, default: null, index: true },
+  totalAlertas24h: { type: Number, default: 0 },
+  alerta24hReconhecido: { type: Boolean, default: false },
   
   anexos: [{
-    nome: String,
-    url: String,
-    tipo: String,
+    nome: String, url: String, tipo: String,
     uploadedAt: { type: Date, default: Date.now }
   }],
   
@@ -221,13 +212,17 @@ const AtendimentoAssistenteSocialSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 }, {
-  toJSON: { getters: true },
-  toObject: { getters: true }
+  toJSON: { getters: true, virtuals: true },
+  toObject: { getters: true, virtuals: true }
 });
 
-// ============================================
-// ÍNDICES
-// ============================================
+// Virtual
+AtendimentoAssistenteSocialSchema.virtual('tiposTarefaCompleto').get(function() {
+  const adicionais = this.detalhes?.tiposTarefaAdicionais || [];
+  return [this.tipoTarefa, ...adicionais].filter(Boolean);
+});
+
+// Índices
 AtendimentoAssistenteSocialSchema.index({ alunoId: 1, status: 1 });
 AtendimentoAssistenteSocialSchema.index({ tipoTarefa: 1, createdAt: -1 });
 AtendimentoAssistenteSocialSchema.index({ alunoTurma: 1, createdAt: -1 });
@@ -235,12 +230,9 @@ AtendimentoAssistenteSocialSchema.index({ createdAt: -1 });
 AtendimentoAssistenteSocialSchema.index({ temRemarcacaoPendente: 1, status: 1 });
 AtendimentoAssistenteSocialSchema.index({ 'remarcacoes.status': 1 });
 AtendimentoAssistenteSocialSchema.index({ 'entrada.statusAssinatura': 1, createdAt: -1 });
-// 🆕 Índice para busca de atendimentos antigos
 AtendimentoAssistenteSocialSchema.index({ status: 1, 'entrada.dataHora': 1, ultimoAlerta24h: 1 });
 
-// ============================================
-// MIDDLEWARE: PRE-SAVE
-// ============================================
+// Pre-save
 AtendimentoAssistenteSocialSchema.pre('save', function(next) {
   if (this.entrada) {
     const temAssinaturaReal = !!(this.entrada.assinaturaBase64 && this.entrada.assinaturaBase64.length > 100);
@@ -248,9 +240,7 @@ AtendimentoAssistenteSocialSchema.pre('save', function(next) {
     
     if (temAssinaturaReal) {
       this.entrada.statusAssinatura = 'assinada';
-      if (!this.entrada.assinadaEm) {
-        this.entrada.assinadaEm = new Date();
-      }
+      if (!this.entrada.assinadaEm) this.entrada.assinadaEm = new Date();
     } else if (this.entrada.statusAssinatura !== 'pendente') {
       this.entrada.statusAssinatura = 'nao_necessaria';
     }
@@ -260,12 +250,9 @@ AtendimentoAssistenteSocialSchema.pre('save', function(next) {
   next();
 });
 
-// ============================================
-// MÉTODOS ESTÁTICOS
-// ============================================
+// Métodos estáticos
 AtendimentoAssistenteSocialSchema.statics.alunoEmAtendimento = async function(alunoId) {
-  const atendimento = await this.findOne({ alunoId, status: 'em_andamento' });
-  return !!atendimento;
+  return !!(await this.findOne({ alunoId, status: 'em_andamento' }));
 };
 
 AtendimentoAssistenteSocialSchema.statics.getAtendimentoAtivo = async function(alunoId) {
@@ -289,9 +276,11 @@ AtendimentoAssistenteSocialSchema.statics.getTipoTarefaLabel = function(tipo) {
   return labels[tipo] || tipo;
 };
 
-// ============================================
-// 🆕 BUSCAR ATENDIMENTOS QUE PRECISAM DE ALERTA 24H
-// ============================================
+AtendimentoAssistenteSocialSchema.statics.getTiposLabels = function(tipos) {
+  if (!Array.isArray(tipos) || tipos.length === 0) return '';
+  return tipos.map(t => this.getTipoTarefaLabel(t)).join(' + ');
+};
+
 AtendimentoAssistenteSocialSchema.statics.buscarAtendimentosParaAlerta = async function() {
   const agora = new Date();
   const limite24h = new Date(agora.getTime() - 24 * 60 * 60 * 1000);
@@ -308,9 +297,6 @@ AtendimentoAssistenteSocialSchema.statics.buscarAtendimentosParaAlerta = async f
   });
 };
 
-// ============================================
-// MÉTODOS DE INSTÂNCIA
-// ============================================
 AtendimentoAssistenteSocialSchema.methods.adicionarRemarcacao = function(dados) {
   if (!this.remarcacoes) this.remarcacoes = [];
   
@@ -331,9 +317,6 @@ AtendimentoAssistenteSocialSchema.methods.adicionarRemarcacao = function(dados) 
   return this.save();
 };
 
-// ============================================
-// EXPORT
-// ============================================
 module.exports = mongoose.model(
   'AtendimentoAssistenteSocial',
   AtendimentoAssistenteSocialSchema,

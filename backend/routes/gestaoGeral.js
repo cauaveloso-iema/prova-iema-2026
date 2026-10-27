@@ -549,7 +549,9 @@ router.get('/atraso/buscar-aluno', authenticateToken, verificarGestaoGeral, asyn
 router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
     const { 
-      alunoId, motivo, descricao, observacoes, detalhes, dataHora,
+      alunoId, 
+      motivos, motivo,
+      descricao, observacoes, detalhes, dataHora,
       precisaAssinatura = false,
       assinaturaBase64 = '',
       sessaoAssinaturaId = null,
@@ -558,13 +560,25 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
       sessaoAssinaturaAlunoId = null
     } = req.body;
     
+    // Normaliza motivos: aceita array `motivos` ou string `motivo`
+    let motivosFinal = Array.isArray(motivos) && motivos.length > 0
+      ? motivos
+      : (motivo ? [motivo] : []);
+    motivosFinal = [...new Set(motivosFinal.filter(Boolean))];
+    
+    if (motivosFinal.length === 0) {
+      return res.status(400).json({ success: false, error: 'Selecione pelo menos um motivo' });
+    }
+    
     if (!descricao || descricao.trim() === '') {
       return res.status(400).json({ success: false, error: 'A descrição é obrigatória' });
     }
     
     const motivosValidos = ['onibus', 'transito', 'problemas_pessoais', 'fardamento', 'outros'];
-    if (!motivosValidos.includes(motivo)) {
-      return res.status(400).json({ success: false, error: 'Motivo inválido' });
+    for (const m of motivosFinal) {
+      if (!motivosValidos.includes(m)) {
+        return res.status(400).json({ success: false, error: `Motivo inválido: ${m}` });
+      }
     }
     
     const aluno = await User.findById(alunoId);
@@ -577,23 +591,16 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
     let dataFinal = new Date();
     if (dataHora) {
       const dataParsed = new Date(dataHora);
-      if (!isNaN(dataParsed.getTime())) {
-        dataFinal = dataParsed;
-      }
+      if (!isNaN(dataParsed.getTime())) dataFinal = dataParsed;
     }
     
     const umAnoFuturo = new Date();
     umAnoFuturo.setFullYear(umAnoFuturo.getFullYear() + 1);
     if (dataFinal > umAnoFuturo) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Data do atraso não pode ser superior a 1 ano no futuro' 
-      });
+      return res.status(400).json({ success: false, error: 'Data do atraso não pode ser superior a 1 ano no futuro' });
     }
     
-    // ============================================
-    // ASSINATURA DO RESPONSÁVEL
-    // ============================================
+    // Assinatura do Responsável
     let assinaturaValida = '';
     let assinadaPorNome = null;
     let assinadaEm = null;
@@ -612,32 +619,23 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
     if (sessaoAssinaturaId && !assinaturaValida) {
       try {
         const sessao = await SessaoAssinatura.findOne({ 
-          sessaoId: sessaoAssinaturaId,
-          status: 'assinado'
+          sessaoId: sessaoAssinaturaId, status: 'assinado'
         });
-        
         if (sessao && sessao.assinaturaBase64) {
           assinaturaValida = sessao.assinaturaBase64;
           assinadaPorNome = sessao.assinadaPorNome;
           assinadaEm = sessao.assinadaEm;
-          
           sessao.status = 'cancelado';
           await sessao.save();
-          
-          console.log(`✅ [GESTÃO] Assinatura do RESPONSÁVEL da sessão ${sessaoAssinaturaId} aplicada`);
         }
-      } catch (e) {
-        console.warn('Erro ao buscar assinatura da sessão (responsável):', e.message);
-      }
+      } catch (e) { console.warn('Erro ao buscar assinatura (resp):', e.message); }
     }
     
     const statusAssinatura = assinaturaValida.length > 100
       ? 'assinada'
       : (precisaAssinatura ? 'pendente' : 'nao_necessaria');
     
-    // ============================================
-    // 🆕 ASSINATURA DO ALUNO
-    // ============================================
+    // Assinatura do Aluno
     let assinaturaAlunoValida = '';
     let assinadaPorNomeAluno = null;
     let assinadaEmAluno = null;
@@ -656,32 +654,22 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
     if (sessaoAssinaturaAlunoId && !assinaturaAlunoValida) {
       try {
         const sessaoAluno = await SessaoAssinatura.findOne({ 
-          sessaoId: sessaoAssinaturaAlunoId,
-          status: 'assinado'
+          sessaoId: sessaoAssinaturaAlunoId, status: 'assinado'
         });
-        
         if (sessaoAluno && sessaoAluno.assinaturaBase64) {
           assinaturaAlunoValida = sessaoAluno.assinaturaBase64;
           assinadaPorNomeAluno = sessaoAluno.assinadaPorNome || aluno.nome;
           assinadaEmAluno = sessaoAluno.assinadaEm;
-          
           sessaoAluno.status = 'cancelado';
           await sessaoAluno.save();
-          
-          console.log(`✅ [GESTÃO] Assinatura do ALUNO da sessão ${sessaoAssinaturaAlunoId} aplicada`);
         }
-      } catch (e) {
-        console.warn('Erro ao buscar assinatura da sessão (aluno):', e.message);
-      }
+      } catch (e) { console.warn('Erro ao buscar assinatura (aluno):', e.message); }
     }
     
     const statusAssinaturaAluno = assinaturaAlunoValida.length > 100
       ? 'assinada'
       : (precisaAssinaturaAluno ? 'pendente' : 'nao_necessaria');
     
-    // ============================================
-    // CRIA O REGISTRO DE ATRASO
-    // ============================================
     const atraso = new Atraso({
       alunoId: aluno._id,
       alunoNome: aluno.nome,
@@ -689,7 +677,10 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
       alunoTurma: aluno.turma || 'Não informada',
       alunoCurso: aluno.curso || 'Não informado',
       alunoFoto: aluno.fotoPerfil,
-      motivo,
+      
+      motivo: motivosFinal[0],
+      motivos: motivosFinal,
+      
       dataHora: dataFinal,
       descricao: descricao.trim(),
       observacoes: observacoes || '',
@@ -697,7 +688,6 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
       registradoPor: req.userId,
       registradoPorNome: gestor?.nome || req.userNome || 'Gestão Geral',
       
-      // Responsável
       precisaAssinatura: !!precisaAssinatura,
       assinaturaBase64: assinaturaValida,
       temAssinatura: assinaturaValida.length > 100,
@@ -705,7 +695,6 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
       assinadaEm: assinadaEm,
       assinadaPorNome: assinadaPorNome,
       
-      // 🆕 Aluno
       precisaAssinaturaAluno: !!precisaAssinaturaAluno,
       assinaturaAlunoBase64: assinaturaAlunoValida,
       temAssinaturaAluno: assinaturaAlunoValida.length > 100,
@@ -717,6 +706,7 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
     await atraso.save();
     
     const dataFormatada = dataFinal.toLocaleString('pt-BR');
+    const labelMotivos = Atraso.getMotivosLabels(motivosFinal);
     
     let msgExtras = '';
     if (statusAssinatura === 'pendente') msgExtras += ' — aguardando assinatura do responsável';
@@ -724,11 +714,12 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
     
     res.json({
       success: true,
-      message: `Atraso de ${dataFormatada} registrado para ${aluno.nome}${msgExtras}`,
+      message: `Atraso de ${dataFormatada} registrado para ${aluno.nome} (${labelMotivos})${msgExtras}`,
       atraso: {
         id: atraso._id,
         motivo: atraso.motivo,
-        motivoLabel: Atraso.getMotivoLabel(motivo),
+        motivos: atraso.motivos,
+        motivoLabel: labelMotivos,
         dataHora: atraso.dataHora,
         dataHoraFormatada: dataFormatada,
         temAssinatura: atraso.temAssinatura,
@@ -766,9 +757,20 @@ router.get('/atraso/dashboard', authenticateToken, verificarGestaoGeral, async (
       Atraso.countDocuments()
     ]);
     
+    // 🆕 Agrupa pelo array de motivos (cada motivo conta 1x)
     const porMotivo = await Atraso.aggregate([
       { $match: { dataHora: { $gte: ultimos30Dias } } },
-      { $group: { _id: '$motivo', count: { $sum: 1 } } },
+      { $project: {
+          motivosEfetivos: {
+            $cond: [
+              { $gt: [{ $size: { $ifNull: ['$motivos', []] } }, 0] },
+              '$motivos',
+              ['$motivo']
+            ]
+          }
+      }},
+      { $unwind: '$motivosEfetivos' },
+      { $group: { _id: '$motivosEfetivos', count: { $sum: 1 } } },
       { $sort: { count: -1 } }
     ]);
     
@@ -780,7 +782,6 @@ router.get('/atraso/dashboard', authenticateToken, verificarGestaoGeral, async (
       const inicio = new Date(dataStr);
       const fim = new Date(dataStr);
       fim.setDate(fim.getDate() + 1);
-      
       const count = await Atraso.countDocuments({ dataHora: { $gte: inicio, $lt: fim } });
       ultimos7Dias.push({
         data: dataStr,
@@ -844,7 +845,7 @@ router.get('/atraso/listar', authenticateToken, verificarGestaoGeral, async (req
     let query = {};
     
     if (motivo && motivo !== 'todos') {
-      query.motivo = motivo;
+      query.motivos = motivo;
     }
     
     if (turma && turma !== 'todas') {
@@ -884,26 +885,30 @@ router.get('/atraso/listar', authenticateToken, verificarGestaoGeral, async (req
       page: pageNum,
       limit: limitNum,
       totalPages: Math.ceil(total / limitNum),
-      atrasos: atrasos.map(a => ({
-        id: a._id,
-        alunoId: a.alunoId,
-        alunoNome: a.alunoNome,
-        alunoMatricula: a.alunoMatricula,
-        alunoTurma: a.alunoTurma,
-        alunoCurso: a.alunoCurso,
-        motivo: a.motivo,
-        motivoLabel: Atraso.getMotivoLabel(a.motivo),
-        descricao: a.descricao,
-        observacoes: a.observacoes,
-        dataHora: a.dataHora,
-        dataHoraFormatada: new Date(a.dataHora).toLocaleString('pt-BR'),
-        registradoPor: a.registradoPorNome,
-        temAssinatura: a.temAssinatura,
-        statusAssinatura: a.statusAssinatura,
-        temAssinaturaAluno: a.temAssinaturaAluno,
-        statusAssinaturaAluno: a.statusAssinaturaAluno,
-        createdAt: a.createdAt
-      }))
+      atrasos: atrasos.map(a => {
+        const motivosArr = (a.motivos && a.motivos.length > 0) ? a.motivos : [a.motivo];
+        return {
+          id: a._id,
+          alunoId: a.alunoId,
+          alunoNome: a.alunoNome,
+          alunoMatricula: a.alunoMatricula,
+          alunoTurma: a.alunoTurma,
+          alunoCurso: a.alunoCurso,
+          motivo: a.motivo,
+          motivos: motivosArr,
+          motivoLabel: Atraso.getMotivosLabels(motivosArr),
+          descricao: a.descricao,
+          observacoes: a.observacoes,
+          dataHora: a.dataHora,
+          dataHoraFormatada: new Date(a.dataHora).toLocaleString('pt-BR'),
+          registradoPor: a.registradoPorNome,
+          temAssinatura: a.temAssinatura,
+          statusAssinatura: a.statusAssinatura,
+          temAssinaturaAluno: a.temAssinaturaAluno,
+          statusAssinaturaAluno: a.statusAssinaturaAluno,
+          createdAt: a.createdAt
+        };
+      })
     });
   } catch (error) {
     console.error('Erro ao listar atrasos:', error);
@@ -925,6 +930,8 @@ router.get('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
       return res.status(404).json({ success: false, error: 'Atraso não encontrado' });
     }
 
+    const motivosArr = (atraso.motivos && atraso.motivos.length > 0) ? atraso.motivos : [atraso.motivo];
+
     res.json({
       success: true,
       atraso: {
@@ -936,7 +943,8 @@ router.get('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
         alunoCurso: atraso.alunoCurso,
         alunoFoto: atraso.alunoFoto,
         motivo: atraso.motivo,
-        motivoLabel: Atraso.getMotivoLabel(atraso.motivo),
+        motivos: motivosArr,
+        motivoLabel: Atraso.getMotivosLabels(motivosArr),
         dataHora: atraso.dataHora,
         dataHoraFormatada: new Date(atraso.dataHora).toLocaleString('pt-BR'),
         descricao: atraso.descricao,
@@ -944,7 +952,6 @@ router.get('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
         detalhes: atraso.detalhes,
         registradoPor: atraso.registradoPorNome,
         
-        // ✅ ASSINATURA DO RESPONSÁVEL
         precisaAssinatura: atraso.precisaAssinatura || false,
         assinaturaBase64: atraso.assinaturaBase64 || '',
         temAssinatura: atraso.temAssinatura || false,
@@ -952,7 +959,6 @@ router.get('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
         assinadaEm: atraso.assinadaEm,
         assinadaPorNome: atraso.assinadaPorNome,
         
-        // ✅ ASSINATURA DO ALUNO (NOVO)
         precisaAssinaturaAluno: atraso.precisaAssinaturaAluno || false,
         assinaturaAlunoBase64: atraso.assinaturaAlunoBase64 || '',
         temAssinaturaAluno: atraso.temAssinaturaAluno || false,
@@ -973,19 +979,30 @@ router.get('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
 // Editar
 router.put('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
-    const { motivo, dataHora, descricao, observacoes, detalhes } = req.body;
+    const { motivos, motivo, dataHora, descricao, observacoes, detalhes } = req.body;
 
     const atraso = await Atraso.findById(req.params.id);
     if (!atraso) {
       return res.status(404).json({ success: false, error: 'Atraso não encontrado' });
     }
 
-    if (motivo) {
+    // Normaliza motivos
+    let motivosFinal = null;
+    if (Array.isArray(motivos) && motivos.length > 0) {
+      motivosFinal = [...new Set(motivos.filter(Boolean))];
+    } else if (motivo) {
+      motivosFinal = [motivo];
+    }
+
+    if (motivosFinal && motivosFinal.length > 0) {
       const motivosValidos = ['onibus', 'transito', 'problemas_pessoais', 'fardamento', 'outros'];
-      if (!motivosValidos.includes(motivo)) {
-        return res.status(400).json({ success: false, error: 'Motivo inválido' });
+      for (const m of motivosFinal) {
+        if (!motivosValidos.includes(m)) {
+          return res.status(400).json({ success: false, error: `Motivo inválido: ${m}` });
+        }
       }
-      atraso.motivo = motivo;
+      atraso.motivo = motivosFinal[0];
+      atraso.motivos = motivosFinal;
     }
 
     if (dataHora) {
@@ -1014,6 +1031,8 @@ router.put('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
     atraso.updatedAt = new Date();
     await atraso.save();
 
+    const motivosArr = (atraso.motivos && atraso.motivos.length > 0) ? atraso.motivos : [atraso.motivo];
+
     console.log(`✏️ Atraso editado: ${atraso.alunoNome} (${atraso._id}) por ${req.userNome}`);
 
     res.json({
@@ -1022,7 +1041,8 @@ router.put('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
       atraso: {
         id: atraso._id,
         motivo: atraso.motivo,
-        motivoLabel: Atraso.getMotivoLabel(atraso.motivo),
+        motivos: motivosArr,
+        motivoLabel: Atraso.getMotivosLabels(motivosArr),
         dataHora: atraso.dataHora,
         dataHoraFormatada: new Date(atraso.dataHora).toLocaleString('pt-BR'),
         descricao: atraso.descricao,
@@ -1061,9 +1081,13 @@ router.get('/atraso/relatorio/aluno/:alunoId', authenticateToken, verificarGesta
     const atrasos = await Atraso.find(query).select('-assinaturaBase64 -assinaturaAlunoBase64').sort({ dataHora: -1 });
     const aluno = await User.findById(req.params.alunoId).select('nome matricula turma curso');
     
+    // 🆕 Conta TODOS os motivos de cada atraso
     const porMotivo = {};
     atrasos.forEach(a => {
-      porMotivo[a.motivo] = (porMotivo[a.motivo] || 0) + 1;
+      const motivosArr = (a.motivos && a.motivos.length > 0) ? a.motivos : [a.motivo];
+      motivosArr.forEach(m => {
+        porMotivo[m] = (porMotivo[m] || 0) + 1;
+      });
     });
     
     res.json({
@@ -1077,13 +1101,20 @@ router.get('/atraso/relatorio/aluno/:alunoId', authenticateToken, verificarGesta
           motivo: m, label: Atraso.getMotivoLabel(m), count: c
         }))
       },
-      atrasos: atrasos.map(a => ({
-        id: a._id, motivo: a.motivo,
-        motivoLabel: Atraso.getMotivoLabel(a.motivo),
-        dataHora: a.dataHora, descricao: a.descricao,
-        observacoes: a.observacoes, registradoPor: a.registradoPorNome,
-        createdAt: a.createdAt
-      }))
+      atrasos: atrasos.map(a => {
+        const motivosArr = (a.motivos && a.motivos.length > 0) ? a.motivos : [a.motivo];
+        return {
+          id: a._id,
+          motivo: a.motivo,
+          motivos: motivosArr,
+          motivoLabel: Atraso.getMotivosLabels(motivosArr),
+          dataHora: a.dataHora, 
+          descricao: a.descricao,
+          observacoes: a.observacoes, 
+          registradoPor: a.registradoPorNome,
+          createdAt: a.createdAt
+        };
+      })
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -1105,6 +1136,8 @@ router.get('/atraso/relatorio/turma/:turma', authenticateToken, verificarGestaoG
     const atrasos = await Atraso.find(query).select('-assinaturaBase64 -assinaturaAlunoBase64').sort({ dataHora: -1 });
     
     const porAluno = {};
+    const porMotivoGlobal = {};
+    
     atrasos.forEach(a => {
       const key = a.alunoId.toString();
       if (!porAluno[key]) {
@@ -1114,7 +1147,13 @@ router.get('/atraso/relatorio/turma/:turma', authenticateToken, verificarGestaoG
         };
       }
       porAluno[key].total++;
-      porAluno[key].motivos[a.motivo] = (porAluno[key].motivos[a.motivo] || 0) + 1;
+      
+      // 🆕 Conta todos os motivos
+      const motivosArr = (a.motivos && a.motivos.length > 0) ? a.motivos : [a.motivo];
+      motivosArr.forEach(m => {
+        porAluno[key].motivos[m] = (porAluno[key].motivos[m] || 0) + 1;
+        porMotivoGlobal[m] = (porMotivoGlobal[m] || 0) + 1;
+      });
     });
     
     res.json({
@@ -1123,15 +1162,25 @@ router.get('/atraso/relatorio/turma/:turma', authenticateToken, verificarGestaoG
       periodo: { dataInicio, dataFim },
       estatisticas: {
         totalAtrasos: atrasos.length,
-        totalAlunos: Object.keys(porAluno).length
+        totalAlunos: Object.keys(porAluno).length,
+        porMotivo: Object.entries(porMotivoGlobal).map(([m, c]) => ({
+          motivo: m, label: Atraso.getMotivoLabel(m), count: c
+        }))
       },
       porAluno: Object.values(porAluno).sort((a, b) => b.total - a.total),
-      atrasos: atrasos.slice(0, 100).map(a => ({
-        id: a._id, alunoNome: a.alunoNome, motivo: a.motivo,
-        motivoLabel: Atraso.getMotivoLabel(a.motivo),
-        dataHora: a.dataHora, descricao: a.descricao,
-        createdAt: a.createdAt
-      }))
+      atrasos: atrasos.slice(0, 100).map(a => {
+        const motivosArr = (a.motivos && a.motivos.length > 0) ? a.motivos : [a.motivo];
+        return {
+          id: a._id, 
+          alunoNome: a.alunoNome, 
+          motivo: a.motivo,
+          motivos: motivosArr,
+          motivoLabel: Atraso.getMotivosLabels(motivosArr),
+          dataHora: a.dataHora, 
+          descricao: a.descricao,
+          createdAt: a.createdAt
+        };
+      })
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -1145,7 +1194,7 @@ router.get('/atraso/relatorio/geral', authenticateToken, verificarGestaoGeral, a
     
     let query = {};
     if (turma && turma !== 'todas') query.alunoTurma = turma;
-    if (motivo && motivo !== 'todos') query.motivo = motivo;
+    if (motivo && motivo !== 'todos') query.motivos = motivo;
     if (dataInicio || dataFim) {
       query.dataHora = {};
       if (dataInicio) query.dataHora.$gte = new Date(dataInicio);
@@ -1164,7 +1213,11 @@ router.get('/atraso/relatorio/geral', authenticateToken, verificarGestaoGeral, a
       porTurma[a.alunoTurma].total++;
       porTurma[a.alunoTurma].alunos.add(a.alunoId.toString());
       
-      porMotivo[a.motivo] = (porMotivo[a.motivo] || 0) + 1;
+      // 🆕 Conta todos os motivos
+      const motivosArr = (a.motivos && a.motivos.length > 0) ? a.motivos : [a.motivo];
+      motivosArr.forEach(m => {
+        porMotivo[m] = (porMotivo[m] || 0) + 1;
+      });
     });
     
     Object.values(porTurma).forEach(t => {
@@ -1192,13 +1245,21 @@ router.get('/atraso/relatorio/geral', authenticateToken, verificarGestaoGeral, a
       porMotivo: Object.entries(porMotivo).map(([m, c]) => ({
         motivo: m, label: Atraso.getMotivoLabel(m), count: c
       })).sort((a, b) => b.count - a.count),
-      atrasos: atrasos.slice(0, 100).map(a => ({
-        id: a._id, alunoNome: a.alunoNome, alunoTurma: a.alunoTurma,
-        motivo: a.motivo, motivoLabel: Atraso.getMotivoLabel(a.motivo),
-        dataHora: a.dataHora, descricao: a.descricao.substring(0, 100),
-        registradoPor: a.registradoPorNome,
-        createdAt: a.createdAt
-      }))
+      atrasos: atrasos.slice(0, 100).map(a => {
+        const motivosArr = (a.motivos && a.motivos.length > 0) ? a.motivos : [a.motivo];
+        return {
+          id: a._id, 
+          alunoNome: a.alunoNome, 
+          alunoTurma: a.alunoTurma,
+          motivo: a.motivo, 
+          motivos: motivosArr,
+          motivoLabel: Atraso.getMotivosLabels(motivosArr),
+          dataHora: a.dataHora, 
+          descricao: a.descricao.substring(0, 100),
+          registradoPor: a.registradoPorNome,
+          createdAt: a.createdAt
+        };
+      })
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

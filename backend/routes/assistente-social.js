@@ -19,7 +19,7 @@ function mascararParaAdmin(dados, req) {
 
 function mascararItem(item, req) {
   if (!item) return item;
-  const obj = item.toObject ? item.toObject() : JSON.parse(JSON.stringify(item));
+  const obj = item.toObject ? item.toObject({ getters: true }) : JSON.parse(JSON.stringify(item));
   const adminId = req.userId?.toString();
   const criadorId = (obj.entrada?.registradoPor || obj.registradoPorId || obj.criadoPor)?.toString();
   
@@ -44,6 +44,7 @@ function mascararItem(item, req) {
   }
   if (obj.detalhes && typeof obj.detalhes === 'object') {
     Object.keys(obj.detalhes).forEach(chave => {
+      if (chave === 'tiposTarefaAdicionais') return;
       const valor = obj.detalhes[chave];
       if (Array.isArray(valor)) obj.detalhes[chave] = [MASCARA_TEXTO];
       else if (valor !== undefined && valor !== null && valor !== '') obj.detalhes[chave] = MASCARA_TEXTO;
@@ -69,6 +70,36 @@ function adminPodeModificar(atendimento, req) {
     permitido: false,
     motivo: 'Você não pode editar/excluir atendimentos criados por outros profissionais.'
   };
+}
+
+// ============================================
+// 🆕 HELPERS DE MÚLTIPLOS TIPOS
+// ============================================
+function extrairTiposTarefa(atendimento) {
+  const adicionais = atendimento?.detalhes?.tiposTarefaAdicionais || [];
+  return [...new Set([atendimento?.tipoTarefa, ...adicionais].filter(Boolean))];
+}
+
+function labelTiposTarefa(tipos) {
+  return AtendimentoAssistenteSocial.getTiposLabels(tipos);
+}
+
+// ============================================
+// 🆕 HELPER: LÊ detalhes com getters (descriptografado)
+// ============================================
+function lerDetalhesLimpos(atendimento) {
+  if (!atendimento || !atendimento.detalhes) return {};
+  try {
+    const obj = atendimento.detalhes.toObject 
+      ? atendimento.detalhes.toObject({ getters: true }) 
+      : JSON.parse(JSON.stringify(atendimento.detalhes));
+    const limpo = { ...obj };
+    delete limpo.tiposTarefaAdicionais;
+    return limpo;
+  } catch (e) {
+    console.error('[lerDetalhesLimpos] erro:', e);
+    return {};
+  }
 }
 
 function formatarTempoAtendimento(dataEntrada) {
@@ -111,11 +142,6 @@ async function criarNotificacaoInterna({ usuarioId, titulo, mensagem, tipo, link
   return notif;
 }
 
-// ============================================
-// PROCESSAR ALERTAS 24H
-// Envia 1 notificação por dia por atendimento
-// (1º alerta: 24h | 2º: 48h | 3º: 72h | ...)
-// ============================================
 async function processarAlertas24h() {
   const atendimentos = await AtendimentoAssistenteSocial.buscarAtendimentosParaAlerta();
   if (atendimentos.length === 0) return { processados: 0, pulados: 0 };
@@ -123,13 +149,12 @@ async function processarAlertas24h() {
   let processados = 0;
   let pulados = 0;
   const agora = new Date();
-  const INTERVALO_MINIMO_MS = 24 * 60 * 60 * 1000; // 24 horas entre alertas
+  const INTERVALO_MINIMO_MS = 24 * 60 * 60 * 1000;
   
   for (const atendimento of atendimentos) {
     const registradoPor = atendimento.entrada?.registradoPor;
     if (!registradoPor) continue;
     
-    // 🛡️ Só envia se passou 24h desde o último alerta (ou se nunca alertou)
     if (atendimento.ultimoAlerta24h) {
       const diff = agora - new Date(atendimento.ultimoAlerta24h);
       if (diff < INTERVALO_MINIMO_MS) {
@@ -139,17 +164,13 @@ async function processarAlertas24h() {
     }
     
     const tempo = formatarTempoAtendimento(atendimento.entrada.dataHora);
-    const tipoLabel = AtendimentoAssistenteSocial.getTipoTarefaLabel(atendimento.tipoTarefa);
+    const tipos = extrairTiposTarefa(atendimento);
+    const tipoLabel = labelTiposTarefa(tipos);
     const totalAlertas = (atendimento.totalAlertas24h || 0) + 1;
-    
-    // Define o "nível" do alerta
     const nivelLabel = totalAlertas === 1 
-      ? '24h' 
-      : totalAlertas === 2 
-        ? '48h' 
-        : totalAlertas === 3 
-          ? '72h' 
-          : `${totalAlertas * 24}h`;
+      ? '24h' : totalAlertas === 2 
+        ? '48h' : totalAlertas === 3 
+          ? '72h' : `${totalAlertas * 24}h`;
     
     try {
       await criarNotificacaoInterna({
@@ -209,18 +230,16 @@ function fimDoDiaBrasil(dataStr) { return new Date(dataStr + 'T23:59:59.999-03:0
 
 // ============================================
 // HEALTH CHECK
-// Retorna o status do serviço (online/versão/timestamp)
 // ============================================
 router.get('/health', (req, res) => {
   res.json({ 
     success: true, status: 'online', service: 'Assistente Social',
-    versao: '2.0-alertas-24h', timestamp: new Date().toISOString()
+    versao: '2.1-multi-tipos', timestamp: new Date().toISOString()
   });
 });
 
 // ============================================
 // MIGRAÇÃO
-// Inicializa campos de alerta 24h em atendimentos existentes
 // ============================================
 router.post('/admin/migrar-alertas-24h', async (req, res) => {
   try {
@@ -237,8 +256,6 @@ router.post('/admin/migrar-alertas-24h', async (req, res) => {
 // ============================================
 // TURMAS E ALUNOS
 // ============================================
-
-// Lista todas as turmas distintas de alunos ativos
 router.get('/turmas', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const turmas = await User.distinct('turma', { 
@@ -248,7 +265,6 @@ router.get('/turmas', authenticateToken, verificarAssistenteSocial, async (req, 
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// Lista alunos de uma turma específica
 router.get('/alunos-por-turma', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const { turma } = req.query;
@@ -267,7 +283,6 @@ router.get('/alunos-por-turma', authenticateToken, verificarAssistenteSocial, as
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// Busca dados completos de um aluno (incluindo atendimentos ativos e histórico recente)
 router.get('/aluno/:id', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const aluno = await User.findOne({ _id: req.params.id, ativo: true })
@@ -290,21 +305,28 @@ router.get('/aluno/:id', authenticateToken, verificarAssistenteSocial, async (re
         id: aluno._id, nome: aluno.nome, matricula: aluno.matricula,
         turma: aluno.turma, curso: aluno.curso, fotoPerfil: aluno.fotoPerfil || null
       },
-      atendimentosAtivos: atendimentosAtivos.map(a => ({
-        id: a._id, tipoTarefa: a.tipoTarefa,
-        tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(a.tipoTarefa),
-        descricao: a.entrada.descricao, dataHoraEntrada: a.entrada.dataHora, prioridade: a.prioridade
-      })),
-      historicoRecente: historicoRecente.map(a => ({
-        id: a._id, tipoTarefa: a.tipoTarefa,
-        tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(a.tipoTarefa),
-        descricao: a.entrada.descricao, dataHora: a.entrada.dataHora, resultado: a.saida?.resultado
-      }))
+      atendimentosAtivos: atendimentosAtivos.map(a => {
+        const tipos = extrairTiposTarefa(a);
+        return {
+          id: a._id, tipoTarefa: a.tipoTarefa,
+          tiposTarefa: tipos,
+          tipoTarefaLabel: labelTiposTarefa(tipos),
+          descricao: a.entrada.descricao, dataHoraEntrada: a.entrada.dataHora, prioridade: a.prioridade
+        };
+      }),
+      historicoRecente: historicoRecente.map(a => {
+        const tipos = extrairTiposTarefa(a);
+        return {
+          id: a._id, tipoTarefa: a.tipoTarefa,
+          tiposTarefa: tipos,
+          tipoTarefaLabel: labelTiposTarefa(tipos),
+          descricao: a.entrada.descricao, dataHora: a.entrada.dataHora, resultado: a.saida?.resultado
+        };
+      })
     });
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// Busca alunos por nome ou matrícula (mínimo 2 caracteres)
 router.get('/buscar-aluno', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const { termo } = req.query;
@@ -331,15 +353,25 @@ router.get('/buscar-aluno', authenticateToken, verificarAssistenteSocial, async 
 });
 
 // ============================================
-// REGISTRAR
-// Cria um novo atendimento com dados do aluno e assinatura opcional
+// REGISTRAR (MÚLTIPLOS TIPOS)
 // ============================================
 router.post('/registrar', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const { 
-      alunoId, tipoTarefa, descricao, observacoes, gravidade, prioridade, detalhes, 
+      alunoId, 
+      tiposTarefa, tipoTarefa,
+      descricao, observacoes, gravidade, prioridade, detalhes, 
       assinaturaBase64, precisaAssinatura = false
     } = req.body;
+    
+    let tiposFinal = Array.isArray(tiposTarefa) && tiposTarefa.length > 0
+      ? tiposTarefa
+      : (tipoTarefa ? [tipoTarefa] : []);
+    tiposFinal = [...new Set(tiposFinal.filter(Boolean))];
+    
+    if (tiposFinal.length === 0) {
+      return res.status(400).json({ success: false, error: 'Selecione pelo menos um tipo de tarefa' });
+    }
     
     if (!descricao || descricao.trim() === '') {
       return res.status(400).json({ success: false, error: 'A descrição é obrigatória' });
@@ -351,8 +383,10 @@ router.post('/registrar', authenticateToken, verificarAssistenteSocial, async (r
       'baixo_rendimento', 'encaminhamento', 'intervencao', 'atendimento', 'outros'
     ];
     
-    if (!tiposValidos.includes(tipoTarefa)) {
-      return res.status(400).json({ success: false, error: 'Tipo de tarefa inválido' });
+    for (const t of tiposFinal) {
+      if (!tiposValidos.includes(t)) {
+        return res.status(400).json({ success: false, error: `Tipo de tarefa inválido: ${t}` });
+      }
     }
     
     const aluno = await User.findById(alunoId);
@@ -373,10 +407,16 @@ router.post('/registrar', authenticateToken, verificarAssistenteSocial, async (r
       ? 'pendente'
       : (assinaturaValida.length > 100 ? 'assinada' : 'nao_necessaria');
     
+    // Prepara detalhes com tipos adicionais
+    const detalhesFinal = { ...(detalhes || {}) };
+    if (tiposFinal.length > 1) {
+      detalhesFinal.tiposTarefaAdicionais = tiposFinal.slice(1);
+    }
+    
     const atendimento = new AtendimentoAssistenteSocial({
       alunoId: aluno._id, alunoNome: aluno.nome, alunoMatricula: aluno.matricula,
       alunoTurma: aluno.turma || 'Não informada', alunoCurso: aluno.curso || 'Não informado',
-      alunoFoto: aluno.fotoPerfil, tipoTarefa,
+      alunoFoto: aluno.fotoPerfil, tipoTarefa: tiposFinal[0],
       entrada: {
         dataHora: new Date(),
         descricao: descricao.trim(),
@@ -391,7 +431,7 @@ router.post('/registrar', authenticateToken, verificarAssistenteSocial, async (r
         assinadaPor: assinaturaValida.length > 100 ? req.userId : null,
         assinadaPorNome: assinaturaValida.length > 100 ? (assistente?.nome || req.userNome) : null
       },
-      detalhes: detalhes || {},
+      detalhes: detalhesFinal,
       prioridade: prioridade || 'normal',
       status: 'em_andamento',
       ultimoAlerta24h: null,
@@ -401,25 +441,30 @@ router.post('/registrar', authenticateToken, verificarAssistenteSocial, async (r
     
     await atendimento.save();
     
+    const labelTipos = labelTiposTarefa(tiposFinal);
+    
     res.json({
       success: true,
-      message: `${AtendimentoAssistenteSocial.getTipoTarefaLabel(tipoTarefa)} registrado para ${aluno.nome}`,
+      message: `${labelTipos} registrado para ${aluno.nome}`,
       atendimento: {
         id: atendimento._id,
         tipoTarefa: atendimento.tipoTarefa,
-        tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(tipoTarefa),
+        tiposTarefa: tiposFinal,
+        tipoTarefaLabel: labelTipos,
         status: atendimento.status,
         dataHora: atendimento.entrada.dataHora,
         temAssinatura: atendimento.entrada.temAssinatura,
         statusAssinatura: atendimento.entrada.statusAssinatura
       }
     });
-  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+  } catch (error) { 
+    console.error('[POST /registrar] Erro:', error);
+    res.status(500).json({ success: false, error: error.message }); 
+  }
 });
 
 // ============================================
 // APLICAR ASSINATURA
-// Aplica a assinatura capturada via QR Code em um atendimento
 // ============================================
 router.post('/aplicar-assinatura', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -459,7 +504,6 @@ router.post('/aplicar-assinatura', authenticateToken, verificarAssistenteSocial,
 
 // ============================================
 // FINALIZAR
-// Finaliza um atendimento com resultado e observações finais
 // ============================================
 router.post('/finalizar', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -515,7 +559,6 @@ router.post('/finalizar', authenticateToken, verificarAssistenteSocial, async (r
 
 // ============================================
 // REMARCAR
-// Adiciona uma remarcação a um atendimento existente
 // ============================================
 router.post('/remarcar', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -575,7 +618,6 @@ router.post('/remarcar', authenticateToken, verificarAssistenteSocial, async (re
 
 // ============================================
 // REMARCAÇÕES PENDENTES
-// Lista todas as remarcações com status pendente
 // ============================================
 router.get('/remarcacoes/pendentes', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -588,6 +630,7 @@ router.get('/remarcacoes/pendentes', authenticateToken, verificarAssistenteSocia
     const remarcacoes = [];
     
     atendimentos.forEach(atendimento => {
+      const tipos = extrairTiposTarefa(atendimento);
       (atendimento.remarcacoes || []).forEach(rem => {
         if (rem.status !== 'pendente') return;
         const dataRem = new Date(rem.dataRemarcacao + 'T00:00:00');
@@ -596,7 +639,8 @@ router.get('/remarcacoes/pendentes', authenticateToken, verificarAssistenteSocia
           alunoId: atendimento.alunoId, alunoNome: atendimento.alunoNome,
           alunoTurma: atendimento.alunoTurma, alunoFoto: atendimento.alunoFoto,
           tipoTarefa: atendimento.tipoTarefa,
-          tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(atendimento.tipoTarefa),
+          tiposTarefa: tipos,
+          tipoTarefaLabel: labelTiposTarefa(tipos),
           dataRemarcacao: rem.dataRemarcacao, horarioRemarcacao: rem.horarioRemarcacao,
           motivoRemarcacao: rem.motivoRemarcacao,
           observacoesRemarcacao: rem.observacoesRemarcacao,
@@ -620,7 +664,6 @@ router.get('/remarcacoes/pendentes', authenticateToken, verificarAssistenteSocia
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// Busca uma remarcação específica pelo ID
 router.get('/remarcacoes/:id', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const atendimento = await AtendimentoAssistenteSocial.findOne({ 'remarcacoes.id': req.params.id });
@@ -645,7 +688,6 @@ router.get('/remarcacoes/:id', authenticateToken, verificarAssistenteSocial, asy
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// Finaliza uma remarcação (realizado ou cancelado)
 router.post('/remarcacoes/finalizar', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const { remarcacaoId, acao } = req.body;
@@ -690,7 +732,6 @@ router.post('/remarcacoes/finalizar', authenticateToken, verificarAssistenteSoci
 
 // ============================================
 // ATENDIMENTOS COM +24H
-// Lista atendimentos em andamento há mais de 24h (com máscara para super_admin)
 // ============================================
 router.get('/atendimentos-antigos', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -708,6 +749,7 @@ router.get('/atendimentos-antigos', authenticateToken, verificarAssistenteSocial
     
     const lista = atendimentos.map(a => {
       const tempo = formatarTempoAtendimento(a.entrada.dataHora);
+      const tipos = extrairTiposTarefa(a);
       return {
         id: a._id,
         alunoId: a.alunoId,
@@ -716,7 +758,8 @@ router.get('/atendimentos-antigos', authenticateToken, verificarAssistenteSocial
         alunoTurma: a.alunoTurma,
         alunoFoto: a.alunoFoto,
         tipoTarefa: a.tipoTarefa,
-        tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(a.tipoTarefa),
+        tiposTarefa: tipos,
+        tipoTarefaLabel: labelTiposTarefa(tipos),
         descricao: a.entrada.descricao,
         gravidade: a.entrada.gravidade,
         prioridade: a.prioridade,
@@ -738,17 +781,12 @@ router.get('/atendimentos-antigos', authenticateToken, verificarAssistenteSocial
       };
     });
     
-    // 🔒 APLICA A MÁSCARA PARA SUPER_ADMIN
     const listaMascarada = mascararParaAdmin(lista, req);
     
     res.json({ success: true, total: listaMascarada.length, atendimentos: listaMascarada });
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ============================================
-// VERIFICAR ATENDIMENTO +24H
-// Permite encerrar ou manter aberto um atendimento com +24h
-// ============================================
 router.post('/atendimento/:id/verificar-24h', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const { acao, resultado, observacoes } = req.body;
@@ -810,7 +848,6 @@ router.post('/atendimento/:id/verificar-24h', authenticateToken, verificarAssist
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// Processa manualmente os alertas de +24h (usado para testes)
 router.post('/processar-alertas-24h', async (req, res) => {
   try {
     const resultado = await processarAlertas24h();
@@ -819,8 +856,7 @@ router.post('/processar-alertas-24h', async (req, res) => {
 });
 
 // ============================================
-// DASHBOARD
-// Retorna métricas, gráficos e tendências dos atendimentos
+// DASHBOARD (agrupa multi-tipos corretamente)
 // ============================================
 router.get('/dashboard', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -854,9 +890,20 @@ router.get('/dashboard', authenticateToken, verificarAssistenteSocial, async (re
       'entrada.dataHora': { $lte: limite24h }
     });
     
+    // 🆕 Agrupa pelos tipos (principal + adicionais)
     const porTipo = await AtendimentoAssistenteSocial.aggregate([
       { $match: { 'entrada.dataHora': { $gte: ultimos30Dias } } },
-      { $group: { _id: '$tipoTarefa', count: { $sum: 1 } } },
+      { $project: {
+          tiposEfetivos: {
+            $cond: [
+              { $gt: [{ $size: { $ifNull: ['$detalhes.tiposTarefaAdicionais', []] } }, 0] },
+              { $concatArrays: [['$tipoTarefa'], '$detalhes.tiposTarefaAdicionais'] },
+              ['$tipoTarefa']
+            ]
+          }
+      }},
+      { $unwind: '$tiposEfetivos' },
+      { $group: { _id: '$tiposEfetivos', count: { $sum: 1 } } },
       { $sort: { count: -1 } }
     ]);
     
@@ -943,7 +990,6 @@ router.get('/dashboard', authenticateToken, verificarAssistenteSocial, async (re
 
 // ============================================
 // ATENDIMENTOS ATIVOS
-// Lista todos os atendimentos em andamento (com máscara para super_admin)
 // ============================================
 router.get('/atendimentos-ativos', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -952,11 +998,13 @@ router.get('/atendimentos-ativos', authenticateToken, verificarAssistenteSocial,
     
     const lista = atendimentos.map(a => {
       const tempo = formatarTempoAtendimento(a.entrada.dataHora);
+      const tipos = extrairTiposTarefa(a);
       return {
         id: a._id, alunoId: a.alunoId, alunoNome: a.alunoNome,
         alunoTurma: a.alunoTurma, alunoFoto: a.alunoFoto,
         tipoTarefa: a.tipoTarefa,
-        tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(a.tipoTarefa),
+        tiposTarefa: tipos,
+        tipoTarefaLabel: labelTiposTarefa(tipos),
         descricao: a.entrada.descricao, gravidade: a.entrada.gravidade, prioridade: a.prioridade,
         dataHoraEntrada: a.entrada.dataHora,
         tempoAtendimento: tempo.minutos, tempoTexto: tempo.texto, nivelTempo: tempo.nivel,
@@ -981,7 +1029,6 @@ router.get('/atendimentos-ativos', authenticateToken, verificarAssistenteSocial,
 
 // ============================================
 // LISTAR ATENDIMENTOS
-// Lista atendimentos com filtros (tipo, status, turma, data, busca, resultado)
 // ============================================
 router.get('/atendimentos', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -991,7 +1038,12 @@ router.get('/atendimentos', authenticateToken, verificarAssistenteSocial, async 
     } = req.query;
     
     let query = {};
-    if (tipo && tipo !== 'todos') query.tipoTarefa = tipo;
+    if (tipo && tipo !== 'todos') {
+      query.$or = [
+        { tipoTarefa: tipo },
+        { 'detalhes.tiposTarefaAdicionais': tipo }
+      ];
+    }
     if (status && status !== 'todos') query.status = status;
     if (turma && turma !== 'todas') query.alunoTurma = turma;
     
@@ -1003,10 +1055,16 @@ router.get('/atendimentos', authenticateToken, verificarAssistenteSocial, async 
     
     if (busca && busca.trim() !== '') {
       const termo = busca.trim();
-      query.$or = [
+      const buscaOr = [
         { alunoNome: { $regex: termo, $options: 'i' } },
         { alunoMatricula: { $regex: termo, $options: 'i' } }
       ];
+      if (query.$or) {
+        query.$and = [{ $or: query.$or }, { $or: buscaOr }];
+        delete query.$or;
+      } else {
+        query.$or = buscaOr;
+      }
     }
     
     if (resultado && resultado !== 'todos' && resultado !== '') {
@@ -1031,11 +1089,13 @@ router.get('/atendimentos', authenticateToken, verificarAssistenteSocial, async 
     
     const lista = atendimentos.map(a => {
       const tempo = formatarTempoAtendimento(a.entrada.dataHora);
+      const tipos = extrairTiposTarefa(a);
       return {
         id: a._id, alunoId: a.alunoId, alunoNome: a.alunoNome,
         alunoMatricula: a.alunoMatricula, alunoTurma: a.alunoTurma, alunoCurso: a.alunoCurso,
         tipoTarefa: a.tipoTarefa,
-        tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(a.tipoTarefa),
+        tiposTarefa: tipos,
+        tipoTarefaLabel: labelTiposTarefa(tipos),
         descricao: a.entrada.descricao, gravidade: a.entrada.gravidade, prioridade: a.prioridade,
         status: a.status,
         dataEntrada: a.entrada.dataHora,
@@ -1075,20 +1135,25 @@ router.get('/atendimentos', authenticateToken, verificarAssistenteSocial, async 
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// Busca um atendimento específico pelo ID (com máscara para super_admin)
+// ============================================
+// BUSCAR POR ID
+// ============================================
 router.get('/atendimento/:id', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const atendimento = await AtendimentoAssistenteSocial.findById(req.params.id);
     if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
     
     const tempo = formatarTempoAtendimento(atendimento.entrada.dataHora);
+    const tipos = extrairTiposTarefa(atendimento);
+    const detalhesLimpos = lerDetalhesLimpos(atendimento);
     
     const payload = {
       id: atendimento._id, alunoId: atendimento.alunoId, alunoNome: atendimento.alunoNome,
       alunoMatricula: atendimento.alunoMatricula, alunoTurma: atendimento.alunoTurma,
       alunoCurso: atendimento.alunoCurso,
       tipoTarefa: atendimento.tipoTarefa,
-      tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(atendimento.tipoTarefa),
+      tiposTarefa: tipos,
+      tipoTarefaLabel: labelTiposTarefa(tipos),
       entrada: {
         dataHora: atendimento.entrada.dataHora,
         dataHoraFormatada: new Date(atendimento.entrada.dataHora).toLocaleString('pt-BR'),
@@ -1103,7 +1168,7 @@ router.get('/atendimento/:id', authenticateToken, verificarAssistenteSocial, asy
         assinadaEm: atendimento.entrada?.assinadaEm || null,
         assinadaPorNome: atendimento.entrada?.assinadaPorNome || null
       },
-      detalhes: atendimento.detalhes,
+      detalhes: detalhesLimpos,
       saida: atendimento.saida ? {
         dataHora: atendimento.saida.dataHora,
         dataHoraFormatada: new Date(atendimento.saida.dataHora).toLocaleString('pt-BR'),
@@ -1128,7 +1193,9 @@ router.get('/atendimento/:id', authenticateToken, verificarAssistenteSocial, asy
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// Atualiza um atendimento (com verificação de permissão para super_admin)
+// ============================================
+// EDITAR (MÚLTIPLOS TIPOS + DETALHES CORRIGIDOS)
+// ============================================
 router.put('/atendimento/:id', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const atendimento = await AtendimentoAssistenteSocial.findById(req.params.id);
@@ -1139,16 +1206,72 @@ router.put('/atendimento/:id', authenticateToken, verificarAssistenteSocial, asy
       return res.status(403).json({ success: false, error: check.motivo, code: 'ADMIN_NAO_CRIADOR' });
     }
     
-    const { tipoTarefa, descricao, observacoes, gravidade, prioridade, detalhes, status, saida } = req.body;
+    const { 
+      tiposTarefa, tipoTarefa,
+      descricao, observacoes, gravidade, prioridade, 
+      detalhes, status, saida
+    } = req.body;
     
-    if (tipoTarefa) atendimento.tipoTarefa = tipoTarefa;
+    // 1) Tipos
+    let tiposFinal = null;
+    if (Array.isArray(tiposTarefa) && tiposTarefa.length > 0) {
+      tiposFinal = [...new Set(tiposTarefa.filter(Boolean))];
+    } else if (tipoTarefa) {
+      tiposFinal = [tipoTarefa];
+    }
+    
+    const detalhesAtuaisLimpos = lerDetalhesLimpos(atendimento);
+    const tiposAdicionaisAtuais = atendimento.detalhes?.tiposTarefaAdicionais 
+      ? [...atendimento.detalhes.tiposTarefaAdicionais] : [];
+    
+    let tiposAdicionaisFinal = tiposAdicionaisAtuais;
+    if (tiposFinal && tiposFinal.length > 0) {
+      atendimento.tipoTarefa = tiposFinal[0];
+      tiposAdicionaisFinal = tiposFinal.length > 1 ? tiposFinal.slice(1) : [];
+    }
+    
+    // 2) Campos simples
     if (descricao) atendimento.entrada.descricao = descricao;
     if (observacoes !== undefined) atendimento.entrada.observacoes = observacoes;
     if (gravidade) atendimento.entrada.gravidade = gravidade;
     if (prioridade) atendimento.prioridade = prioridade;
-    if (detalhes) atendimento.detalhes = { ...atendimento.detalhes, ...detalhes };
-    if (status) atendimento.status = status;
     
+    // 3) Detalhes via .set() (criptografia correta)
+    const detalhesParaSalvar = { ...detalhesAtuaisLimpos };
+    if (detalhes && typeof detalhes === 'object') {
+      Object.entries(detalhes).forEach(([k, v]) => {
+        if (k === 'tiposTarefaAdicionais') return;
+        if (v === undefined) return;
+        detalhesParaSalvar[k] = v;
+      });
+    }
+    detalhesParaSalvar.tiposTarefaAdicionais = tiposAdicionaisFinal;
+    
+    if (!atendimento.detalhes) atendimento.detalhes = {};
+    
+    Object.entries(detalhesParaSalvar).forEach(([k, v]) => {
+      if (v === undefined) return;
+      if (k === 'tiposTarefaAdicionais') {
+        atendimento.detalhes.set('tiposTarefaAdicionais', v);
+        return;
+      }
+      if (Array.isArray(v) && [
+        'profissionaisEnvolvidos', 'participantesAtendimento', 'disciplinasAfetadas',
+        'professoresEnvolvidos', 'disciplinasCriticas', 'participantesIntervencao'
+      ].includes(k)) {
+        atendimento.detalhes.set(k, v.map(x => x || ''));
+        return;
+      }
+      if (v instanceof Date || typeof v === 'boolean' || typeof v === 'number') {
+        atendimento.detalhes.set(k, v);
+        return;
+      }
+      atendimento.detalhes.set(k, v);
+    });
+    atendimento.markModified('detalhes');
+    
+    // 4) Status/Saída
+    if (status) atendimento.status = status;
     if (saida) {
       atendimento.saida = { 
         ...atendimento.saida, ...saida,
@@ -1161,11 +1284,26 @@ router.put('/atendimento/:id', authenticateToken, verificarAssistenteSocial, asy
     
     atendimento.updatedAt = new Date();
     await atendimento.save();
-    res.json({ success: true, message: 'Atualizado', atendimento: { id: atendimento._id } });
-  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+    
+    const tiposFinais = extrairTiposTarefa(atendimento);
+    
+    res.json({ 
+      success: true, 
+      message: 'Atualizado', 
+      atendimento: { 
+        id: atendimento._id,
+        tiposTarefa: tiposFinais
+      } 
+    });
+  } catch (error) { 
+    console.error('[PUT /atendimento] Erro:', error);
+    res.status(500).json({ success: false, error: error.message }); 
+  }
 });
 
-// Exclui um atendimento (com verificação de permissão para super_admin)
+// ============================================
+// EXCLUIR
+// ============================================
 router.delete('/atendimento/:id', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const atendimento = await AtendimentoAssistenteSocial.findById(req.params.id);
@@ -1181,7 +1319,9 @@ router.delete('/atendimento/:id', authenticateToken, verificarAssistenteSocial, 
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// Exclusão em massa de atendimentos finalizados antes de uma data (bloqueado para super_admin)
+// ============================================
+// EXCLUSÃO EM MASSA
+// ============================================
 router.post('/atendimentos/exclusao-massa', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     if (req.userRole === 'super_admin') {
@@ -1214,10 +1354,8 @@ router.post('/atendimentos/exclusao-massa', authenticateToken, verificarAssisten
 });
 
 // ============================================
-// RELATÓRIOS
+// RELATÓRIO POR ALUNO
 // ============================================
-
-// Relatório individual de um aluno
 router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const { dataInicio, dataFim } = req.query;
@@ -1234,7 +1372,8 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarAssistenteSo
     const porGravidade = {};
     
     atendimentos.forEach(a => {
-      porTipo[a.tipoTarefa] = (porTipo[a.tipoTarefa] || 0) + 1;
+      const tipos = extrairTiposTarefa(a);
+      tipos.forEach(t => { porTipo[t] = (porTipo[t] || 0) + 1; });
       porGravidade[a.entrada.gravidade] = (porGravidade[a.entrada.gravidade] || 0) + 1;
     });
     
@@ -1253,9 +1392,11 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarAssistenteSo
       },
       atendimentos: atendimentos.map(a => {
         const tempo = formatarTempoAtendimento(a.entrada.dataHora);
+        const tipos = extrairTiposTarefa(a);
         return {
           id: a._id, tipoTarefa: a.tipoTarefa,
-          tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(a.tipoTarefa),
+          tiposTarefa: tipos,
+          tipoTarefaLabel: labelTiposTarefa(tipos),
           dataEntrada: a.entrada.dataHora, descricao: a.entrada.descricao,
           gravidade: a.entrada.gravidade, status: a.status,
           dataSaida: a.saida?.dataHora || null, resultado: a.saida?.resultado || null,
@@ -1268,7 +1409,9 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarAssistenteSo
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// Relatório por turma
+// ============================================
+// RELATÓRIO POR TURMA
+// ============================================
 router.get('/relatorio/turma/:turma', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const { dataInicio, dataFim } = req.query;
@@ -1292,8 +1435,12 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarAssistenteSoci
         };
       }
       porAluno[key].total++;
-      porAluno[key].tipos[a.tipoTarefa] = (porAluno[key].tipos[a.tipoTarefa] || 0) + 1;
-      porTipo[a.tipoTarefa] = (porTipo[a.tipoTarefa] || 0) + 1;
+      
+      const tipos = extrairTiposTarefa(a);
+      tipos.forEach(t => {
+        porAluno[key].tipos[t] = (porAluno[key].tipos[t] || 0) + 1;
+        porTipo[t] = (porTipo[t] || 0) + 1;
+      });
     });
     
     res.json({
@@ -1309,10 +1456,12 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarAssistenteSoci
       porAluno: Object.values(porAluno).sort((a, b) => b.total - a.total),
       atendimentos: atendimentos.map(a => {
         const tempo = formatarTempoAtendimento(a.entrada.dataHora);
+        const tipos = extrairTiposTarefa(a);
         return {
           id: a._id, alunoNome: a.alunoNome,
           tipoTarefa: a.tipoTarefa,
-          tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(a.tipoTarefa),
+          tiposTarefa: tipos,
+          tipoTarefaLabel: labelTiposTarefa(tipos),
           dataEntrada: a.entrada.dataHora, descricao: a.entrada.descricao,
           gravidade: a.entrada.gravidade, status: a.status,
           tempoTexto: tempo.texto
@@ -1322,13 +1471,20 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarAssistenteSoci
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// Relatório geral com filtros
+// ============================================
+// RELATÓRIO GERAL
+// ============================================
 router.get('/relatorio/geral', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const { dataInicio, dataFim, turma, tipo } = req.query;
     let query = {};
     if (turma && turma !== 'todas') query.alunoTurma = turma;
-    if (tipo && tipo !== 'todos') query.tipoTarefa = tipo;
+    if (tipo && tipo !== 'todos') {
+      query.$or = [
+        { tipoTarefa: tipo },
+        { 'detalhes.tiposTarefaAdicionais': tipo }
+      ];
+    }
     
     if (dataInicio || dataFim) {
       query['entrada.dataHora'] = {};
@@ -1352,7 +1508,9 @@ router.get('/relatorio/geral', authenticateToken, verificarAssistenteSocial, asy
       }
       porTurma[a.alunoTurma].total++;
       porTurma[a.alunoTurma].alunos.add(a.alunoId.toString());
-      porTipo[a.tipoTarefa] = (porTipo[a.tipoTarefa] || 0) + 1;
+      
+      const tipos = extrairTiposTarefa(a);
+      tipos.forEach(t => { porTipo[t] = (porTipo[t] || 0) + 1; });
       porGravidade[a.entrada.gravidade] = (porGravidade[a.entrada.gravidade] || 0) + 1;
     });
     
@@ -1383,10 +1541,12 @@ router.get('/relatorio/geral', authenticateToken, verificarAssistenteSocial, asy
       porGravidade,
       registros: atendimentos.map(a => {
         const tempo = formatarTempoAtendimento(a.entrada.dataHora);
+        const tipos = extrairTiposTarefa(a);
         return {
           id: a._id, alunoNome: a.alunoNome, alunoMatricula: a.alunoMatricula,
           alunoTurma: a.alunoTurma, tipoTarefa: a.tipoTarefa,
-          tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(a.tipoTarefa),
+          tiposTarefa: tipos,
+          tipoTarefaLabel: labelTiposTarefa(tipos),
           dataEntrada: a.entrada.dataHora,
           dataFormatada: new Date(a.entrada.dataHora).toLocaleDateString('pt-BR'),
           descricao: a.entrada.descricao, gravidade: a.entrada.gravidade,
@@ -1399,10 +1559,12 @@ router.get('/relatorio/geral', authenticateToken, verificarAssistenteSocial, asy
       }),
       atendimentos: atendimentos.slice(0, 100).map(a => {
         const tempo = formatarTempoAtendimento(a.entrada.dataHora);
+        const tipos = extrairTiposTarefa(a);
         return {
           id: a._id, alunoNome: a.alunoNome, alunoTurma: a.alunoTurma,
           tipoTarefa: a.tipoTarefa,
-          tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(a.tipoTarefa),
+          tiposTarefa: tipos,
+          tipoTarefaLabel: labelTiposTarefa(tipos),
           dataEntrada: a.entrada.dataHora,
           descricao: a.entrada.descricao.substring(0, 100),
           gravidade: a.entrada.gravidade, status: a.status,
@@ -1417,7 +1579,6 @@ router.get('/relatorio/geral', authenticateToken, verificarAssistenteSocial, asy
 
 // ============================================
 // SCHEDULER
-// Executa alertas de +24h a cada 5 minutos
 // ============================================
 let schedulerInterval = null;
 

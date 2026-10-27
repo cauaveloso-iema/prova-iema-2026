@@ -44,74 +44,64 @@ const RemarcacaoSchema = new mongoose.Schema({
 });
 
 // ============================================
-// 🆕 SUB-SCHEMA: PARTICIPANTE DO ATENDIMENTO
+// SUB-SCHEMA: PARTICIPANTE
 // ============================================
 const ParticipanteSchema = new mongoose.Schema({
-  usuarioId: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'User', 
-    required: true 
-  },
-  usuarioNome: { 
-    type: String, 
-    required: true 
-  },
-  usuarioMatricula: { 
-    type: String, 
-    default: null 
-  },
-  usuarioFoto: { 
-    type: String, 
-    default: null 
-  },
-  tipo: { 
-    type: String, 
-    required: true 
-  }, // 'professor', 'aluno', 'supervisao', 'gestao_geral', 'psicologia', 'assistente_social', 'biblioteca'
-  tipoLabel: { 
-    type: String, 
-    required: true 
-  },
-  turma: { 
-    type: String, 
-    default: null 
-  }, // Se for aluno
-  eixo: { 
-    type: String, 
-    default: null 
-  }, // Se for professor
-  filtroValor: { 
-    type: String, 
-    default: '' 
-  }, // Valor do select intermediário (turma ou eixo)
-  precisaAssinatura: { 
-    type: Boolean, 
-    default: false 
-  },
+  usuarioId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  usuarioNome: { type: String, required: true },
+  usuarioMatricula: { type: String, default: null },
+  usuarioFoto: { type: String, default: null },
+  tipo: { type: String, required: true },
+  tipoLabel: { type: String, required: true },
+  turma: { type: String, default: null },
+  eixo: { type: String, default: null },
+  filtroValor: { type: String, default: '' },
+  precisaAssinatura: { type: Boolean, default: false },
   assinaturaBase64: { 
     type: String, 
     default: '',
     set: criptografar,
     get: descriptografar
   },
-  temAssinatura: { 
-    type: Boolean, 
-    default: false 
-  },
-  assinadaEm: { 
-    type: Date, 
-    default: null 
-  },
-  assinadaPorNome: { 
-    type: String, 
-    default: null 
-  },
-  sessaoAssinaturaId: { 
-    type: String, 
-    default: null 
-  }
+  temAssinatura: { type: Boolean, default: false },
+  assinadaEm: { type: Date, default: null },
+  assinadaPorNome: { type: String, default: null },
+  sessaoAssinaturaId: { type: String, default: null }
 }, {
   _id: true,
+  toJSON: { getters: true },
+  toObject: { getters: true }
+});
+
+// ============================================
+// 🆕 SUB-SCHEMA: DETALHES (SUBSTITUI O OBJETO INLINE)
+// Isso é o que resolve o problema de criptografia
+// ============================================
+const DetalhesSchema = new mongoose.Schema({
+  testemunhas: { 
+    type: [String],
+    set: (arr) => Array.isArray(arr) ? arr.map(v => v ? criptografar(v) : v) : arr,
+    get: (arr) => Array.isArray(arr) ? arr.map(v => v ? descriptografar(v) : v) : arr
+  },
+  descricaoOcorrido: { type: String, set: criptografar, get: descriptografar },
+  nomeResponsavel: { type: String, set: criptografar, get: descriptografar },
+  parentescoResponsavel: { type: String, set: criptografar, get: descriptografar },
+  telefoneResponsavel: { type: String, set: criptografar, get: descriptografar },
+  compareceu: { type: Boolean, default: false },
+  nomeProfessor: { type: String, set: criptografar, get: descriptografar },
+  disciplina: { type: String, set: criptografar, get: descriptografar },
+  dataInicioSuspensao: Date,
+  dataFimSuspensao: Date,
+  diasSuspensao: Number,
+  encaminhadoPara: { type: String, set: criptografar, get: descriptografar },
+  motivoEncaminhamento: { type: String, set: criptografar, get: descriptografar },
+  agendadoPara: Date,
+  tipoTarefaOutros: { type: String, set: criptografar, get: descriptografar },
+  providenciasTomadas: { type: String, set: criptografar, get: descriptografar },
+  proximosPassos: { type: String, set: criptografar, get: descriptografar },
+  tiposTarefaAdicionais: { type: [String], default: [] }
+}, {
+  _id: false,
   toJSON: { getters: true },
   toObject: { getters: true }
 });
@@ -120,11 +110,7 @@ const ParticipanteSchema = new mongoose.Schema({
 // SCHEMA PRINCIPAL
 // ============================================
 const AtendimentoSupervisaoSchema = new mongoose.Schema({
-  alunoId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
+  alunoId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   alunoNome: { type: String, required: true },
   alunoMatricula: String,
   alunoTurma: String,
@@ -134,33 +120,17 @@ const AtendimentoSupervisaoSchema = new mongoose.Schema({
   tipoTarefa: {
     type: String,
     enum: [
-      'advertencia_verbal',
-      'advertencia_escrita',
-      'atendimento_aluno',
-      'atendimento_responsavel',
-      'atendimento_professor',
-      'suspensao',
-      'encaminhamento',
-      'outros'
+      'advertencia_verbal', 'advertencia_escrita', 'atendimento_aluno',
+      'atendimento_responsavel', 'atendimento_professor', 'suspensao',
+      'encaminhamento', 'outros'
     ],
     required: true
   },
   
   entrada: {
     dataHora: { type: Date, default: Date.now },
-    
-    descricao: { 
-      type: String, 
-      required: true,
-      set: criptografar,
-      get: descriptografar
-    },
-    observacoes: { 
-      type: String,
-      set: criptografar,
-      get: descriptografar
-    },
-    
+    descricao: { type: String, required: true, set: criptografar, get: descriptografar },
+    observacoes: { type: String, set: criptografar, get: descriptografar },
     gravidade: {
       type: String,
       enum: ['baixa', 'media', 'alta', 'critica'],
@@ -168,14 +138,7 @@ const AtendimentoSupervisaoSchema = new mongoose.Schema({
     },
     registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     registradoPorNome: String,
-    
-    // Assinatura do responsável
-    assinaturaBase64: { 
-      type: String, 
-      default: '',
-      set: criptografar,
-      get: descriptografar
-    },
+    assinaturaBase64: { type: String, default: '', set: criptografar, get: descriptografar },
     temAssinatura: { type: Boolean, default: false, index: true },
     statusAssinatura: {
       type: String,
@@ -187,40 +150,11 @@ const AtendimentoSupervisaoSchema = new mongoose.Schema({
     assinadaPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     assinadaPorNome: { type: String, default: null },
     sessaoAssinaturaId: { type: String, default: null },
-    
-    // ============================================
-    // 🆕 PARTICIPANTES DO ATENDIMENTO
-    // ============================================
-    participantes: {
-      type: [ParticipanteSchema],
-      default: []
-    }
+    participantes: { type: [ParticipanteSchema], default: [] }
   },
   
-  // Detalhes específicos
-  detalhes: {
-    testemunhas: { 
-      type: [String],
-      set: (arr) => Array.isArray(arr) ? arr.map(criptografar) : arr,
-      get: (arr) => Array.isArray(arr) ? arr.map(descriptografar) : arr
-    },
-    descricaoOcorrido: { type: String, set: criptografar, get: descriptografar },
-    nomeResponsavel: { type: String, set: criptografar, get: descriptografar },
-    parentescoResponsavel: { type: String, set: criptografar, get: descriptografar },
-    telefoneResponsavel: { type: String, set: criptografar, get: descriptografar },
-    compareceu: { type: Boolean, default: false },
-    nomeProfessor: { type: String, set: criptografar, get: descriptografar },
-    disciplina: { type: String, set: criptografar, get: descriptografar },
-    dataInicioSuspensao: Date,
-    dataFimSuspensao: Date,
-    diasSuspensao: Number,
-    encaminhadoPara: { type: String, set: criptografar, get: descriptografar },
-    motivoEncaminhamento: { type: String, set: criptografar, get: descriptografar },
-    agendadoPara: Date,
-    tipoTarefaOutros: { type: String, set: criptografar, get: descriptografar },
-    providenciasTomadas: { type: String, set: criptografar, get: descriptografar },
-    proximosPassos: { type: String, set: criptografar, get: descriptografar }
-  },
+  // 🆕 USO DO SUBSCHEMA DetalhesSchema (antes era objeto inline)
+  detalhes: { type: DetalhesSchema, default: () => ({}) },
   
   saida: {
     dataHora: Date,
@@ -235,34 +169,15 @@ const AtendimentoSupervisaoSchema = new mongoose.Schema({
     registradoPorNome: String
   },
   
-  remarcacoes: {
-    type: [RemarcacaoSchema],
-    default: []
-  },
-  temRemarcacaoPendente: {
-    type: Boolean,
-    default: false
-  },
+  remarcacoes: { type: [RemarcacaoSchema], default: [] },
+  temRemarcacaoPendente: { type: Boolean, default: false },
   
-  // Controle de alertas de 24h
-  ultimoAlerta24h: {
-    type: Date,
-    default: null,
-    index: true
-  },
-  totalAlertas24h: {
-    type: Number,
-    default: 0
-  },
-  alerta24hReconhecido: {
-    type: Boolean,
-    default: false
-  },
+  ultimoAlerta24h: { type: Date, default: null, index: true },
+  totalAlertas24h: { type: Number, default: 0 },
+  alerta24hReconhecido: { type: Boolean, default: false },
   
   anexos: [{
-    nome: String,
-    url: String,
-    tipo: String,
+    nome: String, url: String, tipo: String,
     uploadedAt: { type: Date, default: Date.now }
   }],
   
@@ -281,13 +196,17 @@ const AtendimentoSupervisaoSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 }, {
-  toJSON: { getters: true },
-  toObject: { getters: true }
+  toJSON: { getters: true, virtuals: true },
+  toObject: { getters: true, virtuals: true }
 });
 
-// ============================================
-// ÍNDICES
-// ============================================
+// Virtual
+AtendimentoSupervisaoSchema.virtual('tiposTarefaCompleto').get(function() {
+  const adicionais = this.detalhes?.tiposTarefaAdicionais || [];
+  return [this.tipoTarefa, ...adicionais].filter(Boolean);
+});
+
+// Índices
 AtendimentoSupervisaoSchema.index({ alunoId: 1, status: 1 });
 AtendimentoSupervisaoSchema.index({ tipoTarefa: 1, createdAt: -1 });
 AtendimentoSupervisaoSchema.index({ alunoTurma: 1, createdAt: -1 });
@@ -297,32 +216,24 @@ AtendimentoSupervisaoSchema.index({ 'remarcacoes.status': 1 });
 AtendimentoSupervisaoSchema.index({ 'entrada.statusAssinatura': 1, createdAt: -1 });
 AtendimentoSupervisaoSchema.index({ status: 1, 'entrada.dataHora': 1, ultimoAlerta24h: 1 });
 
-// ============================================
-// MIDDLEWARE: PRE-SAVE
-// ============================================
+// Pre-save
 AtendimentoSupervisaoSchema.pre('save', function(next) {
   if (this.entrada) {
-    // Assinatura do responsável
     const temAssinaturaReal = !!(this.entrada.assinaturaBase64 && this.entrada.assinaturaBase64.length > 100);
     this.entrada.temAssinatura = temAssinaturaReal;
     
     if (temAssinaturaReal) {
       this.entrada.statusAssinatura = 'assinada';
-      if (!this.entrada.assinadaEm) {
-        this.entrada.assinadaEm = new Date();
-      }
+      if (!this.entrada.assinadaEm) this.entrada.assinadaEm = new Date();
     } else if (this.entrada.statusAssinatura !== 'pendente') {
       this.entrada.statusAssinatura = 'nao_necessaria';
     }
     
-    // Assinaturas dos participantes
     if (Array.isArray(this.entrada.participantes)) {
       this.entrada.participantes.forEach(p => {
         const temAssinaturaPart = !!(p.assinaturaBase64 && p.assinaturaBase64.length > 100);
         p.temAssinatura = temAssinaturaPart;
-        if (temAssinaturaPart && !p.assinadaEm) {
-          p.assinadaEm = new Date();
-        }
+        if (temAssinaturaPart && !p.assinadaEm) p.assinadaEm = new Date();
       });
     }
   }
@@ -331,12 +242,9 @@ AtendimentoSupervisaoSchema.pre('save', function(next) {
   next();
 });
 
-// ============================================
-// MÉTODOS ESTÁTICOS
-// ============================================
+// Métodos estáticos
 AtendimentoSupervisaoSchema.statics.alunoEmAtendimento = async function(alunoId) {
-  const atendimento = await this.findOne({ alunoId, status: 'em_andamento' });
-  return !!atendimento;
+  return !!(await this.findOne({ alunoId, status: 'em_andamento' }));
 };
 
 AtendimentoSupervisaoSchema.statics.getAtendimentoAtivo = async function(alunoId) {
@@ -373,9 +281,6 @@ AtendimentoSupervisaoSchema.statics.buscarAtendimentosParaAlerta = async functio
   });
 };
 
-// ============================================
-// MÉTODOS DE INSTÂNCIA
-// ============================================
 AtendimentoSupervisaoSchema.methods.adicionarRemarcacao = function(dados) {
   if (!this.remarcacoes) this.remarcacoes = [];
   
@@ -396,9 +301,6 @@ AtendimentoSupervisaoSchema.methods.adicionarRemarcacao = function(dados) {
   return this.save();
 };
 
-// ============================================
-// EXPORT
-// ============================================
 module.exports = mongoose.model(
   'AtendimentoSupervisao',
   AtendimentoSupervisaoSchema,

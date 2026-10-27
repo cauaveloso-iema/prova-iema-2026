@@ -315,36 +315,39 @@
 
                             <div class="mb-3">
                                 <label class="form-label">Tipo de Tarefa <span class="text-danger">*</span></label>
+                                <small class="text-muted d-block mb-2">
+                                    <i class="fas fa-info-circle"></i> Você pode marcar mais de um tipo. Os campos específicos de cada tipo aparecerão abaixo.
+                                </small>
                                 <div class="tipos-tarefa-grid">
-                                    <div class="tipo-card" data-tipo="advertencia_verbal" onclick="selecionarTipo('advertencia_verbal')">
+                                    <div class="tipo-card" data-tipo="advertencia_verbal" onclick="toggleTipoTarefa('advertencia_verbal')">
                                         <i class="fas fa-comment-dots"></i>
                                         <span>Advertência Verbal</span>
                                     </div>
-                                    <div class="tipo-card" data-tipo="advertencia_escrita" onclick="selecionarTipo('advertencia_escrita')">
+                                    <div class="tipo-card" data-tipo="advertencia_escrita" onclick="toggleTipoTarefa('advertencia_escrita')">
                                         <i class="fas fa-file-signature"></i>
                                         <span>Advertência Escrita</span>
                                     </div>
-                                    <div class="tipo-card" data-tipo="atendimento_aluno" onclick="selecionarTipo('atendimento_aluno')">
+                                    <div class="tipo-card" data-tipo="atendimento_aluno" onclick="toggleTipoTarefa('atendimento_aluno')">
                                         <i class="fas fa-user-graduate"></i>
                                         <span>Atendimento Aluno</span>
                                     </div>
-                                    <div class="tipo-card" data-tipo="atendimento_responsavel" onclick="selecionarTipo('atendimento_responsavel')">
+                                    <div class="tipo-card" data-tipo="atendimento_responsavel" onclick="toggleTipoTarefa('atendimento_responsavel')">
                                         <i class="fas fa-users"></i>
                                         <span>Atendimento Responsável</span>
                                     </div>
-                                    <div class="tipo-card" data-tipo="atendimento_professor" onclick="selecionarTipo('atendimento_professor')">
+                                    <div class="tipo-card" data-tipo="atendimento_professor" onclick="toggleTipoTarefa('atendimento_professor')">
                                         <i class="fas fa-chalkboard-teacher"></i>
                                         <span>Atendimento Professor</span>
                                     </div>
-                                    <div class="tipo-card" data-tipo="suspensao" onclick="selecionarTipo('suspensao')">
+                                    <div class="tipo-card" data-tipo="suspensao" onclick="toggleTipoTarefa('suspensao')">
                                         <i class="fas fa-ban"></i>
                                         <span>Suspensão</span>
                                     </div>
-                                    <div class="tipo-card" data-tipo="encaminhamento" onclick="selecionarTipo('encaminhamento')">
+                                    <div class="tipo-card" data-tipo="encaminhamento" onclick="toggleTipoTarefa('encaminhamento')">
                                         <i class="fas fa-share"></i>
                                         <span>Encaminhamento</span>
                                     </div>
-                                    <div class="tipo-card" data-tipo="outros" onclick="selecionarTipo('outros')">
+                                    <div class="tipo-card" data-tipo="outros" onclick="toggleTipoTarefa('outros')">
                                         <i class="fas fa-ellipsis-h"></i>
                                         <span>Outros</span>
                                     </div>

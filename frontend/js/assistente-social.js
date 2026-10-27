@@ -10,6 +10,7 @@ let currentAtendimento = null;
 let relatorioData = null;
 let dashboardCharts = {};
 let tipoTarefaSelecionado = null;
+let __tiposSelecionados = []; 
 
 let scannerAuto = null;
 let scannerAutoAtivo = false;
@@ -766,7 +767,10 @@ function aplicarFiltrosAndamento() {
         );
     }
     if (f.turma) filtrados = filtrados.filter(a => a.alunoTurma === f.turma);
-    if (f.tipo) filtrados = filtrados.filter(a => a.tipoTarefa === f.tipo);
+    if (f.tipo) filtrados = filtrados.filter(a => {
+        const tipos = a.tiposTarefa || [a.tipoTarefa];
+        return tipos.includes(f.tipo);
+    });
     if (f.prioridade) filtrados = filtrados.filter(a => a.prioridade === f.prioridade);
     if (f.gravidade) filtrados = filtrados.filter(a => a.gravidade === f.gravidade);
     if (f.remarcado === 'sim') filtrados = filtrados.filter(a => a.temRemarcacaoPendente);
@@ -1257,122 +1261,161 @@ function mostrarFormRegistro() {
 
 function selecionarTipo(tipo) {
     if (!tipo) return;
-    tipoTarefaSelecionado = tipo;
-    safeGet('tipoTarefaSelecionado').value = tipo;
-    document.querySelectorAll('.tipo-card').forEach(c => c.classList.remove('selected'));
-    const card = document.querySelector(`.tipo-card[data-tipo="${tipo}"]`);
-    if (card) card.classList.add('selected');
-    renderizarCamposEspecificos(tipo);
-}
-
-function renderizarCamposEspecificos(tipo) {
-    const container = safeGet('camposEspecificos');
-    if (!container) return;
-    let html = '';
-    const camposComuns = `
-        <div class="mb-3"><label class="form-label">Contexto Familiar</label><textarea id="detalheContextoFamiliar" class="form-control" rows="2" placeholder="Informações sobre o contexto familiar..."></textarea></div>
-        <div class="mb-3"><label class="form-label">Histórico Anterior</label><textarea id="detalheHistoricoAnterior" class="form-control" rows="2" placeholder="Histórico de situações anteriores..."></textarea></div>`;
     
-    switch (tipo) {
-        case 'evasao_escolar':
-            html = `<div class="row">
-                <div class="col-md-6 mb-3"><label class="form-label">Motivo da Evasão</label><input type="text" id="detalheMotivoEvasao" class="form-control" placeholder="Ex: Desmotivação, trabalho"></div>
-                <div class="col-md-6 mb-3"><label class="form-label">Frequência de Faltas</label><input type="text" id="detalheFrequenciaFaltas" class="form-control" placeholder="Ex: 3x por semana"></div>
-            </div>${camposComuns}`;
-            break;
-        case 'desinteresse_aprendizado':
-            html = `<div class="mb-3"><label class="form-label">Disciplinas Afetadas (separadas por vírgula)</label><input type="text" id="detalheDisciplinasAfetadas" class="form-control"></div>
-                <div class="mb-3"><label class="form-label">Estratégias de Motivação</label><textarea id="detalheEstrategiasMotivacao" class="form-control" rows="2"></textarea></div>${camposComuns}`;
-            break;
-        case 'problemas_disciplina':
-            html = `<div class="mb-3"><label class="form-label">Tipo de Indisciplina</label><input type="text" id="detalheTipoIndisciplina" class="form-control"></div>
-                <div class="mb-3"><label class="form-label">Professores Envolvidos (separados por vírgula)</label><input type="text" id="detalheProfessoresEnvolvidos" class="form-control"></div>${camposComuns}`;
-            break;
-        case 'insubordinacao_limites':
-            html = `<div class="mb-3"><label class="form-label">Contexto da Insubordinação</label><textarea id="detalheContextoInsubordinacao" class="form-control" rows="2"></textarea></div>${camposComuns}`;
-            break;
-        case 'vulnerabilidade_drogas':
-            html = `<div class="row">
-                <div class="col-md-6 mb-3"><label class="form-label">Tipo de Substância</label><input type="text" id="detalheTipoSubstancia" class="form-control"></div>
-                <div class="col-md-6 mb-3"><label class="form-label">Encaminhamento p/ Tratamento</label><input type="text" id="detalheEncaminhamentoTratamento" class="form-control"></div>
-            </div>${camposComuns}`;
-            break;
-        case 'atitudes_agressivas':
-            html = `<div class="row">
-                <div class="col-md-6 mb-3"><label class="form-label">Tipo de Agressão</label><input type="text" id="detalheTipoAgressao" class="form-control"></div>
-                <div class="col-md-6 mb-3"><label class="form-label">Vítimas</label><input type="text" id="detalheVitimas" class="form-control"></div>
-            </div>${camposComuns}`;
-            break;
-        case 'baixo_rendimento':
-            html = `<div class="mb-3"><label class="form-label">Notas Recentes</label><input type="text" id="detalheNotasRecentes" class="form-control"></div>
-                <div class="mb-3"><label class="form-label">Disciplinas Críticas (separadas por vírgula)</label><input type="text" id="detalheDisciplinasCriticas" class="form-control"></div>${camposComuns}`;
-            break;
-        case 'encaminhamento':
-            html = `<div class="mb-3"><label class="form-label">Órgão Encaminhado</label><input type="text" id="detalheOrgaoEncaminhado" class="form-control" placeholder="Ex: CRAS, CREAS, Conselho Tutelar"></div>
-                <div class="mb-3"><label class="form-label">Motivo do Encaminhamento</label><textarea id="detalheMotivoEncaminhamento" class="form-control" rows="2"></textarea></div>${camposComuns}`;
-            break;
-        case 'intervencao':
-            html = `<div class="mb-3"><label class="form-label">Tipo de Intervenção</label><input type="text" id="detalheTipoIntervencao" class="form-control"></div>
-                <div class="mb-3"><label class="form-label">Participantes (separados por vírgula)</label><input type="text" id="detalheParticipantesIntervencao" class="form-control"></div>${camposComuns}`;
-            break;
-        case 'atendimento':
-            html = `<div class="row">
-                <div class="col-md-6 mb-3"><label class="form-label">Tipo de Atendimento</label><input type="text" id="detalheTipoAtendimento" class="form-control"></div>
-                <div class="col-md-6 mb-3"><label class="form-label">Duração (min)</label><input type="number" id="detalheDuracaoAtendimento" class="form-control" min="1"></div>
-            </div>${camposComuns}`;
-            break;
-        case 'outros':
-            html = `<div class="mb-3"><label class="form-label">Especifique <span class="text-danger">*</span></label><input type="text" id="detalheTipoTarefaOutros" class="form-control"></div>${camposComuns}`;
-            break;
+    const idx = __tiposSelecionados.indexOf(tipo);
+    if (idx >= 0) {
+        __tiposSelecionados.splice(idx, 1);
+    } else {
+        __tiposSelecionados.push(tipo);
     }
     
-    html += `<div class="mb-3"><label class="form-label">Providências Tomadas</label><textarea id="detalheProvidencias" class="form-control" rows="2"></textarea></div>
-        <div class="mb-3"><label class="form-label">Próximos Passos</label><textarea id="detalheProximosPassos" class="form-control" rows="2"></textarea></div>`;
+    document.querySelectorAll('.tipo-card').forEach(c => {
+        const t = c.getAttribute('data-tipo');
+        if (__tiposSelecionados.includes(t)) c.classList.add('selected');
+        else c.classList.remove('selected');
+    });
     
-    container.innerHTML = html;
+    tipoTarefaSelecionado = __tiposSelecionados[0] || null;
+    const hidden = safeGet('tipoTarefaSelecionado');
+    if (hidden) hidden.value = __tiposSelecionados.join(',');
+    
+    renderizarCamposEspecificosMultiplos();
+}
+
+function renderizarCamposEspecificosMultiplos() {
+    const container = safeGet('camposEspecificos');
+    if (!container) return;
+    
+    if (__tiposSelecionados.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+    
+    const blocos = __tiposSelecionados.map(tipo => {
+        const label = TIPO_LABELS[tipo] || tipo;
+        let htmlTipo = '';
+        
+        switch (tipo) {
+            case 'evasao_escolar':
+                htmlTipo = `<div class="row">
+                    <div class="col-md-6 mb-3"><label class="form-label">Motivo da Evasão</label><input type="text" id="detalheMotivoEvasao_${tipo}" class="form-control" data-detalhe-key="motivoEvasao" placeholder="Ex: Desmotivação, trabalho"></div>
+                    <div class="col-md-6 mb-3"><label class="form-label">Frequência de Faltas</label><input type="text" id="detalheFrequenciaFaltas_${tipo}" class="form-control" data-detalhe-key="frequenciaFaltas" placeholder="Ex: 3x por semana"></div>
+                </div>`;
+                break;
+            case 'desinteresse_aprendizado':
+                htmlTipo = `<div class="mb-3"><label class="form-label">Disciplinas Afetadas (separadas por vírgula)</label><input type="text" id="detalheDisciplinasAfetadas_${tipo}" class="form-control" data-detalhe-key="disciplinasAfetadas"></div>
+                    <div class="mb-3"><label class="form-label">Estratégias de Motivação</label><textarea id="detalheEstrategiasMotivacao_${tipo}" class="form-control" rows="2" data-detalhe-key="estrategiasMotivacao"></textarea></div>`;
+                break;
+            case 'problemas_disciplina':
+                htmlTipo = `<div class="mb-3"><label class="form-label">Tipo de Indisciplina</label><input type="text" id="detalheTipoIndisciplina_${tipo}" class="form-control" data-detalhe-key="tipoIndisciplina"></div>
+                    <div class="mb-3"><label class="form-label">Professores Envolvidos (separados por vírgula)</label><input type="text" id="detalheProfessoresEnvolvidos_${tipo}" class="form-control" data-detalhe-key="professoresEnvolvidos"></div>`;
+                break;
+            case 'insubordinacao_limites':
+                htmlTipo = `<div class="mb-3"><label class="form-label">Contexto da Insubordinação</label><textarea id="detalheContextoInsubordinacao_${tipo}" class="form-control" rows="2" data-detalhe-key="contextoInsubordinacao"></textarea></div>`;
+                break;
+            case 'vulnerabilidade_drogas':
+                htmlTipo = `<div class="row">
+                    <div class="col-md-6 mb-3"><label class="form-label">Tipo de Substância</label><input type="text" id="detalheTipoSubstancia_${tipo}" class="form-control" data-detalhe-key="tipoSubstancia"></div>
+                    <div class="col-md-6 mb-3"><label class="form-label">Encaminhamento p/ Tratamento</label><input type="text" id="detalheEncaminhamentoTratamento_${tipo}" class="form-control" data-detalhe-key="encaminhamentoTratamento"></div>
+                </div>`;
+                break;
+            case 'atitudes_agressivas':
+                htmlTipo = `<div class="row">
+                    <div class="col-md-6 mb-3"><label class="form-label">Tipo de Agressão</label><input type="text" id="detalheTipoAgressao_${tipo}" class="form-control" data-detalhe-key="tipoAgressao"></div>
+                    <div class="col-md-6 mb-3"><label class="form-label">Vítimas</label><input type="text" id="detalheVitimas_${tipo}" class="form-control" data-detalhe-key="vitimas"></div>
+                </div>`;
+                break;
+            case 'baixo_rendimento':
+                htmlTipo = `<div class="mb-3"><label class="form-label">Notas Recentes</label><input type="text" id="detalheNotasRecentes_${tipo}" class="form-control" data-detalhe-key="notasRecentes"></div>
+                    <div class="mb-3"><label class="form-label">Disciplinas Críticas (separadas por vírgula)</label><input type="text" id="detalheDisciplinasCriticas_${tipo}" class="form-control" data-detalhe-key="disciplinasCriticas"></div>`;
+                break;
+            case 'encaminhamento':
+                htmlTipo = `<div class="mb-3"><label class="form-label">Órgão Encaminhado</label><input type="text" id="detalheOrgaoEncaminhado_${tipo}" class="form-control" data-detalhe-key="orgaoEncaminhado" placeholder="Ex: CRAS, CREAS, Conselho Tutelar"></div>
+                    <div class="mb-3"><label class="form-label">Motivo do Encaminhamento</label><textarea id="detalheMotivoEncaminhamento_${tipo}" class="form-control" rows="2" data-detalhe-key="motivoEncaminhamento"></textarea></div>`;
+                break;
+            case 'intervencao':
+                htmlTipo = `<div class="mb-3"><label class="form-label">Tipo de Intervenção</label><input type="text" id="detalheTipoIntervencao_${tipo}" class="form-control" data-detalhe-key="tipoIntervencao"></div>
+                    <div class="mb-3"><label class="form-label">Participantes (separados por vírgula)</label><input type="text" id="detalheParticipantesIntervencao_${tipo}" class="form-control" data-detalhe-key="participantesIntervencao"></div>`;
+                break;
+            case 'atendimento':
+                htmlTipo = `<div class="row">
+                    <div class="col-md-6 mb-3"><label class="form-label">Tipo de Atendimento</label><input type="text" id="detalheTipoAtendimento_${tipo}" class="form-control" data-detalhe-key="tipoAtendimento"></div>
+                    <div class="col-md-6 mb-3"><label class="form-label">Duração (min)</label><input type="number" id="detalheDuracaoAtendimento_${tipo}" class="form-control" min="1" data-detalhe-key="duracaoAtendimento"></div>
+                </div>`;
+                break;
+            case 'outros':
+                htmlTipo = `<div class="mb-3"><label class="form-label">Especifique <span class="text-danger">*</span></label><input type="text" id="detalheTipoTarefaOutros_${tipo}" class="form-control" data-detalhe-key="tipoTarefaOutros"></div>`;
+                break;
+            default:
+                htmlTipo = '';
+        }
+        
+        if (!htmlTipo) return '';
+        
+        return `
+            <div class="bloco-tipo-especifico" data-tipo-bloco="${tipo}">
+                <div class="bloco-tipo-header">
+                    <i class="fas fa-tag"></i> ${escapeHTML(label)}
+                </div>
+                <div class="bloco-tipo-body">
+                    ${htmlTipo}
+                </div>
+            </div>
+        `;
+    }).filter(Boolean);
+    
+    const htmlExtras = `
+        <div class="mt-3">
+            <div class="mb-3">
+                <label class="form-label">Contexto Familiar</label>
+                <textarea id="detalheContextoFamiliar" class="form-control" rows="2" data-detalhe-key="contextoFamiliar" placeholder="Informações sobre o contexto familiar..."></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Histórico Anterior</label>
+                <textarea id="detalheHistoricoAnterior" class="form-control" rows="2" data-detalhe-key="historicoAnterior" placeholder="Histórico de situações anteriores..."></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Providências Tomadas</label>
+                <textarea id="detalheProvidencias" class="form-control" rows="2" data-detalhe-key="providenciasTomadas" placeholder="O que já foi feito..."></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Próximos Passos</label>
+                <textarea id="detalheProximosPassos" class="form-control" rows="2" data-detalhe-key="proximosPassos" placeholder="O que será feito..."></textarea>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = blocos.join('') + htmlExtras;
+}
+
+// Compatibilidade com chamadas antigas
+function renderizarCamposEspecificos(tipo) {
+    renderizarCamposEspecificosMultiplos();
 }
 
 function coletarDetalhes() {
     const detalhes = {};
-    const arrays = {
-        'detalheDisciplinasAfetadas': 'disciplinasAfetadas',
-        'detalheProfessoresEnvolvidos': 'professoresEnvolvidos',
-        'detalheDisciplinasCriticas': 'disciplinasCriticas',
-        'detalheParticipantesIntervencao': 'participantesIntervencao'
-    };
-    Object.entries(arrays).forEach(([id, key]) => {
-        const el = safeGet(id);
-        if (el && el.value) detalhes[key] = el.value.split(',').map(t => t.trim()).filter(t => t.length > 0);
-    });
     
-    const camposTexto = {
-        'detalheContextoFamiliar': 'contextoFamiliar',
-        'detalheHistoricoAnterior': 'historicoAnterior',
-        'detalheMotivoEvasao': 'motivoEvasao',
-        'detalheFrequenciaFaltas': 'frequenciaFaltas',
-        'detalheEstrategiasMotivacao': 'estrategiasMotivacao',
-        'detalheTipoIndisciplina': 'tipoIndisciplina',
-        'detalheContextoInsubordinacao': 'contextoInsubordinacao',
-        'detalheTipoSubstancia': 'tipoSubstancia',
-        'detalheEncaminhamentoTratamento': 'encaminhamentoTratamento',
-        'detalheTipoAgressao': 'tipoAgressao',
-        'detalheVitimas': 'vitimas',
-        'detalheNotasRecentes': 'notasRecentes',
-        'detalheOrgaoEncaminhado': 'orgaoEncaminhado',
-        'detalheMotivoEncaminhamento': 'motivoEncaminhamento',
-        'detalheTipoIntervencao': 'tipoIntervencao',
-        'detalheTipoAtendimento': 'tipoAtendimento',
-        'detalheTipoTarefaOutros': 'tipoTarefaOutros',
-        'detalheProvidencias': 'providenciasTomadas',
-        'detalheProximosPassos': 'proximosPassos'
-    };
-    Object.entries(camposTexto).forEach(([id, key]) => {
-        const el = safeGet(id);
-        if (el && el.value) detalhes[key] = el.value.trim();
+    document.querySelectorAll('[data-detalhe-key]').forEach(el => {
+        const key = el.getAttribute('data-detalhe-key');
+        const val = el.value;
+        
+        if (!val) return;
+        
+        const chavesArray = [
+            'profissionaisEnvolvidos', 'participantesAtendimento', 'disciplinasAfetadas',
+            'professoresEnvolvidos', 'disciplinasCriticas', 'participantesIntervencao'
+        ];
+        
+        if (key === 'duracaoAtendimento' || key === 'duracaoSessao') {
+            const n = parseInt(val);
+            if (!isNaN(n) && n > 0) detalhes[key] = n;
+        } else if (chavesArray.includes(key)) {
+            detalhes[key] = val.split(',').map(t => t.trim()).filter(t => t.length > 0);
+        } else {
+            detalhes[key] = val.trim();
+        }
     });
-    
-    const da = safeGet('detalheDuracaoAtendimento');
-    if (da && da.value) { const d = parseInt(da.value); if (d > 0) detalhes.duracaoAtendimento = d; }
     
     return detalhes;
 }
@@ -1381,8 +1424,8 @@ function coletarDetalhes() {
 // REGISTRAR OCORRÊNCIA (COM ASSINATURA VIA QR)
 // ============================================
 async function registrarOcorrencia() {
-    if (!tipoTarefaSelecionado) { 
-        mostrarToastConcluido('Selecione o tipo de tarefa', 'error'); 
+    if (__tiposSelecionados.length === 0) { 
+        mostrarToastConcluido('Selecione pelo menos um tipo de tarefa', 'error'); 
         return; 
     }
     const descricao = (safeGet('descricao')?.value || '').trim();
@@ -1395,9 +1438,6 @@ async function registrarOcorrencia() {
         return; 
     }
     
-    // ==========================================
-    // 🆕 VALIDAÇÃO DA ASSINATURA VIA QR
-    // ==========================================
     const precisaAssinatura = safeGet('assistenteSocialNecessitaAssinatura')?.checked || false;
     const assinaturaQRCapturada = estadoSessaoAssinatura.assistenteSocial?.assinaturaCapturada || '';
     const assinaturaCanvas = obterAssinaturaBase64();
@@ -1418,7 +1458,8 @@ async function registrarOcorrencia() {
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({
                 alunoId: currentAluno.id,
-                tipoTarefa: tipoTarefaSelecionado,
+                tiposTarefa: __tiposSelecionados,       // 🆕 array
+                tipoTarefa: __tiposSelecionados[0],     // compatibilidade
                 descricao,
                 observacoes: safeGet('observacoes')?.value || '',
                 gravidade: safeGet('gravidade')?.value || 'media',
@@ -1431,7 +1472,6 @@ async function registrarOcorrencia() {
         const data = await response.json();
         
         if (data.success) {
-            // 🆕 Limpa a sessão de assinatura
             const sessaoId = estadoSessaoAssinatura.assistenteSocial?.sessaoId;
             if (sessaoId) {
                 fetch(`/api/sessoes-assinatura/${sessaoId}`, {
@@ -1444,7 +1484,19 @@ async function registrarOcorrencia() {
             limparEstadoSessaoAssinatura('assistenteSocial');
             
             mostrarToastConcluido(`✅ ${data.message}`, 'success');
-            finalizarAposSucesso();
+
+            // 🛡️ Chama de forma segura (com fallback inline)
+            if (typeof finalizarAposSucesso === 'function') {
+                finalizarAposSucesso();
+            } else {
+                console.warn('[registrarOcorrencia] finalizarAposSucesso não encontrada, executando fallback');
+                limparTela();
+                if (modoAtual === 'automatico') reiniciarScannerAutomatico();
+                else carregarAlunosPorTurma();
+                carregarAtendimentosAtivos();
+                carregarDashboard();
+                carregarLembretes();
+            }
         } else {
             mostrarToastConcluido('❌ ' + (data.error || 'Erro ao registrar'), 'error');
         }
@@ -1458,10 +1510,43 @@ async function registrarOcorrencia() {
 
 function finalizarAposSucesso() {
     limparTela();
-    if (modoAtual === 'automatico') reiniciarScannerAutomatico(); else carregarAlunosPorTurma();
+    if (modoAtual === 'automatico') reiniciarScannerAutomatico(); 
+    else carregarAlunosPorTurma();
     carregarAtendimentosAtivos();
     carregarDashboard();
     carregarLembretes();
+}
+
+function limparTela() {
+    safeGet('alunoInfo').style.display = 'none';
+    safeGet('formRegistro').style.display = 'none';
+    currentAluno = null;
+    currentAtendimento = null;
+    
+    // 🆕 Reseta multi-seleção
+    __tiposSelecionados = [];
+    tipoTarefaSelecionado = null;
+    const tipoInput = safeGet('tipoTarefaSelecionado');
+    if (tipoInput) tipoInput.value = '';
+    document.querySelectorAll('.tipo-card').forEach(c => c.classList.remove('selected'));
+    
+    limparAssinatura();
+    
+    const sessaoId = estadoSessaoAssinatura.assistenteSocial?.sessaoId;
+    if (sessaoId) {
+        fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        }).catch(e => console.warn(e));
+    }
+    pararMonitoramentoSessao('assistenteSocial');
+    fecharModalAssinatura('assistenteSocial');
+    limparEstadoSessaoAssinatura('assistenteSocial');
+    
+    const checkAssinatura = safeGet('assistenteSocialNecessitaAssinatura');
+    if (checkAssinatura) checkAssinatura.checked = false;
+    const blocoInfo = safeGet('assistenteSocialBlocoAssinaturaInfo');
+    if (blocoInfo) { blocoInfo.style.display = 'none'; blocoInfo.innerHTML = ''; }
 }
 
 function limparTela() {
@@ -2187,12 +2272,24 @@ async function abrirEditarAtendimento(atendimentoId) {
         }
         
         const a = data.atendimento;
+        const tiposDoAtendimento = a.tiposTarefa || [a.tipoTarefa];
+        
+        __tiposSelecionados = [...tiposDoAtendimento];
+        
         const oldModal = safeGet('modalEditarAtendimento');
         if (oldModal) oldModal.remove();
         
-        const tiposOptions = Object.entries(TIPO_LABELS).map(([key, label]) => 
-            `<option value="${key}" ${a.tipoTarefa === key ? 'selected' : ''}>${label}</option>`
-        ).join('');
+        const tiposCards = Object.entries(TIPO_LABELS).map(([key, label]) => {
+            const selecionado = tiposDoAtendimento.includes(key);
+            return `
+                <div class="tipo-card ${selecionado ? 'selected' : ''}" 
+                     data-tipo="${key}" 
+                     onclick="toggleTipoTarefaEdicaoAS('${key}')">
+                    <i class="fas ${getIconePorTipoAS(key)}"></i>
+                    <span>${label}</span>
+                </div>
+            `;
+        }).join('');
         
         const modalHtml = `
             <div class="modal fade" id="modalEditarAtendimento" tabindex="-1">
@@ -2206,6 +2303,7 @@ async function abrirEditarAtendimento(atendimentoId) {
                         </div>
                         <div class="modal-body">
                             <input type="hidden" id="editAtendimentoId" value="${a.id}">
+                            <input type="hidden" id="editTiposSelecionados" value="${tiposDoAtendimento.join(',')}">
                             
                             <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #f5f3ff; border-radius: 10px; margin-bottom: 16px;">
                                 <img src="${gerarAvatarSVG(a.alunoNome)}" style="width: 50px; height: 50px; border-radius: 50%;" alt="">
@@ -2219,10 +2317,13 @@ async function abrirEditarAtendimento(atendimentoId) {
                             </div>
                             
                             <div class="mb-3">
-                                <label class="form-label">Tipo de Tarefa <span class="text-danger">*</span></label>
-                                <select id="editTipoTarefa" class="form-select">
-                                    ${tiposOptions}
-                                </select>
+                                <label class="form-label">Tipos de Tarefa <span class="text-danger">*</span></label>
+                                <small class="text-muted d-block mb-2">
+                                    <i class="fas fa-info-circle"></i> Você pode marcar mais de um tipo.
+                                </small>
+                                <div class="tipos-tarefa-grid" id="editTiposGrid">
+                                    ${tiposCards}
+                                </div>
                             </div>
                             
                             <div class="mb-3">
@@ -2255,6 +2356,8 @@ async function abrirEditarAtendimento(atendimentoId) {
                                 <label class="form-label">Observações</label>
                                 <textarea id="editObservacoes" class="form-control" rows="2">${escapeHTML(a.entrada?.observacoes || '')}</textarea>
                             </div>
+                            
+                            <div id="editCamposEspecificos"></div>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
@@ -2270,24 +2373,243 @@ async function abrirEditarAtendimento(atendimentoId) {
         
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         new bootstrap.Modal(safeGet('modalEditarAtendimento')).show();
+        
+        preencherCamposEspecificosEdicaoAS(tiposDoAtendimento, a.detalhes || {});
+        
     } catch (error) {
         console.error('Erro:', error);
         mostrarToastConcluido('Erro ao carregar para edição', 'error');
     }
 }
 
+function getIconePorTipoAS(tipo) {
+    const icones = {
+        'evasao_escolar': 'fa-door-open',
+        'desinteresse_aprendizado': 'fa-frown',
+        'problemas_disciplina': 'fa-exclamation-triangle',
+        'insubordinacao_limites': 'fa-hand-paper',
+        'vulnerabilidade_drogas': 'fa-pills',
+        'atitudes_agressivas': 'fa-angry',
+        'baixo_rendimento': 'fa-chart-line',
+        'encaminhamento': 'fa-share',
+        'intervencao': 'fa-hands-helping',
+        'atendimento': 'fa-comments',
+        'outros': 'fa-ellipsis-h'
+    };
+    return icones[tipo] || 'fa-tag';
+}
+
+function toggleTipoTarefaEdicaoAS(tipo) {
+    if (!tipo) return;
+    
+    const valoresAtuais = coletarValoresAtuaisEdicaoAS();
+    
+    const idx = __tiposSelecionados.indexOf(tipo);
+    if (idx >= 0) {
+        __tiposSelecionados.splice(idx, 1);
+    } else {
+        __tiposSelecionados.push(tipo);
+    }
+    
+    document.querySelectorAll('#editTiposGrid .tipo-card').forEach(c => {
+        const t = c.getAttribute('data-tipo');
+        if (__tiposSelecionados.includes(t)) c.classList.add('selected');
+        else c.classList.remove('selected');
+    });
+    
+    const hidden = safeGet('editTiposSelecionados');
+    if (hidden) hidden.value = __tiposSelecionados.join(',');
+    
+    renderizarCamposEspecificosEdicaoAS();
+    restaurarValoresEdicaoAS(valoresAtuais);
+}
+
+function renderizarCamposEspecificosEdicaoAS() {
+    const container = safeGet('editCamposEspecificos');
+    if (!container) return;
+    
+    if (__tiposSelecionados.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+    
+    const blocos = __tiposSelecionados.map(tipo => {
+        const label = TIPO_LABELS[tipo] || tipo;
+        let htmlTipo = '';
+        
+        switch (tipo) {
+            case 'evasao_escolar':
+                htmlTipo = `<div class="row">
+                    <div class="col-md-6 mb-3"><label class="form-label">Motivo da Evasão</label><input type="text" id="editDetalheMotivoEvasao_${tipo}" class="form-control" data-detalhe-key="motivoEvasao"></div>
+                    <div class="col-md-6 mb-3"><label class="form-label">Frequência de Faltas</label><input type="text" id="editDetalheFrequenciaFaltas_${tipo}" class="form-control" data-detalhe-key="frequenciaFaltas"></div>
+                </div>`;
+                break;
+            case 'desinteresse_aprendizado':
+                htmlTipo = `<div class="mb-3"><label class="form-label">Disciplinas Afetadas</label><input type="text" id="editDetalheDisciplinasAfetadas_${tipo}" class="form-control" data-detalhe-key="disciplinasAfetadas"></div>
+                    <div class="mb-3"><label class="form-label">Estratégias de Motivação</label><textarea id="editDetalheEstrategiasMotivacao_${tipo}" class="form-control" rows="2" data-detalhe-key="estrategiasMotivacao"></textarea></div>`;
+                break;
+            case 'problemas_disciplina':
+                htmlTipo = `<div class="mb-3"><label class="form-label">Tipo de Indisciplina</label><input type="text" id="editDetalheTipoIndisciplina_${tipo}" class="form-control" data-detalhe-key="tipoIndisciplina"></div>
+                    <div class="mb-3"><label class="form-label">Professores Envolvidos</label><input type="text" id="editDetalheProfessoresEnvolvidos_${tipo}" class="form-control" data-detalhe-key="professoresEnvolvidos"></div>`;
+                break;
+            case 'insubordinacao_limites':
+                htmlTipo = `<div class="mb-3"><label class="form-label">Contexto da Insubordinação</label><textarea id="editDetalheContextoInsubordinacao_${tipo}" class="form-control" rows="2" data-detalhe-key="contextoInsubordinacao"></textarea></div>`;
+                break;
+            case 'vulnerabilidade_drogas':
+                htmlTipo = `<div class="row">
+                    <div class="col-md-6 mb-3"><label class="form-label">Tipo de Substância</label><input type="text" id="editDetalheTipoSubstancia_${tipo}" class="form-control" data-detalhe-key="tipoSubstancia"></div>
+                    <div class="col-md-6 mb-3"><label class="form-label">Encaminhamento p/ Tratamento</label><input type="text" id="editDetalheEncaminhamentoTratamento_${tipo}" class="form-control" data-detalhe-key="encaminhamentoTratamento"></div>
+                </div>`;
+                break;
+            case 'atitudes_agressivas':
+                htmlTipo = `<div class="row">
+                    <div class="col-md-6 mb-3"><label class="form-label">Tipo de Agressão</label><input type="text" id="editDetalheTipoAgressao_${tipo}" class="form-control" data-detalhe-key="tipoAgressao"></div>
+                    <div class="col-md-6 mb-3"><label class="form-label">Vítimas</label><input type="text" id="editDetalheVitimas_${tipo}" class="form-control" data-detalhe-key="vitimas"></div>
+                </div>`;
+                break;
+            case 'baixo_rendimento':
+                htmlTipo = `<div class="mb-3"><label class="form-label">Notas Recentes</label><input type="text" id="editDetalheNotasRecentes_${tipo}" class="form-control" data-detalhe-key="notasRecentes"></div>
+                    <div class="mb-3"><label class="form-label">Disciplinas Críticas</label><input type="text" id="editDetalheDisciplinasCriticas_${tipo}" class="form-control" data-detalhe-key="disciplinasCriticas"></div>`;
+                break;
+            case 'encaminhamento':
+                htmlTipo = `<div class="mb-3"><label class="form-label">Órgão Encaminhado</label><input type="text" id="editDetalheOrgaoEncaminhado_${tipo}" class="form-control" data-detalhe-key="orgaoEncaminhado"></div>
+                    <div class="mb-3"><label class="form-label">Motivo do Encaminhamento</label><textarea id="editDetalheMotivoEncaminhamento_${tipo}" class="form-control" rows="2" data-detalhe-key="motivoEncaminhamento"></textarea></div>`;
+                break;
+            case 'intervencao':
+                htmlTipo = `<div class="mb-3"><label class="form-label">Tipo de Intervenção</label><input type="text" id="editDetalheTipoIntervencao_${tipo}" class="form-control" data-detalhe-key="tipoIntervencao"></div>
+                    <div class="mb-3"><label class="form-label">Participantes</label><input type="text" id="editDetalheParticipantesIntervencao_${tipo}" class="form-control" data-detalhe-key="participantesIntervencao"></div>`;
+                break;
+            case 'atendimento':
+                htmlTipo = `<div class="row">
+                    <div class="col-md-6 mb-3"><label class="form-label">Tipo de Atendimento</label><input type="text" id="editDetalheTipoAtendimento_${tipo}" class="form-control" data-detalhe-key="tipoAtendimento"></div>
+                    <div class="col-md-6 mb-3"><label class="form-label">Duração (min)</label><input type="number" id="editDetalheDuracaoAtendimento_${tipo}" class="form-control" min="1" data-detalhe-key="duracaoAtendimento"></div>
+                </div>`;
+                break;
+            case 'outros':
+                htmlTipo = `<div class="mb-3"><label class="form-label">Especifique</label><input type="text" id="editDetalheTipoTarefaOutros_${tipo}" class="form-control" data-detalhe-key="tipoTarefaOutros"></div>`;
+                break;
+            default:
+                htmlTipo = '';
+        }
+        
+        if (!htmlTipo) return '';
+        
+        return `
+            <div class="bloco-tipo-especifico" data-tipo-bloco="${tipo}">
+                <div class="bloco-tipo-header">
+                    <i class="fas fa-tag"></i> ${escapeHTML(label)}
+                </div>
+                <div class="bloco-tipo-body">
+                    ${htmlTipo}
+                </div>
+            </div>
+        `;
+    }).filter(Boolean);
+    
+    const htmlExtras = `
+        <div class="mt-3">
+            <div class="mb-3"><label class="form-label">Contexto Familiar</label><textarea id="editDetalheContextoFamiliar" class="form-control" rows="2" data-detalhe-key="contextoFamiliar"></textarea></div>
+            <div class="mb-3"><label class="form-label">Histórico Anterior</label><textarea id="editDetalheHistoricoAnterior" class="form-control" rows="2" data-detalhe-key="historicoAnterior"></textarea></div>
+            <div class="mb-3"><label class="form-label">Providências Tomadas</label><textarea id="editDetalheProvidencias" class="form-control" rows="2" data-detalhe-key="providenciasTomadas"></textarea></div>
+            <div class="mb-3"><label class="form-label">Próximos Passos</label><textarea id="editDetalheProximosPassos" class="form-control" rows="2" data-detalhe-key="proximosPassos"></textarea></div>
+        </div>
+    `;
+    
+    container.innerHTML = blocos.join('') + htmlExtras;
+}
+
+function preencherCamposEspecificosEdicaoAS(tipos, detalhes) {
+    __tiposSelecionados = Array.isArray(tipos) ? [...tipos] : [];
+    
+    document.querySelectorAll('#editTiposGrid .tipo-card').forEach(c => {
+        const t = c.getAttribute('data-tipo');
+        if (__tiposSelecionados.includes(t)) c.classList.add('selected');
+        else c.classList.remove('selected');
+    });
+    
+    renderizarCamposEspecificosEdicaoAS();
+    
+    if (!detalhes) return;
+    
+    const preencherTodos = (key, valorFormatado) => {
+        const els = document.querySelectorAll(`#editCamposEspecificos [data-detalhe-key="${key}"]`);
+        els.forEach(el => { el.value = valorFormatado; });
+    };
+    
+    Object.entries(detalhes).forEach(([detKey, valor]) => {
+        if (valor === undefined || valor === null || valor === '') return;
+        if (detKey === 'tiposTarefaAdicionais') return;
+        
+        let valorFormatado = valor;
+        if (Array.isArray(valor)) valorFormatado = valor.join(', ');
+        
+        preencherTodos(detKey, valorFormatado);
+    });
+}
+
+function coletarValoresAtuaisEdicaoAS() {
+    const valores = {};
+    document.querySelectorAll('#editCamposEspecificos [data-detalhe-key]').forEach(el => {
+        const key = el.getAttribute('data-detalhe-key');
+        if (valores[key] !== undefined && valores[key] !== '') return;
+        if (el.value) valores[key] = el.value;
+    });
+    return valores;
+}
+
+function restaurarValoresEdicaoAS(valores) {
+    if (!valores || Object.keys(valores).length === 0) return;
+    Object.entries(valores).forEach(([key, val]) => {
+        document.querySelectorAll(`#editCamposEspecificos [data-detalhe-key="${key}"]`).forEach(el => {
+            el.value = val;
+        });
+    });
+}
+
+function coletarDetalhesEdicaoAS() {
+    const detalhes = {};
+    const chavesArray = [
+        'profissionaisEnvolvidos', 'participantesAtendimento', 'disciplinasAfetadas',
+        'professoresEnvolvidos', 'disciplinasCriticas', 'participantesIntervencao'
+    ];
+    
+    document.querySelectorAll('#editCamposEspecificos [data-detalhe-key]').forEach(el => {
+        const key = el.getAttribute('data-detalhe-key');
+        const val = el.value;
+        if (!val) return;
+        
+        if (key === 'duracaoAtendimento' || key === 'duracaoSessao') {
+            const n = parseInt(val);
+            if (!isNaN(n) && n > 0) detalhes[key] = n;
+        } else if (chavesArray.includes(key)) {
+            detalhes[key] = val.split(',').map(t => t.trim()).filter(t => t.length > 0);
+        } else {
+            detalhes[key] = val.trim();
+        }
+    });
+    
+    return detalhes;
+}
+
 async function salvarEdicaoAtendimento() {
     const atendimentoId = safeGet('editAtendimentoId')?.value;
-    const tipoTarefa = safeGet('editTipoTarefa')?.value;
     const descricao = (safeGet('editDescricao')?.value || '').trim();
     const gravidade = safeGet('editGravidade')?.value;
     const prioridade = safeGet('editPrioridade')?.value;
     const observacoes = safeGet('editObservacoes')?.value || '';
     
-    if (!tipoTarefa || !descricao) {
-        mostrarToastConcluido('Preencha todos os campos obrigatórios', 'error');
+    if (__tiposSelecionados.length === 0) {
+        mostrarToastConcluido('Selecione pelo menos um tipo de tarefa', 'error');
         return;
     }
+    
+    if (!descricao) {
+        mostrarToastConcluido('A descrição é obrigatória', 'error');
+        return;
+    }
+    
+    const detalhesEnviados = coletarDetalhesEdicaoAS();
+    console.log('[salvar edição AS] detalhes enviados:', detalhesEnviados);
     
     try {
         const response = await fetch(`/api/assistente-social/atendimento/${atendimentoId}`, {
@@ -2297,11 +2619,12 @@ async function salvarEdicaoAtendimento() {
                 'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({
-                tipoTarefa,
+                tiposTarefa: __tiposSelecionados,
                 descricao,
                 gravidade,
                 prioridade,
-                observacoes
+                observacoes,
+                detalhes: detalhesEnviados
             })
         });
         const data = await response.json();
@@ -2317,7 +2640,6 @@ async function salvarEdicaoAtendimento() {
             carregarLembretes();
             carregarAtendimentosConcluidos(__concluidosPaginaAtual);
         } else {
-            // 🔒 Trata bloqueio específico
             if (data.code === 'ADMIN_NAO_CRIADOR') {
                 const modal = bootstrap.Modal.getInstance(safeGet('modalEditarAtendimento'));
                 if (modal) modal.hide();
@@ -2373,7 +2695,25 @@ async function verAtendimento(atendimentoId) {
                 participantesAtendimento: 'Participantes',
                 tipoTarefaOutros: 'Especificação',
                 providenciasTomadas: 'Providências Tomadas',
-                proximosPassos: 'Próximos Passos'
+                proximosPassos: 'Próximos Passos',
+                // 🆕 Específicos
+                motivoEvasao: 'Motivo da Evasão',
+                frequenciaFaltas: 'Frequência de Faltas',
+                disciplinasAfetadas: 'Disciplinas Afetadas',
+                estrategiasMotivacao: 'Estratégias de Motivação',
+                tipoIndisciplina: 'Tipo de Indisciplina',
+                professoresEnvolvidos: 'Professores Envolvidos',
+                contextoInsubordinacao: 'Contexto da Insubordinação',
+                tipoSubstancia: 'Tipo de Substância',
+                encaminhamentoTratamento: 'Encaminhamento p/ Tratamento',
+                tipoAgressao: 'Tipo de Agressão',
+                vitimas: 'Vítimas',
+                notasRecentes: 'Notas Recentes',
+                disciplinasCriticas: 'Disciplinas Críticas',
+                orgaoEncaminhado: 'Órgão Encaminhado',
+                participantesIntervencao: 'Participantes da Intervenção',
+                tipoAtendimento: 'Tipo de Atendimento',
+                duracaoAtendimento: 'Duração do Atendimento (min)'
             };
             
             detalhesHTML = '<div class="section-title">📋 Detalhes</div>';
@@ -2638,7 +2978,25 @@ function gerarHTMLImpressaoAS(a, qrCodeUrl) {
             participantesAtendimento: 'Participantes',
             tipoTarefaOutros: 'Especificação',
             providenciasTomadas: 'Providências',
-            proximosPassos: 'Próximos Passos'
+            proximosPassos: 'Próximos Passos',
+            // 🆕 Específicos
+            motivoEvasao: 'Motivo da Evasão',
+            frequenciaFaltas: 'Frequência de Faltas',
+            disciplinasAfetadas: 'Disciplinas Afetadas',
+            estrategiasMotivacao: 'Estratégias de Motivação',
+            tipoIndisciplina: 'Tipo de Indisciplina',
+            professoresEnvolvidos: 'Professores Envolvidos',
+            contextoInsubordinacao: 'Contexto da Insubordinação',
+            tipoSubstancia: 'Tipo de Substância',
+            encaminhamentoTratamento: 'Encaminhamento p/ Tratamento',
+            tipoAgressao: 'Tipo de Agressão',
+            vitimas: 'Vítimas',
+            notasRecentes: 'Notas Recentes',
+            disciplinasCriticas: 'Disciplinas Críticas',
+            orgaoEncaminhado: 'Órgão Encaminhado',
+            participantesIntervencao: 'Participantes da Intervenção',
+            tipoAtendimento: 'Tipo de Atendimento',
+            duracaoAtendimento: 'Duração do Atendimento (min)'
         };
         
         const linhas = [];
@@ -4029,6 +4387,22 @@ async function toggleNecessitaAssinatura(modulo) {
 }
 
 function montarSnapshotAtendimento(modulo) {
+    const labels = {
+        'evasao_escolar': 'Evasão Escolar',
+        'desinteresse_aprendizado': 'Desinteresse pelo Aprendizado',
+        'problemas_disciplina': 'Problemas com Disciplina',
+        'insubordinacao_limites': 'Insubordinação a Limites/Regras',
+        'vulnerabilidade_drogas': 'Vulnerabilidade às Drogas',
+        'atitudes_agressivas': 'Atitudes Agressivas/Violentas',
+        'baixo_rendimento': 'Baixo Rendimento Escolar',
+        'encaminhamento': 'Encaminhamento',
+        'intervencao': 'Intervenção',
+        'atendimento': 'Atendimento',
+        'outros': 'Outros'
+    };
+    
+    const labelTipos = __tiposSelecionados.map(t => labels[t] || t).join(' + ');
+    
     return {
         alunoId: currentAluno?.id,
         alunoNome: currentAluno?.nome,
@@ -4036,8 +4410,11 @@ function montarSnapshotAtendimento(modulo) {
         alunoTurma: currentAluno?.turma,
         alunoCurso: currentAluno?.curso,
         alunoFoto: currentAluno?.fotoPerfil,
-        motivo: tipoTarefaSelecionado,
-        motivoLabel: TIPO_LABELS[tipoTarefaSelecionado] || tipoTarefaSelecionado,
+        tiposTarefa: __tiposSelecionados,
+        tipoTarefa: __tiposSelecionados[0],
+        tipoTarefaLabel: labelTipos,
+        motivo: __tiposSelecionados[0],
+        motivoLabel: labelTipos,
         descricao: safeGet('descricao')?.value || '',
         observacoes: safeGet('observacoes')?.value || '',
         gravidade: safeGet('gravidade')?.value || 'media',
@@ -5257,6 +5634,7 @@ window.confirmarInterno = confirmarInterno;
 window.exportarPDF = exportarPDF;
 window.habilitarBotoesRelatorioAS = habilitarBotoesRelatorioAS;
 window.gerarHTMLRelatorioAS = gerarHTMLRelatorioAS;
+window.finalizarAposSucesso = finalizarAposSucesso;
 
 // 🆕 SISTEMA DE SESSÃO DE ASSINATURA
 window.assistenteSocial = {

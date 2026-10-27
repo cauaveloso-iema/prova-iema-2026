@@ -15,6 +15,7 @@ let currentAluno = null;
 let relatorioData = null;
 let dashboardCharts = {};
 let motivoSelecionado = null;
+let __motivosSelecionados = [];
 
 let scannerAuto = null;
 let scannerAutoAtivo = false;
@@ -1348,8 +1349,13 @@ function exibirAluno(data) {
 
 function mostrarFormRegistro() {
     safeGet('formRegistro').style.display = 'block';
-    safeGet('motivoSelecionado').value = '';
+    
+    // 🆕 Reseta estado de multi-seleção
+    __motivosSelecionados = [];
     motivoSelecionado = null;
+    const hiddenMotivo = safeGet('motivoSelecionado');
+    if (hiddenMotivo) hiddenMotivo.value = '';
+    
     document.querySelectorAll('#formRegistro .tipo-card').forEach(c => c.classList.remove('selected'));
     safeGet('descricao').value = '';
     safeGet('observacoes').value = '';
@@ -1365,7 +1371,7 @@ function mostrarFormRegistro() {
     const blocoInfo = safeGet('atrasoBlocoAssinaturaInfo');
     if (blocoInfo) { blocoInfo.style.display = 'none'; blocoInfo.innerHTML = ''; }
     
-    // 🆕 Limpa assinatura do ALUNO
+    // Limpa assinatura do ALUNO
     limparEstadoSessaoAssinaturaAluno('atraso');
     const checkAssinaturaAluno = safeGet('atrasoNecessitaAssinaturaAluno');
     if (checkAssinaturaAluno) checkAssinaturaAluno.checked = false;
@@ -1382,24 +1388,42 @@ function mostrarFormRegistro() {
     const horaEl = safeGet('atrasoHoraChegada');
     if (horaEl) horaEl.value = horaAtual;
     
-    setTimeout(() => {
-        dataEl?.focus();
-    }, 100);
+    setTimeout(() => { dataEl?.focus(); }, 100);
 }
 
 function selecionarMotivo(motivo) {
     if (!motivo) return;
-    motivoSelecionado = motivo;
-    safeGet('motivoSelecionado').value = motivo;
-    document.querySelectorAll('#formRegistro .tipo-card').forEach(c => c.classList.remove('selected'));
-    const card = document.querySelector(`#formRegistro .tipo-card[data-tipo="${motivo}"]`);
-    if (card) card.classList.add('selected');
-    safeGet('campoOutros').style.display = motivo === 'outros' ? 'block' : 'none';
+    
+    const idx = __motivosSelecionados.indexOf(motivo);
+    if (idx >= 0) {
+        __motivosSelecionados.splice(idx, 1);
+    } else {
+        __motivosSelecionados.push(motivo);
+    }
+    
+    // Atualiza visual dos cards
+    document.querySelectorAll('#formRegistro .tipo-card').forEach(c => {
+        const t = c.getAttribute('data-tipo');
+        if (__motivosSelecionados.includes(t)) c.classList.add('selected');
+        else c.classList.remove('selected');
+    });
+    
+    // Atualiza hidden + estado global
+    motivoSelecionado = __motivosSelecionados[0] || null;
+    const hidden = safeGet('motivoSelecionado');
+    if (hidden) hidden.value = __motivosSelecionados.join(',');
+    
+    // Mostra/oculta campo "Outros" se estiver entre os selecionados
+    const campoOutros = safeGet('campoOutros');
+    if (campoOutros) {
+        campoOutros.style.display = __motivosSelecionados.includes('outros') ? 'block' : 'none';
+    }
 }
 
 async function registrarAtraso() {
-    if (!motivoSelecionado) { 
-        notificar('Selecione o motivo do atraso', 'error');
+    // 🆕 Valida multi-seleção
+    if (!__motivosSelecionados || __motivosSelecionados.length === 0) { 
+        notificar('Selecione pelo menos um motivo do atraso', 'error');
         return; 
     }
     
@@ -1426,15 +1450,17 @@ async function registrarAtraso() {
         notificar('Nenhum aluno selecionado', 'error');
         return; 
     }
-    if (motivoSelecionado === 'outros') {
+    
+    // Se "outros" estiver selecionado, exige o texto
+    if (__motivosSelecionados.includes('outros')) {
         const motivoOutros = (safeGet('motivoOutrosTexto')?.value || '').trim();
         if (!motivoOutros) { 
-            notificar('Especifique o motivo', 'error');
+            notificar('Especifique o motivo "Outros"', 'error');
             return; 
         }
     }
     
-    // 🔹 Assinatura do RESPONSÁVEL
+    // Assinatura do RESPONSÁVEL
     const precisaAssinatura = safeGet('atrasoNecessitaAssinatura')?.checked || false;
     const assinaturaBase64 = estadoSessaoAssinatura.atraso?.assinaturaCapturada || '';
     const sessaoAssinaturaId = estadoSessaoAssinatura.atraso?.sessaoId || null;
@@ -1445,7 +1471,7 @@ async function registrarAtraso() {
         return;
     }
     
-    // 🆕 Assinatura do ALUNO
+    // Assinatura do ALUNO
     const precisaAssinaturaAluno = safeGet('atrasoNecessitaAssinaturaAluno')?.checked || false;
     const assinaturaAlunoBase64 = estadoSessaoAssinaturaAluno.atraso?.assinaturaCapturada || '';
     const sessaoAssinaturaAlunoId = estadoSessaoAssinaturaAluno.atraso?.sessaoId || null;
@@ -1474,7 +1500,8 @@ async function registrarAtraso() {
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({
                 alunoId: currentAluno.id,
-                motivo: motivoSelecionado,
+                motivos: __motivosSelecionados,     // 🆕 array
+                motivo: __motivosSelecionados[0],   // compatibilidade
                 descricao,
                 observacoes: safeGet('observacoes')?.value || '',
                 dataHora: dataHoraCompleta.toISOString(),
@@ -1483,11 +1510,9 @@ async function registrarAtraso() {
                     horarioPrevisto: safeGet('horarioPrevisto')?.value || '',
                     horarioChegada: safeGet('horarioChegada')?.value || ''
                 },
-                // Responsável
                 precisaAssinatura: precisaAssinatura,
                 assinaturaBase64: assinaturaBase64,
                 sessaoAssinaturaId: sessaoAssinaturaId,
-                // 🆕 Aluno
                 precisaAssinaturaAluno: precisaAssinaturaAluno,
                 assinaturaAlunoBase64: assinaturaAlunoBase64,
                 sessaoAssinaturaAlunoId: sessaoAssinaturaAlunoId
@@ -1507,7 +1532,7 @@ async function registrarAtraso() {
             fecharModalAssinatura('atraso');
             limparEstadoSessaoAssinatura('atraso');
             
-            // 🆕 Limpa sessão do aluno
+            // Limpa sessão do aluno
             const sessaoAlunoId = estadoSessaoAssinaturaAluno.atraso?.sessaoId;
             if (sessaoAlunoId) {
                 fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoAlunoId}`, {
@@ -1538,7 +1563,13 @@ function limparTela() {
     safeGet('alunoInfo').style.display = 'none';
     safeGet('formRegistro').style.display = 'none';
     currentAluno = null;
+    
+    // 🆕 Reseta multi-seleção
+    __motivosSelecionados = [];
     motivoSelecionado = null;
+    const hiddenMotivo = safeGet('motivoSelecionado');
+    if (hiddenMotivo) hiddenMotivo.value = '';
+    document.querySelectorAll('#formRegistro .tipo-card').forEach(c => c.classList.remove('selected'));
     
     // Limpa sessão do RESPONSÁVEL
     const sessaoId = estadoSessaoAssinatura.atraso?.sessaoId;
@@ -1557,7 +1588,7 @@ function limparTela() {
     const blocoInfo = safeGet('atrasoBlocoAssinaturaInfo');
     if (blocoInfo) { blocoInfo.style.display = 'none'; blocoInfo.innerHTML = ''; }
     
-    // 🆕 Limpa sessão do ALUNO
+    // Limpa sessão do ALUNO
     const sessaoAlunoId = estadoSessaoAssinaturaAluno.atraso?.sessaoId;
     if (sessaoAlunoId) {
         fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoAlunoId}`, {
@@ -1829,6 +1860,7 @@ function renderizarListaAtrasosRecentes(lista) {
     `;
 }
 
+
 // 🆕 Renderiza paginação dos atrasos
 function renderizarPaginacaoAtrasos() {
     const { paginaAtual, totalPaginas, totalRegistros, porPagina } = paginacaoAtrasosState;
@@ -1912,12 +1944,14 @@ async function verAtraso(atrasoId) {
         }
         
         const a = data.atraso;
+        const motivosArr = (a.motivos && a.motivos.length > 0) ? a.motivos : [a.motivo];
+        
         const oldModal = safeGet('modalVerAtraso');
         if (oldModal) oldModal.remove();
         
         let assinaturasHTML = '';
 
-        // Bloco da Assinatura do Responsável
+        // Assinatura do Responsável
         if (a.temAssinatura && a.assinaturaBase64) {
             assinaturasHTML += `
                 <div class="mb-3">
@@ -1938,7 +1972,7 @@ async function verAtraso(atrasoId) {
                 </div>`;
         }
 
-        // Bloco da Assinatura do Aluno
+        // Assinatura do Aluno
         if (a.temAssinaturaAluno && a.assinaturaAlunoBase64) {
             assinaturasHTML += `
                 <div class="mb-3">
@@ -1958,6 +1992,20 @@ async function verAtraso(atrasoId) {
                     </div>
                 </div>`;
         }
+        
+        // 🆕 Badges de todos os motivos
+        const badgesMotivos = motivosArr.map(m => {
+            const labels = {
+                'onibus': 'Ônibus',
+                'transito': 'Trânsito',
+                'problemas_pessoais': 'Problemas Pessoais',
+                'fardamento': 'Fardamento',
+                'outros': 'Outros'
+            };
+            return `<span class="badge" style="background: #1e3c72; font-size: 12px; margin-right: 4px; margin-bottom: 4px; padding: 6px 10px;">
+                ${escapeHTML(labels[m] || m)}
+            </span>`;
+        }).join('');
         
         const modalHtml = `
             <div class="modal fade" id="modalVerAtraso" tabindex="-1">
@@ -1980,14 +2028,16 @@ async function verAtraso(atrasoId) {
                                         <i class="fas fa-graduation-cap"></i> ${escapeHTML(a.alunoTurma || '-')}
                                     </small>
                                 </div>
-                                <span class="badge" style="background: #1e3c72; font-size: 12px;">
-                                    ${escapeHTML(a.motivoLabel || a.motivo)}
-                                </span>
                             </div>
                             
                             <div class="mb-3">
                                 <strong><i class="fas fa-clock"></i> Data/Hora:</strong>
                                 <p class="mb-0">${a.dataHoraFormatada || new Date(a.dataHora).toLocaleString('pt-BR')}</p>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <strong><i class="fas fa-tags"></i> Motivo(s):</strong>
+                                <div class="mt-2">${badgesMotivos}</div>
                             </div>
                             
                             <div class="mb-3">
@@ -2051,8 +2101,34 @@ async function editarAtraso(atrasoId) {
         }
         
         const a = data.atraso;
+        const motivosArr = (a.motivos && a.motivos.length > 0) ? a.motivos : [a.motivo];
+        
         const oldModal = safeGet('modalEditarAtraso');
         if (oldModal) oldModal.remove();
+        
+        // 🆕 Cards de motivos multi-seleção (todos os disponíveis)
+        const todosMotivos = [
+            { valor: 'onibus', label: 'Ônibus', icone: 'fa-bus' },
+            { valor: 'transito', label: 'Trânsito', icone: 'fa-car' },
+            { valor: 'problemas_pessoais', label: 'Problemas Pessoais', icone: 'fa-user-injured' },
+            { valor: 'fardamento', label: 'Fardamento', icone: 'fa-tshirt' },
+            { valor: 'outros', label: 'Outros', icone: 'fa-ellipsis-h' }
+        ];
+        
+        const cardsMotivos = todosMotivos.map(m => {
+            const selecionado = motivosArr.includes(m.valor);
+            return `
+                <div class="tipo-card ${selecionado ? 'selected' : ''}" 
+                     data-tipo="${m.valor}" 
+                     onclick="toggleMotivoEdicao('${m.valor}')">
+                    <i class="fas ${m.icone}"></i>
+                    <span>${m.label}</span>
+                </div>
+            `;
+        }).join('');
+        
+        const motivoOutrosVal = a.detalhes?.motivoOutros || '';
+        const temOutros = motivosArr.includes('outros');
         
         const modalHtml = `
             <div class="modal fade" id="modalEditarAtraso" tabindex="-1">
@@ -2066,6 +2142,7 @@ async function editarAtraso(atrasoId) {
                         </div>
                         <div class="modal-body">
                             <input type="hidden" id="editAtrasoId" value="${a.id}">
+                            <input type="hidden" id="editAtrasoMotivos" value="${motivosArr.join(',')}">
                             
                             <div class="mb-3">
                                 <label class="form-label">Aluno</label>
@@ -2073,14 +2150,18 @@ async function editarAtraso(atrasoId) {
                             </div>
                             
                             <div class="mb-3">
-                                <label class="form-label">Motivo <span class="text-danger">*</span></label>
-                                <select id="editAtrasoMotivo" class="form-select">
-                                    <option value="onibus" ${a.motivo === 'onibus' ? 'selected' : ''}>Ônibus</option>
-                                    <option value="transito" ${a.motivo === 'transito' ? 'selected' : ''}>Trânsito</option>
-                                    <option value="problemas_pessoais" ${a.motivo === 'problemas_pessoais' ? 'selected' : ''}>Problemas Pessoais</option>
-                                    <option value="fardamento" ${a.motivo === 'fardamento' ? 'selected' : ''}>Fardamento</option>
-                                    <option value="outros" ${a.motivo === 'outros' ? 'selected' : ''}>Outros</option>
-                                </select>
+                                <label class="form-label">Motivo(s) <span class="text-danger">*</span></label>
+                                <small class="text-muted d-block mb-2">
+                                    <i class="fas fa-info-circle"></i> Você pode marcar mais de um motivo.
+                                </small>
+                                <div class="tipos-tarefa-grid" id="editMotivosGrid">
+                                    ${cardsMotivos}
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3" id="editCampoOutros" style="display: ${temOutros ? 'block' : 'none'};">
+                                <label class="form-label">Especifique o Motivo "Outros"</label>
+                                <input type="text" id="editAtrasoMotivoOutros" class="form-control" value="${escapeHTML(motivoOutrosVal)}">
                             </div>
                             
                             <div class="mb-3">
@@ -2121,15 +2202,54 @@ async function editarAtraso(atrasoId) {
     }
 }
 
+// 🆕 Toggle de motivo na edição
+function toggleMotivoEdicao(motivo) {
+    if (!motivo) return;
+    
+    const hidden = safeGet('editAtrasoMotivos');
+    if (!hidden) return;
+    
+    let selecionados = hidden.value ? hidden.value.split(',').filter(Boolean) : [];
+    
+    const idx = selecionados.indexOf(motivo);
+    if (idx >= 0) selecionados.splice(idx, 1);
+    else selecionados.push(motivo);
+    
+    hidden.value = selecionados.join(',');
+    
+    document.querySelectorAll('#editMotivosGrid .tipo-card').forEach(c => {
+        const t = c.getAttribute('data-tipo');
+        if (selecionados.includes(t)) c.classList.add('selected');
+        else c.classList.remove('selected');
+    });
+    
+    const campoOutros = safeGet('editCampoOutros');
+    if (campoOutros) {
+        campoOutros.style.display = selecionados.includes('outros') ? 'block' : 'none';
+    }
+}
+
 async function salvarEdicaoAtraso() {
     const atrasoId = safeGet('editAtrasoId')?.value;
-    const motivo = safeGet('editAtrasoMotivo')?.value;
+    const motivosStr = safeGet('editAtrasoMotivos')?.value || '';
+    const motivos = motivosStr.split(',').filter(Boolean);
     const dataHora = safeGet('editAtrasoDataHora')?.value;
     const descricao = (safeGet('editAtrasoDescricao')?.value || '').trim();
     const observacoes = safeGet('editAtrasoObservacoes')?.value || '';
+    const motivoOutros = safeGet('editAtrasoMotivoOutros')?.value || '';
     
-    if (!motivo || !dataHora || !descricao) {
-        notificar('Preencha todos os campos obrigatórios');
+    if (motivos.length === 0) {
+        notificar('Selecione pelo menos um motivo', 'error');
+        return;
+    }
+    
+    if (!dataHora || !descricao) {
+        notificar('Preencha todos os campos obrigatórios', 'error');
+        return;
+    }
+    
+    if (motivos.includes('outros') && !motivoOutros.trim()) {
+        notificar('Especifique o motivo "Outros"', 'error');
         return;
     }
     
@@ -2141,10 +2261,12 @@ async function salvarEdicaoAtraso() {
                 'Authorization': `Bearer ${token}` 
             },
             body: JSON.stringify({
-                motivo,
+                motivos,
+                motivo: motivos[0],
                 dataHora: new Date(dataHora).toISOString(),
                 descricao,
-                observacoes
+                observacoes,
+                detalhes: { motivoOutros }
             })
         });
         const data = await response.json();
@@ -2227,9 +2349,24 @@ function gerarHTMLImpressaoAtraso(a, qrCodeUrl) {
             </div>`;
     }
     
-    // ============================================
-    // 🔍 DEFINE QUAIS ASSINATURAS MOSTRAR
-    // ============================================
+    // 🆕 Lista de motivos (badges/checkbox)
+    const motivosArr = (a.motivos && a.motivos.length > 0) ? a.motivos : [a.motivo];
+    const labelsMotivos = {
+        'onibus': 'Ônibus',
+        'transito': 'Trânsito',
+        'problemas_pessoais': 'Problemas Pessoais',
+        'fardamento': 'Fardamento',
+        'outros': 'Outros'
+    };
+    const motivosHTML = motivosArr.map(m => `
+        <div style="display: inline-block; margin-right: 15px;">
+            ☑ <strong>${labelsMotivos[m] || m}</strong>
+        </div>
+    `).join('');
+    
+    const motivoOutrosTexto = a.detalhes?.motivoOutros ? ` <em>(${escapeHTML(a.detalhes.motivoOutros)})</em>` : '';
+    
+    // Assinaturas
     const temResp = !!(a.assinaturaBase64 && a.assinaturaBase64.length > 100);
     const temAluno = !!(a.assinaturaAlunoBase64 && a.assinaturaAlunoBase64.length > 100);
     const precisaResp = !!a.precisaAssinatura;
@@ -2237,9 +2374,6 @@ function gerarHTMLImpressaoAtraso(a, qrCodeUrl) {
     
     const mostrarResp = precisaResp || (!precisaResp && !precisaAluno);
     const mostrarAluno = precisaAluno;
-    
-    console.log('🖨️ Impressão - mostrarResp:', mostrarResp, '| mostrarAluno:', mostrarAluno, 
-                '| temResp:', temResp, '| temAluno:', temAluno);
     
     const assinaturaRespHTML = temResp
         ? `<img class="assinatura-img" src="${a.assinaturaBase64}" alt="Assinatura Responsável">`
@@ -2259,16 +2393,11 @@ function gerarHTMLImpressaoAtraso(a, qrCodeUrl) {
         assinaturasHTML = `
             <div class="assinaturas">
                 <div class="assinatura">
-                    <div class="assinatura-container">
-                        ${assinaturaRespHTML}
-                    </div>
+                    <div class="assinatura-container">${assinaturaRespHTML}</div>
                     <div class="assinatura-linha">Assinatura do Responsável</div>
                 </div>
                 <div class="assinatura">
-                    <div class="assinatura-container">
-                        ${assinaturaAlunoHTML}
-                        ${nomeAlunoAssinante}
-                    </div>
+                    <div class="assinatura-container">${assinaturaAlunoHTML}${nomeAlunoAssinante}</div>
                     <div class="assinatura-linha">Assinatura do Aluno</div>
                 </div>
                 <div class="assinatura">
@@ -2282,10 +2411,7 @@ function gerarHTMLImpressaoAtraso(a, qrCodeUrl) {
         assinaturasHTML = `
             <div class="assinaturas">
                 <div class="assinatura">
-                    <div class="assinatura-container">
-                        ${assinaturaAlunoHTML}
-                        ${nomeAlunoAssinante}
-                    </div>
+                    <div class="assinatura-container">${assinaturaAlunoHTML}${nomeAlunoAssinante}</div>
                     <div class="assinatura-linha">Assinatura do Aluno</div>
                 </div>
                 <div class="assinatura">
@@ -2299,9 +2425,7 @@ function gerarHTMLImpressaoAtraso(a, qrCodeUrl) {
         assinaturasHTML = `
             <div class="assinaturas">
                 <div class="assinatura">
-                    <div class="assinatura-container">
-                        ${assinaturaRespHTML}
-                    </div>
+                    <div class="assinatura-container">${assinaturaRespHTML}</div>
                     <div class="assinatura-linha">Assinatura do Responsável</div>
                 </div>
                 <div class="assinatura">
@@ -2328,7 +2452,7 @@ function gerarHTMLImpressaoAtraso(a, qrCodeUrl) {
             .header h1 { font-size: 10pt; text-transform: uppercase; font-weight: bold; margin: 2px 0 0; }
             .header p { font-size: 8pt; margin: 1px 0 0; }
             
-            .titulo { text-align: center; font-size: 11pt; font-weight: bold; background: #eef2ff; padding: 4px 8px; border: 1.5px solid #000; margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+            .titulo { text-align: center; font-size: 11pt; font-weight: bold; background: #eef2ff; padding: 4px 8px; border: 1.5px solid #000; margin: 6px 0 3px; text-transform: uppercase; }
             
             .aluno-box { display: flex; align-items: center; gap: 8px; padding: 5px 8px; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 5px; margin-bottom: 6px; }
             .aluno-foto { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1.5px solid #1e3c72; flex-shrink: 0; }
@@ -2345,11 +2469,10 @@ function gerarHTMLImpressaoAtraso(a, qrCodeUrl) {
             
             .motivo-box { background: #f5f5f5; border: 1px solid #000; padding: 5px 8px; margin: 5px 0; border-radius: 4px; }
             .motivo-box strong { font-size: 9pt; }
-            .motivo-box p { margin: 3px 0 0; font-size: 9.5pt; font-weight: bold; }
+            .motivo-box .motivos-lista { margin: 3px 0 0; font-size: 9pt; }
             
             .descricao-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; padding: 5px 8px; font-size: 8.5pt; line-height: 1.3; min-height: 30px; max-height: 80px; overflow: hidden; word-wrap: break-word; }
             
-            /* Assinaturas - layout dinâmico */
             .assinaturas { display: flex; justify-content: space-around; margin-top: 15px; gap: 15px; }
             .assinatura { flex: 1; text-align: center; font-size: 7.5pt; position: relative; }
             .assinatura-container { position: relative; border-bottom: 1px solid #000; min-height: 14mm; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; }
@@ -2402,8 +2525,8 @@ function gerarHTMLImpressaoAtraso(a, qrCodeUrl) {
         ${horariosHTML}
         
         <div class="motivo-box">
-            <strong>📌 Motivo:</strong>
-            <p>☑ ${escapeHTML(a.motivoLabel || a.motivo || '-')}</p>
+            <strong>📌 Motivo(s):</strong>
+            <div class="motivos-lista">${motivosHTML}${motivoOutrosTexto}</div>
         </div>
         
         <div class="section-title">📝 Descrição</div>
@@ -6905,6 +7028,20 @@ function montarSnapshotAtendimento(modulo) {
     const I = getPrefixoInput(modulo);
 
     if (modulo === 'atraso') {
+        const motivosLabel = {
+            'onibus': 'Ônibus',
+            'transito': 'Trânsito',
+            'problemas_pessoais': 'Problemas Pessoais',
+            'fardamento': 'Fardamento',
+            'outros': 'Outros'
+        };
+        
+        const motivosArr = Array.isArray(__motivosSelecionados) && __motivosSelecionados.length > 0
+            ? __motivosSelecionados
+            : (motivoSelecionado ? [motivoSelecionado] : []);
+        
+        const labelMotivos = motivosArr.map(m => motivosLabel[m] || m).join(' + ');
+        
         return {
             alunoId: aluno.id,
             alunoNome: aluno.nome,
@@ -6912,8 +7049,9 @@ function montarSnapshotAtendimento(modulo) {
             alunoTurma: aluno.turma,
             alunoCurso: aluno.curso,
             alunoFoto: aluno.fotoPerfil,
-            motivo: motivoSelecionado,
-            motivoLabel: getMotivoLabelAtraso(motivoSelecionado),
+            motivo: motivosArr[0] || motivoSelecionado,
+            motivos: motivosArr,
+            motivoLabel: labelMotivos,
             descricao: safeGet('descricao')?.value || '',
             observacoes: safeGet('observacoes')?.value || '',
             dataHora: safeGet('atrasoData')?.value || ''

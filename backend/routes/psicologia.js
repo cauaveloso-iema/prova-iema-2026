@@ -22,7 +22,7 @@ function mascararParaAdmin(dados, req) {
 
 function mascararItem(item, req) {
   if (!item) return item;
-  const obj = item.toObject ? item.toObject() : JSON.parse(JSON.stringify(item));
+  const obj = item.toObject ? item.toObject({ getters: true }) : JSON.parse(JSON.stringify(item));
   const adminId = req.userId?.toString();
   const criadorId = (obj.entrada?.registradoPor || obj.registradoPorId || obj.criadoPor)?.toString();
   
@@ -47,6 +47,7 @@ function mascararItem(item, req) {
   }
   if (obj.detalhes && typeof obj.detalhes === 'object') {
     Object.keys(obj.detalhes).forEach(chave => {
+      if (chave === 'tiposTarefaAdicionais') return;
       const valor = obj.detalhes[chave];
       if (Array.isArray(valor)) obj.detalhes[chave] = [MASCARA_TEXTO];
       else if (valor !== undefined && valor !== null && valor !== '') obj.detalhes[chave] = MASCARA_TEXTO;
@@ -72,6 +73,36 @@ function adminPodeModificar(atendimento, req) {
     permitido: false,
     motivo: 'Você não pode editar/excluir atendimentos criados por outros profissionais.'
   };
+}
+
+// ============================================
+// 🆕 HELPERS DE MÚLTIPLOS TIPOS
+// ============================================
+function extrairTiposTarefa(atendimento) {
+  const adicionais = atendimento?.detalhes?.tiposTarefaAdicionais || [];
+  return [...new Set([atendimento?.tipoTarefa, ...adicionais].filter(Boolean))];
+}
+
+function labelTiposTarefa(tipos) {
+  return AtendimentoPsicologia.getTiposLabels(tipos);
+}
+
+// ============================================
+// 🆕 HELPER: LÊ detalhes com getters (descriptografado)
+// ============================================
+function lerDetalhesLimpos(atendimento) {
+  if (!atendimento || !atendimento.detalhes) return {};
+  try {
+    const obj = atendimento.detalhes.toObject 
+      ? atendimento.detalhes.toObject({ getters: true }) 
+      : JSON.parse(JSON.stringify(atendimento.detalhes));
+    const limpo = { ...obj };
+    delete limpo.tiposTarefaAdicionais;
+    return limpo;
+  } catch (e) {
+    console.error('[lerDetalhesLimpos] erro:', e);
+    return {};
+  }
 }
 
 // ============================================
@@ -116,9 +147,7 @@ async function criarNotificacaoInterna({ usuarioId, titulo, mensagem, tipo, link
   const tipoFinal = TIPOS_VALIDOS.includes(tipo) ? tipo : 'sistema';
   
   const notif = new Notificacao({
-    usuarioId,
-    titulo,
-    mensagem,
+    usuarioId, titulo, mensagem,
     tipo: tipoFinal,
     link: link || '/psicologia.html',
     icone: icone || '⏰',
@@ -132,7 +161,6 @@ async function criarNotificacaoInterna({ usuarioId, titulo, mensagem, tipo, link
 
 // ============================================
 // PROCESSAR ALERTAS 24H
-// Envia 1 notificação por dia por atendimento
 // ============================================
 async function processarAlertas24h() {
   const atendimentos = await AtendimentoPsicologia.buscarAtendimentosParaAlerta();
@@ -141,13 +169,12 @@ async function processarAlertas24h() {
   let processados = 0;
   let pulados = 0;
   const agora = new Date();
-  const INTERVALO_MINIMO_MS = 24 * 60 * 60 * 1000; // 24 horas entre alertas
+  const INTERVALO_MINIMO_MS = 24 * 60 * 60 * 1000;
   
   for (const atendimento of atendimentos) {
     const registradoPor = atendimento.entrada?.registradoPor;
     if (!registradoPor) continue;
     
-    // 🛡️ Só envia se passou 24h desde o último alerta
     if (atendimento.ultimoAlerta24h) {
       const diff = agora - new Date(atendimento.ultimoAlerta24h);
       if (diff < INTERVALO_MINIMO_MS) {
@@ -157,15 +184,13 @@ async function processarAlertas24h() {
     }
     
     const tempo = formatarTempoAtendimento(atendimento.entrada.dataHora);
-    const tipoLabel = AtendimentoPsicologia.getTipoTarefaLabel(atendimento.tipoTarefa);
+    const tipos = extrairTiposTarefa(atendimento);
+    const tipoLabel = labelTiposTarefa(tipos);
     const totalAlertas = (atendimento.totalAlertas24h || 0) + 1;
     const nivelLabel = totalAlertas === 1 
-      ? '24h' 
-      : totalAlertas === 2 
-        ? '48h' 
-        : totalAlertas === 3 
-          ? '72h' 
-          : `${totalAlertas * 24}h`;
+      ? '24h' : totalAlertas === 2 
+        ? '48h' : totalAlertas === 3 
+          ? '72h' : `${totalAlertas * 24}h`;
     
     try {
       await criarNotificacaoInterna({
@@ -232,21 +257,19 @@ function fimDoDiaBrasil(dataStr) {
 
 // ============================================
 // HEALTH CHECK
-// Retorna status do serviço (online/versão/timestamp)
 // ============================================
 router.get('/health', (req, res) => {
   res.json({ 
     success: true, 
     status: 'online', 
     service: 'Psicologia',
-    versao: '2.0-alertas-24h',
+    versao: '2.1-multi-tipos',
     timestamp: new Date().toISOString()
   });
 });
 
 // ============================================
 // MIGRAÇÃO
-// Inicializa campos de alerta 24h em atendimentos existentes
 // ============================================
 router.post('/admin/migrar-alertas-24h', async (req, res) => {
   try {
@@ -263,8 +286,6 @@ router.post('/admin/migrar-alertas-24h', async (req, res) => {
 // ============================================
 // TURMAS E ALUNOS
 // ============================================
-
-// Lista todas as turmas distintas de alunos ativos
 router.get('/turmas', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const turmas = await User.distinct('turma', { 
@@ -276,7 +297,6 @@ router.get('/turmas', authenticateToken, verificarPsicologia, async (req, res) =
   }
 });
 
-// Lista alunos de uma turma específica
 router.get('/alunos-por-turma', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const { turma } = req.query;
@@ -297,7 +317,6 @@ router.get('/alunos-por-turma', authenticateToken, verificarPsicologia, async (r
   }
 });
 
-// Busca dados completos de um aluno (atendimentos ativos + histórico recente)
 router.get('/aluno/:id', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const aluno = await User.findOne({ _id: req.params.id, ativo: true })
@@ -320,23 +339,30 @@ router.get('/aluno/:id', authenticateToken, verificarPsicologia, async (req, res
         id: aluno._id, nome: aluno.nome, matricula: aluno.matricula,
         turma: aluno.turma, curso: aluno.curso, fotoPerfil: aluno.fotoPerfil || null
       },
-      atendimentosAtivos: atendimentosAtivos.map(a => ({
-        id: a._id, tipoTarefa: a.tipoTarefa,
-        tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
-        descricao: a.entrada.descricao, dataHoraEntrada: a.entrada.dataHora, prioridade: a.prioridade
-      })),
-      historicoRecente: historicoRecente.map(a => ({
-        id: a._id, tipoTarefa: a.tipoTarefa,
-        tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
-        descricao: a.entrada.descricao, dataHora: a.entrada.dataHora, resultado: a.saida?.resultado
-      }))
+      atendimentosAtivos: atendimentosAtivos.map(a => {
+        const tipos = extrairTiposTarefa(a);
+        return {
+          id: a._id, tipoTarefa: a.tipoTarefa,
+          tiposTarefa: tipos,
+          tipoTarefaLabel: labelTiposTarefa(tipos),
+          descricao: a.entrada.descricao, dataHoraEntrada: a.entrada.dataHora, prioridade: a.prioridade
+        };
+      }),
+      historicoRecente: historicoRecente.map(a => {
+        const tipos = extrairTiposTarefa(a);
+        return {
+          id: a._id, tipoTarefa: a.tipoTarefa,
+          tiposTarefa: tipos,
+          tipoTarefaLabel: labelTiposTarefa(tipos),
+          descricao: a.entrada.descricao, dataHora: a.entrada.dataHora, resultado: a.saida?.resultado
+        };
+      })
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Busca alunos por nome ou matrícula (mínimo 2 caracteres)
 router.get('/buscar-aluno', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const { termo } = req.query;
@@ -365,15 +391,25 @@ router.get('/buscar-aluno', authenticateToken, verificarPsicologia, async (req, 
 });
 
 // ============================================
-// REGISTRAR ATENDIMENTO
-// Cria um novo atendimento psicológico (assinatura opcional)
+// REGISTRAR (MÚLTIPLOS TIPOS)
 // ============================================
 router.post('/registrar', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const { 
-      alunoId, tipoTarefa, descricao, observacoes, gravidade, prioridade, detalhes,
+      alunoId, 
+      tiposTarefa, tipoTarefa,
+      descricao, observacoes, gravidade, prioridade, detalhes,
       precisaAssinatura = false
     } = req.body;
+    
+    let tiposFinal = Array.isArray(tiposTarefa) && tiposTarefa.length > 0
+      ? tiposTarefa
+      : (tipoTarefa ? [tipoTarefa] : []);
+    tiposFinal = [...new Set(tiposFinal.filter(Boolean))];
+    
+    if (tiposFinal.length === 0) {
+      return res.status(400).json({ success: false, error: 'Selecione pelo menos um tipo de tarefa' });
+    }
     
     if (!descricao || descricao.trim() === '') {
       return res.status(400).json({ success: false, error: 'A descrição é obrigatória' });
@@ -384,8 +420,10 @@ router.post('/registrar', authenticateToken, verificarPsicologia, async (req, re
       'acoes_atividades_saude', 'acoes_socioemocionais_culturais', 'outros'
     ];
     
-    if (!tiposValidos.includes(tipoTarefa)) {
-      return res.status(400).json({ success: false, error: 'Tipo de tarefa inválido' });
+    for (const t of tiposFinal) {
+      if (!tiposValidos.includes(t)) {
+        return res.status(400).json({ success: false, error: `Tipo de tarefa inválido: ${t}` });
+      }
     }
     
     const aluno = await User.findById(alunoId);
@@ -396,6 +434,11 @@ router.post('/registrar', authenticateToken, verificarPsicologia, async (req, re
     const psicologo = await User.findById(req.userId).select('nome');
     const statusAssinatura = precisaAssinatura ? 'pendente' : 'nao_necessaria';
     
+    const detalhesFinal = { ...(detalhes || {}) };
+    if (tiposFinal.length > 1) {
+      detalhesFinal.tiposTarefaAdicionais = tiposFinal.slice(1);
+    }
+    
     const atendimento = new AtendimentoPsicologia({
       alunoId: aluno._id,
       alunoNome: aluno.nome,
@@ -403,7 +446,7 @@ router.post('/registrar', authenticateToken, verificarPsicologia, async (req, re
       alunoTurma: aluno.turma || 'Não informada',
       alunoCurso: aluno.curso || 'Não informado',
       alunoFoto: aluno.fotoPerfil,
-      tipoTarefa,
+      tipoTarefa: tiposFinal[0],
       entrada: {
         dataHora: new Date(),
         descricao: descricao.trim(),
@@ -419,7 +462,7 @@ router.post('/registrar', authenticateToken, verificarPsicologia, async (req, re
         assinadaPorNome: null,
         sessaoAssinaturaId: null
       },
-      detalhes: detalhes || {},
+      detalhes: detalhesFinal,
       prioridade: prioridade || 'normal',
       status: 'em_andamento',
       ultimoAlerta24h: null,
@@ -429,13 +472,17 @@ router.post('/registrar', authenticateToken, verificarPsicologia, async (req, re
     
     await atendimento.save();
     
+    const labelTipos = labelTiposTarefa(tiposFinal);
+    
     res.json({
       success: true,
-      message: `${AtendimentoPsicologia.getTipoTarefaLabel(tipoTarefa)} registrado para ${aluno.nome}${statusAssinatura === 'pendente' ? ' — aguardando assinatura' : ''}`,
+      message: `${labelTipos} registrado para ${aluno.nome}${statusAssinatura === 'pendente' ? ' — aguardando assinatura' : ''}`,
       atendimento: {
         id: atendimento._id,
         tipoTarefa: atendimento.tipoTarefa,
-        tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(tipoTarefa),
+        tiposTarefa: tiposFinal,
+        tiposTarefaLabel: labelTipos,
+        tipoTarefaLabel: labelTipos,
         status: atendimento.status,
         dataHora: atendimento.entrada.dataHora,
         temAssinatura: atendimento.entrada.temAssinatura,
@@ -443,13 +490,13 @@ router.post('/registrar', authenticateToken, verificarPsicologia, async (req, re
       }
     });
   } catch (error) {
+    console.error('[POST /registrar] Erro:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // ============================================
 // APLICAR ASSINATURA
-// Aplica assinatura capturada via QR Code em um atendimento
 // ============================================
 router.post('/aplicar-assinatura', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -495,7 +542,6 @@ router.post('/aplicar-assinatura', authenticateToken, verificarPsicologia, async
 
 // ============================================
 // FINALIZAR
-// Finaliza um atendimento com resultado e observações finais
 // ============================================
 router.post('/finalizar', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -553,7 +599,6 @@ router.post('/finalizar', authenticateToken, verificarPsicologia, async (req, re
 
 // ============================================
 // REMARCAR
-// Adiciona uma remarcação a um atendimento existente
 // ============================================
 router.post('/remarcar', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -616,7 +661,6 @@ router.post('/remarcar', authenticateToken, verificarPsicologia, async (req, res
 
 // ============================================
 // REMARCAÇÕES PENDENTES
-// Lista todas as remarcações com status pendente
 // ============================================
 router.get('/remarcacoes/pendentes', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -629,6 +673,7 @@ router.get('/remarcacoes/pendentes', authenticateToken, verificarPsicologia, asy
     const remarcacoes = [];
     
     atendimentos.forEach(atendimento => {
+      const tipos = extrairTiposTarefa(atendimento);
       (atendimento.remarcacoes || []).forEach(rem => {
         if (rem.status !== 'pendente') return;
         const dataRem = new Date(rem.dataRemarcacao + 'T00:00:00');
@@ -640,7 +685,8 @@ router.get('/remarcacoes/pendentes', authenticateToken, verificarPsicologia, asy
           alunoTurma: atendimento.alunoTurma,
           alunoFoto: atendimento.alunoFoto,
           tipoTarefa: atendimento.tipoTarefa,
-          tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(atendimento.tipoTarefa),
+          tiposTarefa: tipos,
+          tipoTarefaLabel: labelTiposTarefa(tipos),
           dataRemarcacao: rem.dataRemarcacao,
           horarioRemarcacao: rem.horarioRemarcacao,
           motivoRemarcacao: rem.motivoRemarcacao,
@@ -668,7 +714,6 @@ router.get('/remarcacoes/pendentes', authenticateToken, verificarPsicologia, asy
   }
 });
 
-// Busca uma remarcação específica pelo ID
 router.get('/remarcacoes/:id', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const atendimento = await AtendimentoPsicologia.findOne({ 'remarcacoes.id': req.params.id });
@@ -698,7 +743,6 @@ router.get('/remarcacoes/:id', authenticateToken, verificarPsicologia, async (re
   }
 });
 
-// Finaliza uma remarcação (realizado ou cancelado)
 router.post('/remarcacoes/finalizar', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const { remarcacaoId, acao } = req.body;
@@ -751,8 +795,7 @@ router.post('/remarcacoes/finalizar', authenticateToken, verificarPsicologia, as
 });
 
 // ============================================
-// ATENDIMENTOS COM +24H
-// Lista atendimentos em andamento há mais de 24h (com máscara para super_admin)
+// ATENDIMENTOS +24H
 // ============================================
 router.get('/atendimentos-antigos', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -770,6 +813,7 @@ router.get('/atendimentos-antigos', authenticateToken, verificarPsicologia, asyn
     
     const lista = atendimentos.map(a => {
       const tempo = formatarTempoAtendimento(a.entrada.dataHora);
+      const tipos = extrairTiposTarefa(a);
       return {
         id: a._id,
         alunoId: a.alunoId,
@@ -778,7 +822,8 @@ router.get('/atendimentos-antigos', authenticateToken, verificarPsicologia, asyn
         alunoTurma: a.alunoTurma,
         alunoFoto: a.alunoFoto,
         tipoTarefa: a.tipoTarefa,
-        tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
+        tiposTarefa: tipos,
+        tipoTarefaLabel: labelTiposTarefa(tipos),
         descricao: a.entrada.descricao,
         gravidade: a.entrada.gravidade,
         prioridade: a.prioridade,
@@ -800,19 +845,13 @@ router.get('/atendimentos-antigos', authenticateToken, verificarPsicologia, asyn
       };
     });
     
-    // 🔒 APLICA A MÁSCARA PARA SUPER_ADMIN
     const listaMascarada = mascararParaAdmin(lista, req);
-    
     res.json({ success: true, total: listaMascarada.length, atendimentos: listaMascarada });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// ============================================
-// VERIFICAR ATENDIMENTO +24H
-// Permite encerrar ou manter aberto um atendimento com +24h
-// ============================================
 router.post('/atendimento/:id/verificar-24h', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const { acao, resultado, observacoes } = req.body;
@@ -879,7 +918,6 @@ router.post('/atendimento/:id/verificar-24h', authenticateToken, verificarPsicol
   }
 });
 
-// Processa manualmente os alertas de +24h (usado para testes)
 router.post('/processar-alertas-24h', async (req, res) => {
   try {
     const resultado = await processarAlertas24h();
@@ -891,7 +929,6 @@ router.post('/processar-alertas-24h', async (req, res) => {
 
 // ============================================
 // DASHBOARD
-// Retorna métricas, gráficos e tendências dos atendimentos
 // ============================================
 router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -925,9 +962,20 @@ router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res
       'entrada.dataHora': { $lte: limite24h }
     });
     
+    // 🆕 Agrupa por tipo contando TODOS os tipos (principal + adicionais)
     const porTipo = await AtendimentoPsicologia.aggregate([
       { $match: { 'entrada.dataHora': { $gte: ultimos30Dias } } },
-      { $group: { _id: '$tipoTarefa', count: { $sum: 1 } } },
+      { $project: {
+          tiposEfetivos: {
+            $cond: [
+              { $gt: [{ $size: { $ifNull: ['$detalhes.tiposTarefaAdicionais', []] } }, 0] },
+              { $concatArrays: [['$tipoTarefa'], '$detalhes.tiposTarefaAdicionais'] },
+              ['$tipoTarefa']
+            ]
+          }
+      }},
+      { $unwind: '$tiposEfetivos' },
+      { $group: { _id: '$tiposEfetivos', count: { $sum: 1 } } },
       { $sort: { count: -1 } }
     ]);
     
@@ -1016,7 +1064,6 @@ router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res
 
 // ============================================
 // ATENDIMENTOS ATIVOS
-// Lista todos os atendimentos em andamento (com máscara para super_admin)
 // ============================================
 router.get('/atendimentos-ativos', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -1025,11 +1072,13 @@ router.get('/atendimentos-ativos', authenticateToken, verificarPsicologia, async
     
     const lista = atendimentos.map(a => {
       const tempo = formatarTempoAtendimento(a.entrada.dataHora);
+      const tipos = extrairTiposTarefa(a);
       return {
         id: a._id, alunoId: a.alunoId, alunoNome: a.alunoNome,
         alunoTurma: a.alunoTurma, alunoFoto: a.alunoFoto,
         tipoTarefa: a.tipoTarefa,
-        tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
+        tiposTarefa: tipos,
+        tipoTarefaLabel: labelTiposTarefa(tipos),
         descricao: a.entrada.descricao, gravidade: a.entrada.gravidade, prioridade: a.prioridade,
         dataHoraEntrada: a.entrada.dataHora,
         tempoAtendimento: tempo.minutos, tempoTexto: tempo.texto, nivelTempo: tempo.nivel,
@@ -1056,7 +1105,6 @@ router.get('/atendimentos-ativos', authenticateToken, verificarPsicologia, async
 
 // ============================================
 // LISTAR ATENDIMENTOS
-// Lista atendimentos com filtros e paginação (com máscara para super_admin)
 // ============================================
 router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -1066,7 +1114,13 @@ router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, 
     } = req.query;
     
     let query = {};
-    if (tipo && tipo !== 'todos') query.tipoTarefa = tipo;
+    if (tipo && tipo !== 'todos') {
+      // Filtra por array (pega principal OU adicional)
+      query.$or = [
+        { tipoTarefa: tipo },
+        { 'detalhes.tiposTarefaAdicionais': tipo }
+      ];
+    }
     if (status && status !== 'todos') query.status = status;
     if (turma && turma !== 'todas') query.alunoTurma = turma;
     
@@ -1078,10 +1132,16 @@ router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, 
     
     if (busca && busca.trim() !== '') {
       const termo = busca.trim();
-      query.$or = [
+      const buscaOr = [
         { alunoNome: { $regex: termo, $options: 'i' } },
         { alunoMatricula: { $regex: termo, $options: 'i' } }
       ];
+      if (query.$or) {
+        query.$and = [{ $or: query.$or }, { $or: buscaOr }];
+        delete query.$or;
+      } else {
+        query.$or = buscaOr;
+      }
     }
     
     if (resultado && resultado !== 'todos' && resultado !== '') {
@@ -1106,11 +1166,13 @@ router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, 
     
     const lista = atendimentos.map(a => {
       const tempo = formatarTempoAtendimento(a.entrada.dataHora);
+      const tipos = extrairTiposTarefa(a);
       return {
         id: a._id, alunoId: a.alunoId, alunoNome: a.alunoNome,
         alunoMatricula: a.alunoMatricula, alunoTurma: a.alunoTurma, alunoCurso: a.alunoCurso,
         tipoTarefa: a.tipoTarefa,
-        tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
+        tiposTarefa: tipos,
+        tipoTarefaLabel: labelTiposTarefa(tipos),
         descricao: a.entrada.descricao, gravidade: a.entrada.gravidade, prioridade: a.prioridade,
         status: a.status,
         dataEntrada: a.entrada.dataHora,
@@ -1155,7 +1217,6 @@ router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, 
 
 // ============================================
 // BUSCAR ATENDIMENTO POR ID
-// Retorna um atendimento específico (com máscara para super_admin)
 // ============================================
 router.get('/atendimento/:id', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -1163,13 +1224,16 @@ router.get('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
     if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
     
     const tempo = formatarTempoAtendimento(atendimento.entrada.dataHora);
+    const tipos = extrairTiposTarefa(atendimento);
+    const detalhesLimpos = lerDetalhesLimpos(atendimento);
     
     const payload = {
       id: atendimento._id, alunoId: atendimento.alunoId, alunoNome: atendimento.alunoNome,
       alunoMatricula: atendimento.alunoMatricula, alunoTurma: atendimento.alunoTurma,
       alunoCurso: atendimento.alunoCurso,
       tipoTarefa: atendimento.tipoTarefa,
-      tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(atendimento.tipoTarefa),
+      tiposTarefa: tipos,
+      tipoTarefaLabel: labelTiposTarefa(tipos),
       entrada: {
         dataHora: atendimento.entrada.dataHora,
         dataHoraFormatada: new Date(atendimento.entrada.dataHora).toLocaleString('pt-BR'),
@@ -1185,7 +1249,7 @@ router.get('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
         assinadaPorNome: atendimento.entrada?.assinadaPorNome || null,
         sessaoAssinaturaId: atendimento.entrada?.sessaoAssinaturaId || null
       },
-      detalhes: atendimento.detalhes,
+      detalhes: detalhesLimpos,
       saida: atendimento.saida ? {
         dataHora: atendimento.saida.dataHora,
         dataHoraFormatada: new Date(atendimento.saida.dataHora).toLocaleString('pt-BR'),
@@ -1213,8 +1277,7 @@ router.get('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
 });
 
 // ============================================
-// EDITAR
-// Atualiza um atendimento (com verificação de permissão para super_admin)
+// EDITAR (MÚLTIPLOS TIPOS + DETALHES CORRIGIDOS)
 // ============================================
 router.put('/atendimento/:id', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -1226,22 +1289,77 @@ router.put('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
       return res.status(403).json({ success: false, error: check.motivo, code: 'ADMIN_NAO_CRIADOR' });
     }
     
-    const { descricao, observacoes, gravidade, prioridade, detalhes, status, saida, tipoTarefa } = req.body;
+    const { 
+      tiposTarefa, tipoTarefa,
+      descricao, observacoes, gravidade, prioridade, 
+      detalhes, status, saida
+    } = req.body;
     
-    if (tipoTarefa && [
-      'escuta_acolhimento', 'manejo_crises_emocionais', 'atividades_grupos',
-      'acoes_atividades_saude', 'acoes_socioemocionais_culturais', 'outros'
-    ].includes(tipoTarefa)) {
-      atendimento.tipoTarefa = tipoTarefa;
+    // ============================================
+    // 1) TIPOS
+    // ============================================
+    let tiposFinal = null;
+    if (Array.isArray(tiposTarefa) && tiposTarefa.length > 0) {
+      tiposFinal = [...new Set(tiposTarefa.filter(Boolean))];
+    } else if (tipoTarefa) {
+      tiposFinal = [tipoTarefa];
     }
     
+    const detalhesAtuaisLimpos = lerDetalhesLimpos(atendimento);
+    const tiposAdicionaisAtuais = atendimento.detalhes?.tiposTarefaAdicionais 
+      ? [...atendimento.detalhes.tiposTarefaAdicionais] : [];
+    
+    let tiposAdicionaisFinal = tiposAdicionaisAtuais;
+    if (tiposFinal && tiposFinal.length > 0) {
+      atendimento.tipoTarefa = tiposFinal[0];
+      tiposAdicionaisFinal = tiposFinal.length > 1 ? tiposFinal.slice(1) : [];
+    }
+    
+    // ============================================
+    // 2) CAMPOS SIMPLES
+    // ============================================
     if (descricao) atendimento.entrada.descricao = descricao;
     if (observacoes !== undefined) atendimento.entrada.observacoes = observacoes;
     if (gravidade) atendimento.entrada.gravidade = gravidade;
     if (prioridade) atendimento.prioridade = prioridade;
-    if (detalhes) atendimento.detalhes = { ...atendimento.detalhes, ...detalhes };
-    if (status) atendimento.status = status;
     
+    // ============================================
+    // 3) DETALHES via .set() (criptografia correta)
+    // ============================================
+    const detalhesParaSalvar = { ...detalhesAtuaisLimpos };
+    if (detalhes && typeof detalhes === 'object') {
+      Object.entries(detalhes).forEach(([k, v]) => {
+        if (k === 'tiposTarefaAdicionais') return;
+        if (v === undefined) return;
+        detalhesParaSalvar[k] = v;
+      });
+    }
+    detalhesParaSalvar.tiposTarefaAdicionais = tiposAdicionaisFinal;
+    
+    if (!atendimento.detalhes) atendimento.detalhes = {};
+    
+    Object.entries(detalhesParaSalvar).forEach(([k, v]) => {
+      if (v === undefined) return;
+      if (k === 'tiposTarefaAdicionais') {
+        atendimento.detalhes.set('tiposTarefaAdicionais', v);
+        return;
+      }
+      if (Array.isArray(v) && (k === 'profissionaisEnvolvidos' || k === 'participantesAtividade')) {
+        atendimento.detalhes.set(k, v.map(x => x || ''));
+        return;
+      }
+      if (v instanceof Date || typeof v === 'boolean' || typeof v === 'number') {
+        atendimento.detalhes.set(k, v);
+        return;
+      }
+      atendimento.detalhes.set(k, v);
+    });
+    atendimento.markModified('detalhes');
+    
+    // ============================================
+    // 4) STATUS / SAÍDA
+    // ============================================
+    if (status) atendimento.status = status;
     if (saida) {
       atendimento.saida = { 
         ...atendimento.saida, ...saida,
@@ -1255,15 +1373,24 @@ router.put('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
     atendimento.updatedAt = new Date();
     await atendimento.save();
     
-    res.json({ success: true, message: 'Atendimento atualizado com sucesso', atendimento: { id: atendimento._id } });
+    const tiposFinais = extrairTiposTarefa(atendimento);
+    
+    res.json({ 
+      success: true, 
+      message: 'Atendimento atualizado com sucesso', 
+      atendimento: { 
+        id: atendimento._id,
+        tiposTarefa: tiposFinais
+      } 
+    });
   } catch (error) {
+    console.error('[PUT atendimento] Erro:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // ============================================
 // EXCLUIR
-// Exclui um atendimento (com verificação de permissão para super_admin)
 // ============================================
 router.delete('/atendimento/:id', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -1284,7 +1411,6 @@ router.delete('/atendimento/:id', authenticateToken, verificarPsicologia, async 
 
 // ============================================
 // EXCLUSÃO EM MASSA
-// Exclui atendimentos finalizados antes de uma data (bloqueado para super_admin)
 // ============================================
 router.post('/atendimentos/exclusao-massa', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -1328,10 +1454,8 @@ router.post('/atendimentos/exclusao-massa', authenticateToken, verificarPsicolog
 });
 
 // ============================================
-// RELATÓRIOS
+// RELATÓRIO POR ALUNO
 // ============================================
-
-// Relatório individual de um aluno
 router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const { dataInicio, dataFim } = req.query;
@@ -1348,7 +1472,10 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarPsicologia, 
     const porGravidade = {};
     
     atendimentos.forEach(a => {
-      porTipo[a.tipoTarefa] = (porTipo[a.tipoTarefa] || 0) + 1;
+      const tipos = extrairTiposTarefa(a);
+      tipos.forEach(t => {
+        porTipo[t] = (porTipo[t] || 0) + 1;
+      });
       porGravidade[a.entrada.gravidade] = (porGravidade[a.entrada.gravidade] || 0) + 1;
     });
     
@@ -1367,9 +1494,11 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarPsicologia, 
       },
       atendimentos: atendimentos.map(a => {
         const tempo = formatarTempoAtendimento(a.entrada.dataHora);
+        const tipos = extrairTiposTarefa(a);
         return {
           id: a._id, tipoTarefa: a.tipoTarefa,
-          tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
+          tiposTarefa: tipos,
+          tipoTarefaLabel: labelTiposTarefa(tipos),
           dataEntrada: a.entrada.dataHora, descricao: a.entrada.descricao,
           gravidade: a.entrada.gravidade, status: a.status,
           dataSaida: a.saida?.dataHora || null, resultado: a.saida?.resultado || null,
@@ -1384,7 +1513,9 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarPsicologia, 
   }
 });
 
-// Relatório por turma
+// ============================================
+// RELATÓRIO POR TURMA
+// ============================================
 router.get('/relatorio/turma/:turma', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const { dataInicio, dataFim } = req.query;
@@ -1408,8 +1539,12 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarPsicologia, as
         };
       }
       porAluno[key].total++;
-      porAluno[key].tipos[a.tipoTarefa] = (porAluno[key].tipos[a.tipoTarefa] || 0) + 1;
-      porTipo[a.tipoTarefa] = (porTipo[a.tipoTarefa] || 0) + 1;
+      
+      const tipos = extrairTiposTarefa(a);
+      tipos.forEach(t => {
+        porAluno[key].tipos[t] = (porAluno[key].tipos[t] || 0) + 1;
+        porTipo[t] = (porTipo[t] || 0) + 1;
+      });
     });
     
     res.json({
@@ -1425,10 +1560,12 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarPsicologia, as
       porAluno: Object.values(porAluno).sort((a, b) => b.total - a.total),
       atendimentos: atendimentos.map(a => {
         const tempo = formatarTempoAtendimento(a.entrada.dataHora);
+        const tipos = extrairTiposTarefa(a);
         return {
           id: a._id, alunoNome: a.alunoNome,
           tipoTarefa: a.tipoTarefa,
-          tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
+          tiposTarefa: tipos,
+          tipoTarefaLabel: labelTiposTarefa(tipos),
           dataEntrada: a.entrada.dataHora, descricao: a.entrada.descricao,
           gravidade: a.entrada.gravidade, status: a.status,
           tempoTexto: tempo.texto
@@ -1440,13 +1577,20 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarPsicologia, as
   }
 });
 
-// Relatório geral com filtros
+// ============================================
+// RELATÓRIO GERAL
+// ============================================
 router.get('/relatorio/geral', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const { dataInicio, dataFim, turma, tipo } = req.query;
     let query = {};
     if (turma && turma !== 'todas') query.alunoTurma = turma;
-    if (tipo && tipo !== 'todos') query.tipoTarefa = tipo;
+    if (tipo && tipo !== 'todos') {
+      query.$or = [
+        { tipoTarefa: tipo },
+        { 'detalhes.tiposTarefaAdicionais': tipo }
+      ];
+    }
     
     if (dataInicio || dataFim) {
       query['entrada.dataHora'] = {};
@@ -1470,7 +1614,11 @@ router.get('/relatorio/geral', authenticateToken, verificarPsicologia, async (re
       }
       porTurma[a.alunoTurma].total++;
       porTurma[a.alunoTurma].alunos.add(a.alunoId.toString());
-      porTipo[a.tipoTarefa] = (porTipo[a.tipoTarefa] || 0) + 1;
+      
+      const tipos = extrairTiposTarefa(a);
+      tipos.forEach(t => {
+        porTipo[t] = (porTipo[t] || 0) + 1;
+      });
       porGravidade[a.entrada.gravidade] = (porGravidade[a.entrada.gravidade] || 0) + 1;
     });
     
@@ -1501,10 +1649,12 @@ router.get('/relatorio/geral', authenticateToken, verificarPsicologia, async (re
       porGravidade,
       registros: atendimentos.map(a => {
         const tempo = formatarTempoAtendimento(a.entrada.dataHora);
+        const tipos = extrairTiposTarefa(a);
         return {
           id: a._id, alunoNome: a.alunoNome, alunoMatricula: a.alunoMatricula,
           alunoTurma: a.alunoTurma, tipoTarefa: a.tipoTarefa,
-          tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
+          tiposTarefa: tipos,
+          tipoTarefaLabel: labelTiposTarefa(tipos),
           dataEntrada: a.entrada.dataHora,
           dataFormatada: new Date(a.entrada.dataHora).toLocaleDateString('pt-BR'),
           descricao: a.entrada.descricao, gravidade: a.entrada.gravidade,
@@ -1517,10 +1667,12 @@ router.get('/relatorio/geral', authenticateToken, verificarPsicologia, async (re
       }),
       atendimentos: atendimentos.slice(0, 100).map(a => {
         const tempo = formatarTempoAtendimento(a.entrada.dataHora);
+        const tipos = extrairTiposTarefa(a);
         return {
           id: a._id, alunoNome: a.alunoNome, alunoTurma: a.alunoTurma,
           tipoTarefa: a.tipoTarefa,
-          tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
+          tiposTarefa: tipos,
+          tipoTarefaLabel: labelTiposTarefa(tipos),
           dataEntrada: a.entrada.dataHora,
           descricao: a.entrada.descricao.substring(0, 100),
           gravidade: a.entrada.gravidade, status: a.status,
@@ -1537,7 +1689,6 @@ router.get('/relatorio/geral', authenticateToken, verificarPsicologia, async (re
 
 // ============================================
 // SCHEDULER
-// Executa alertas de +24h a cada 5 minutos
 // ============================================
 let schedulerInterval = null;
 

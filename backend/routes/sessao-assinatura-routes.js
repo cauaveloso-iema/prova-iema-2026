@@ -116,8 +116,7 @@ router.post('/', authenticateToken, verificarGestaoGeral, async (req, res) => {
         sessao.markModified('dadosAtendimento');
         
         await sessao.save();
-        console.log(`✅ Sessão criada: ${sessao.sessaoId} (${sessao.tipo}) por ${sessao.criadoPorNome}`);
-        console.log('📦 Dados salvos no banco:', sessao.dadosAtendimento); 
+        console.log(`✅ Sessão criada: ${sessao.sessaoId} (${sessao.tipo}) por ${sessao.criadoPorNome}`); 
         
         res.json({ success: true, sessaoId: sessao.sessaoId });
     } catch (error) {

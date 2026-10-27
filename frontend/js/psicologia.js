@@ -12,6 +12,7 @@ let currentAtendimento = null;
 let relatorioData = null;
 let dashboardCharts = {};
 let tipoTarefaSelecionado = null;
+let __tiposSelecionados = [];
 
 // Scanner Auto
 let scannerAuto = null;
@@ -1327,12 +1328,25 @@ async function abrirEditarAtendimento(atendimentoId) {
         }
 
         const a = data.atendimento;
+        const tiposDoAtendimento = a.tiposTarefa || [a.tipoTarefa];
+        
+        // Popula estado de edição
+        __tiposSelecionados = [...tiposDoAtendimento];
+        
         const oldModal = safeGet('modalEditarAtendimento');
         if (oldModal) oldModal.remove();
 
-        const tiposOptions = Object.entries(TIPO_LABELS).map(([key, label]) => 
-            `<option value="${key}" ${a.tipoTarefa === key ? 'selected' : ''}>${label}</option>`
-        ).join('');
+        const tiposCards = Object.entries(TIPO_LABELS).map(([key, label]) => {
+            const selecionado = tiposDoAtendimento.includes(key);
+            return `
+                <div class="tipo-card ${selecionado ? 'selected' : ''}" 
+                     data-tipo="${key}" 
+                     onclick="toggleTipoTarefaEdicao('${key}')">
+                    <i class="fas ${getIconePorTipoPsico(key)}"></i>
+                    <span>${label}</span>
+                </div>
+            `;
+        }).join('');
 
         const modalHtml = `
             <div class="modal fade" id="modalEditarAtendimento" tabindex="-1">
@@ -1346,6 +1360,7 @@ async function abrirEditarAtendimento(atendimentoId) {
                         </div>
                         <div class="modal-body">
                             <input type="hidden" id="editAtendimentoId" value="${a.id}">
+                            <input type="hidden" id="editTiposSelecionados" value="${tiposDoAtendimento.join(',')}">
 
                             <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #f0fdfa; border-radius: 10px; margin-bottom: 16px;">
                                 <img src="${gerarAvatarSVG(a.alunoNome)}" style="width: 50px; height: 50px; border-radius: 50%;" alt="">
@@ -1359,10 +1374,13 @@ async function abrirEditarAtendimento(atendimentoId) {
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label">Tipo de Tarefa <span class="text-danger">*</span></label>
-                                <select id="editTipoTarefa" class="form-select">
-                                    ${tiposOptions}
-                                </select>
+                                <label class="form-label">Tipos de Tarefa <span class="text-danger">*</span></label>
+                                <small class="text-muted d-block mb-2">
+                                    <i class="fas fa-info-circle"></i> Você pode marcar mais de um tipo.
+                                </small>
+                                <div class="tipos-tarefa-grid" id="editTiposGrid">
+                                    ${tiposCards}
+                                </div>
                             </div>
 
                             <div class="mb-3">
@@ -1395,6 +1413,8 @@ async function abrirEditarAtendimento(atendimentoId) {
                                 <label class="form-label">Observações</label>
                                 <textarea id="editObservacoes" class="form-control" rows="2">${escapeHTML(a.entrada?.observacoes || '')}</textarea>
                             </div>
+
+                            <div id="editCamposEspecificos"></div>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
@@ -1410,24 +1430,309 @@ async function abrirEditarAtendimento(atendimentoId) {
 
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         new bootstrap.Modal(safeGet('modalEditarAtendimento')).show();
+        
+        // Renderiza + preenche campos específicos
+        preencherCamposEspecificosEdicaoPsico(tiposDoAtendimento, a.detalhes || {});
+        
+        console.log('[editar psi] detalhes recebidos:', a.detalhes);
+        console.log('[editar psi] tipos:', tiposDoAtendimento);
     } catch (error) {
         console.error('Erro:', error);
         mostrarToastConcluido('Erro ao carregar para edição', 'error');
     }
 }
 
+function getIconePorTipoPsico(tipo) {
+    const icones = {
+        'escuta_acolhimento': 'fa-comments',
+        'manejo_crises_emocionais': 'fa-heartbeat',
+        'atividades_grupos': 'fa-users',
+        'acoes_atividades_saude': 'fa-notes-medical',
+        'acoes_socioemocionais_culturais': 'fa-palette',
+        'outros': 'fa-ellipsis-h'
+    };
+    return icones[tipo] || 'fa-tag';
+}
+
+function toggleTipoTarefaEdicao(tipo) {
+    if (!tipo) return;
+    
+    // Salva valores atuais antes
+    const valoresAtuais = coletarValoresAtuaisEdicaoPsico();
+    
+    const idx = __tiposSelecionados.indexOf(tipo);
+    if (idx >= 0) {
+        __tiposSelecionados.splice(idx, 1);
+    } else {
+        __tiposSelecionados.push(tipo);
+    }
+    
+    document.querySelectorAll('#editTiposGrid .tipo-card').forEach(c => {
+        const t = c.getAttribute('data-tipo');
+        if (__tiposSelecionados.includes(t)) c.classList.add('selected');
+        else c.classList.remove('selected');
+    });
+    
+    const hidden = safeGet('editTiposSelecionados');
+    if (hidden) hidden.value = __tiposSelecionados.join(',');
+    
+    renderizarCamposEspecificosEdicaoPsico();
+    restaurarValoresEdicaoPsico(valoresAtuais);
+}
+
+function renderizarCamposEspecificosEdicaoPsico() {
+    const container = safeGet('editCamposEspecificos');
+    if (!container) return;
+    
+    if (__tiposSelecionados.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+    
+    const blocos = __tiposSelecionados.map(tipo => {
+        const label = TIPO_LABELS[tipo] || tipo;
+        let htmlTipo = '';
+        
+        switch (tipo) {
+            case 'escuta_acolhimento':
+                htmlTipo = `
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Tipo de Escuta</label>
+                            <select id="editDetalheTipoEscuta_${tipo}" class="form-select" data-detalhe-key="tipoEscuta">
+                                <option value="">Selecione...</option>
+                                <option value="Individual">Individual</option>
+                                <option value="Em Grupo">Em Grupo</option>
+                                <option value="Com Responsável">Com Responsável</option>
+                                <option value="Com Professor">Com Professor</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Duração (minutos)</label>
+                            <input type="number" id="editDetalheDuracaoEscuta_${tipo}" class="form-control" min="1" data-detalhe-key="duracaoEscuta">
+                        </div>
+                    </div>`;
+                break;
+            case 'manejo_crises_emocionais':
+                htmlTipo = `
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de Crise</label>
+                        <select id="editDetalheTipoCrise_${tipo}" class="form-select" data-detalhe-key="tipoCrise">
+                            <option value="">Selecione...</option>
+                            <option value="Ansiedade">Ansiedade</option>
+                            <option value="Pânico">Pânico</option>
+                            <option value="Depressão">Depressão</option>
+                            <option value="Agressividade">Agressividade</option>
+                            <option value="Automutilação">Automutilação</option>
+                            <option value="Ideação Suicida">Ideação Suicida</option>
+                            <option value="Outro">Outro</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Ações Tomadas</label>
+                        <textarea id="editDetalheAcoesTomadas_${tipo}" class="form-control" rows="2" data-detalhe-key="acoesTomadas"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Encaminhamento Emergencial</label>
+                        <input type="text" id="editDetalheEncaminhamentoEmergencial_${tipo}" class="form-control" data-detalhe-key="encaminhamentoEmergencial">
+                    </div>`;
+                break;
+            case 'atividades_grupos':
+                htmlTipo = `
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Nome da Atividade</label>
+                            <input type="text" id="editDetalheNomeAtividade_${tipo}" class="form-control" data-detalhe-key="nomeAtividade">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Local</label>
+                            <input type="text" id="editDetalheLocalAtividade_${tipo}" class="form-control" data-detalhe-key="localAtividade">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Participantes (separados por vírgula)</label>
+                            <input type="text" id="editDetalheParticipantesAtividade_${tipo}" class="form-control" data-detalhe-key="participantesAtividade">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Duração (minutos)</label>
+                            <input type="number" id="editDetalheDuracaoAtividade_${tipo}" class="form-control" min="1" data-detalhe-key="duracaoAtividade">
+                        </div>
+                    </div>`;
+                break;
+            case 'acoes_atividades_saude':
+                htmlTipo = `
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Tema da Ação</label>
+                            <input type="text" id="editDetalheTemaAcao_${tipo}" class="form-control" data-detalhe-key="temaAcao">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Local</label>
+                            <input type="text" id="editDetalheLocalAcao_${tipo}" class="form-control" data-detalhe-key="localAcao">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Público Alvo</label>
+                        <input type="text" id="editDetalhePublicoAlvo_${tipo}" class="form-control" data-detalhe-key="publicoAlvo">
+                    </div>`;
+                break;
+            case 'acoes_socioemocionais_culturais':
+                htmlTipo = `
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Tema Socioemocional</label>
+                            <input type="text" id="editDetalheTemaSocioemocional_${tipo}" class="form-control" data-detalhe-key="temaSocioemocional">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Tipo de Atividade Cultural</label>
+                            <input type="text" id="editDetalheTipoAtividadeCultural_${tipo}" class="form-control" data-detalhe-key="tipoAtividadeCultural">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Parcerias</label>
+                        <input type="text" id="editDetalheParceria_${tipo}" class="form-control" data-detalhe-key="parceria">
+                    </div>`;
+                break;
+            case 'outros':
+                htmlTipo = `
+                    <div class="mb-3">
+                        <label class="form-label">Especifique o Tipo de Tarefa</label>
+                        <input type="text" id="editDetalheTipoTarefaOutros_${tipo}" class="form-control" data-detalhe-key="tipoTarefaOutros">
+                    </div>`;
+                break;
+            default:
+                htmlTipo = '';
+        }
+        
+        if (!htmlTipo) return '';
+        
+        return `
+            <div class="bloco-tipo-especifico" data-tipo-bloco="${tipo}">
+                <div class="bloco-tipo-header">
+                    <i class="fas fa-tag"></i> ${escapeHTML(label)}
+                </div>
+                <div class="bloco-tipo-body">
+                    ${htmlTipo}
+                </div>
+            </div>
+        `;
+    }).filter(Boolean);
+    
+    const htmlExtras = `
+        <div class="mt-3">
+            <div class="mb-3">
+                <label class="form-label">Contexto Familiar</label>
+                <textarea id="editDetalheContextoFamiliar" class="form-control" rows="2" data-detalhe-key="contextoFamiliar"></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Histórico Anterior</label>
+                <textarea id="editDetalheHistoricoAnterior" class="form-control" rows="2" data-detalhe-key="historicoAnterior"></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Providências Tomadas</label>
+                <textarea id="editDetalheProvidencias" class="form-control" rows="2" data-detalhe-key="providenciasTomadas"></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Próximos Passos</label>
+                <textarea id="editDetalheProximosPassos" class="form-control" rows="2" data-detalhe-key="proximosPassos"></textarea>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = blocos.join('') + htmlExtras;
+}
+
+function preencherCamposEspecificosEdicaoPsico(tipos, detalhes) {
+    __tiposSelecionados = Array.isArray(tipos) ? [...tipos] : [];
+    
+    document.querySelectorAll('#editTiposGrid .tipo-card').forEach(c => {
+        const t = c.getAttribute('data-tipo');
+        if (__tiposSelecionados.includes(t)) c.classList.add('selected');
+        else c.classList.remove('selected');
+    });
+    
+    renderizarCamposEspecificosEdicaoPsico();
+    
+    if (!detalhes) return;
+    
+    const preencherTodos = (key, valorFormatado) => {
+        const els = document.querySelectorAll(`#editCamposEspecificos [data-detalhe-key="${key}"]`);
+        els.forEach(el => { el.value = valorFormatado; });
+    };
+    
+    Object.entries(detalhes).forEach(([detKey, valor]) => {
+        if (valor === undefined || valor === null || valor === '') return;
+        if (detKey === 'tiposTarefaAdicionais') return;
+        
+        let valorFormatado = valor;
+        if (Array.isArray(valor)) {
+            valorFormatado = valor.join(', ');
+        }
+        
+        preencherTodos(detKey, valorFormatado);
+    });
+}
+
+function coletarValoresAtuaisEdicaoPsico() {
+    const valores = {};
+    document.querySelectorAll('#editCamposEspecificos [data-detalhe-key]').forEach(el => {
+        const key = el.getAttribute('data-detalhe-key');
+        if (valores[key] !== undefined && valores[key] !== '') return;
+        if (el.value) valores[key] = el.value;
+    });
+    return valores;
+}
+
+function restaurarValoresEdicaoPsico(valores) {
+    if (!valores || Object.keys(valores).length === 0) return;
+    Object.entries(valores).forEach(([key, val]) => {
+        document.querySelectorAll(`#editCamposEspecificos [data-detalhe-key="${key}"]`).forEach(el => {
+            el.value = val;
+        });
+    });
+}
+
+function coletarDetalhesEdicaoPsico() {
+    const detalhes = {};
+    
+    document.querySelectorAll('#editCamposEspecificos [data-detalhe-key]').forEach(el => {
+        const key = el.getAttribute('data-detalhe-key');
+        const val = el.value;
+        if (!val) return;
+        
+        if (key === 'duracaoEscuta' || key === 'duracaoAtividade') {
+            const n = parseInt(val);
+            if (!isNaN(n) && n > 0) detalhes[key] = n;
+        } else if (key === 'participantesAtividade' || key === 'profissionaisEnvolvidos') {
+            detalhes[key] = val.split(',').map(t => t.trim()).filter(t => t.length > 0);
+        } else {
+            detalhes[key] = val.trim();
+        }
+    });
+    
+    return detalhes;
+}
+
 async function salvarEdicaoAtendimento() {
     const atendimentoId = safeGet('editAtendimentoId')?.value;
-    const tipoTarefa = safeGet('editTipoTarefa')?.value;
     const descricao = (safeGet('editDescricao')?.value || '').trim();
     const gravidade = safeGet('editGravidade')?.value;
     const prioridade = safeGet('editPrioridade')?.value;
     const observacoes = safeGet('editObservacoes')?.value || '';
 
-    if (!tipoTarefa || !descricao) {
-        mostrarToastConcluido('Preencha todos os campos obrigatórios', 'error');
+    if (__tiposSelecionados.length === 0) {
+        mostrarToastConcluido('Selecione pelo menos um tipo de tarefa', 'error');
         return;
     }
+    
+    if (!descricao) {
+        mostrarToastConcluido('A descrição é obrigatória', 'error');
+        return;
+    }
+
+    const detalhesEnviados = coletarDetalhesEdicaoPsico();
+    console.log('[salvar edição psi] detalhes enviados:', detalhesEnviados);
 
     try {
         const response = await fetch(`/api/psicologia/atendimento/${atendimentoId}`, {
@@ -1437,11 +1742,12 @@ async function salvarEdicaoAtendimento() {
                 'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({
-                tipoTarefa,
+                tiposTarefa: __tiposSelecionados,
                 descricao,
                 gravidade,
                 prioridade,
-                observacoes
+                observacoes,
+                detalhes: detalhesEnviados
             })
         });
         const data = await response.json();
@@ -1457,14 +1763,10 @@ async function salvarEdicaoAtendimento() {
             carregarLembretes();
             carregarAtendimentosConcluidos(__concluidosPaginaAtual);
         } else {
-            // 🔒 Trata bloqueio específico
             if (data.code === 'ADMIN_NAO_CRIADOR') {
                 const modal = bootstrap.Modal.getInstance(safeGet('modalEditarAtendimento'));
                 if (modal) modal.hide();
-                mostrarNotificacaoInterna(
-                    '🔒 Acesso restrito\n\n' + data.error,
-                    'warning'
-                );
+                mostrarNotificacaoInterna('🔒 Acesso restrito\n\n' + data.error, 'warning');
             } else {
                 mostrarToastConcluido('❌ ' + (data.error || 'Erro ao salvar'));
             }
@@ -1587,7 +1889,7 @@ async function toggleNecessitaAssinatura(modulo) {
  * Monta snapshot dos dados atuais para exibir na tela de assinatura.
  */
 function montarSnapshotAtendimento() {
-    const motivosLabel = {
+    const labels = {
         'escuta_acolhimento': 'Escutas de Acolhimento',
         'manejo_crises_emocionais': 'Manejo de Crises Emocionais',
         'atividades_grupos': 'Atividades em Grupos',
@@ -1596,6 +1898,8 @@ function montarSnapshotAtendimento() {
         'outros': 'Outros'
     };
     
+    const labelTipos = __tiposSelecionados.map(t => labels[t] || t).join(' + ');
+    
     return {
         alunoId: currentAluno?.id,
         alunoNome: currentAluno?.nome,
@@ -1603,8 +1907,11 @@ function montarSnapshotAtendimento() {
         alunoTurma: currentAluno?.turma,
         alunoCurso: currentAluno?.curso,
         alunoFoto: currentAluno?.fotoPerfil,
-        motivo: tipoTarefaSelecionado,
-        motivoLabel: motivosLabel[tipoTarefaSelecionado] || tipoTarefaSelecionado,
+        tiposTarefa: __tiposSelecionados,
+        tipoTarefa: __tiposSelecionados[0],
+        tipoTarefaLabel: labelTipos,
+        motivo: __tiposSelecionados[0],
+        motivoLabel: labelTipos,
         descricao: safeGet('descricao')?.value || '',
         observacoes: safeGet('observacoes')?.value || '',
         gravidade: safeGet('gravidade')?.value || 'media',
@@ -2243,24 +2550,24 @@ function exibirAluno(data) {
 // ============================================
 function mostrarFormRegistro() {
     safeGet('formRegistro').style.display = 'block';
-
+    
+    // 🆕 Reseta multi-seleção
+    __tiposSelecionados = [];
+    tipoTarefaSelecionado = null;
     const tipoInput = safeGet('tipoTarefaSelecionado');
     if (tipoInput) tipoInput.value = '';
-
-    tipoTarefaSelecionado = null;
+    
     document.querySelectorAll('.tipo-card').forEach(c => c.classList.remove('selected'));
-
+    
     safeGet('descricao').value = '';
     safeGet('observacoes').value = '';
     safeGet('gravidade').value = 'media';
     safeGet('prioridade').value = 'normal';
     safeSetHTML('camposEspecificos', '');
-
-    // 🆕 Limpa estado de assinatura (IGUAL À GESTÃO GERAL)
+    
     const check = safeGet('assistenteSocialNecessitaAssinatura');
     if (check) check.checked = false;
     
-    // Cancela sessão anterior se existir
     const sessaoId = estadoSessaoAssinatura.psicologia.sessaoId;
     if (sessaoId) {
         fetch(`/api/sessoes-assinatura/${sessaoId}`, {
@@ -2276,7 +2583,6 @@ function mostrarFormRegistro() {
     const bloco = safeGet('assistenteSocialBlocoAssinaturaInfo');
     if (bloco) { bloco.style.display = 'none'; bloco.innerHTML = ''; }
     
-    // Fecha modal se estiver aberto
     const modalEl = safeGet('modalQRCodeAssinatura');
     if (modalEl) {
         const modal = bootstrap.Modal.getInstance(modalEl);
@@ -2287,226 +2593,231 @@ function mostrarFormRegistro() {
 
 function selecionarTipo(tipo) {
     if (!tipo) return;
-    tipoTarefaSelecionado = tipo;
-    safeGet('tipoTarefaSelecionado').value = tipo;
-
-    document.querySelectorAll('.tipo-card').forEach(c => c.classList.remove('selected'));
-    const card = document.querySelector(`.tipo-card[data-tipo="${tipo}"]`);
-    if (card) card.classList.add('selected');
-
-    renderizarCamposEspecificos(tipo);
+    
+    const idx = __tiposSelecionados.indexOf(tipo);
+    if (idx >= 0) {
+        __tiposSelecionados.splice(idx, 1);
+    } else {
+        __tiposSelecionados.push(tipo);
+    }
+    
+    // Atualiza visual dos cards
+    document.querySelectorAll('.tipo-card').forEach(c => {
+        const t = c.getAttribute('data-tipo');
+        if (__tiposSelecionados.includes(t)) c.classList.add('selected');
+        else c.classList.remove('selected');
+    });
+    
+    // Atualiza hidden + estado global
+    tipoTarefaSelecionado = __tiposSelecionados[0] || null;
+    const hidden = safeGet('tipoTarefaSelecionado');
+    if (hidden) hidden.value = __tiposSelecionados.join(',');
+    
+    // Renderiza campos específicos de TODOS os tipos marcados
+    renderizarCamposEspecificosMultiplos();
 }
 
-function renderizarCamposEspecificos(tipo) {
+function renderizarCamposEspecificosMultiplos() {
     const container = safeGet('camposEspecificos');
     if (!container) return;
-
-    let html = '';
-    const camposComuns = `
-        <div class="mb-3">
-            <label class="form-label">Contexto Familiar</label>
-            <textarea id="detalheContextoFamiliar" class="form-control" rows="2" placeholder="Informações sobre o contexto familiar..."></textarea>
-        </div>
-        <div class="mb-3">
-            <label class="form-label">Histórico Anterior</label>
-            <textarea id="detalheHistoricoAnterior" class="form-control" rows="2" placeholder="Histórico de situações anteriores..."></textarea>
-        </div>
-    `;
-
-    switch (tipo) {
-        case 'escuta_acolhimento':
-            html = `
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Tipo de Escuta</label>
-                        <select id="detalheTipoEscuta" class="form-select">
+    
+    if (__tiposSelecionados.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+    
+    const blocos = __tiposSelecionados.map(tipo => {
+        const label = TIPO_LABELS[tipo] || tipo;
+        let htmlTipo = '';
+        
+        switch (tipo) {
+            case 'escuta_acolhimento':
+                htmlTipo = `
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Tipo de Escuta</label>
+                            <select id="detalheTipoEscuta_${tipo}" class="form-select" data-detalhe-key="tipoEscuta">
+                                <option value="">Selecione...</option>
+                                <option value="Individual">Individual</option>
+                                <option value="Em Grupo">Em Grupo</option>
+                                <option value="Com Responsável">Com Responsável</option>
+                                <option value="Com Professor">Com Professor</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Duração (minutos)</label>
+                            <input type="number" id="detalheDuracaoEscuta_${tipo}" class="form-control" min="1" data-detalhe-key="duracaoEscuta">
+                        </div>
+                    </div>`;
+                break;
+            case 'manejo_crises_emocionais':
+                htmlTipo = `
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de Crise</label>
+                        <select id="detalheTipoCrise_${tipo}" class="form-select" data-detalhe-key="tipoCrise">
                             <option value="">Selecione...</option>
-                            <option value="Individual">Individual</option>
-                            <option value="Em Grupo">Em Grupo</option>
-                            <option value="Com Responsável">Com Responsável</option>
-                            <option value="Com Professor">Com Professor</option>
+                            <option value="Ansiedade">Ansiedade</option>
+                            <option value="Pânico">Pânico</option>
+                            <option value="Depressão">Depressão</option>
+                            <option value="Agressividade">Agressividade</option>
+                            <option value="Automutilação">Automutilação</option>
+                            <option value="Ideação Suicida">Ideação Suicida</option>
+                            <option value="Outro">Outro</option>
                         </select>
                     </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Duração (minutos)</label>
-                        <input type="number" id="detalheDuracaoEscuta" class="form-control" min="1">
+                    <div class="mb-3">
+                        <label class="form-label">Ações Tomadas</label>
+                        <textarea id="detalheAcoesTomadas_${tipo}" class="form-control" rows="2" data-detalhe-key="acoesTomadas" placeholder="O que foi feito durante o manejo..."></textarea>
                     </div>
-                </div>
-                ${camposComuns}
-            `;
-            break;
-
-        case 'manejo_crises_emocionais':
-            html = `
-                <div class="mb-3">
-                    <label class="form-label">Tipo de Crise</label>
-                    <select id="detalheTipoCrise" class="form-select">
-                        <option value="">Selecione...</option>
-                        <option value="Ansiedade">Ansiedade</option>
-                        <option value="Pânico">Pânico</option>
-                        <option value="Depressão">Depressão</option>
-                        <option value="Agressividade">Agressividade</option>
-                        <option value="Automutilação">Automutilação</option>
-                        <option value="Ideação Suicida">Ideação Suicida</option>
-                        <option value="Outro">Outro</option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Ações Tomadas</label>
-                    <textarea id="detalheAcoesTomadas" class="form-control" rows="2" placeholder="O que foi feito durante o manejo..."></textarea>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Encaminhamento Emergencial</label>
-                    <input type="text" id="detalheEncaminhamentoEmergencial" class="form-control" placeholder="Ex: SAMU, Bombeiros, Família">
-                </div>
-                ${camposComuns}
-            `;
-            break;
-
-        case 'atividades_grupos':
-            html = `
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Nome da Atividade</label>
-                        <input type="text" id="detalheNomeAtividade" class="form-control" placeholder="Ex: Roda de Conversa">
+                    <div class="mb-3">
+                        <label class="form-label">Encaminhamento Emergencial</label>
+                        <input type="text" id="detalheEncaminhamentoEmergencial_${tipo}" class="form-control" data-detalhe-key="encaminhamentoEmergencial" placeholder="Ex: SAMU, Bombeiros, Família">
+                    </div>`;
+                break;
+            case 'atividades_grupos':
+                htmlTipo = `
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Nome da Atividade</label>
+                            <input type="text" id="detalheNomeAtividade_${tipo}" class="form-control" data-detalhe-key="nomeAtividade" placeholder="Ex: Roda de Conversa">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Local</label>
+                            <input type="text" id="detalheLocalAtividade_${tipo}" class="form-control" data-detalhe-key="localAtividade" placeholder="Ex: Sala 3, Pátio">
+                        </div>
                     </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Local</label>
-                        <input type="text" id="detalheLocalAtividade" class="form-control" placeholder="Ex: Sala 3, Pátio">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Participantes (separados por vírgula)</label>
+                            <input type="text" id="detalheParticipantesAtividade_${tipo}" class="form-control" data-detalhe-key="participantesAtividade" placeholder="Ex: João, Maria, Pedro">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Duração (minutos)</label>
+                            <input type="number" id="detalheDuracaoAtividade_${tipo}" class="form-control" min="1" data-detalhe-key="duracaoAtividade">
+                        </div>
+                    </div>`;
+                break;
+            case 'acoes_atividades_saude':
+                htmlTipo = `
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Tema da Ação</label>
+                            <input type="text" id="detalheTemaAcao_${tipo}" class="form-control" data-detalhe-key="temaAcao" placeholder="Ex: Saúde Mental">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Local</label>
+                            <input type="text" id="detalheLocalAcao_${tipo}" class="form-control" data-detalhe-key="localAcao" placeholder="Ex: Pátio, Auditório">
+                        </div>
                     </div>
-                </div>
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Participantes (separados por vírgula)</label>
-                        <input type="text" id="detalheParticipantesAtividade" class="form-control" placeholder="Ex: João, Maria, Pedro">
+                    <div class="mb-3">
+                        <label class="form-label">Público Alvo</label>
+                        <input type="text" id="detalhePublicoAlvo_${tipo}" class="form-control" data-detalhe-key="publicoAlvo" placeholder="Ex: Todos os alunos">
+                    </div>`;
+                break;
+            case 'acoes_socioemocionais_culturais':
+                htmlTipo = `
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Tema Socioemocional</label>
+                            <input type="text" id="detalheTemaSocioemocional_${tipo}" class="form-control" data-detalhe-key="temaSocioemocional" placeholder="Ex: Empatia">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Tipo de Atividade Cultural</label>
+                            <input type="text" id="detalheTipoAtividadeCultural_${tipo}" class="form-control" data-detalhe-key="tipoAtividadeCultural" placeholder="Ex: Teatro, Música">
+                        </div>
                     </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Duração (minutos)</label>
-                        <input type="number" id="detalheDuracaoAtividade" class="form-control" min="1">
-                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Parcerias</label>
+                        <input type="text" id="detalheParceria_${tipo}" class="form-control" data-detalhe-key="parceria" placeholder="Ex: Secretaria de Cultura">
+                    </div>`;
+                break;
+            case 'outros':
+                htmlTipo = `
+                    <div class="mb-3">
+                        <label class="form-label">Especifique o Tipo de Tarefa <span class="text-danger">*</span></label>
+                        <input type="text" id="detalheTipoTarefaOutros_${tipo}" class="form-control" data-detalhe-key="tipoTarefaOutros" placeholder="Descreva o tipo...">
+                    </div>`;
+                break;
+            default:
+                htmlTipo = '';
+        }
+        
+        if (!htmlTipo) return '';
+        
+        return `
+            <div class="bloco-tipo-especifico" data-tipo-bloco="${tipo}">
+                <div class="bloco-tipo-header">
+                    <i class="fas fa-tag"></i> ${escapeHTML(label)}
                 </div>
-                ${camposComuns}
-            `;
-            break;
-
-        case 'acoes_atividades_saude':
-            html = `
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Tema da Ação</label>
-                        <input type="text" id="detalheTemaAcao" class="form-control" placeholder="Ex: Saúde Mental">
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Local</label>
-                        <input type="text" id="detalheLocalAcao" class="form-control" placeholder="Ex: Pátio, Auditório">
-                    </div>
+                <div class="bloco-tipo-body">
+                    ${htmlTipo}
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">Público Alvo</label>
-                    <input type="text" id="detalhePublicoAlvo" class="form-control" placeholder="Ex: Todos os alunos">
-                </div>
-                ${camposComuns}
-            `;
-            break;
-
-        case 'acoes_socioemocionais_culturais':
-            html = `
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Tema Socioemocional</label>
-                        <input type="text" id="detalheTemaSocioemocional" class="form-control" placeholder="Ex: Empatia">
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Tipo de Atividade Cultural</label>
-                        <input type="text" id="detalheTipoAtividadeCultural" class="form-control" placeholder="Ex: Teatro, Música">
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Parcerias</label>
-                    <input type="text" id="detalheParceria" class="form-control" placeholder="Ex: Secretaria de Cultura">
-                </div>
-                ${camposComuns}
-            `;
-            break;
-
-        case 'outros':
-            html = `
-                <div class="mb-3">
-                    <label class="form-label">Especifique o Tipo de Tarefa <span class="text-danger">*</span></label>
-                    <input type="text" id="detalheTipoTarefaOutros" class="form-control" placeholder="Descreva o tipo...">
-                </div>
-                ${camposComuns}
-            `;
-            break;
-    }
-
-    html += `
-        <div class="mb-3">
-            <label class="form-label">Providências Tomadas</label>
-            <textarea id="detalheProvidencias" class="form-control" rows="2" placeholder="O que já foi feito..."></textarea>
-        </div>
-        <div class="mb-3">
-            <label class="form-label">Próximos Passos</label>
-            <textarea id="detalheProximosPassos" class="form-control" rows="2" placeholder="O que será feito..."></textarea>
+            </div>
+        `;
+    }).filter(Boolean);
+    
+    const htmlExtras = `
+        <div class="mt-3">
+            <div class="mb-3">
+                <label class="form-label">Contexto Familiar</label>
+                <textarea id="detalheContextoFamiliar" class="form-control" rows="2" data-detalhe-key="contextoFamiliar" placeholder="Informações sobre o contexto familiar..."></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Histórico Anterior</label>
+                <textarea id="detalheHistoricoAnterior" class="form-control" rows="2" data-detalhe-key="historicoAnterior" placeholder="Histórico de situações anteriores..."></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Providências Tomadas</label>
+                <textarea id="detalheProvidencias" class="form-control" rows="2" data-detalhe-key="providenciasTomadas" placeholder="O que já foi feito..."></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Próximos Passos</label>
+                <textarea id="detalheProximosPassos" class="form-control" rows="2" data-detalhe-key="proximosPassos" placeholder="O que será feito..."></textarea>
+            </div>
         </div>
     `;
+    
+    container.innerHTML = blocos.join('') + htmlExtras;
+}
 
-    container.innerHTML = html;
+// Compatibilidade (chamadas antigas)
+function renderizarCamposEspecificos(tipo) {
+    renderizarCamposEspecificosMultiplos();
 }
 
 function coletarDetalhes() {
     const detalhes = {};
-
-    const participantesAtivEl = safeGet('detalheParticipantesAtividade');
-    if (participantesAtivEl) {
-        detalhes.participantesAtividade = participantesAtivEl.value
-            .split(',').map(t => t.trim()).filter(t => t.length > 0);
-    }
-
-    const camposTexto = {
-        'detalheContextoFamiliar': 'contextoFamiliar', 'detalheHistoricoAnterior': 'historicoAnterior',
-        'detalheTipoEscuta': 'tipoEscuta', 'detalheTipoCrise': 'tipoCrise',
-        'detalheAcoesTomadas': 'acoesTomadas', 'detalheEncaminhamentoEmergencial': 'encaminhamentoEmergencial',
-        'detalheNomeAtividade': 'nomeAtividade', 'detalheLocalAtividade': 'localAtividade',
-        'detalheTemaAcao': 'temaAcao', 'detalhePublicoAlvo': 'publicoAlvo',
-        'detalheLocalAcao': 'localAcao', 'detalheTemaSocioemocional': 'temaSocioemocional',
-        'detalheTipoAtividadeCultural': 'tipoAtividadeCultural', 'detalheParceria': 'parceria',
-        'detalheTipoTarefaOutros': 'tipoTarefaOutros', 'detalheProvidencias': 'providenciasTomadas',
-        'detalheProximosPassos': 'proximosPassos'
-    };
-
-    Object.entries(camposTexto).forEach(([elementId, key]) => {
-        const el = safeGet(elementId);
-        if (el && el.value) detalhes[key] = el.value.trim();
+    
+    document.querySelectorAll('[data-detalhe-key]').forEach(el => {
+        const key = el.getAttribute('data-detalhe-key');
+        const val = el.value;
+        
+        if (!val) return;
+        
+        if (key === 'duracaoEscuta' || key === 'duracaoAtividade') {
+            const n = parseInt(val);
+            if (!isNaN(n) && n > 0) detalhes[key] = n;
+        } else if (key === 'participantesAtividade' || key === 'profissionaisEnvolvidos') {
+            detalhes[key] = val.split(',').map(t => t.trim()).filter(t => t.length > 0);
+        } else {
+            detalhes[key] = val.trim();
+        }
     });
-
-    const duracaoEscutaEl = safeGet('detalheDuracaoEscuta');
-    if (duracaoEscutaEl && duracaoEscutaEl.value) {
-        const d = parseInt(duracaoEscutaEl.value);
-        if (!isNaN(d) && d > 0) detalhes.duracaoEscuta = d;
-    }
-
-    const duracaoAtividadeEl = safeGet('detalheDuracaoAtividade');
-    if (duracaoAtividadeEl && duracaoAtividadeEl.value) {
-        const d = parseInt(duracaoAtividadeEl.value);
-        if (!isNaN(d) && d > 0) detalhes.duracaoAtividade = d;
-    }
-
+    
     return detalhes;
 }
-
 // ============================================
 // REGISTRAR (com assinatura capturada via QR)
 // ============================================
 async function registrarOcorrencia() {
-    if (!tipoTarefaSelecionado) { mostrarToastConcluido('Selecione o tipo de tarefa', 'error'); return; }
+    if (__tiposSelecionados.length === 0) {
+        mostrarToastConcluido('Selecione pelo menos um tipo de tarefa', 'error');
+        return;
+    }
     const descricao = (safeGet('descricao')?.value || '').trim();
     if (!descricao) { mostrarToastConcluido('Descreva o ocorrido', 'error'); return; }
     if (!currentAluno || !currentAluno.id) { mostrarToastConcluido('Nenhum aluno selecionado', 'error'); return; }
-
-    // ==========================================
-    // 🆕 VALIDAÇÃO: Se checkbox marcado mas não assinou
-    // ==========================================
+    
     const precisaAssinatura = !!safeGet('assistenteSocialNecessitaAssinatura')?.checked;
     const assinaturaBase64 = estadoSessaoAssinatura.psicologia?.assinaturaCapturada || '';
     
@@ -2515,10 +2826,10 @@ async function registrarOcorrencia() {
         reabrirModalAssinaturaQR();
         return;
     }
-
+    
     const btn = document.querySelector('#formRegistro .btn-primary-custom');
     if (btn) btn.disabled = true;
-
+    
     try {
         const response = await fetch('/api/psicologia/registrar', {
             method: 'POST',
@@ -2528,23 +2839,20 @@ async function registrarOcorrencia() {
             },
             body: JSON.stringify({
                 alunoId: currentAluno.id,
-                tipoTarefa: tipoTarefaSelecionado,
+                tiposTarefa: __tiposSelecionados,     // 🆕 array
+                tipoTarefa: __tiposSelecionados[0],   // compatibilidade
                 descricao,
                 observacoes: safeGet('observacoes')?.value || '',
                 gravidade: safeGet('gravidade')?.value || 'media',
                 prioridade: safeGet('prioridade')?.value || 'normal',
                 detalhes: coletarDetalhes(),
-                precisaAssinatura: precisaAssinatura,
-                assinaturaBase64: assinaturaBase64  // 🔥 envia a assinatura capturada
+                precisaAssinatura: precisaAssinatura
             })
         });
-
+        
         const data = await response.json();
-
+        
         if (data.success) {
-            // ==========================================
-            // 🆕 Aplica assinatura ao atendimento (se houver)
-            // ==========================================
             if (assinaturaBase64 && data.atendimento?.id) {
                 try {
                     const sessaoId = estadoSessaoAssinatura.psicologia.sessaoId;
@@ -2559,13 +2867,9 @@ async function registrarOcorrencia() {
                             sessaoId: sessaoId
                         })
                     });
-                    console.log('✅ Assinatura aplicada ao atendimento');
-                } catch (e) {
-                    console.warn('Erro ao aplicar assinatura:', e);
-                }
+                } catch (e) { console.warn('Erro ao aplicar assinatura:', e); }
             }
-
-            // Limpa sessão de assinatura
+            
             const sessaoId = estadoSessaoAssinatura.psicologia.sessaoId;
             if (sessaoId) {
                 fetch(`/api/sessoes-assinatura/${sessaoId}`, {
@@ -2610,9 +2914,14 @@ function limparTela() {
     safeGet('formRegistro').style.display = 'none';
     currentAluno = null;
     currentAtendimento = null;
+    
+    // 🆕 Reseta multi-seleção
+    __tiposSelecionados = [];
     tipoTarefaSelecionado = null;
-
-    // 🆕 Limpa a sessão de assinatura
+    const tipoInput = safeGet('tipoTarefaSelecionado');
+    if (tipoInput) tipoInput.value = '';
+    document.querySelectorAll('.tipo-card').forEach(c => c.classList.remove('selected'));
+    
     const sessaoId = estadoSessaoAssinatura.psicologia.sessaoId;
     if (sessaoId) {
         fetch(`/api/sessoes-assinatura/${sessaoId}`, {
