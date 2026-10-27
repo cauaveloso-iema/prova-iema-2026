@@ -44099,6 +44099,7 @@ class AdminPanel {
                     { icone: 'fa-qrcode', label: 'QR Codes', section: 'qrcode-management' },
                     { icone: 'fa-bell', label: 'OneSignal', section: 'onesignal' },
                     { icone: 'fa-camera', label: 'OMR Debug', section: 'omr-debug' },
+                    { icone: 'fa-tablet-alt', label: 'Tablets', section: 'tablets' },
                     { icone: 'fa-sitemap', label: 'Eixos', section: 'eixos' },
                     { icone: 'fa-graduation-cap', label: 'Cursos', section: 'cursos' },
                     { icone: 'fa-database', label: 'Backups', section: 'backups' },
@@ -44208,7 +44209,7 @@ class AdminPanel {
             this.switchSection(section);
             
             // Atualiza bottom nav
-            const bottomNavSections = ['dashboard', 'usuarios', 'provas', 'turmas'];
+            const bottomNavSections = ['dashboard', 'usuarios', 'provas', 'turmas', 'tablets'];
             if (bottomNavSections.includes(section)) {
                 this.updateBottomNav(section);
             } else {
