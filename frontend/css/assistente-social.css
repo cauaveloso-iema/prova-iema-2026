@@ -1360,3 +1360,60 @@ body {
     background: linear-gradient(135deg, #f59e0b, #d97706);
     color: white;
 }
+
+/* ============================================
+   📱 CORREÇÃO DEFINITIVA DO HEADER NO MOBILE
+   ============================================ */
+@media (max-width: 768px) {
+    /* 1. RELÓGIO E AVATAR LADO A LADO */
+    .header-top {
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        flex-wrap: nowrap !important;
+        padding: 10px !important;
+        gap: 15px !important;
+    }
+    
+    /* Relógio compacto */
+    .relogio-card {
+        padding: 8px 16px !important;
+        border-radius: 50px !important;
+        flex: 1 !important;
+        justify-content: center !important;
+    }
+    .relogio-tempo { font-size: 1.1rem !important; }
+    .relogio-data { display: none !important; } /* Esconde a data */
+    
+    /* Avatar só a bolinha */
+    .user-trigger {
+        padding: 3px !important;
+        border-radius: 50% !important;
+        background: white !important;
+    }
+    .user-avatar {
+        width: 42px !important;
+        height: 42px !important;
+        margin-right: 0 !important;
+    }
+    .user-details, 
+    .user-trigger .fa-chevron-down {
+        display: none !important;
+    }
+
+    /* 2. CONSERTA O CARD DO TÍTULO (Supervisão - CAUA) */
+    
+    /* Remove o "Bem-vindo(a)" e o crachá de "Turno" do meio do título */
+    #headerNomeUsuarioContainer,
+    #headerTurnoContainer {
+        display: none !important;
+    }
+
+    /* Ajusta o cabeçalho do card para não amassar o texto */
+    .card-header {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        padding: 15px 20px !important;
+        gap: 5px !important;
+    }
+}

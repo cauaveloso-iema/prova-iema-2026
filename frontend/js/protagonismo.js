@@ -1,5 +1,6 @@
 // ============================================
 // PROTAGONISMO - PAINEL ADMINISTRATIVO
+// ✅ VERSÃO CORRIGIDA - Inicialização à prova de falhas
 // ============================================
 
 let token = localStorage.getItem('auth_token');
@@ -16,28 +17,23 @@ let tutorEditandoId = null;
 let modalClube = null;
 let modalTutor = null;
 let modalCandidato = null;
-let chartTopClubes = null;
+let chartTopClubesInstance = null; // ✅ renomeado para evitar conflito com o ID
 
 // ============================================
 // 🛡️ PROTEÇÃO CONTRA alert() NATIVO (Kodular)
-// Sobrescreve window.alert para usar toast customizado
 // ============================================
 (function protegerContraAlertNativo() {
     const alertOriginal = window.alert;
     
     window.alert = function(mensagem) {
-        // Detecta WebView do Kodular (ou qualquer Android WebView)
         const isWebView = /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
                           (typeof window.AppInventor !== 'undefined');
         
-        // No desktop, mantém comportamento nativo (ou troque por mostrarToast se preferir)
         if (!isWebView) {
-            // Para ver no console sem travar:
             console.log('%c[ALERT] ' + mensagem, 'background:#f59e0b;color:white;padding:4px 8px;border-radius:4px;');
             return;
         }
         
-        // No WebView: usa modal customizado (não trava)
         try {
             const modal = document.createElement('div');
             modal.style.cssText = `
@@ -68,51 +64,131 @@ let chartTopClubes = null;
 })();
 
 // ============================================
-// INICIALIZAÇÃO
+// ✅ INICIALIZAÇÃO À PROVA DE FALHAS
 // ============================================
-document.addEventListener('DOMContentLoaded', async () => {
-    if (!token) { window.location.href = '/login.html'; return; }
+async function inicializarPainel() {
+    console.log('🚀 [protagonismo] iniciando painel...');
     
-    userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-    const allowedRoles = ['protagonismo', 'super_admin', 'admin'];
-    
-    if (!allowedRoles.includes(userData.role)) {
-        mostrarToast('Acesso negado.');
-        window.location.href = '/login.html';
-        return;
+    try {
+        // 1) Validações básicas
+        if (!token) {
+            console.warn('⚠️ Sem token → redirecionando para login');
+            window.location.href = '/login.html';
+            return;
+        }
+        
+        userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+        const allowedRoles = ['protagonismo', 'super_admin', 'admin'];
+        
+        if (!allowedRoles.includes(userData.role)) {
+            console.warn('⚠️ Role inválido:', userData.role);
+            if (typeof mostrarToast === 'function') mostrarToast('Acesso negado.');
+            window.location.href = '/login.html';
+            return;
+        }
+        
+        // 2) Atualiza cabeçalho
+        try {
+            const elNome = document.getElementById('userName');
+            if (elNome) elNome.textContent = userData.nome || 'Protagonismo';
+            
+            const elData = document.getElementById('dataAtual');
+            if (elData) elData.textContent = new Date().toLocaleDateString('pt-BR');
+            
+            const linkPublico = window.location.origin + '/protagonismo-publico.html';
+            const inputLink = document.getElementById('linkPublicoInput');
+            if (inputLink) inputLink.value = linkPublico;
+        } catch (e) {
+            console.error('❌ Erro no cabeçalho:', e);
+        }
+        
+        // 3) Modais (Bootstrap)
+        try {
+            if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                const elClube = document.getElementById('modalClube');
+                const elTutor = document.getElementById('modalTutor');
+                const elCand = document.getElementById('modalCandidato');
+                
+                if (elClube) modalClube = new bootstrap.Modal(elClube);
+                if (elTutor) modalTutor = new bootstrap.Modal(elTutor);
+                if (elCand) modalCandidato = new bootstrap.Modal(elCand);
+                console.log('✅ Modais prontos');
+            } else {
+                console.warn('⚠️ Bootstrap não disponível ainda');
+            }
+        } catch (e) {
+            console.error('❌ Erro nos modais:', e);
+        }
+        
+        // 4) Carrega dados em PARALELO (com timeout de 15s cada)
+        const tarefas = [
+            { nome: 'Foto',       fn: carregarFotoPerfil },
+            { nome: 'Cursos',     fn: carregarCursosTurmas },
+            { nome: 'Stats',      fn: carregarEstatisticas },
+            { nome: 'Config',     fn: carregarConfiguracao },
+            { nome: 'Clubes',     fn: carregarClubes },
+            { nome: 'Tutores',    fn: carregarTutores },
+            { nome: 'Candidatos', fn: carregarCandidatos }
+        ];
+        
+        const resultados = await Promise.allSettled(
+            tarefas.map(t => 
+                Promise.race([
+                    t.fn(),
+                    new Promise((_, rej) => 
+                        setTimeout(() => rej(new Error(`${t.nome} timeout 15s`)), 15000)
+                    )
+                ])
+            )
+        );
+        
+        resultados.forEach((r, i) => {
+            if (r.status === 'fulfilled') {
+                console.log(`✅ ${tarefas[i].nome} carregado`);
+            } else {
+                console.error(`❌ ${tarefas[i].nome} falhou:`, r.reason?.message || r.reason);
+            }
+        });
+        
+        // 5) Preenche selects auxiliares
+        try {
+            preencherSelectsAuxiliares();
+        } catch (e) {
+            console.error('❌ Erro nos selects:', e);
+        }
+        
+        // 6) Listeners das abas
+        const abas = {
+            'aba-clubes':     carregarClubes,
+            'aba-inscricoes': carregarInscricoes,
+            'aba-tutoria':    carregarTutores,
+            'aba-candidatos': carregarCandidatos,
+            'aba-eleicao':    carregarResultadosEleicao
+        };
+        
+        Object.entries(abas).forEach(([id, fn]) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('shown.bs.tab', () => {
+                    try { fn(); } catch (e) { console.error(`Erro aba ${id}:`, e); }
+                });
+            }
+        });
+        
+        console.log('🎉 [protagonismo] painel inicializado com sucesso');
+        
+    } catch (e) {
+        console.error('❌ ERRO FATAL na inicialização:', e);
     }
-    
-    document.getElementById('userName').textContent = userData.nome || 'Protagonismo';
-    document.getElementById('dataAtual').textContent = new Date().toLocaleDateString('pt-BR');
-    
-    // Link público
-    const linkPublico = window.location.origin + '/protagonismo-publico.html';
-    document.getElementById('linkPublicoInput').value = linkPublico;
-    
-    // Inicializar modais
-    modalClube = new bootstrap.Modal(document.getElementById('modalClube'));
-    modalTutor = new bootstrap.Modal(document.getElementById('modalTutor'));
-    modalCandidato = new bootstrap.Modal(document.getElementById('modalCandidato'));
-    
-    // Carregar dados iniciais
-    await carregarFotoPerfil();
-    await carregarCursosTurmas();
-    await carregarEstatisticas();
-    await carregarConfiguracao();
-    await carregarClubes();
-    await carregarTutores();
-    await carregarCandidatos();
-    
-    // Listeners das abas
-    document.getElementById('aba-clubes').addEventListener('shown.bs.tab', () => carregarClubes());
-    document.getElementById('aba-inscricoes').addEventListener('shown.bs.tab', () => carregarInscricoes());
-    document.getElementById('aba-tutoria').addEventListener('shown.bs.tab', () => carregarTutores());
-    document.getElementById('aba-candidatos').addEventListener('shown.bs.tab', () => carregarCandidatos());
-    document.getElementById('aba-eleicao').addEventListener('shown.bs.tab', () => carregarResultadosEleicao());
-    
-    // Preencher selects de filtros
-    preencherSelectsAuxiliares();
-});
+}
+
+// Dispara no DOMContentLoaded OU imediatamente se já carregou
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', inicializarPainel);
+} else {
+    console.log('⚡ DOM já pronto, executando inicializarPainel direto');
+    inicializarPainel();
+}
 
 // ============================================
 // HELPERS
@@ -182,19 +258,26 @@ function toggleUserMenu(event) {
     if (event) event.stopPropagation();
     const dropdown = document.getElementById('userDropdown');
     const chevron = document.getElementById('userChevron');
+    const body = document.body;
 
     if (dropdown) {
         const isShowing = dropdown.classList.contains('show');
         if (isShowing) {
             dropdown.classList.remove('show');
+            body.classList.remove('menu-user-aberto');
             if (chevron) chevron.style.transform = 'rotate(0deg)';
         } else {
             dropdown.classList.add('show');
+            // Só aplica overlay no mobile
+            if (window.innerWidth <= 768) {
+                body.classList.add('menu-user-aberto');
+            }
             if (chevron) chevron.style.transform = 'rotate(180deg)';
         }
     }
 }
 
+// Fecha o menu ao clicar fora
 document.addEventListener('click', function (event) {
     const container = document.getElementById('userMenuContainer');
     const dropdown = document.getElementById('userDropdown');
@@ -203,15 +286,14 @@ document.addEventListener('click', function (event) {
     if (container && !container.contains(event.target)) {
         if (dropdown) dropdown.classList.remove('show');
         if (chevron) chevron.style.transform = 'rotate(0deg)';
+        document.body.classList.remove('menu-user-aberto');
     }
 });
 
 // ============================================
 // 3. NOTIFICAÇÕES NO AVATAR (Badge + anel pulsante)
-// ✅ Versão corrigida: usa variáveis LOCAIS e atualiza TODOS os badges
 // ============================================
 function atualizarBadgeUnificado() {
-    // 1) Calcula total a partir das variáveis LOCAIS (não do window!)
     let totalNaoLidas = 0;
     let totalLembretes = 0;
     try {
@@ -220,7 +302,6 @@ function atualizarBadgeUnificado() {
         } else {
             totalNaoLidas = (__notificacoesCache || []).filter(n => !n.lida).length;
         }
-        // Protagonismo não tem lembretes retroativos, mas mantém compatibilidade
         totalLembretes = (typeof __lembretesCache !== 'undefined' && Array.isArray(__lembretesCache))
             ? __lembretesCache.length
             : 0;
@@ -229,7 +310,6 @@ function atualizarBadgeUnificado() {
     }
     const total = totalNaoLidas + totalLembretes;
 
-    // 2) Badge do sino escondido (notificacoesBadge)
     const badgeSino = document.getElementById('notificacoesBadge');
     if (badgeSino) {
         if (total > 0) {
@@ -240,7 +320,6 @@ function atualizarBadgeUnificado() {
         }
     }
 
-    // 3) Badge numérico no avatar (userNotificationBadge)
     const badgeAvatar = document.getElementById('userNotificationBadge');
     if (badgeAvatar) {
         if (total > 0) {
@@ -251,7 +330,6 @@ function atualizarBadgeUnificado() {
         }
     }
 
-    // 4) Badge no item "Notificações" do menu dropdown
     const badgeMenu = document.getElementById('menuNotifBadge');
     if (badgeMenu) {
         if (total > 0) {
@@ -262,7 +340,6 @@ function atualizarBadgeUnificado() {
         }
     }
 
-    // 5) Anel pulsante no trigger do usuário
     const trigger = document.getElementById('userTrigger');
     if (trigger) {
         if (total > 0) trigger.classList.add('tem-notificacao');
@@ -307,29 +384,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ============================================
 // 5. ABRIR MENU DE NOTIFICAÇÕES PELO AVATAR
-// 🔥 CORREÇÃO PRINCIPAL: chama carregarListaNotificacoes()
 // ============================================
 function abrirMenuNotificacoesSeguro(event) {
     if (event) event.stopPropagation();
 
-    // 1. Fecha o menu do usuário
     const userDropdown = document.getElementById('userDropdown');
     const chevron = document.getElementById('userChevron');
     if (userDropdown) userDropdown.classList.remove('show');
     if (chevron) chevron.style.transform = 'rotate(0deg)';
 
-    // 2. Abre o dropdown do sino
     const notifDropdown = document.getElementById('notificacoesDropdown');
     if (notifDropdown) {
         notifDropdown.classList.add('show');
         notifDropdown.style.display = 'block';
     }
 
-    // 3. 🔥 CARREGA AS NOTIFICAÇÕES IMEDIATAMENTE
-    // Estratégia em cascata: tenta as funções na ordem de preferência
     const lista = document.getElementById('notificacoesLista');
 
-    // Mostra loading no lugar do conteúdo antigo (feedback visual imediato)
     if (lista) {
         lista.innerHTML = `
             <div style="text-align: center; padding: 40px; color: #6c757d;">
@@ -339,26 +410,21 @@ function abrirMenuNotificacoesSeguro(event) {
         `;
     }
 
-    // Tenta cada função na ordem de disponibilidade
     if (typeof carregarListaNotificacoes === 'function') {
-        // ✅ Função existe no protagonismo.js
         carregarListaNotificacoes().catch(err => {
             console.error('Erro ao carregar notificações:', err);
             mostrarFallbackNotificacoes(lista);
         });
     } else if (typeof carregarNotificacoes === 'function') {
-        // Função do protagonismo.js que checa o contador E carrega a lista se dropdown aberto
         carregarNotificacoes().catch(err => {
             console.error('Erro ao carregar notificações:', err);
             mostrarFallbackNotificacoes(lista);
         });
     } else if (typeof carregarTudo === 'function') {
-        // Fallback do push-client.js
         try { carregarTudo(); } catch (e) {
             mostrarFallbackNotificacoes(lista);
         }
     } else if (typeof abrirNotificacoes === 'function') {
-        // Último recurso: chama a função original (só faz toggle)
         try { abrirNotificacoes(); } catch (e) {
             mostrarFallbackNotificacoes(lista);
         }
@@ -367,7 +433,6 @@ function abrirMenuNotificacoesSeguro(event) {
     }
 }
 
-// Fallback: mensagem caso nenhuma função de carregamento exista
 function mostrarFallbackNotificacoes(lista) {
     if (!lista) return;
     lista.innerHTML = `
@@ -396,7 +461,6 @@ function fecharNotificacoes() {
     if (btn) btn.classList.remove('active');
 }
 
-// Impede que o clique no X se propague
 document.addEventListener('click', function (event) {
     const btnFecharSino = event.target.closest('.notificacoes-header button[onclick*="fecharNotificacoes"]');
     if (btnFecharSino) {
@@ -405,7 +469,6 @@ document.addEventListener('click', function (event) {
     }
 }, true);
 
-// Fecha o sino ao clicar fora dele
 document.addEventListener('click', function (event) {
     const notifDropdown = document.getElementById('notificacoesDropdown');
     const containerSino = document.getElementById('containerSinoOriginal');
@@ -445,7 +508,6 @@ async function carregarCursosTurmas() {
 }
 
 function preencherSelectsAuxiliares() {
-    // Selects de curso
     const tutorCursoSelect = safeGet('tutorCurso');
     if (tutorCursoSelect) {
         tutorCursoSelect.innerHTML = '<option value="">Selecione o curso...</option>';
@@ -454,7 +516,6 @@ function preencherSelectsAuxiliares() {
         });
     }
     
-    // Selects de turma
     const selects = [
         'tutorTurma', 
         'candidatoTurma', 
@@ -491,13 +552,12 @@ async function carregarEstatisticas() {
             safeSetText('totalInscricoes', e.totalInscricoes || 0);
             safeSetText('totalTutores', e.totalTutores || 0);
             safeSetText('totalCandidatos', e.totalCandidatos || 0);
+            safeSetText('totalVotos', e.totalVotos || 0);
             
-            // Status
             atualizarBadgeStatus('statusInscricoes', e.inscricoesAbertas);
             atualizarBadgeStatus('statusEleicao', e.eleicaoAberta);
             atualizarBadgeStatus('statusTutoria', e.tutoriaVisivel !== false);
             
-            // Gráfico Top Clubes
             renderizarGraficoTopClubes(data.topClubes || []);
         }
     } catch (error) {
@@ -519,17 +579,23 @@ function atualizarBadgeStatus(id, ativo) {
 }
 
 function renderizarGraficoTopClubes(topClubes) {
-    const ctx = safeGet('chartTopClubes');
-    if (!ctx) return;
+    const canvas = safeGet('chartTopClubes');
+    if (!canvas) return;
     
-    if (chartTopClubes) {
-        try { chartTopClubes.destroy(); } catch(e) {}
+    // ✅ CORREÇÃO: usar variável com nome diferente do ID
+    if (chartTopClubesInstance) {
+        try { chartTopClubesInstance.destroy(); } catch(e) {}
+    }
+    
+    if (typeof Chart === 'undefined') {
+        console.warn('Chart.js não carregado');
+        return;
     }
     
     const labels = topClubes.map(c => c.clubeNome || 'Sem nome');
     const values = topClubes.map(c => c.total || 0);
     
-    chartTopClubes = new Chart(ctx.getContext('2d'), {
+    chartTopClubesInstance = new Chart(canvas.getContext('2d'), {
         type: 'bar',
         data: {
             labels: labels,
@@ -594,7 +660,6 @@ async function atualizarConfiguracao() {
         const data = await response.json();
         
         if (data.success) {
-            // Feedback visual
             mostrarToast('Configuração atualizada!', 'success');
             atualizarBadgeStatus('statusInscricoes', dados.inscricoesClubesAbertas);
             atualizarBadgeStatus('statusEleicao', dados.eleicaoLiderAberta);
@@ -712,7 +777,6 @@ function renderizarClubes(clubes) {
 }
 
 function ajustarCor(cor) {
-    // Escurece a cor para gradiente
     try {
         const hex = cor.replace('#', '');
         const r = Math.max(0, parseInt(hex.substr(0, 2), 16) - 30);
@@ -738,7 +802,6 @@ function abrirModalClube() {
     clubeEditandoId = null;
     safeGet('modalClubeTitulo').textContent = 'Novo Clube';
     
-    // Limpar form
     safeGet('clubeNome').value = '';
     safeGet('clubeDescricao').value = '';
     safeGet('clubeLider').value = '';
@@ -751,7 +814,7 @@ function abrirModalClube() {
     safeGet('clubeAtivo').checked = true;
     safeGet('clubeInscricoesAbertas').checked = false;
     
-    modalClube.show();
+    if (modalClube) modalClube.show();
 }
 
 async function editarClube(id) {
@@ -782,7 +845,7 @@ async function editarClube(id) {
         safeGet('clubeAtivo').checked = c.ativo !== false;
         safeGet('clubeInscricoesAbertas').checked = c.inscricoesAbertas === true;
         
-        modalClube.show();
+        if (modalClube) modalClube.show();
     } catch (error) {
         console.error('Erro:', error);
         mostrarToast('Erro ao carregar clube');
@@ -831,7 +894,7 @@ async function salvarClube() {
         
         if (data.success) {
             mostrarToast('Clube salvo com sucesso!', 'success');
-            modalClube.hide();
+            if (modalClube) modalClube.hide();
             await carregarClubes();
             await carregarEstatisticas();
         } else {
@@ -876,11 +939,9 @@ async function excluirClube(id, nome) {
 }
 
 function verInscricoesClube(id) {
-    // Vai para aba de inscrições com filtro
     const filtroSelect = safeGet('filtroClubeInscricoes');
     if (filtroSelect) filtroSelect.value = id;
     
-    // Muda para aba de inscrições
     const tab = new bootstrap.Tab(safeGet('aba-inscricoes'));
     tab.show();
 }
@@ -1065,7 +1126,7 @@ function abrirModalTutor() {
     safeGet('tutorTurma').value = '';
     safeGet('tutorObservacoes').value = '';
     
-    modalTutor.show();
+    if (modalTutor) modalTutor.show();
 }
 
 async function editarTutor(id) {
@@ -1089,7 +1150,7 @@ async function editarTutor(id) {
         safeGet('tutorTurma').value = tutor.turma || '';
         safeGet('tutorObservacoes').value = tutor.observacoes || '';
         
-        modalTutor.show();
+        if (modalTutor) modalTutor.show();
     } catch (error) {
         console.error('Erro:', error);
     }
@@ -1128,7 +1189,7 @@ async function salvarTutor() {
         
         if (data.success) {
             mostrarToast('Tutor salvo!', 'success');
-            modalTutor.hide();
+            if (modalTutor) modalTutor.hide();
             await carregarTutores();
             await carregarEstatisticas();
         } else {
@@ -1275,7 +1336,7 @@ function abrirModalCandidato() {
     safeGet('candidatoSlogan').value = '';
     safeGet('candidatoProposta').value = '';
     
-    modalCandidato.show();
+    if (modalCandidato) modalCandidato.show();
 }
 
 async function carregarAlunosTurma() {
@@ -1339,7 +1400,7 @@ async function salvarCandidato() {
         
         if (data.success) {
             mostrarToast('Candidato cadastrado!', 'success');
-            modalCandidato.hide();
+            if (modalCandidato) modalCandidato.hide();
             await carregarCandidatos();
             await carregarEstatisticas();
         } else {
@@ -1534,27 +1595,21 @@ async function logout() {
 let modalQRCode = null;
 
 async function abrirModalQRCode() {
-    // Pega o link público dinamicamente
     const linkPublico = window.location.origin + '/protagonismo-publico.html';
     
-    // Mostra o texto do link
     safeGet('qrCodeUrlTexto').textContent = linkPublico;
     
-    // Mostra loading
     safeGet('qrCodeLoading').style.display = 'flex';
     safeGet('qrCodeImg').style.display = 'none';
     
-    // Abre o modal
     if (!modalQRCode) {
         modalQRCode = new bootstrap.Modal(document.getElementById('modalQRCode'));
     }
     modalQRCode.show();
     
-    // Gera o QR Code
     try {
         const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=10&data=${encodeURIComponent(linkPublico)}`;
         
-        // Precarrega a imagem
         const img = new Image();
         img.onload = () => {
             safeGet('qrCodeImg').src = qrUrl;
@@ -1606,7 +1661,6 @@ function imprimirQRCode() {
     const linkPublico = window.location.origin + '/protagonismo-publico.html';
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=20&data=${encodeURIComponent(linkPublico)}`;
     
-    // Abre uma nova janela com o QR Code pronto para imprimir
     const janelaImpressao = window.open('', '_blank', 'width=800,height=900');
     janelaImpressao.document.write(`
         <!DOCTYPE html>
@@ -1718,19 +1772,34 @@ function imprimirQRCode() {
     janelaImpressao.document.close();
 }
 
+async function copiarLinkDoQR() {
+    const linkPublico = window.location.origin + '/protagonismo-publico.html';
+    
+    try {
+        await navigator.clipboard.writeText(linkPublico);
+        mostrarToast('✅ Link copiado!', 'success');
+    } catch (e) {
+        const input = document.createElement('input');
+        input.value = linkPublico;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+        mostrarToast('✅ Link copiado!', 'success');
+    }
+}
+
 // ============================================
 // 🔔 SISTEMA DE NOTIFICAÇÕES INTERNAS
 // ============================================
 
 let notificacoesInterval;
 
-// Detectar WebView (Kodular)
 function isWebView() {
     return /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
            (typeof window.AppInventor !== 'undefined');
 }
 
-// Mostrar notificação customizada (não trava o WebView)
 function mostrarNotificacao(mensagem, tipo = 'info') {
     if (!isWebView()) {
         mostrarToast(mensagem);
@@ -1784,7 +1853,6 @@ function mostrarNotificacao(mensagem, tipo = 'info') {
     document.body.appendChild(modal);
 }
 
-// Modal de confirmação customizado (não trava o WebView)
 function confirmar(mensagem) {
     return new Promise((resolve) => {
         const oldModal = document.getElementById('modalConfirmacao');
@@ -1836,12 +1904,10 @@ function confirmar(mensagem) {
     });
 }
 
-// Inicializar sistema de notificações
 function iniciarNotificacoes() {
     carregarNotificacoes();
     notificacoesInterval = setInterval(carregarNotificacoes, 30000);
     
-    // Fechar dropdown ao clicar fora
     document.addEventListener('click', function(event) {
         const dropdown = document.getElementById('notificacoesDropdown');
         const btn = document.getElementById('notificacoesBtn');
@@ -1852,15 +1918,14 @@ function iniciarNotificacoes() {
     });
 }
 
-// Cache do contador vindo direto do servidor (mais confiável)
 let __totalNaoLidasServidor = null;
+let __notificacoesCache = [];
 
 async function carregarNotificacoes() {
     try {
         const token = localStorage.getItem('auth_token');
         if (!token) return;
 
-        // 1) Buscar contador (badge)
         const countResponse = await fetch('/api/notificacoes/nao-lidas/contador', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -1869,7 +1934,6 @@ async function carregarNotificacoes() {
         if (countData.success) {
             __totalNaoLidasServidor = Number(countData.count) || 0;
 
-            // Atualiza badge do sino
             const badge = document.getElementById('notificacoesBadge');
             if (badge) {
                 if (__totalNaoLidasServidor > 0) {
@@ -1883,10 +1947,8 @@ async function carregarNotificacoes() {
             }
         }
 
-        // 2) Atualiza os badges do avatar / menu
         atualizarBadgeUnificado();
 
-        // 3) Se o dropdown estiver aberto, recarrega a lista
         const dropdown = document.getElementById('notificacoesDropdown');
         if (dropdown && (dropdown.classList.contains('show') || dropdown.style.display === 'block')) {
             await carregarListaNotificacoes();
@@ -1914,14 +1976,11 @@ async function carregarListaNotificacoes() {
         const data = await response.json();
 
         if (data.success) {
-            // ✅ Atualiza o cache LOCAL para os badges
             if (Array.isArray(data.notificacoes)) {
                 __notificacoesCache = data.notificacoes;
             }
 
             renderizarNotificacoes(data.notificacoes);
-
-            // ✅ Atualiza contadores
             atualizarBadgeUnificado();
         }
     } catch (error) {
@@ -1973,7 +2032,6 @@ function renderizarNotificacoes(notificacoes) {
 
         const classeLida = notif.lida ? '' : 'nao-lida';
 
-        // ✅ Escapa atributos com segurança
         const linkSeguro = String(notif.link || '#')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
@@ -2005,7 +2063,6 @@ function renderizarNotificacoes(notificacoes) {
 
     lista.innerHTML = html;
 
-    // ✅ Adicionar listeners após renderizar
     lista.querySelectorAll('.notificacao-item').forEach(item => {
         item.addEventListener('click', () => {
             const id = item.getAttribute('data-notif-id');
@@ -2015,14 +2072,10 @@ function renderizarNotificacoes(notificacoes) {
     });
 }
 
-// ============================================
-// ✅ ABRIR NOTIFICAÇÃO (fecha dropdown, marca como lida, navega)
-// ============================================
 async function abrirNotificacao(id, link) {
     try {
         const tk = localStorage.getItem('auth_token');
 
-        // 1) Marca como lida
         if (id) {
             try {
                 await fetch(`/api/notificacoes/${id}/lida`, {
@@ -2034,13 +2087,9 @@ async function abrirNotificacao(id, link) {
             }
         }
 
-        // 2) Fecha o dropdown
         fecharNotificacoes();
-
-        // 3) Atualiza badges
         await carregarNotificacoes();
 
-        // 4) Navega se houver link válido
         if (link && link !== '#' && link !== 'null' && link !== 'undefined' && String(link).trim() !== '') {
             window.location.href = link;
         }
@@ -2086,7 +2135,6 @@ async function limparMinhasNotificacoes(event) {
     try {
         const token = localStorage.getItem('auth_token');
         
-        // 🔥 USA confirmar() em vez de confirm() nativo
         const confirmacao = await confirmar('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.');
         
         if (!confirmacao) return;
@@ -2111,7 +2159,6 @@ async function limparMinhasNotificacoes(event) {
             await carregarListaNotificacoes();
             document.getElementById('notificacoesBadge').style.display = 'none';
             document.getElementById('notificacoesBtn')?.classList.remove('tem-notificacao');
-            // 🔥 USA mostrarNotificacao() em vez de mostrarToast() nativo
             mostrarNotificacao(data.message || 'Notificações excluídas com sucesso!', 'success');
         } else {
             throw new Error(data.error || 'Erro ao excluir notificações');
@@ -2129,50 +2176,26 @@ async function limparMinhasNotificacoes(event) {
     }
 }
 
-// Iniciar quando o DOM carregar
 document.addEventListener('DOMContentLoaded', function() {
     if (document.getElementById('notificacoesBtn')) {
         iniciarNotificacoes();
 
-        // ✅ Força atualização dos badges do avatar logo após o boot
         setTimeout(async () => {
             try { await carregarNotificacoes(); } catch (e) { /* silencioso */ }
         }, 1200);
     }
 });
 
-// Limpar interval ao sair
 window.addEventListener('beforeunload', function() {
     if (notificacoesInterval) {
         clearInterval(notificacoesInterval);
     }
 });
 
-async function copiarLinkDoQR() {
-    const linkPublico = window.location.origin + '/protagonismo-publico.html';
-    
-    try {
-        await navigator.clipboard.writeText(linkPublico);
-        mostrarToast('✅ Link copiado!', 'success');
-    } catch (e) {
-        // Fallback para navegadores antigos
-        const input = document.createElement('input');
-        input.value = linkPublico;
-        document.body.appendChild(input);
-        input.select();
-        document.execCommand('copy');
-        document.body.removeChild(input);
-        mostrarToast('✅ Link copiado!', 'success');
-    }
-}
-
 // ============================================================================
 // 📄 EXPORTAÇÃO PDF - TODAS AS ABAS
 // ============================================================================
 
-// ============================================
-// 🎨 TEMPLATE COMUM DE RELATÓRIO (PADRONIZADO)
-// ============================================
 function montarHTMLRelatorioProtagonismo({ titulo, subtitulo, statsHTML, tabelaHTML, assinaturaDigital, dataGeracao }) {
     const logo = '/uploads/logo-iema.png';
     const carimbo = '/icons/assinatura_protagonismo.ico';
@@ -2537,12 +2560,10 @@ async function exportarPDFInscricoes() {
         const inscricoes = data.inscricoes || [];
         const dataGeracao = new Date().toLocaleString('pt-BR');
         
-        // Verifica se tem assinatura digital em alguma inscrição
         let assinaturaDigital = null;
         const comAssinatura = inscricoes.find(i => i.assinaturaBase64);
         if (comAssinatura) assinaturaDigital = comAssinatura.assinaturaBase64;
         
-        // Subtítulo com filtros aplicados
         let subtitulo = `${inscricoes.length} inscrição(ões)`;
         const filtrosAtivos = [];
         if (clubeId) {
@@ -2990,17 +3011,23 @@ window.carregarAlunosTurma = carregarAlunosTurma;
 window.excluirCandidato = excluirCandidato;
 window.salvarCandidato = salvarCandidato;
 
-// Exportar funções de notificações
 window.abrirNotificacoes = abrirNotificacoes;
 window.abrirNotificacao = abrirNotificacao;
 window.marcarTodasLidas = marcarTodasLidas;
 window.limparMinhasNotificacoes = limparMinhasNotificacoes;
 window.fecharNotificacoes = fecharNotificacoes;
+window.abrirMenuNotificacoesSeguro = abrirMenuNotificacoesSeguro;
+window.carregarListaNotificacoes = carregarListaNotificacoes;
+window.carregarNotificacoes = carregarNotificacoes;
+window.atualizarBadgeUnificado = atualizarBadgeUnificado;
+window.toggleUserMenu = toggleUserMenu;
 
 window.excluirInscricao = excluirInscricao;
 window.carregarInscricoes = carregarInscricoes;
 window.carregarTutores = carregarTutores;
 window.carregarCandidatos = carregarCandidatos;
+window.carregarClubes = carregarClubes;
+window.carregarEstatisticas = carregarEstatisticas;
 window.carregarResultadosEleicao = carregarResultadosEleicao;
 window.atualizarConfiguracao = atualizarConfiguracao;
 window.abrirModalQRCode = abrirModalQRCode;
@@ -3009,14 +3036,13 @@ window.imprimirQRCode = imprimirQRCode;
 window.copiarLinkDoQR = copiarLinkDoQR;
 window.copiarLinkPublico = copiarLinkPublico;
 window.logout = logout;
-window.copiarLinkPublico = copiarLinkPublico;
-window.logout = logout;
-// ============================================
-// EXPORTAR FUNÇÕES GLOBALMENTE
-// ============================================
+window.mostrarToast = mostrarToast;
+
 window.exportarPDFDashboard = exportarPDFDashboard;
 window.exportarPDFClubes = exportarPDFClubes;
 window.exportarPDFInscricoes = exportarPDFInscricoes;
 window.exportarPDFTutores = exportarPDFTutores;
 window.exportarPDFCandidatos = exportarPDFCandidatos;
 window.exportarPDFEleicao = exportarPDFEleicao;
+
+console.log('✅ [protagonismo.js] Todas as funções exportadas para window');
