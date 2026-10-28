@@ -43683,7 +43683,9 @@ class AdminPanel {
                 'autorizacao_visitas': 'fa-map-marked-alt',
                 'gestao_professores_setor_pedagogico': 'fa-chalkboard-teacher',
                 'aee_setor_pedagogico': 'fa-universal-access',
-                'calendario_setor_pedagogico': 'fa-calendar-alt'
+                'calendario_setor_pedagogico': 'fa-calendar-alt',
+                // 🆕 NOVO MÓDULO
+                'protocolo_provas_setor_pedagogico': 'fa-file-signature'
             };
             return icones[modulo] || 'fa-key';
         };
@@ -43697,7 +43699,9 @@ class AdminPanel {
                 'autorizacao_visitas': 'linear-gradient(135deg, #667eea, #764ba2)',
                 'gestao_professores_setor_pedagogico': 'linear-gradient(135deg, #f59e0b, #d97706)',
                 'aee_setor_pedagogico': 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                'calendario_setor_pedagogico': 'linear-gradient(135deg, #8b5cf6, #7c3aed)'
+                'calendario_setor_pedagogico': 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+                // 🆕 NOVO MÓDULO
+                'protocolo_provas_setor_pedagogico': 'linear-gradient(135deg, #1e3c72, #2a5298)'
             };
             return cores[modulo] || 'linear-gradient(135deg, #8b5cf6, #7c3aed)';
         };

@@ -60,6 +60,11 @@
                 <i class="fas fa-redo"></i> 2ª Chamada
             </a>
 
+            <!-- 🆕 PROTOCOLO DE PROVAS -->
+            <a href="#" class="nav-link" data-section="protocolo-provas" id="navProtocoloProvas" style="display: none;">
+                <i class="fas fa-file-signature"></i> Protocolo de Provas
+            </a>
+
             <!-- REMOVIDO O FUNDO ROXO INLINE -->
             <a href="#" class="nav-link"
                onclick="event.preventDefault(); setorPedagogico.fecharMenuLateral(); setTimeout(() => setorPedagogico.abrirModalUploadAdaptarDocumento(), 300);">
@@ -244,6 +249,7 @@
     <script src="js/draggable.js"></script>
     <script src="js/chatbot-frontend.js"></script>
     <script src="/js/core-security.js"></script>
+    <script src="js/protocolo-provas-module.js"></script>
 
     <nav class="bottom-nav-sp" id="bottomNavSp">
         <button class="nav-item-sp active" data-section="boas-vindas" onclick="setorPedagogico.navigateTo('boas-vindas'); setorPedagogico.updateBottomNav('boas-vindas');">

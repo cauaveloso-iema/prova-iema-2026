@@ -24,7 +24,8 @@ const SessaoAssinaturaSchema = new mongoose.Schema({
             'supervisao',
             'supervisao_participante',
             'biblioteca',
-            'tablet'  // 🆕 NOVO TIPO
+            'tablet',
+            'protocolo_prova'  // 🆕 NOVO TIPO ADICIONADO AQUI
         ],
         required: true 
     },

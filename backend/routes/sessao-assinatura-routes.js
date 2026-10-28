@@ -56,7 +56,8 @@ const TIPOS_VALIDOS = [
     'autorizacao', 'justificativa', 'segunda_chamada', 'atraso', 'atraso_aluno',
     'uniforme', 'atendimento', 'atendimento_aluno',
     'psicologia', 'assistente_social', 'supervisao', 'supervisao_participante', 'biblioteca',
-    'tablet'  // 🆕 NOVO
+    'tablet',
+    'protocolo_prova'  // 🆕 NOVO TIPO ADICIONADO AQUI
 ];
 
 // ============================================
@@ -67,7 +68,7 @@ router.get('/health', (req, res) => {
         success: true, 
         status: 'online', 
         service: 'Sessões de Assinatura (QR Code)',
-        versao: '2.3-tablets',
+        versao: '2.4-protocolo',
         tiposSuportados: TIPOS_VALIDOS,
         timestamp: new Date().toISOString()
     });

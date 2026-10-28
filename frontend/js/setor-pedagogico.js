@@ -88,6 +88,7 @@ class SetorPedagogico {
         this.temPermissaoVisitas = false;
         this.temPermissaoGestaoProfessores = false;
         this.temPermissaoAEE = false;
+        this.temPermissaoProtocoloProvas = false;
 
         this.estadoSegundaChamada = {
             currentAluno: null,
@@ -169,6 +170,7 @@ class SetorPedagogico {
         if (modoAssinatura) {
             console.log('📱 Modo assinatura detectado:', modoAssinatura);
 
+            // Tenta carregar os dados do usuário se o token existir, mas NÃO obriga.
             try {
                 const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
                 if (userData.nome) this.currentUser = userData;
@@ -184,12 +186,13 @@ class SetorPedagogico {
                 console.warn('Erro ao carregar usuário no modo assinatura:', e);
             }
 
+            // Carrega a tela de assinatura e PARA a execução aqui.
             await this.mostrarTelaAssinatura(modoAssinatura);
             return;
         }
 
         // ============================================
-        // INIT NORMAL
+        // INIT NORMAL (exige login)
         // ============================================
         if (!this.token) {
             window.location.href = '/login.html';
@@ -241,6 +244,11 @@ class SetorPedagogico {
                         metodo: () => this.loadAEE(),
                         permissao: () => this.temPermissaoAEE,
                         nome: 'AEE'
+                    },
+                    'protocolo-provas': {
+                        metodo: () => this.loadProtocoloProvas(),
+                        permissao: () => this.temPermissaoProtocoloProvas,
+                        nome: 'Protocolo de Provas'
                     }
                 };
 
@@ -256,6 +264,7 @@ class SetorPedagogico {
                             if (moduloForcado === 'segunda-chamada') this.temPermissao2Chamada = true;
                             if (moduloForcado === 'visitas') this.temPermissaoVisitas = true;
                             if (moduloForcado === 'aee') this.temPermissaoAEE = true;
+                            if (moduloForcado === 'protocolo-provas') this.temPermissaoProtocoloProvas = true;
                         }
 
                         console.log(`✅ Abrindo módulo: ${modulo.nome}`);
@@ -408,6 +417,25 @@ class SetorPedagogico {
             } catch (error) {
                 console.error('❌ Erro ao verificar permissão AEE:', error);
                 this.temPermissaoAEE = false;
+            }
+            // 6. 🆕 PROTOCOLO DE PROVAS
+            try {
+                const responseProt = await fetch('/api/admin/permissoes-modulos/verificar/protocolo_provas_setor_pedagogico', {
+                    headers: { 'Authorization': `Bearer ${this.token}` }
+                });
+                const dataProt = await responseProt.json();
+
+                if (dataProt.success && dataProt.temPermissao) {
+                    const navItem = document.getElementById('navProtocoloProvas');
+                    if (navItem) navItem.style.display = 'flex';
+                    this.temPermissaoProtocoloProvas = true;
+                    console.log('✅ Permissão Protocolo de Provas concedida');
+                } else {
+                    this.temPermissaoProtocoloProvas = false;
+                }
+            } catch (error) {
+                console.error('❌ Erro ao verificar permissão Protocolo de Provas:', error);
+                this.temPermissaoProtocoloProvas = false;
             }
 
         } catch (error) {
@@ -592,6 +620,10 @@ class SetorPedagogico {
             this.showToast('❌ Você não tem permissão para acessar AEE', 'error');
             return;
         }
+        if (section === 'protocolo-provas' && !this.temPermissaoProtocoloProvas) {
+            this.showToast('❌ Você não tem permissão para acessar Protocolo de Provas', 'error');
+            return;
+        }
 
         // Atualizar nav ativo
         document.querySelectorAll('.nav-link[data-section]').forEach(link => link.classList.remove('active'));
@@ -619,7 +651,8 @@ class SetorPedagogico {
             'atrasos': 'Atrasos de Professores',
             'visitas': 'Autorização de Visitas',
             'gestao-professores': 'Gestão de Professores',
-            'aee': 'AEE - Atendimento Educacional Especializado'
+            'aee': 'AEE - Atendimento Educacional Especializado',
+            'protocolo-provas': 'Protocolo de Provas'
         };
 
         const pageTitle = document.getElementById('pageTitle');
@@ -644,6 +677,8 @@ class SetorPedagogico {
             this.loadGestaoProfessores();
         } else if (section === 'aee') {
             this.loadAEE();
+        } else if (section === 'protocolo-provas') {
+            this.loadProtocoloProvas();
         }
     }
 
@@ -742,6 +777,16 @@ class SetorPedagogico {
                 descricao: 'Registre e gerencie as segundas chamadas dos alunos',
                 icone: 'fa-redo',
                 cor: 'linear-gradient(135deg, #06b6d4, #0891b2)'
+            });
+        }
+        if (this.temPermissaoProtocoloProvas) {
+            modulos.push({
+                section: 'protocolo-provas',
+                titulo: 'Protocolo de Provas',
+                subtitulo: 'Recebimento de provas',
+                descricao: 'Registre o recebimento das provas dos professores',
+                icone: 'fa-file-signature',
+                cor: 'linear-gradient(135deg, #1e3c72, #2a5298)'
             });
         }
 
@@ -1153,6 +1198,40 @@ class SetorPedagogico {
                 <div class="alert alert-danger m-4">
                     <i class="fas fa-exclamation-triangle"></i>
                     <strong>Erro:</strong> Módulo AEE não carregado.
+                    <br><small>Recarregue a página (F5) e tente novamente.</small>
+                </div>
+            `;
+        }
+    }
+
+    // ============================================================================
+    // 🔥 PROTOCOLO DE PROVAS
+    // ============================================================================
+    async loadProtocoloProvas() {
+        const content = document.getElementById('content');
+        if (!content) return;
+
+        if (!this.temPermissaoProtocoloProvas) {
+            content.innerHTML = `
+                <div class="alert alert-warning m-4">
+                    <i class="fas fa-lock"></i>
+                    <strong>Acesso Restrito</strong>
+                    <p>Você não tem permissão para acessar este módulo.</p>
+                </div>
+            `;
+            return;
+        }
+
+        console.log('📋 Carregando módulo de Protocolo de Provas...');
+
+        if (typeof window.ProtocoloProvasModule !== 'undefined') {
+            await window.ProtocoloProvasModule.init();
+        } else {
+            console.warn('⚠️ ProtocoloProvasModule não encontrado');
+            content.innerHTML = `
+                <div class="alert alert-danger m-4">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Erro:</strong> Módulo de Protocolo de Provas não carregado.
                     <br><small>Recarregue a página (F5) e tente novamente.</small>
                 </div>
             `;
@@ -3723,9 +3802,8 @@ class SetorPedagogico {
         `;
 
         try {
-            const response = await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
-                headers: { 'Authorization': `Bearer ${this.token}` }
-            });
+            // 🔥 CORREÇÃO: Removido o header Authorization, pois a rota é pública
+            const response = await fetch(`/api/sessoes-assinatura/${sessaoId}`);
             const data = await response.json();
 
             if (!data.success) {
@@ -3759,56 +3837,92 @@ class SetorPedagogico {
             }
 
             const d = data.sessao.dadosAtendimento || {};
+            
+            // 🔥 CORREÇÃO: Adicionado o tipo 'protocolo_prova'
             const tipoLabel = {
                 'autorizacao': 'Autorização',
                 'justificativa': 'Justificativa',
-                'segunda_chamada': '2ª Chamada'
+                'segunda_chamada': '2ª Chamada',
+                'protocolo_prova': 'Protocolo de Provas'
             }[data.sessao.tipo] || data.sessao.tipo;
+
+            // 🔥 CORREÇÃO: Condicional para exibir dados de Aluno ou de Protocolo
+            let infoHtml = '';
+            
+            if (data.sessao.tipo === 'protocolo_prova') {
+                // Layout específico para Protocolo de Provas (Professor / Turmas)
+                infoHtml = `
+                    <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div style="grid-column: 1 / -1;">
+                            <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Professor</span>
+                            <span style="font-size: 15px; color: #1e293b; font-weight: 600;">${this.escapeHtml(d.professorNome || '-')}</span>
+                        </div>
+                        <div>
+                            <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Data</span>
+                            <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.dataFormatada || '-')}</span>
+                        </div>
+                        <div>
+                            <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Tipo / Período</span>
+                            <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.tipoProvaLabel || '-')} • ${this.escapeHtml(d.periodoFormatado || '-')}</span>
+                        </div>
+                        <div style="grid-column: 1 / -1;">
+                            <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Turmas / Quantidade</span>
+                            <span style="font-size: 14px; color: #1e293b; font-weight: 500;">
+                                ${(d.turmas || []).map(t => `Turma ${t.turma} (${t.quantidadeProvas} provas)`).join(', ')}
+                            </span>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Layout antigo para Aluno (Autorização, 2ª Chamada, etc)
+                infoHtml = `
+                    <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Aluno</span>
+                            <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.alunoNome || '-')}</span>
+                        </div>
+                        <div>
+                            <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Turma</span>
+                            <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.alunoTurma || '-')}</span>
+                        </div>
+                        <div>
+                            <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Motivo</span>
+                            <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.motivoLabel || '-')}</span>
+                        </div>
+                        ${d.periodoFaltaFormatado ? `
+                            <div>
+                                <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Período da Falta</span>
+                                <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.periodoFaltaFormatado)}</span>
+                            </div>
+                        ` : ''}
+                        ${d.tipoProvaPerdidaFormatado ? `
+                            <div>
+                                <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Tipo de Prova</span>
+                                <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.tipoProvaPerdidaFormatado)}</span>
+                            </div>
+                        ` : ''}
+                        ${d.periodoProva ? `
+                            <div>
+                                <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Período da Prova</span>
+                                <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.periodoProva)}</span>
+                            </div>
+                        ` : ''}
+                        ${d.responsavelNome ? `
+                            <div style="grid-column: 1 / -1;">
+                                <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Responsável</span>
+                                <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.responsavelNome)}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
 
             document.getElementById('telaAssinaturaInfo').innerHTML = `
                 <div style="border-left: 4px solid #1e3c72; padding-left: 14px;">
                     <h2 style="margin: 0 0 4px; font-size: 18px; color: #1e3c72;">${tipoLabel}</h2>
                     <p style="margin: 0; color: #64748b; font-size: 13px;">Confirme os dados e assine abaixo</p>
                 </div>
-
-                <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                    <div>
-                        <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Aluno</span>
-                        <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.alunoNome || '-')}</span>
-                    </div>
-                    <div>
-                        <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Turma</span>
-                        <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.alunoTurma || '-')}</span>
-                    </div>
-                    <div>
-                        <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Motivo</span>
-                        <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.motivoLabel || '-')}</span>
-                    </div>
-                    ${d.periodoFaltaFormatado ? `
-                        <div>
-                            <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Período da Falta</span>
-                            <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.periodoFaltaFormatado)}</span>
-                        </div>
-                    ` : ''}
-                    ${d.tipoProvaPerdidaFormatado ? `
-                        <div>
-                            <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Tipo de Prova</span>
-                            <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.tipoProvaPerdidaFormatado)}</span>
-                        </div>
-                    ` : ''}
-                    ${d.periodoProva ? `
-                        <div>
-                            <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Período da Prova</span>
-                            <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.periodoProva)}</span>
-                        </div>
-                    ` : ''}
-                    ${d.responsavelNome ? `
-                        <div style="grid-column: 1 / -1;">
-                            <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Responsável</span>
-                            <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.responsavelNome)}</span>
-                        </div>
-                    ` : ''}
-                </div>
+                ${infoHtml}
             `;
 
             document.getElementById('telaAssinaturaArea').style.display = 'block';
@@ -4436,7 +4550,7 @@ class SetorPedagogico {
     gerarHTMLRelatorio2Chamada(data) {
         const tipo = data.aluno ? 'aluno' : (data.turma ? 'turma' : 'geral');
         const logoIema = '/uploads/logo-iema.png';
-        const carimbo = '/icons/assinatura_gestao.ico';
+        const carimbo = '/icons/assinatura_gpeda.ico';
         const dataGeracao = new Date().toLocaleString('pt-BR');
 
         let assinaturaDigital = null;

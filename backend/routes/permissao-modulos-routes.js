@@ -97,6 +97,10 @@ const MODULOS_DISPONIVEIS = {
     'calendario_setor_pedagogico': {
         nomeAmigavel: 'Calendário Acadêmico',
         descricao: 'Permite que usuários autorizados (Setor Pedagógico, Gestão Geral, etc) criem e editem eventos no calendário'
+    },
+    'protocolo_provas_setor_pedagogico': {
+        nomeAmigavel: 'Protocolo de Provas - Setor Pedagógico',
+        descricao: 'Permite registrar o recebimento de provas dos professores'
     }
 };
 
