@@ -9,6 +9,7 @@ const jwt = require('jsonwebtoken');
 function getUser() { return require('../models/User'); }
 function getAutorizacao() { return require('../models/Autorizacao'); }
 function getSessaoAssinatura() { return require('../models/SessaoAssinatura'); }
+function getAtraso() { return require('../models/Atraso'); }
 
 // ============================================
 // HELPERS DE DATA (BRASIL)
@@ -25,15 +26,21 @@ function getDataLocalISO(dateObj) {
         String(d.getMonth() + 1).padStart(2, '0') + '-' +
         String(d.getDate()).padStart(2, '0');
 }
-function getPeriodoFaltaFormatado(doc) {
-    if (!doc || !doc.periodoFaltaInicio) return null;
-    const ini = new Date(doc.periodoFaltaInicio);
-    const fim = doc.periodoFaltaFim ? new Date(doc.periodoFaltaFim) : ini;
+function formatarPeriodo(inicio, fim) {
+    if (!inicio) return null;
+    const ini = new Date(inicio);
+    const f = fim ? new Date(fim) : ini;
     const iniDia = new Date(ini.getFullYear(), ini.getMonth(), ini.getDate());
-    const fimDia = new Date(fim.getFullYear(), fim.getMonth(), fim.getDate());
+    const fimDia = new Date(f.getFullYear(), f.getMonth(), f.getDate());
     const fmt = (d) => d.toLocaleDateString('pt-BR');
     if (iniDia.getTime() === fimDia.getTime()) return fmt(iniDia);
     return `${fmt(iniDia)} a ${fmt(fimDia)}`;
+}
+function getPeriodoFaltaFormatado(doc) {
+    return formatarPeriodo(doc?.periodoFaltaInicio, doc?.periodoFaltaFim);
+}
+function getUniformePeriodoFormatado(doc) {
+    return formatarPeriodo(doc?.uniformePeriodoInicio, doc?.uniformePeriodoFim);
 }
 function getEntradaCompleta(doc) {
     if (!doc) return null;
@@ -54,6 +61,9 @@ function getSaidaCompleta(doc) {
     if (temData) partes.push(new Date(doc.dataSaida).toLocaleDateString('pt-BR'));
     if (temHora) partes.push(temData ? `às ${doc.horarioSaida}` : doc.horarioSaida);
     return partes.join(' ');
+}
+function escapeRegex(str) {
+    return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // ============================================
@@ -160,14 +170,21 @@ router.get('/aluno/:id', authenticateToken, verificarRecepcao, async (req, res) 
 });
 
 // ============================================
-// 5. VERIFICAR AUTORIZAÇÃO
+// 5. VERIFICAR AUTORIZAÇÃO (AGRUPADA + HISTÓRICO COM FILTROS)
 // ============================================
 router.get('/verificar/:alunoId', authenticateToken, verificarRecepcao, async (req, res) => {
     try {
         const Autorizacao = getAutorizacao();
         const User = getUser();
         const { alunoId } = req.params;
-        const { data } = req.query;
+        const {
+            data,
+            // 🆕 Filtros do histórico de atrasos
+            atrasoMotivo,
+            atrasoBusca,
+            atrasoDataInicio,
+            atrasoDataFim
+        } = req.query;
 
         if (!alunoId.match(/^[a-f0-9]{24}$/i)) {
             return res.status(400).json({ success: false, error: 'ID do aluno inválido' });
@@ -185,8 +202,8 @@ router.get('/verificar/:alunoId', authenticateToken, verificarRecepcao, async (r
 
         const autorizacoes = await Autorizacao.find({
             alunoId: alunoId,
-            tipo: 'autorizacao',
             ativo: true,
+            tipo: { $in: ['autorizacao', 'uniforme'] },
             $or: [
                 { data: { $gte: inicio, $lte: fim } },
                 { periodoFaltaInicio: { $lte: fim }, periodoFaltaFim: { $gte: inicio } },
@@ -196,11 +213,74 @@ router.get('/verificar/:alunoId', authenticateToken, verificarRecepcao, async (r
                         { periodoFaltaFim: null },
                         { periodoFaltaFim: { $exists: false } }
                     ]
+                },
+                { uniformePeriodoInicio: { $lte: fim }, uniformePeriodoFim: { $gte: inicio } },
+                {
+                    uniformePeriodoInicio: { $gte: inicio, $lte: fim },
+                    $or: [
+                        { uniformePeriodoFim: null },
+                        { uniformePeriodoFim: { $exists: false } }
+                    ]
                 }
             ]
         }).sort({ data: -1 });
 
-        const autorizacoesFormatadas = autorizacoes.map(a => ({
+        // ============================================
+        // 🆕 HISTÓRICO DE ATRASOS COM FILTROS
+        // ============================================
+        let atrasos = [];
+        let totalAtrasosSemFiltro = 0;
+        try {
+            const Atraso = getAtraso();
+
+            // Query base (sem filtros) para contar total
+            const queryBase = { alunoId: alunoId, ativo: { $ne: false } };
+            totalAtrasosSemFiltro = await Atraso.countDocuments(queryBase);
+
+            // Aplica filtros
+            const query = { ...queryBase };
+
+            if (atrasoMotivo && atrasoMotivo !== 'todos') {
+                query.$or = [
+                    { motivos: atrasoMotivo },
+                    { motivo: atrasoMotivo }
+                ];
+            }
+
+            if (atrasoBusca && atrasoBusca.trim()) {
+                const regex = new RegExp(escapeRegex(atrasoBusca.trim()), 'i');
+                const buscaOr = [
+                    { descricao: regex },
+                    { observacoes: regex }
+                ];
+                // Combina com $or existente (motivo) usando $and
+                if (query.$or) {
+                    query.$and = [
+                        { $or: query.$or },
+                        { $or: buscaOr }
+                    ];
+                    delete query.$or;
+                } else {
+                    query.$or = buscaOr;
+                }
+            }
+
+            if (atrasoDataInicio || atrasoDataFim) {
+                query.dataHora = {};
+                if (atrasoDataInicio) query.dataHora.$gte = inicioDoDiaBrasil(atrasoDataInicio);
+                if (atrasoDataFim) query.dataHora.$lte = fimDoDiaBrasil(atrasoDataFim);
+            }
+
+            atrasos = await Atraso.find(query)
+                .sort({ dataHora: -1 })
+                .limit(100)
+                .lean();
+        } catch (err) {
+            console.warn('⚠️ Erro ao buscar atrasos:', err.message);
+            atrasos = [];
+        }
+
+        const formatarAutorizacao = (a) => ({
             id: a._id,
             tipo: a.tipo,
             data: a.data,
@@ -208,6 +288,9 @@ router.get('/verificar/:alunoId', authenticateToken, verificarRecepcao, async (r
             periodoFaltaInicio: a.periodoFaltaInicio,
             periodoFaltaFim: a.periodoFaltaFim,
             periodoFaltaFormatado: getPeriodoFaltaFormatado(a),
+            uniformePeriodoInicio: a.uniformePeriodoInicio || null,
+            uniformePeriodoFim: a.uniformePeriodoFim || null,
+            uniformePeriodoFormatado: getUniformePeriodoFormatado(a),
             dataEntrada: a.dataEntrada,
             dataSaida: a.dataSaida,
             dataEntradaFormatada: a.dataEntrada ? new Date(a.dataEntrada).toLocaleDateString('pt-BR') : null,
@@ -230,7 +313,51 @@ router.get('/verificar/:alunoId', authenticateToken, verificarRecepcao, async (r
             registradoPorNome: a.registradoPorNome,
             createdAt: a.createdAt,
             createdAtFormatado: new Date(a.createdAt).toLocaleString('pt-BR')
-        }));
+        });
+
+        const formatadas = autorizacoes.map(formatarAutorizacao);
+
+        const autorizacoesArr = formatadas.filter(a => a.tipo === 'autorizacao');
+        const uniformesArr = formatadas.filter(a => a.tipo === 'uniforme');
+
+        const motivosLabels = {
+            onibus: 'Ônibus', transito: 'Trânsito',
+            problemas_pessoais: 'Problemas Pessoais', fardamento: 'Fardamento', outros: 'Outros'
+        };
+        const atrasosFormatados = (atrasos || []).map(a => {
+            const motivosArr = Array.isArray(a.motivos) && a.motivos.length > 0
+                ? a.motivos
+                : (a.motivo ? [a.motivo] : []);
+            return {
+                id: a._id,
+                dataHora: a.dataHora,
+                dataHoraFormatada: a.dataHora ? new Date(a.dataHora).toLocaleString('pt-BR') : '-',
+                dataFormatada: a.dataHora ? new Date(a.dataHora).toLocaleDateString('pt-BR') : '-',
+                horaFormatada: a.dataHora ? new Date(a.dataHora).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '-',
+                motivos: motivosArr,
+                motivosLabel: motivosArr.map(m => motivosLabels[m] || m).join(' + '),
+                descricao: a.descricao || '',
+                observacoes: a.observacoes || '',
+                temAssinatura: !!a.temAssinatura,
+                registradoPor: a.registradoPor || a.registradoPorNome || '-'
+            };
+        });
+
+        // Contagem por motivo (para os chips de filtro)
+        let contagemPorMotivo = {};
+        try {
+            const Atraso = getAtraso();
+            const agg = await Atraso.aggregate([
+                { $match: { alunoId: new (require('mongoose').Types.ObjectId)(alunoId), ativo: { $ne: false } } },
+                { $unwind: { path: '$motivos', preserveNullAndEmptyArrays: true } },
+                { $group: { _id: { $ifNull: ['$motivos', '$motivo'] }, count: { $sum: 1 } } }
+            ]);
+            agg.forEach(item => {
+                if (item._id) contagemPorMotivo[item._id] = item.count;
+            });
+        } catch (err) {
+            console.warn('Erro na contagem por motivo:', err.message);
+        }
 
         res.json({
             success: true,
@@ -240,9 +367,21 @@ router.get('/verificar/:alunoId', authenticateToken, verificarRecepcao, async (r
             },
             dataConsulta: dataBusca,
             dataConsultaFormatada: new Date(dataBusca + 'T12:00:00').toLocaleDateString('pt-BR'),
-            temAutorizacao: autorizacoesFormatadas.length > 0,
-            totalAutorizacoes: autorizacoesFormatadas.length,
-            autorizacoes: autorizacoesFormatadas
+            temAutorizacao: formatadas.length > 0,
+            totalAutorizacoes: formatadas.length,
+            agrupado: {
+                autorizacoes: autorizacoesArr,
+                uniforme: uniformesArr
+            },
+            totalPorModulo: {
+                autorizacoes: autorizacoesArr.length,
+                uniforme: uniformesArr.length
+            },
+            autorizacoes: formatadas,
+            totalAtrasos: totalAtrasosSemFiltro,
+            atrasosFiltrados: atrasosFormatados.length,
+            atrasos: atrasosFormatados,
+            contagemPorMotivo
         });
     } catch (error) {
         console.error('Erro ao verificar autorização:', error);
@@ -278,6 +417,9 @@ router.get('/autorizacao/:id', authenticateToken, verificarRecepcao, async (req,
                 periodoFaltaInicio: a.periodoFaltaInicio,
                 periodoFaltaFim: a.periodoFaltaFim,
                 periodoFaltaFormatado: getPeriodoFaltaFormatado(a),
+                uniformePeriodoInicio: a.uniformePeriodoInicio || null,
+                uniformePeriodoFim: a.uniformePeriodoFim || null,
+                uniformePeriodoFormatado: getUniformePeriodoFormatado(a),
                 dataEntrada: a.dataEntrada,
                 dataSaida: a.dataSaida,
                 dataEntradaFormatada: a.dataEntrada ? new Date(a.dataEntrada).toLocaleDateString('pt-BR') : null,
@@ -505,12 +647,19 @@ router.delete('/sessoes-assinatura/:sessaoId', authenticateToken, verificarRecep
 });
 
 // ============================================
-// 7. LISTAR AUTORIZAÇÕES DO DIA
+// 7. LISTAR AUTORIZAÇÕES DO DIA (COM FILTROS)
 // ============================================
 router.get('/autorizacoes-do-dia', authenticateToken, verificarRecepcao, async (req, res) => {
     try {
         const Autorizacao = getAutorizacao();
-        const { data, turma, page = 1, limit = 10 } = req.query;
+        const {
+            data,
+            turma,
+            tipo,        // 🆕 'todos' | 'autorizacao' | 'uniforme'
+            busca,       // 🆕 nome ou matrícula
+            page = 1,
+            limit = 10
+        } = req.query;
 
         const dataBusca = data || getDataLocalISO();
         const inicio = inicioDoDiaBrasil(dataBusca);
@@ -520,16 +669,41 @@ router.get('/autorizacoes-do-dia', authenticateToken, verificarRecepcao, async (
         const limitNum = Math.min(100, Math.max(5, parseInt(limit) || 10));
         const skip = (pageNum - 1) * limitNum;
 
+        // Filtro de tipo
+        let tipos = ['autorizacao', 'uniforme'];
+        if (tipo && tipo !== 'todos') {
+            tipos = [tipo];
+        }
+
         let query = {
-            tipo: 'autorizacao',
             ativo: true,
+            tipo: { $in: tipos },
             $or: [
                 { data: { $gte: inicio, $lte: fim } },
-                { periodoFaltaInicio: { $lte: fim }, periodoFaltaFim: { $gte: inicio } }
+                { periodoFaltaInicio: { $lte: fim }, periodoFaltaFim: { $gte: inicio } },
+                { uniformePeriodoInicio: { $lte: fim }, uniformePeriodoFim: { $gte: inicio } }
             ]
         };
 
         if (turma && turma !== 'todas') query.alunoTurma = turma;
+
+        // 🆕 Busca por nome ou matrícula
+        if (busca && busca.trim()) {
+            const regex = new RegExp(escapeRegex(busca.trim()), 'i');
+            const buscaOr = [
+                { alunoNome: regex },
+                { alunoMatricula: regex }
+            ];
+            if (query.$or) {
+                query.$and = [
+                    { $or: query.$or },
+                    { $or: buscaOr }
+                ];
+                delete query.$or;
+            } else {
+                query.$or = buscaOr;
+            }
+        }
 
         const [total, autorizacoes] = await Promise.all([
             Autorizacao.countDocuments(query),
@@ -552,6 +726,7 @@ router.get('/autorizacoes-do-dia', authenticateToken, verificarRecepcao, async (
             totalPages,
             autorizacoes: autorizacoes.map(a => ({
                 id: a._id,
+                tipo: a.tipo,
                 alunoNome: a.alunoNome,
                 alunoMatricula: a.alunoMatricula,
                 alunoTurma: a.alunoTurma,
@@ -559,6 +734,8 @@ router.get('/autorizacoes-do-dia', authenticateToken, verificarRecepcao, async (
                 saidaCompleta: getSaidaCompleta(a),
                 horarioEntrada: a.horarioEntrada,
                 horarioSaida: a.horarioSaida,
+                periodoFaltaFormatado: getPeriodoFaltaFormatado(a),
+                uniformePeriodoFormatado: getUniformePeriodoFormatado(a),
                 motivoLabel: Autorizacao.getMotivoLabel(a.motivo, a.tipo),
                 temAssinatura: a.temAssinatura
             }))
@@ -582,15 +759,16 @@ router.get('/estatisticas-dia', authenticateToken, verificarRecepcao, async (req
         const fim = fimDoDiaBrasil(dataBusca);
 
         const matchStage = {
-            tipo: 'autorizacao',
             ativo: true,
+            tipo: { $in: ['autorizacao', 'uniforme'] },
             $or: [
                 { data: { $gte: inicio, $lte: fim } },
-                { periodoFaltaInicio: { $lte: fim }, periodoFaltaFim: { $gte: inicio } }
+                { periodoFaltaInicio: { $lte: fim }, periodoFaltaFim: { $gte: inicio } },
+                { uniformePeriodoInicio: { $lte: fim }, uniformePeriodoFim: { $gte: inicio } }
             ]
         };
 
-        const [total, comAssinatura, porTurma, porMotivo] = await Promise.all([
+        const [total, comAssinatura, porTurma, porMotivo, porTipo] = await Promise.all([
             Autorizacao.countDocuments(matchStage),
             Autorizacao.countDocuments({ ...matchStage, temAssinatura: true }),
             Autorizacao.aggregate([
@@ -602,6 +780,10 @@ router.get('/estatisticas-dia', authenticateToken, verificarRecepcao, async (req
                 { $match: matchStage },
                 { $group: { _id: '$motivo', count: { $sum: 1 } } },
                 { $sort: { count: -1 } }
+            ]),
+            Autorizacao.aggregate([
+                { $match: matchStage },
+                { $group: { _id: '$tipo', count: { $sum: 1 } } }
             ])
         ]);
 
@@ -611,6 +793,7 @@ router.get('/estatisticas-dia', authenticateToken, verificarRecepcao, async (req
             dataFormatada: new Date(dataBusca + 'T12:00:00').toLocaleDateString('pt-BR'),
             estatisticas: { total, comAssinatura, semAssinatura: total - comAssinatura },
             porTurma: porTurma.map(t => ({ turma: t._id || 'Sem turma', count: t.count })),
+            porTipo: porTipo.map(t => ({ tipo: t._id, count: t.count })),
             porMotivo: porMotivo.map(m => ({
                 motivo: m._id,
                 label: Autorizacao.getMotivoLabel(m._id, 'autorizacao'),

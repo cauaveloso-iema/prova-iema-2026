@@ -1,6 +1,6 @@
 // ============================================
 // RECEPÇÃO - VERIFICAÇÃO DE AUTORIZAÇÕES
-// + ASSINATURA VIA QR CODE (sessão) + CANVAS (fallback)
+// + FILTROS DE PESQUISA (RESUMO + HISTÓRICO)
 // ============================================
 
 let token = localStorage.getItem('auth_token');
@@ -18,6 +18,14 @@ let totalPaginasResumoDia = 0;
 let totalRegistrosResumoDia = 0;
 const itensPorPaginaResumoDia = 10;
 
+// 🆕 Estado dos filtros do histórico de atrasos
+const filtrosAtrasos = {
+    motivo: 'todos',
+    busca: '',
+    dataInicio: '',
+    dataFim: ''
+};
+
 // ============================================
 // CACHES GLOBAIS DE NOTIFICAÇÕES
 // ============================================
@@ -25,7 +33,7 @@ window.__notificacoesCache = window.__notificacoesCache || [];
 window.__lembretesCache    = window.__lembretesCache    || [];
 
 // ============================================
-// 🔥 ESTADO DO MODAL DE ASSINATURA
+// ESTADO DO MODAL DE ASSINATURA
 // ============================================
 const estadoAssinatura = {
     autorizacaoId: null,
@@ -81,6 +89,10 @@ function gerarUUID() {
     });
 }
 
+function escapeRegex(str) {
+    return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 // ============================================
 // INICIALIZAÇÃO
 // ============================================
@@ -116,10 +128,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     safeGet('filtroTurmaManual')?.addEventListener('change', () => carregarAlunosPorTurma());
     safeGet('filtroBuscaManual')?.addEventListener('input', () => filtrarAlunosManual());
     safeGet('dataVerificacao')?.addEventListener('change', onDataChange);
+    
+    // 🆕 Filtros do Resumo do Dia
     safeGet('filtroResumoTurma')?.addEventListener('change', () => {
         paginaAtualResumoDia = 1;
         carregarResumoDia();
     });
+    safeGet('filtroResumoTipo')?.addEventListener('change', () => {
+        paginaAtualResumoDia = 1;
+        carregarResumoDia();
+    });
+    let __timeoutBuscaResumo = null;
+    safeGet('filtroResumoBusca')?.addEventListener('input', () => {
+        clearTimeout(__timeoutBuscaResumo);
+        __timeoutBuscaResumo = setTimeout(() => {
+            paginaAtualResumoDia = 1;
+            carregarResumoDia();
+        }, 400);
+    });
+    safeGet('btnLimparFiltrosResumo')?.addEventListener('click', limparFiltrosResumo);
     
     setTimeout(() => iniciarScannerAutomatico(), 1000);
     carregarResumoDia();
@@ -141,23 +168,15 @@ async function carregarFotoPerfil() {
 }
 
 // ============================================================
-// HEADER DA RECEPÇÃO
+// HEADER
 // ============================================================
-
-// ------------------------------------------------------------
-// 1. RELÓGIO EM TEMPO REAL
-// ------------------------------------------------------------
 function atualizarRelogioRecepcao() {
     const elTempo = document.getElementById('relogioTempoReal');
     const elData = document.getElementById('relogioData');
     if (!elTempo) return;
 
     const agora = new Date();
-    const horas = String(agora.getHours()).padStart(2, '0');
-    const minutos = String(agora.getMinutes()).padStart(2, '0');
-    const segundos = String(agora.getSeconds()).padStart(2, '0');
-
-    elTempo.textContent = `${horas}:${minutos}:${segundos}`;
+    elTempo.textContent = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}:${String(agora.getSeconds()).padStart(2, '0')}`;
 
     if (elData) {
         const dataFormatada = agora.toLocaleDateString('pt-BR', {
@@ -167,9 +186,6 @@ function atualizarRelogioRecepcao() {
     }
 }
 
-// ------------------------------------------------------------
-// 2. MENU DO USUÁRIO (toggle)
-// ------------------------------------------------------------
 function toggleUserMenu(event) {
     if (event) event.stopPropagation();
     const dropdown = document.getElementById('userDropdown');
@@ -186,12 +202,8 @@ function toggleUserMenu(event) {
     }
 }
 
-// ------------------------------------------------------------
-// 3. ABRIR O SINO A PARTIR DO MENU DO USUÁRIO
-// ------------------------------------------------------------
 function abrirMenuNotificacoesSeguro(event) {
     if (event) event.stopPropagation();
-
     const userDropdown = document.getElementById('userDropdown');
     const chevron = document.getElementById('userChevron');
     if (userDropdown) userDropdown.classList.remove('show');
@@ -202,15 +214,9 @@ function abrirMenuNotificacoesSeguro(event) {
         notifDropdown.classList.add('show');
         notifDropdown.style.display = 'block';
     }
-
-    if (typeof carregarTudo === 'function') {
-        carregarTudo();
-    }
+    if (typeof carregarTudo === 'function') carregarTudo();
 }
 
-// ------------------------------------------------------------
-// 4. BADGES UNIFICADOS (avatar + menu + sino)
-// ------------------------------------------------------------
 function atualizarBadgeUnificado() {
     let total = 0;
     try {
@@ -237,9 +243,6 @@ function atualizarBadgeUnificado() {
     }
 }
 
-// ------------------------------------------------------------
-// 5. CARREGAR FOTO DO PERFIL NO AVATAR
-// ------------------------------------------------------------
 async function carregarFotoPerfilRecepcao() {
     try {
         const token = localStorage.getItem('auth_token');
@@ -250,40 +253,28 @@ async function carregarFotoPerfilRecepcao() {
         const data = await response.json();
         if (data.success && data.perfil?.fotoPerfil) {
             const avatar = document.getElementById('userAvatar');
-            if (avatar) {
-                avatar.innerHTML = `<img src="${data.perfil.fotoPerfil}" alt="Foto">`;
-            }
+            if (avatar) avatar.innerHTML = `<img src="${data.perfil.fotoPerfil}" alt="Foto">`;
         }
     } catch (error) {
         console.error('Erro ao carregar foto do perfil:', error);
     }
 }
 
-// ------------------------------------------------------------
-// 6. PREENCHER NOME/ROLE NO TRIGGER
-// ------------------------------------------------------------
 function preencherDadosUsuarioHeader() {
     try {
         const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
         const nameEl = document.getElementById('userName');
         const roleEl = document.getElementById('userRole');
         if (nameEl && userData.nome) nameEl.textContent = userData.nome;
-        if (roleEl) {
-            roleEl.textContent = userData.role === 'super_admin' ? 'Super Admin' : 'Recepção';
-        }
+        if (roleEl) roleEl.textContent = userData.role === 'super_admin' ? 'Super Admin' : 'Recepção';
     } catch (e) {}
 }
 
-// ------------------------------------------------------------
-// 7. BOAS-VINDAS E TURNO NO CARD DE TÍTULO
-// ------------------------------------------------------------
 function atualizarBoasVindasETurnoRecepcao() {
     try {
         const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
         const nomeEl = document.getElementById('headerNomeUsuario');
-        if (nomeEl && userData.nome) {
-            nomeEl.textContent = userData.nome.split(' ')[0];
-        }
+        if (nomeEl && userData.nome) nomeEl.textContent = userData.nome.split(' ')[0];
     } catch (e) {}
 
     const agora = new Date();
@@ -301,14 +292,10 @@ function atualizarBoasVindasETurnoRecepcao() {
 
     const turnoEl = document.getElementById('headerTurno');
     const iconeEl = document.getElementById('headerTurnoIcone');
-
     if (turnoEl) turnoEl.textContent = turno;
     if (iconeEl) iconeEl.className = `fas ${icone} me-1`;
 }
 
-// ------------------------------------------------------------
-// 8. FECHAR DROPDOWNS AO CLICAR FORA
-// ------------------------------------------------------------
 document.addEventListener('click', function (event) {
     const userContainer = document.getElementById('userMenuContainer');
     const userDropdown = document.getElementById('userDropdown');
@@ -322,9 +309,8 @@ document.addEventListener('click', function (event) {
     const containerSino = document.getElementById('containerSinoOriginal');
     if (notifDropdown && notifDropdown.classList.contains('show')) {
         if (containerSino && !containerSino.contains(event.target)) {
-            if (typeof fecharNotificacoes === 'function') {
-                fecharNotificacoes();
-            } else {
+            if (typeof fecharNotificacoes === 'function') fecharNotificacoes();
+            else {
                 notifDropdown.classList.remove('show');
                 notifDropdown.style.display = 'none';
             }
@@ -332,24 +318,18 @@ document.addEventListener('click', function (event) {
     }
 });
 
-// ------------------------------------------------------------
-// 9. INICIALIZAÇÃO DO HEADER
-// ------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', function () {
     atualizarRelogioRecepcao();
     setInterval(atualizarRelogioRecepcao, 1000);
-
     preencherDadosUsuarioHeader();
-
     atualizarBoasVindasETurnoRecepcao();
     setInterval(atualizarBoasVindasETurnoRecepcao, 60000);
-
     carregarFotoPerfilRecepcao();
-
     setTimeout(() => {
         if (typeof carregarTudo === 'function') carregarTudo();
     }, 800);
 });
+
 // ============================================
 // FILTRO DE DATA
 // ============================================
@@ -605,6 +585,7 @@ async function selecionarAluno(alunoId, itemEl) {
     }
     try { await buscarAluno(alunoId); } catch (error) { console.error('Erro:', error); }
 }
+
 // ============================================
 // BUSCAR ALUNO / VERIFICAR
 // ============================================
@@ -625,6 +606,11 @@ async function buscarAluno(alunoId) {
         
         if (data.success && data.aluno) {
             currentAluno = data.aluno;
+            // 🆕 Reseta filtros de atrasos ao trocar de aluno
+            filtrosAtrasos.motivo = 'todos';
+            filtrosAtrasos.busca = '';
+            filtrosAtrasos.dataInicio = '';
+            filtrosAtrasos.dataFim = '';
             await verificarAutorizacao(alunoId);
         } else {
             notificar(data.error || 'Aluno não encontrado');
@@ -643,8 +629,19 @@ async function buscarAluno(alunoId) {
 async function verificarAutorizacao(alunoId) {
     const data = safeGet('dataVerificacao')?.value || getDataLocalISO();
     
+    const params = new URLSearchParams();
+    params.append('data', data);
+    
+    // 🆕 Filtros de atraso
+    if (filtrosAtrasos.motivo && filtrosAtrasos.motivo !== 'todos') {
+        params.append('atrasoMotivo', filtrosAtrasos.motivo);
+    }
+    if (filtrosAtrasos.busca) params.append('atrasoBusca', filtrosAtrasos.busca);
+    if (filtrosAtrasos.dataInicio) params.append('atrasoDataInicio', filtrosAtrasos.dataInicio);
+    if (filtrosAtrasos.dataFim) params.append('atrasoDataFim', filtrosAtrasos.dataFim);
+    
     try {
-        const response = await fetch(`/api/recepcao/verificar/${alunoId}?data=${data}`, {
+        const response = await fetch(`/api/recepcao/verificar/${alunoId}?${params.toString()}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const result = await response.json();
@@ -661,8 +658,14 @@ async function verificarAutorizacao(alunoId) {
     }
 }
 
+// ============================================
+// EXIBIR RESULTADO
+// ============================================
 function exibirResultado(data) {
-    const { aluno, autorizacoes, temAutorizacao, dataConsultaFormatada } = data;
+    const { aluno, agrupado, dataConsultaFormatada, atrasos, totalAtrasos, contagemPorMotivo } = data;
+    
+    const autorizacoesArr = agrupado?.autorizacoes || [];
+    const uniformesArr = agrupado?.uniforme || [];
     
     const fotoEl = safeGet('alunoFoto');
     if (fotoEl) {
@@ -671,126 +674,520 @@ function exibirResultado(data) {
         fotoEl.onerror = function() { this.onerror = null; this.src = gerarAvatarSVG(aluno.nome); };
     }
     
-    safeSetText('alunoNome', aluno.nome || '-');
+    const nomeEl = safeGet('alunoNome');
+    if (nomeEl) {
+        if (totalAtrasos > 0) {
+            nomeEl.innerHTML = `${escapeHTML(aluno.nome || '-')} 
+                <span class="badge bg-danger ms-2" style="font-size: 13px; vertical-align: middle; padding: 6px 10px;" title="Total de atrasos registrados">
+                    <i class="fas fa-clock"></i> ${totalAtrasos} atraso${totalAtrasos > 1 ? 's' : ''}
+                </span>`;
+        } else {
+            nomeEl.textContent = aluno.nome || '-';
+        }
+    }
+    
     safeSetText('alunoMatricula', aluno.matricula || 'Não informada');
     safeSetText('alunoTurma', aluno.turma || 'Não informada');
     safeSetText('alunoCurso', aluno.curso || 'Não informado');
     
+    const totalAutorizacoes = autorizacoesArr.length + uniformesArr.length;
     const statusDiv = safeGet('statusVerificacao');
-    if (temAutorizacao) {
-        statusDiv.innerHTML = `
-            <div class="status-verificacao tem-autorizacao">
-                <i class="fas fa-check-circle status-icon"></i>
-                <h4>✅ AUTORIZAÇÃO ENCONTRADA</h4>
-                <p>Este aluno possui <strong>${autorizacoes.length}</strong> autorização(ões) para <strong>${dataConsultaFormatada}</strong></p>
-            </div>
-        `;
-    } else {
-        statusDiv.innerHTML = `
-            <div class="status-verificacao sem-autorizacao">
-                <i class="fas fa-times-circle status-icon"></i>
-                <h4>❌ SEM AUTORIZAÇÃO</h4>
-                <p>Nenhuma autorização encontrada para <strong>${dataConsultaFormatada}</strong></p>
-            </div>
-        `;
+    if (statusDiv) {
+        if (totalAutorizacoes > 0) {
+            statusDiv.innerHTML = `
+                <div class="status-verificacao tem-autorizacao" style="background: linear-gradient(135deg, #f0fdf4, #dcfce7); border: 2px solid #10b981; border-radius: 14px; padding: 18px; display: flex; align-items: center; gap: 14px;">
+                    <i class="fas fa-check-circle" style="font-size: 38px; color: #10b981; flex-shrink: 0;"></i>
+                    <div>
+                        <h4 style="margin: 0 0 4px; color: #065f46; font-size: 17px;">✅ AUTORIZAÇÃO ENCONTRADA</h4>
+                        <p style="margin: 0; color: #047857; font-size: 13px;">
+                            <strong>${totalAutorizacoes}</strong> registro(s) válido(s) para <strong>${dataConsultaFormatada}</strong>
+                        </p>
+                    </div>
+                </div>
+            `;
+        } else {
+            statusDiv.innerHTML = `
+                <div class="status-verificacao sem-autorizacao" style="background: linear-gradient(135deg, #fef2f2, #fee2e2); border: 2px solid #ef4444; border-radius: 14px; padding: 18px; display: flex; align-items: center; gap: 14px;">
+                    <i class="fas fa-times-circle" style="font-size: 38px; color: #ef4444; flex-shrink: 0;"></i>
+                    <div>
+                        <h4 style="margin: 0 0 4px; color: #991b1b; font-size: 17px;">❌ SEM AUTORIZAÇÃO</h4>
+                        <p style="margin: 0; color: #b91c1c; font-size: 13px;">
+                            Nenhuma autorização para <strong>${dataConsultaFormatada}</strong>
+                        </p>
+                    </div>
+                </div>
+            `;
+        }
     }
     
     const listaDiv = safeGet('listaAutorizacoes');
-    if (temAutorizacao) {
-        listaDiv.innerHTML = autorizacoes.map(a => gerarCardAutorizacao(a)).join('');
-    } else {
-        listaDiv.innerHTML = '';
+    if (listaDiv) {
+        let html = '';
+        if (autorizacoesArr.length > 0) {
+            html += renderizarSecaoAutorizacoes(autorizacoesArr);
+        }
+        if (uniformesArr.length > 0) {
+            html += renderizarSecaoUniforme(uniformesArr);
+        }
+        if (autorizacoesArr.length === 0 && uniformesArr.length === 0) {
+            html = `
+                <div class="text-center py-4 text-muted" style="background: #f8fafc; border-radius: 12px; padding: 30px 20px;">
+                    <i class="fas fa-inbox" style="font-size: 42px; color: #cbd5e1; margin-bottom: 12px; display: block;"></i>
+                    <p style="margin: 0; font-size: 14px;">Nenhuma autorização registrada para esta data</p>
+                </div>
+            `;
+        }
+        listaDiv.innerHTML = html;
+    }
+    
+    // 🆕 HISTÓRICO DE ATRASOS COM FILTROS
+    const historicoDiv = safeGet('historicoAtrasosRecepcao');
+    if (historicoDiv) {
+        historicoDiv.innerHTML = renderizarSecaoAtrasos(atrasos || [], totalAtrasos || 0, contagemPorMotivo || {});
+        // Adiciona listeners após renderizar
+        setTimeout(anexarListenersFiltrosAtrasos, 100);
     }
     
     safeGet('resultadoConsulta').style.display = 'block';
     safeGet('resultadoConsulta').scrollIntoView({ behavior: 'smooth' });
 }
 
-function gerarCardAutorizacao(a) {
-    const botaoAssinatura = a.temAssinatura
-        ? `<button class="btn btn-sm btn-success" onclick="abrirModalAssinaturaRecepcao('${a.id}')" title="Editar/refazer assinatura">
-                <i class="fas fa-signature"></i> Assinada
-           </button>`
-        : `<button class="btn btn-sm btn-warning" onclick="abrirModalAssinaturaRecepcao('${a.id}')" title="Solicitar assinatura do responsável">
-                <i class="fas fa-pen-fancy"></i> Assinatura
-           </button>`;
+// ============================================
+// SEÇÃO 1: AUTORIZAÇÕES
+// ============================================
+function renderizarSecaoAutorizacoes(autorizacoes) {
+    return `
+        <div class="modulo-card" style="background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(30, 60, 114, 0.12); overflow: hidden; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+            <div class="modulo-header" style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; padding: 16px 22px; display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 42px; height: 42px; background: rgba(255,255,255,0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px;">
+                        <i class="fas fa-file-signature"></i>
+                    </div>
+                    <div>
+                        <h5 style="margin: 0; font-size: 17px; font-weight: 700;">Autorizações</h5>
+                        <p style="margin: 2px 0 0; font-size: 12px; opacity: 0.85;">Entrada, saída e ausências autorizadas</p>
+                    </div>
+                </div>
+                <span class="badge" style="background: rgba(255,255,255,0.25); color: white; font-size: 13px; padding: 8px 14px; border-radius: 20px; font-weight: 600;">
+                    ${autorizacoes.length} registro${autorizacoes.length > 1 ? 's' : ''}
+                </span>
+            </div>
+            <div class="modulo-body" style="padding: 18px; background: #f8fafc;">
+                ${autorizacoes.map(a => renderizarCardAutorizacao(a)).join('')}
+            </div>
+        </div>
+    `;
+}
 
+function renderizarCardAutorizacao(a) {
     const badgeAssinatura = a.temAssinatura 
-        ? '<span class="autorizacao-badge assinado"><i class="fas fa-signature"></i> Assinado</span>'
+        ? '<span class="badge" style="background: #10b981; color: white; font-size: 11px; padding: 5px 10px;"><i class="fas fa-signature"></i> Assinado</span>'
         : (a.statusAssinatura === 'pendente' 
-            ? '<span class="autorizacao-badge pendente"><i class="fas fa-clock"></i> Pendente</span>'
-            : '<span class="autorizacao-badge sem-assinatura"><i class="fas fa-minus"></i> Sem assinatura</span>');
+            ? '<span class="badge" style="background: #f59e0b; color: white; font-size: 11px; padding: 5px 10px;"><i class="fas fa-clock"></i> Pendente</span>'
+            : '<span class="badge" style="background: #94a3b8; color: white; font-size: 11px; padding: 5px 10px;">Sem assinatura</span>');
     
     let motivoDetalhes = '';
     if (a.motivo === 'outros' && a.motivoOutros) {
-        motivoDetalhes = ` <small>(${escapeHTML(a.motivoOutros)})</small>`;
+        motivoDetalhes = ` <small style="color: #64748b;">(${escapeHTML(a.motivoOutros)})</small>`;
     }
     if (a.motivo === 'necessita_ausentar_retornar' && a.horarioAusencia && a.horarioRetorno) {
-        motivoDetalhes = ` <small>(Ausência: ${a.horarioAusencia} → Retorno: ${a.horarioRetorno})</small>`;
+        motivoDetalhes = ` <small style="color: #64748b;">(Ausência: ${a.horarioAusencia} → Retorno: ${a.horarioRetorno})</small>`;
     }
     
     return `
-        <div class="autorizacao-item-card">
-            <div class="autorizacao-header">
+        <div style="background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; border-left: 4px solid #1e3c72; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;">
                 <div>
-                    <div class="autorizacao-data">
-                        <i class="fas fa-calendar-check"></i> Registrado em ${a.dataFormatada}
+                    <div style="font-size: 13px; color: #475569; font-weight: 600;">
+                        <i class="fas fa-calendar-check" style="color: #1e3c72;"></i> 
+                        Registrado em ${a.dataFormatada}
                     </div>
-                    <small class="text-muted">
+                    <small style="color: #94a3b8; font-size: 11px;">
                         <i class="fas fa-user-tie"></i> Por: ${escapeHTML(a.registradoPorNome || '-')}
                     </small>
                 </div>
                 ${badgeAssinatura}
             </div>
             
-            <div class="autorizacao-info-grid">
-                <div class="autorizacao-info-item">
-                    <span class="label"><i class="fas fa-tag"></i> Motivo</span>
-                    <span class="value">${escapeHTML(a.motivoLabel || '-')}${motivoDetalhes}</span>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 12px;">
+                <div style="background: #eff6ff; border-radius: 8px; padding: 10px; border-left: 3px solid #3b82f6;">
+                    <div style="font-size: 10px; color: #1e40af; text-transform: uppercase; font-weight: 700; margin-bottom: 3px;">Motivo</div>
+                    <div style="font-size: 13px; color: #1e293b; font-weight: 600;">
+                        ${escapeHTML(a.motivoLabel || '-')}${motivoDetalhes}
+                    </div>
                 </div>
                 
-                ${(a.entradaCompleta || a.saidaCompleta) ? `
-                    ${a.entradaCompleta ? `
-                        <div class="autorizacao-info-item" style="grid-column: span 2; background: #f0fdf4; border-radius: 6px; padding: 8px; border-left: 3px solid #10b981;">
-                            <span class="label" style="color: #065f46;"><i class="fas fa-sign-in-alt"></i> Entrada Prevista</span>
-                            <span class="value" style="color: #065f46; font-size: 15px;"><strong>${escapeHTML(a.entradaCompleta)}</strong></span>
+                ${a.entradaCompleta ? `
+                    <div style="background: #f0fdf4; border-radius: 8px; padding: 10px; border-left: 3px solid #10b981;">
+                        <div style="font-size: 10px; color: #065f46; text-transform: uppercase; font-weight: 700; margin-bottom: 3px;">
+                            <i class="fas fa-sign-in-alt"></i> Entrada
                         </div>
-                    ` : ''}
-                    ${a.saidaCompleta ? `
-                        <div class="autorizacao-info-item" style="grid-column: span 2; background: #fef2f2; border-radius: 6px; padding: 8px; border-left: 3px solid #ef4444;">
-                            <span class="label" style="color: #991b1b;"><i class="fas fa-sign-out-alt"></i> Saída Prevista</span>
-                            <span class="value" style="color: #991b1b; font-size: 15px;"><strong>${escapeHTML(a.saidaCompleta)}</strong></span>
-                        </div>
-                    ` : ''}
+                        <div style="font-size: 13px; color: #065f46; font-weight: 600;">${escapeHTML(a.entradaCompleta)}</div>
+                    </div>
                 ` : ''}
-
-                ${a.periodoFaltaFormatado ? `<div class="autorizacao-info-item"><span class="label"><i class="fas fa-calendar-alt"></i> Período</span><span class="value">${a.periodoFaltaFormatado}</span></div>` : ''}
-                ${a.responsavelNome ? `<div class="autorizacao-info-item"><span class="label"><i class="fas fa-user-shield"></i> Responsável</span><span class="value">${escapeHTML(a.responsavelNome)}</span></div>` : ''}
-                ${a.responsavelCPF ? `<div class="autorizacao-info-item"><span class="label"><i class="fas fa-id-card"></i> CPF</span><span class="value">${escapeHTML(a.responsavelCPF)}</span></div>` : ''}
-                ${a.responsavelTelefone ? `<div class="autorizacao-info-item"><span class="label"><i class="fas fa-phone"></i> Telefone</span><span class="value">${escapeHTML(a.responsavelTelefone)}</span></div>` : ''}
+                
+                ${a.saidaCompleta ? `
+                    <div style="background: #fef2f2; border-radius: 8px; padding: 10px; border-left: 3px solid #ef4444;">
+                        <div style="font-size: 10px; color: #991b1b; text-transform: uppercase; font-weight: 700; margin-bottom: 3px;">
+                            <i class="fas fa-sign-out-alt"></i> Saída
+                        </div>
+                        <div style="font-size: 13px; color: #991b1b; font-weight: 600;">${escapeHTML(a.saidaCompleta)}</div>
+                    </div>
+                ` : ''}
+                
+                ${a.periodoFaltaFormatado ? `
+                    <div style="background: #fef3c7; border-radius: 8px; padding: 10px; border-left: 3px solid #f59e0b; grid-column: span 2;">
+                        <div style="font-size: 10px; color: #92400e; text-transform: uppercase; font-weight: 700; margin-bottom: 3px;">
+                            <i class="fas fa-calendar-alt"></i> Período
+                        </div>
+                        <div style="font-size: 13px; color: #78350f; font-weight: 700;">${escapeHTML(a.periodoFaltaFormatado)}</div>
+                    </div>
+                ` : ''}
             </div>
             
-            ${a.observacoes ? `
-                <div class="autorizacao-info-item" style="grid-column: 1 / -1; border-left-color: #f59e0b; margin-top: 10px;">
-                    <span class="label"><i class="fas fa-comment"></i> Observações</span>
-                    <span class="value">${escapeHTML(a.observacoes)}</span>
+            ${(a.responsavelNome || a.responsavelCPF || a.responsavelTelefone) ? `
+                <div style="background: #f5f3ff; border-radius: 8px; padding: 10px; margin-bottom: 12px; border-left: 3px solid #8b5cf6;">
+                    <div style="font-size: 10px; color: #6d28d9; text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">
+                        <i class="fas fa-user-shield"></i> Responsável
+                    </div>
+                    <div style="font-size: 12px; color: #475569; line-height: 1.5;">
+                        ${a.responsavelNome ? `<strong style="color: #1e293b;">${escapeHTML(a.responsavelNome)}</strong>` : ''}
+                        ${a.responsavelCPF ? ` • CPF: ${escapeHTML(a.responsavelCPF)}` : ''}
+                        ${a.responsavelTelefone ? ` • Tel: ${escapeHTML(a.responsavelTelefone)}` : ''}
+                    </div>
                 </div>
             ` : ''}
             
-            <div class="autorizacao-acoes">
-                ${botaoAssinatura}
-                <button class="btn btn-sm btn-primary" onclick="imprimirAutorizacao('${a.id}')">
+            ${a.observacoes ? `
+                <div style="background: #f8fafc; border-radius: 8px; padding: 10px; margin-bottom: 12px; border-left: 3px solid #64748b;">
+                    <div style="font-size: 10px; color: #475569; text-transform: uppercase; font-weight: 700; margin-bottom: 3px;">
+                        <i class="fas fa-comment"></i> Observações
+                    </div>
+                    <div style="font-size: 12px; color: #1e293b; line-height: 1.5;">${escapeHTML(a.observacoes)}</div>
+                </div>
+            ` : ''}
+            
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button onclick="abrirModalAssinaturaRecepcao('${a.id}')" 
+                        style="flex: 1; min-width: 130px; padding: 10px; background: ${a.temAssinatura ? '#10b981' : '#f59e0b'}; color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer;">
+                    <i class="fas fa-signature"></i> ${a.temAssinatura ? 'Editar Assinatura' : 'Solicitar Assinatura'}
+                </button>
+                <button onclick="imprimirAutorizacao('${a.id}')" 
+                        style="flex: 1; min-width: 100px; padding: 10px; background: #1e3c72; color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer;">
                     <i class="fas fa-print"></i> Imprimir
                 </button>
-                <button class="btn btn-sm btn-outline-secondary" onclick="verDetalhesCompletos('${a.id}')">
-                    <i class="fas fa-eye"></i> Ver Detalhes
+                <button onclick="verDetalhesCompletos('${a.id}')" 
+                        style="flex: 1; min-width: 100px; padding: 10px; background: white; color: #1e3c72; border: 2px solid #1e3c72; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer;">
+                    <i class="fas fa-eye"></i> Detalhes
                 </button>
             </div>
         </div>
     `;
 }
+
 // ============================================
-// 🔥 MODAL DE ASSINATURA — ABRIR
+// SEÇÃO 2: UNIFORME
+// ============================================
+function renderizarSecaoUniforme(uniformes) {
+    return `
+        <div class="modulo-card" style="background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(124, 58, 237, 0.15); overflow: hidden; margin-bottom: 20px; border: 2px solid #ddd6fe;">
+            <div class="modulo-header" style="background: linear-gradient(135deg, #7c3aed, #8b5cf6); color: white; padding: 16px 22px; display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 42px; height: 42px; background: rgba(255,255,255,0.25); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px;">
+                        <i class="fas fa-tshirt"></i>
+                    </div>
+                    <div>
+                        <h5 style="margin: 0; font-size: 17px; font-weight: 700;">Autorização de Uniforme</h5>
+                        <p style="margin: 2px 0 0; font-size: 12px; opacity: 0.9;">Aluno liberado do uso do uniforme</p>
+                    </div>
+                </div>
+                <span class="badge" style="background: rgba(255,255,255,0.3); color: white; font-size: 13px; padding: 8px 14px; border-radius: 20px; font-weight: 600;">
+                    ${uniformes.length} registro${uniformes.length > 1 ? 's' : ''}
+                </span>
+            </div>
+            <div class="modulo-body" style="padding: 18px; background: #faf5ff;">
+                ${uniformes.map(u => renderizarCardUniforme(u)).join('')}
+            </div>
+        </div>
+    `;
+}
+
+function renderizarCardUniforme(u) {
+    const badgeAssinatura = u.temAssinatura 
+        ? '<span class="badge" style="background: #10b981; color: white; font-size: 11px; padding: 5px 10px;"><i class="fas fa-signature"></i> Assinado</span>'
+        : (u.statusAssinatura === 'pendente' 
+            ? '<span class="badge" style="background: #f59e0b; color: white; font-size: 11px; padding: 5px 10px;"><i class="fas fa-clock"></i> Pendente</span>'
+            : '<span class="badge" style="background: #94a3b8; color: white; font-size: 11px; padding: 5px 10px;">Sem assinatura</span>');
+    
+    return `
+        <div style="background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; border-left: 4px solid #7c3aed; box-shadow: 0 2px 8px rgba(124, 58, 237, 0.08);">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;">
+                <div>
+                    <div style="font-size: 13px; color: #475569; font-weight: 600;">
+                        <i class="fas fa-calendar-check" style="color: #7c3aed;"></i> 
+                        Registrado em ${u.dataFormatada}
+                    </div>
+                    <small style="color: #94a3b8; font-size: 11px;">
+                        <i class="fas fa-user-tie"></i> Por: ${escapeHTML(u.registradoPorNome || '-')}
+                    </small>
+                </div>
+                ${badgeAssinatura}
+            </div>
+            
+            ${u.uniformePeriodoFormatado ? `
+                <div style="background: linear-gradient(135deg, #ede9fe, #ddd6fe); border-radius: 10px; padding: 14px; margin-bottom: 12px; border: 2px solid #a78bfa;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-calendar-week" style="font-size: 22px; color: #6d28d9;"></i>
+                        <div style="flex: 1;">
+                            <div style="font-size: 10px; color: #6d28d9; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">
+                                Período Autorizado
+                            </div>
+                            <div style="font-size: 16px; color: #5b21b6; font-weight: 700; margin-top: 2px;">
+                                ${escapeHTML(u.uniformePeriodoFormatado)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ` : ''}
+            
+            <div style="background: #faf5ff; border-radius: 8px; padding: 10px; margin-bottom: 12px; border-left: 3px solid #8b5cf6;">
+                <div style="font-size: 10px; color: #6d28d9; text-transform: uppercase; font-weight: 700; margin-bottom: 3px;">Motivo</div>
+                <div style="font-size: 13px; color: #1e293b; font-weight: 600;">
+                    ${escapeHTML(u.motivoLabel || '-')}
+                    ${u.motivoOutros ? `<small style="color: #64748b;">(${escapeHTML(u.motivoOutros)})</small>` : ''}
+                </div>
+            </div>
+            
+            ${(u.responsavelNome || u.responsavelCPF || u.responsavelTelefone) ? `
+                <div style="background: #f5f3ff; border-radius: 8px; padding: 10px; margin-bottom: 12px; border-left: 3px solid #8b5cf6;">
+                    <div style="font-size: 10px; color: #6d28d9; text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">
+                        <i class="fas fa-user-shield"></i> Responsável
+                    </div>
+                    <div style="font-size: 12px; color: #475569; line-height: 1.5;">
+                        ${u.responsavelNome ? `<strong style="color: #1e293b;">${escapeHTML(u.responsavelNome)}</strong>` : ''}
+                        ${u.responsavelCPF ? ` • CPF: ${escapeHTML(u.responsavelCPF)}` : ''}
+                        ${u.responsavelTelefone ? ` • Tel: ${escapeHTML(u.responsavelTelefone)}` : ''}
+                    </div>
+                </div>
+            ` : ''}
+            
+            ${u.observacoes ? `
+                <div style="background: #f8fafc; border-radius: 8px; padding: 10px; margin-bottom: 12px; border-left: 3px solid #64748b;">
+                    <div style="font-size: 10px; color: #475569; text-transform: uppercase; font-weight: 700; margin-bottom: 3px;">
+                        <i class="fas fa-comment"></i> Observações
+                    </div>
+                    <div style="font-size: 12px; color: #1e293b; line-height: 1.5;">${escapeHTML(u.observacoes)}</div>
+                </div>
+            ` : ''}
+            
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button onclick="abrirModalAssinaturaRecepcao('${u.id}')" 
+                        style="flex: 1; min-width: 130px; padding: 10px; background: ${u.temAssinatura ? '#10b981' : '#f59e0b'}; color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer;">
+                    <i class="fas fa-signature"></i> ${u.temAssinatura ? 'Editar Assinatura' : 'Solicitar Assinatura'}
+                </button>
+                <button onclick="imprimirAutorizacao('${u.id}')" 
+                        style="flex: 1; min-width: 100px; padding: 10px; background: #7c3aed; color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer;">
+                    <i class="fas fa-print"></i> Imprimir
+                </button>
+                <button onclick="verDetalhesCompletos('${u.id}')" 
+                        style="flex: 1; min-width: 100px; padding: 10px; background: white; color: #7c3aed; border: 2px solid #7c3aed; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer;">
+                    <i class="fas fa-eye"></i> Detalhes
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+// ============================================
+// SEÇÃO 3: HISTÓRICO DE ATRASOS (COM FILTROS)
+// ============================================
+function renderizarSecaoAtrasos(atrasos, totalSemFiltro, contagemPorMotivo) {
+    const motivosLabels = {
+        onibus: 'Ônibus',
+        transito: 'Trânsito',
+        problemas_pessoais: 'Problemas Pessoais',
+        fardamento: 'Fardamento',
+        outros: 'Outros'
+    };
+    
+    // Chips de filtro por motivo
+    const motivosDisponiveis = [
+        { valor: 'todos', label: 'Todos', icone: 'fa-list' },
+        { valor: 'onibus', label: 'Ônibus', icone: 'fa-bus' },
+        { valor: 'transito', label: 'Trânsito', icone: 'fa-car' },
+        { valor: 'problemas_pessoais', label: 'Pessoais', icone: 'fa-user-injured' },
+        { valor: 'fardamento', label: 'Fardamento', icone: 'fa-tshirt' },
+        { valor: 'outros', label: 'Outros', icone: 'fa-ellipsis-h' }
+    ];
+    
+    const chipsHTML = motivosDisponiveis.map(m => {
+        const ativo = filtrosAtrasos.motivo === m.valor;
+        const count = m.valor === 'todos' ? totalSemFiltro : (contagemPorMotivo[m.valor] || 0);
+        return `
+            <button type="button" 
+                    class="filtro-chip-atraso ${ativo ? 'ativo' : ''}"
+                    data-motivo="${m.valor}"
+                    style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 20px; border: 2px solid ${ativo ? '#ef4444' : '#e2e8f0'}; background: ${ativo ? '#ef4444' : 'white'}; color: ${ativo ? 'white' : '#475569'}; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                <i class="fas ${m.icone}" style="font-size: 11px;"></i>
+                ${m.label}
+                <span style="background: ${ativo ? 'rgba(255,255,255,0.3)' : '#f1f5f9'}; color: ${ativo ? 'white' : '#64748b'}; padding: 2px 6px; border-radius: 10px; font-size: 10px; font-weight: 700;">
+                    ${count}
+                </span>
+            </button>
+        `;
+    }).join('');
+    
+    const temFiltroAtivo = filtrosAtrasos.motivo !== 'todos' || filtrosAtrasos.busca || filtrosAtrasos.dataInicio || filtrosAtrasos.dataFim;
+    
+    return `
+        <div class="modulo-card" style="background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(220, 38, 38, 0.12); overflow: hidden; margin-top: 20px; border: 1px solid #fecaca;">
+            <div class="modulo-header" style="background: linear-gradient(135deg, #dc2626, #ef4444); color: white; padding: 16px 22px; display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 42px; height: 42px; background: rgba(255,255,255,0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px;">
+                        <i class="fas fa-history"></i>
+                    </div>
+                    <div>
+                        <h5 style="margin: 0; font-size: 17px; font-weight: 700;">Histórico de Atrasos</h5>
+                        <p style="margin: 2px 0 0; font-size: 12px; opacity: 0.9;">Registros de atrasos do aluno</p>
+                    </div>
+                </div>
+                <span class="badge" style="background: rgba(255,255,255,0.25); color: white; font-size: 13px; padding: 8px 14px; border-radius: 20px; font-weight: 600;">
+                    ${atrasos.length}${temFiltroAtivo ? ` de ${totalSemFiltro}` : ''} registro${atrasos.length !== 1 ? 's' : ''}
+                </span>
+            </div>
+            
+            <!-- 🆕 BARRA DE FILTROS -->
+            <div style="background: #fef2f2; padding: 14px 18px; border-bottom: 1px solid #fecaca;">
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px;" id="chipsMotivoAtraso">
+                    ${chipsHTML}
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 8px;">
+                    <input type="text" 
+                           id="filtroBuscaAtraso" 
+                           placeholder="Buscar por descrição..."
+                           value="${escapeHTML(filtrosAtrasos.busca)}"
+                           style="padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; outline: none;">
+                    <input type="date" 
+                           id="filtroDataInicioAtraso" 
+                           value="${filtrosAtrasos.dataInicio}"
+                           style="padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; outline: none;">
+                    <input type="date" 
+                           id="filtroDataFimAtraso" 
+                           value="${filtrosAtrasos.dataFim}"
+                           style="padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; outline: none;">
+                    <button type="button" 
+                            id="btnLimparFiltrosAtraso"
+                            style="padding: 8px 14px; background: white; color: #dc2626; border: 1px solid #dc2626; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;">
+                        <i class="fas fa-eraser"></i> Limpar
+                    </button>
+                </div>
+            </div>
+            
+            <div class="modulo-body" style="padding: 18px; background: #fef2f2; max-height: 500px; overflow-y: auto;">
+                ${atrasos.length === 0 ? `
+                    <div class="text-center py-4 text-muted">
+                        <i class="fas ${temFiltroAtivo ? 'fa-search' : 'fa-check-circle'}" style="font-size: 42px; color: ${temFiltroAtivo ? '#cbd5e1' : '#10b981'}; margin-bottom: 12px; display: block;"></i>
+                        <p style="margin: 0; font-size: 14px;">
+                            ${temFiltroAtivo ? 'Nenhum atraso corresponde aos filtros' : 'Nenhum atraso registrado'}
+                        </p>
+                    </div>
+                ` : atrasos.map(a => renderizarCardAtraso(a)).join('')}
+            </div>
+        </div>
+    `;
+}
+
+function renderizarCardAtraso(a) {
+    return `
+        <div style="background: white; border-radius: 12px; padding: 14px; margin-bottom: 10px; border-left: 4px solid #ef4444; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 200px;">
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px;">
+                        <span style="background: #fef2f2; color: #991b1b; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 700;">
+                            <i class="fas fa-tag"></i> ${escapeHTML(a.motivosLabel || '-')}
+                        </span>
+                    </div>
+                    <div style="font-size: 13px; color: #475569; margin-bottom: 4px;">
+                        <i class="far fa-clock" style="color: #ef4444;"></i> 
+                        <strong>${escapeHTML(a.dataFormatada)}</strong> às ${escapeHTML(a.horaFormatada)}
+                    </div>
+                    ${a.descricao ? `
+                        <div style="font-size: 12px; color: #64748b; margin-top: 6px; padding-left: 20px; line-height: 1.5;">
+                            ${escapeHTML(a.descricao)}
+                        </div>
+                    ` : ''}
+                    ${a.registradoPor && a.registradoPor !== '-' ? `
+                        <div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">
+                            <i class="fas fa-user-tie"></i> Registrado por: ${escapeHTML(a.registradoPor)}
+                        </div>
+                    ` : ''}
+                </div>
+                <div style="flex-shrink: 0;">
+                    ${a.temAssinatura
+                        ? '<span class="badge" style="background: #10b981; color: white; font-size: 10px; padding: 4px 8px;"><i class="fas fa-signature"></i> Assinado</span>'
+                        : '<span class="badge" style="background: #cbd5e1; color: #64748b; font-size: 10px; padding: 4px 8px;">Sem assinatura</span>'}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// 🆕 Anexa listeners aos filtros de atraso
+function anexarListenersFiltrosAtrasos() {
+    // Chips de motivo
+    document.querySelectorAll('.filtro-chip-atraso').forEach(btn => {
+        btn.addEventListener('click', () => {
+            filtrosAtrasos.motivo = btn.getAttribute('data-motivo');
+            if (currentAluno) verificarAutorizacao(currentAluno.id);
+        });
+    });
+    
+    // Busca por texto
+    const inputBusca = safeGet('filtroBuscaAtraso');
+    if (inputBusca) {
+        let __timeoutBusca = null;
+        inputBusca.addEventListener('input', () => {
+            clearTimeout(__timeoutBusca);
+            __timeoutBusca = setTimeout(() => {
+                filtrosAtrasos.busca = inputBusca.value.trim();
+                if (currentAluno) verificarAutorizacao(currentAluno.id);
+            }, 500);
+        });
+    }
+    
+    // Data início
+    const inputInicio = safeGet('filtroDataInicioAtraso');
+    if (inputInicio) {
+        inputInicio.addEventListener('change', () => {
+            filtrosAtrasos.dataInicio = inputInicio.value;
+            if (currentAluno) verificarAutorizacao(currentAluno.id);
+        });
+    }
+    
+    // Data fim
+    const inputFim = safeGet('filtroDataFimAtraso');
+    if (inputFim) {
+        inputFim.addEventListener('change', () => {
+            filtrosAtrasos.dataFim = inputFim.value;
+            if (currentAluno) verificarAutorizacao(currentAluno.id);
+        });
+    }
+    
+    // Limpar filtros
+    const btnLimpar = safeGet('btnLimparFiltrosAtraso');
+    if (btnLimpar) {
+        btnLimpar.addEventListener('click', () => {
+            filtrosAtrasos.motivo = 'todos';
+            filtrosAtrasos.busca = '';
+            filtrosAtrasos.dataInicio = '';
+            filtrosAtrasos.dataFim = '';
+            if (currentAluno) verificarAutorizacao(currentAluno.id);
+        });
+    }
+}
+
+// ============================================
+// MODAL DE ASSINATURA
 // ============================================
 async function abrirModalAssinaturaRecepcao(autorizacaoId) {
     const autorizacao = await obterAutorizacaoCompleta(autorizacaoId);
@@ -870,7 +1267,7 @@ async function obterAutorizacaoCompleta(id) {
 }
 
 // ============================================
-// 🔥 SESSÃO DE ASSINATURA (QR CODE)
+// SESSÃO DE ASSINATURA
 // ============================================
 async function iniciarSessaoAssinatura() {
     const loadingEl = safeGet('assinaturaQrLoading');
@@ -951,7 +1348,6 @@ async function iniciarSessaoAssinatura() {
 
 function iniciarMonitoramentoSessao(sessaoId) {
     pararMonitoramentoSessao();
-
     const intervalId = setInterval(async () => {
         try {
             const response = await fetch(`/api/recepcao/sessoes-assinatura/${sessaoId}`, {
@@ -966,7 +1362,6 @@ function iniciarMonitoramentoSessao(sessaoId) {
 
             if (data.sessao.status === 'assinado') {
                 pararMonitoramentoSessao();
-
                 const salvo = await salvarAssinaturaNaAutorizacao(data.sessao.assinaturaBase64);
                 if (salvo) {
                     const conteudoEl = safeGet('assinaturaQrConteudo');
@@ -977,12 +1372,9 @@ function iniciarMonitoramentoSessao(sessaoId) {
                         const preview = safeGet('assinaturaQrPreview');
                         if (preview) preview.src = data.sessao.assinaturaBase64;
                     }
-
                     atualizarBlocoAssinaturaAtual(data.sessao.assinaturaBase64, data.sessao.assinadaPorNome);
-
                     if (currentAluno) verificarAutorizacao(currentAluno.id);
                     carregarResumoDia();
-
                     notificar('✅ Assinatura capturada com sucesso!', 'success');
                 }
             } else if (data.sessao.status === 'cancelado') {
@@ -992,7 +1384,6 @@ function iniciarMonitoramentoSessao(sessaoId) {
             console.warn('Erro no monitoramento:', e);
         }
     }, 3000);
-
     estadoAssinatura.monitoramentoInterval = intervalId;
 }
 
@@ -1054,8 +1445,9 @@ async function copiarLinkAssinaturaRecepcao() {
         notificar('✅ Link copiado!', 'success');
     }
 }
+
 // ============================================
-// CANVAS (fallback — assinar direto na recepção)
+// CANVAS (fallback)
 // ============================================
 function inicializarCanvasRecepcao() {
     const canvas = safeGet('canvasAssinaturaRecepcao');
@@ -1184,10 +1576,8 @@ async function salvarCanvasRecepcao() {
         if (salvo) {
             atualizarBlocoAssinaturaAtual(dataURL, estadoAssinatura.responsavelNome || 'Recepção (presencial)');
             notificar('✅ Assinatura salva com sucesso!', 'success');
-
             if (currentAluno) verificarAutorizacao(currentAluno.id);
             carregarResumoDia();
-
             setTimeout(() => {
                 if (estadoAssinatura.modalInstance) estadoAssinatura.modalInstance.hide();
             }, 1000);
@@ -1219,7 +1609,6 @@ async function removerAssinaturaRecepcao() {
         if (blocoAtual) blocoAtual.style.display = 'none';
 
         notificar('✅ Assinatura removida', 'success');
-
         if (currentAluno) verificarAutorizacao(currentAluno.id);
         carregarResumoDia();
     } catch (e) {
@@ -1254,7 +1643,7 @@ function reimprimirAutorizacaoAtual() {
 }
 
 // ============================================
-// IMPRIMIR AUTORIZAÇÃO
+// IMPRIMIR
 // ============================================
 async function imprimirAutorizacao(id) {
     try {
@@ -1304,6 +1693,29 @@ function gerarHTMLImpressaoAutorizacao(a, qrCodeUrl) {
         detalheMotivo = ` <strong>(Ausência: ${a.horarioAusencia} | Retorno: ${a.horarioRetorno})</strong>`;
     }
     
+    const tipoLabel = a.tipo === 'uniforme' ? 'Autorização de Uniforme' : 'Autorização';
+    
+    let periodoHTML = '';
+    if (a.tipo === 'uniforme' && a.uniformePeriodoFormatado) {
+        periodoHTML = `
+            <div class="section-title">👕 Período da Autorização (Uniforme)</div>
+            <div class="motivo-box" style="background: #ede9fe; border-color: #7c3aed;">
+                <p style="margin: 0; font-size: 11pt; text-align: center;">
+                    <strong>${escapeHTML(a.uniformePeriodoFormatado)}</strong>
+                </p>
+            </div>
+        `;
+    } else if (a.periodoFaltaFormatado) {
+        periodoHTML = `
+            <div class="section-title">📆 Período</div>
+            <div class="motivo-box" style="background: #fef3c7; border-color: #f59e0b;">
+                <p style="margin: 0; font-size: 11pt; text-align: center;">
+                    <strong>${escapeHTML(a.periodoFaltaFormatado)}</strong>
+                </p>
+            </div>
+        `;
+    }
+    
     let horariosHTML = '';
     if (a.entradaCompleta || a.saidaCompleta) {
         horariosHTML = `
@@ -1338,7 +1750,7 @@ function gerarHTMLImpressaoAutorizacao(a, qrCodeUrl) {
     <html lang="pt-BR">
     <head>
         <meta charset="UTF-8">
-        <title>Autorização - ${escapeHTML(a.alunoNome)}</title>
+        <title>${tipoLabel} - ${escapeHTML(a.alunoNome)}</title>
         <style>
             @page { size: A4 portrait; margin: 8mm; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1389,7 +1801,7 @@ function gerarHTMLImpressaoAutorizacao(a, qrCodeUrl) {
             <p>Sistema de Atendimentos — Recepção</p>
         </div>
         
-        <div class="titulo">📋 Autorização</div>
+        <div class="titulo">📋 ${tipoLabel}</div>
         
         <div class="aluno-box">
             <img class="aluno-foto" src="${gerarAvatarSVG(a.alunoNome)}" alt="${escapeHTML(a.alunoNome)}">
@@ -1403,6 +1815,7 @@ function gerarHTMLImpressaoAutorizacao(a, qrCodeUrl) {
             </div>
         </div>
         
+        ${periodoHTML}
         ${horariosHTML}
         
         <div class="section-title">📌 Dados do Registro</div>
@@ -1452,6 +1865,7 @@ function gerarHTMLImpressaoAutorizacao(a, qrCodeUrl) {
     </body>
     </html>`;
 }
+
 // ============================================
 // VER DETALHES COMPLETOS
 // ============================================
@@ -1461,7 +1875,6 @@ async function verDetalhesCompletos(id) {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-        
         if (!data.success || !data.autorizacao) {
             notificar('Erro ao carregar detalhes');
             return;
@@ -1512,24 +1925,47 @@ async function verDetalhesCompletos(id) {
             `;
         }
         
+        let periodoDetalheHTML = '';
+        if (a.tipo === 'uniforme' && a.uniformePeriodoFormatado) {
+            periodoDetalheHTML = `
+                <div style="background: #ede9fe; border-radius: 12px; padding: 16px; margin-bottom: 16px; border-left: 4px solid #7c3aed;">
+                    <div style="font-size: 12px; color: #6d28d9; text-transform: uppercase; font-weight: 700; margin-bottom: 6px;">
+                        <i class="fas fa-tshirt"></i> Período do Uniforme
+                    </div>
+                    <div style="font-size: 16px; font-weight: 700; color: #5b21b6;">${escapeHTML(a.uniformePeriodoFormatado)}</div>
+                </div>
+            `;
+        } else if (a.periodoFaltaFormatado) {
+            periodoDetalheHTML = `
+                <div style="background: #fef3c7; border-radius: 12px; padding: 16px; margin-bottom: 16px; border-left: 4px solid #f59e0b;">
+                    <div style="font-size: 12px; color: #92400e; text-transform: uppercase; font-weight: 700; margin-bottom: 6px;">
+                        <i class="fas fa-calendar-alt"></i> Período
+                    </div>
+                    <div style="font-size: 16px; font-weight: 700; color: #78350f;">${escapeHTML(a.periodoFaltaFormatado)}</div>
+                </div>
+            `;
+        }
+        
+        const tipoLabel = a.tipo === 'uniforme' ? 'Autorização de Uniforme' : 'Autorização';
+        
         const modalHtml = `
             <div class="modal fade" id="modalDetalhesAutorizacao" tabindex="-1">
                 <div class="modal-dialog modal-lg modal-dialog-scrollable">
                     <div class="modal-content" style="border-radius: 16px; overflow: hidden; border: none;">
-                        <div class="modal-header" style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; border: none; padding: 20px 25px;">
+                        <div class="modal-header" style="background: linear-gradient(135deg, ${a.tipo === 'uniforme' ? '#7c3aed, #8b5cf6' : '#1e3c72, #2a5298'}); color: white; border: none; padding: 20px 25px;">
                             <h5 class="modal-title" style="display: flex; align-items: center; gap: 10px; font-size: 18px;">
-                                <i class="fas fa-file-signature"></i>
-                                Detalhes da Autorização
+                                <i class="fas ${a.tipo === 'uniforme' ? 'fa-tshirt' : 'fa-file-signature'}"></i>
+                                Detalhes - ${tipoLabel}
                             </h5>
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body" style="padding: 25px;">
                             <div style="display: flex; align-items: center; gap: 15px; padding: 16px; background: linear-gradient(135deg, #eef2ff, #e0e7ff); border-radius: 14px; margin-bottom: 20px;">
                                 <img src="${alunoFoto}" 
-                                     style="width: 70px; height: 70px; border-radius: 50%; object-fit: cover; border: 3px solid #1e3c72; flex-shrink: 0;"
+                                     style="width: 70px; height: 70px; border-radius: 50%; object-fit: cover; border: 3px solid ${a.tipo === 'uniforme' ? '#7c3aed' : '#1e3c72'}; flex-shrink: 0;"
                                      onerror="this.src='${gerarAvatarSVG(a.alunoNome)}'" alt="">
                                 <div style="flex: 1; min-width: 0;">
-                                    <h4 style="margin: 0 0 5px; color: #1e3c72; font-size: 18px; font-weight: 700;">${escapeHTML(a.alunoNome)}</h4>
+                                    <h4 style="margin: 0 0 5px; color: ${a.tipo === 'uniforme' ? '#7c3aed' : '#1e3c72'}; font-size: 18px; font-weight: 700;">${escapeHTML(a.alunoNome)}</h4>
                                     <div style="font-size: 13px; color: #475569;">
                                         <i class="fas fa-id-card"></i> <strong>Matrícula:</strong> ${escapeHTML(a.alunoMatricula || 'Não informada')}
                                         &nbsp;•&nbsp;
@@ -1542,7 +1978,7 @@ async function verDetalhesCompletos(id) {
                                         : '<span class="badge bg-secondary" style="padding: 8px 14px; font-size: 12px; border-radius: 20px;">Sem Assinatura</span>'}
                                 </div>
                             </div>
-                            <div style="background: #f8fafc; border-radius: 12px; padding: 16px; margin-bottom: 16px; border-left: 4px solid #1e3c72;">
+                            <div style="background: #f8fafc; border-radius: 12px; padding: 16px; margin-bottom: 16px; border-left: 4px solid ${a.tipo === 'uniforme' ? '#7c3aed' : '#1e3c72'};">
                                 <div style="font-size: 12px; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 6px;"><i class="fas fa-calendar-check"></i> Data do Registro</div>
                                 <div style="font-size: 16px; font-weight: 600; color: #1e293b;">${a.dataFormatada}</div>
                             </div>
@@ -1553,13 +1989,8 @@ async function verDetalhesCompletos(id) {
                                     ${a.motivoOutros ? `<span style="color: #64748b; font-weight: 400;">(${escapeHTML(a.motivoOutros)})</span>` : ''}
                                 </div>
                             </div>
+                            ${periodoDetalheHTML}
                             ${horariosHTML}
-                            ${a.periodoFaltaFormatado ? `
-                                <div style="background: #fef3c7; border-radius: 12px; padding: 16px; margin-bottom: 16px; border-left: 4px solid #f59e0b;">
-                                    <div style="font-size: 12px; color: #92400e; text-transform: uppercase; font-weight: 600; margin-bottom: 6px;"><i class="fas fa-calendar-alt"></i> Período da Falta</div>
-                                    <div style="font-size: 15px; font-weight: 600; color: #78350f;">${a.periodoFaltaFormatado}</div>
-                                </div>
-                            ` : ''}
                             ${(a.responsavelNome || a.responsavelCPF || a.responsavelTelefone) ? `
                                 <div style="background: #f5f3ff; border-radius: 12px; padding: 16px; margin-bottom: 16px; border-left: 4px solid #8b5cf6;">
                                     <div style="font-size: 12px; color: #6d28d9; text-transform: uppercase; font-weight: 600; margin-bottom: 10px;"><i class="fas fa-user-shield"></i> Responsável</div>
@@ -1603,8 +2034,16 @@ async function verDetalhesCompletos(id) {
 }
 
 // ============================================
-// RESUMO DO DIA (COM PAGINAÇÃO)
+// 🆕 RESUMO DO DIA COM FILTROS
 // ============================================
+function limparFiltrosResumo() {
+    safeGet('filtroResumoTurma').value = 'todas';
+    safeGet('filtroResumoTipo').value = 'todos';
+    safeGet('filtroResumoBusca').value = '';
+    paginaAtualResumoDia = 1;
+    carregarResumoDia();
+}
+
 async function carregarResumoDia(pagina = null) {
     const container = safeGet('listaResumoDia');
     if (!container) return;
@@ -1613,6 +2052,8 @@ async function carregarResumoDia(pagina = null) {
     
     const data = safeGet('dataVerificacao')?.value || getDataLocalISO();
     const turma = safeGet('filtroResumoTurma')?.value || 'todas';
+    const tipo = safeGet('filtroResumoTipo')?.value || 'todos';
+    const busca = safeGet('filtroResumoBusca')?.value || '';
     
     container.innerHTML = `
         <div class="text-center py-4">
@@ -1626,6 +2067,8 @@ async function carregarResumoDia(pagina = null) {
         params.append('page', paginaAtualResumoDia);
         params.append('limit', itensPorPaginaResumoDia);
         if (turma && turma !== 'todas') params.append('turma', turma);
+        if (tipo && tipo !== 'todos') params.append('tipo', tipo);
+        if (busca && busca.trim()) params.append('busca', busca.trim());
         
         const response = await fetch(`/api/recepcao/autorizacoes-do-dia?${params.toString()}`, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -1643,11 +2086,20 @@ async function carregarResumoDia(pagina = null) {
         const contador = safeGet('contadorAutorizacoes');
         if (contador) contador.textContent = totalRegistrosResumoDia;
         
+        const temFiltro = (turma !== 'todas') || (tipo !== 'todos') || (busca && busca.trim());
+        
         if (totalRegistrosResumoDia === 0) {
             container.innerHTML = `
                 <div class="text-center py-4 text-muted">
-                    <i class="fas fa-inbox fa-3x mb-3" style="color:#cbd5e1;"></i>
-                    <p>Nenhuma autorização registrada para <strong>${result.dataFormatada}</strong></p>
+                    <i class="fas ${temFiltro ? 'fa-search' : 'fa-inbox'} fa-3x mb-3" style="color:#cbd5e1;"></i>
+                    <p>${temFiltro 
+                        ? 'Nenhuma autorização corresponde aos filtros aplicados' 
+                        : `Nenhuma autorização registrada para <strong>${result.dataFormatada}</strong>`}</p>
+                    ${temFiltro ? `
+                        <button onclick="limparFiltrosResumo()" class="btn btn-sm btn-outline-primary mt-2" style="border-radius: 8px;">
+                            <i class="fas fa-eraser"></i> Limpar filtros
+                        </button>
+                    ` : ''}
                 </div>`;
             return;
         }
@@ -1657,52 +2109,59 @@ async function carregarResumoDia(pagina = null) {
                 <table class="table-resumo">
                     <thead>
                         <tr>
+                            <th>Tipo</th>
                             <th>Aluno</th>
-                            <th>Matrícula</th>
                             <th>Turma</th>
-                            <th>Entrada</th>
-                            <th>Saída</th>
+                            <th>Período</th>
                             <th>Motivo</th>
                             <th style="text-align:center;">Assinatura</th>
                             <th style="text-align:center; width: 140px;">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${result.autorizacoes.map(a => `
-                            <tr>
-                                <td><strong>${escapeHTML(a.alunoNome)}</strong></td>
-                                <td>${escapeHTML(a.alunoMatricula || '-')}</td>
-                                <td>${escapeHTML(a.alunoTurma || '-')}</td>
-                                <td><span style="font-size: 12px; white-space: nowrap;">${a.entradaCompleta || '-'}</span></td>
-                                <td><span style="font-size: 12px; white-space: nowrap;">${a.saidaCompleta || '-'}</span></td>
-                                <td><span class="badge bg-info text-dark">${escapeHTML(a.motivoLabel)}</span></td>
-                                <td style="text-align:center;">
-                                    ${a.temAssinatura 
-                                        ? '<span class="badge bg-success"><i class="fas fa-signature"></i> Assinado</span>' 
-                                        : '<span class="badge bg-secondary">Sem</span>'}
-                                </td>
-                                <td style="text-align:center;">
-                                    <div style="display: flex; gap: 5px; justify-content: center;">
-                                        <button class="btn-resumo-action btn-resumo-view" 
-                                                onclick="verDetalhesCompletos('${a.id}')" 
-                                                title="Ver detalhes">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
-                                        <button class="btn-resumo-action" 
-                                                onclick="abrirModalAssinaturaRecepcao('${a.id}')" 
-                                                title="Editar assinatura"
-                                                style="background: ${a.temAssinatura ? '#10b981' : '#f59e0b'}; color: white;">
-                                            <i class="fas fa-signature"></i>
-                                        </button>
-                                        <button class="btn-resumo-action btn-resumo-print" 
-                                                onclick="imprimirAutorizacao('${a.id}')" 
-                                                title="Imprimir">
-                                            <i class="fas fa-print"></i>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        `).join('')}
+                        ${result.autorizacoes.map(a => {
+                            const isUniforme = a.tipo === 'uniforme';
+                            const tipoBadge = isUniforme 
+                                ? '<span class="badge" style="background: #7c3aed; color: white; font-size: 10px;"><i class="fas fa-tshirt"></i> Uniforme</span>'
+                                : '<span class="badge" style="background: #1e3c72; color: white; font-size: 10px;"><i class="fas fa-file-signature"></i> Autorização</span>';
+                            const periodo = isUniforme 
+                                ? (a.uniformePeriodoFormatado || '-')
+                                : (a.periodoFaltaFormatado || a.entradaCompleta || '-');
+                            return `
+                                <tr>
+                                    <td>${tipoBadge}</td>
+                                    <td><strong>${escapeHTML(a.alunoNome)}</strong><br><small style="color: #94a3b8;">${escapeHTML(a.alunoMatricula || '')}</small></td>
+                                    <td>${escapeHTML(a.alunoTurma || '-')}</td>
+                                    <td><span style="font-size: 12px;">${escapeHTML(periodo)}</span></td>
+                                    <td><span class="badge bg-info text-dark">${escapeHTML(a.motivoLabel)}</span></td>
+                                    <td style="text-align:center;">
+                                        ${a.temAssinatura 
+                                            ? '<span class="badge bg-success"><i class="fas fa-signature"></i> Assinado</span>' 
+                                            : '<span class="badge bg-secondary">Sem</span>'}
+                                    </td>
+                                    <td style="text-align:center;">
+                                        <div style="display: flex; gap: 5px; justify-content: center;">
+                                            <button class="btn-resumo-action btn-resumo-view" 
+                                                    onclick="verDetalhesCompletos('${a.id}')" 
+                                                    title="Ver detalhes">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                            <button class="btn-resumo-action" 
+                                                    onclick="abrirModalAssinaturaRecepcao('${a.id}')" 
+                                                    title="Editar assinatura"
+                                                    style="background: ${a.temAssinatura ? '#10b981' : '#f59e0b'}; color: white;">
+                                                <i class="fas fa-signature"></i>
+                                            </button>
+                                            <button class="btn-resumo-action btn-resumo-print" 
+                                                    onclick="imprimirAutorizacao('${a.id}')" 
+                                                    title="Imprimir">
+                                                <i class="fas fa-print"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
                     </tbody>
                 </table>
             </div>
@@ -1790,12 +2249,17 @@ function renderizarPaginacaoResumoDia(result) {
 function limparTela() {
     safeGet('resultadoConsulta').style.display = 'none';
     currentAluno = null;
+    // 🆕 Reseta filtros de atrasos
+    filtrosAtrasos.motivo = 'todos';
+    filtrosAtrasos.busca = '';
+    filtrosAtrasos.dataInicio = '';
+    filtrosAtrasos.dataFim = '';
     if (modoAtual === 'automatico') reiniciarScannerAutomatico();
     else carregarAlunosPorTurma();
 }
 
 // ============================================
-// NOTIFICAÇÕES (TOAST)
+// NOTIFICAÇÕES
 // ============================================
 function notificar(mensagem, tipo = 'success', duracao = 3500) {
     if (typeof window.mostrarToastConcluido === 'function') {
@@ -1831,9 +2295,6 @@ function notificar(mensagem, tipo = 'success', duracao = 3500) {
     }, duracao);
 }
 
-// ============================================
-// NOTIFICAÇÕES (SINO + BADGES)
-// ============================================
 let notificacoesInterval = null;
 
 async function carregarNotificacoesSistema() {
@@ -1856,9 +2317,7 @@ async function carregarNotificacoesSistema() {
 function renderizarSino() {
     const lista = document.getElementById('notificacoesLista');
     if (!lista) return;
-
     const cache = window.__notificacoesCache || [];
-
     if (cache.length === 0) {
         lista.innerHTML = `<div style="text-align:center;padding:40px;color:#6c757d;">
             <i class="fas fa-bell-slash" style="font-size:2rem;margin-bottom:10px;display:block;"></i>
@@ -1866,7 +2325,6 @@ function renderizarSino() {
         </div>`;
         return;
     }
-
     lista.innerHTML = cache.map(notif => {
         const data = new Date(notif.createdAt);
         const agora = new Date();
@@ -1874,13 +2332,11 @@ function renderizarSino() {
         const diffMin = Math.floor(diffMs / 60000);
         const diffHr = Math.floor(diffMs / 3600000);
         const diffDia = Math.floor(diffMs / 86400000);
-
         let tempoTexto;
         if (diffMin < 1) tempoTexto = 'agora mesmo';
         else if (diffMin < 60) tempoTexto = `há ${diffMin} min`;
         else if (diffHr < 24) tempoTexto = `há ${diffHr} h`;
         else tempoTexto = `há ${diffDia} d`;
-
         return `
             <div class="notificacao-item ${notif.lida ? '' : 'nao-lida'}"
                  data-notif-id="${notif._id}"
@@ -1898,7 +2354,6 @@ function renderizarSino() {
                 </div>
             </div>`;
     }).join('');
-
     lista.querySelectorAll('.notificacao-item').forEach(item => {
         item.addEventListener('click', () => {
             abrirNotificacao(item.getAttribute('data-notif-id'), item.getAttribute('data-notif-link'));
@@ -1910,9 +2365,7 @@ function atualizarBadge() {
     const badge = document.getElementById('notificacoesBadge');
     const btn = document.getElementById('notificacoesBtn');
     if (!badge || !btn) return;
-
     const naoLidas = (window.__notificacoesCache || []).filter(n => !n.lida).length;
-
     if (naoLidas > 0) {
         badge.textContent = naoLidas > 99 ? '99+' : naoLidas;
         badge.style.display = 'inline-flex';
@@ -1921,7 +2374,6 @@ function atualizarBadge() {
         badge.style.display = 'none';
         btn.classList.remove('tem-notificacao');
     }
-
     atualizarBadgeUnificado();
 }
 
@@ -1976,10 +2428,8 @@ async function marcarTodasLidas() {
 
 async function limparMinhasNotificacoes(event) {
     if (event) event.stopPropagation();
-
     const confirmacao = await confirm('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.');
     if (!confirmacao) return;
-
     try {
         const token = localStorage.getItem('auth_token');
         const response = await fetch('/api/notificacoes/limpar-minhas', {
@@ -1987,7 +2437,6 @@ async function limparMinhasNotificacoes(event) {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-
         if (data.success) {
             window.__notificacoesCache = [];
             await carregarTudo();
@@ -2001,9 +2450,6 @@ async function limparMinhasNotificacoes(event) {
     }
 }
 
-// ============================================
-// LOGOUT
-// ============================================
 async function logout() {
     const confirmar = await confirm('Tem certeza que deseja sair do sistema?');
     if (confirmar) {
@@ -2013,9 +2459,6 @@ async function logout() {
     }
 }
 
-// ============================================
-// INICIALIZAÇÃO DAS NOTIFICAÇÕES
-// ============================================
 document.addEventListener('DOMContentLoaded', () => {
     carregarTudo();
     if (notificacoesInterval) clearInterval(notificacoesInterval);
@@ -2045,7 +2488,6 @@ window.abrirNotificacoes = abrirNotificacoes;
 window.fecharNotificacoes = fecharNotificacoes;
 window.marcarTodasLidas = marcarTodasLidas;
 window.logout = logout;
-
 window.abrirModalAssinaturaRecepcao = abrirModalAssinaturaRecepcao;
 window.limparCanvasRecepcao = limparCanvasRecepcao;
 window.salvarCanvasRecepcao = salvarCanvasRecepcao;
@@ -2058,5 +2500,6 @@ window.atualizarBadgeUnificado = atualizarBadgeUnificado;
 window.atualizarBoasVindasETurnoRecepcao = atualizarBoasVindasETurnoRecepcao;
 window.atualizarRelogioRecepcao = atualizarRelogioRecepcao;
 window.limparMinhasNotificacoes = limparMinhasNotificacoes;
+window.limparFiltrosResumo = limparFiltrosResumo;
 
-console.log('✅ Recepção JS carregado (QR Code + Canvas + polling)');
+console.log('✅ Recepção JS carregado (filtros em resumo + atrasos)');
