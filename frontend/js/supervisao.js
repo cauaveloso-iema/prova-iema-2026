@@ -1662,34 +1662,94 @@ function abrirModalAssinaturaParticipante(participanteId, urlAssinatura) {
                             </div>
                         </div>
                         
-                        <div id="statusAssinaturaParticipante" style="margin-bottom: 20px;">
-                            <div style="background: #fef3c7; border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 12px; text-align: left;">
-                                <div style="width: 40px; height: 40px; border-radius: 50%; border: 4px solid #f59e0b; border-top-color: transparent; animation: spin 1s linear infinite; flex-shrink: 0;"></div>
-                                <div>
-                                    <strong style="color: #92400e;">Aguardando assinatura...</strong>
-                                    <p style="margin: 3px 0 0; font-size: 13px; color: #78350f;">
-                                        Peça para o participante escanear o QR Code
-                                    </p>
+                        <!-- ÁREA DO QR CODE -->
+                        <div id="participanteQrView">
+                            <div id="statusAssinaturaParticipante" style="margin-bottom: 20px;">
+                                <div style="background: #fef3c7; border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 12px; text-align: left;">
+                                    <div style="width: 40px; height: 40px; border-radius: 50%; border: 4px solid #f59e0b; border-top-color: transparent; animation: spin 1s linear infinite; flex-shrink: 0;"></div>
+                                    <div>
+                                        <strong style="color: #92400e;">Aguardando assinatura...</strong>
+                                        <p style="margin: 3px 0 0; font-size: 13px; color: #78350f;">
+                                            Peça para o participante escanear o QR Code
+                                        </p>
+                                    </div>
                                 </div>
+                            </div>
+                            
+                            <div style="background: white; border: 2px solid #e2e8f0; border-radius: 16px; padding: 20px; display: inline-block;">
+                                <img src="${qrUrl}" 
+                                    alt="QR Code para assinatura" 
+                                    style="width: 240px; height: 240px; display: block;"
+                                    id="qrCodeParticipanteImage">
+                                <p style="margin: 12px 0 0; font-size: 13px; color: #64748b;">
+                                    <i class="fas fa-mobile-alt"></i> 
+                                    Aponte a câmera do celular
+                                </p>
+                            </div>
+                            
+                            <div style="margin-top: 16px;">
+                                <button onclick="copiarLinkAssinatura('${urlAssinatura}')"
+                                        class="btn-copiar-link">
+                                    <i class="fas fa-link"></i> Copiar link de assinatura
+                                </button>
+                            </div>
+                            
+                            <!-- LINK PARA ASSINAR AQUI -->
+                            <div style="margin-top: 14px; padding-top: 14px; border-top: 1px dashed #cbd5e1;">
+                                <p style="margin: 0 0 8px; font-size: 12px; color: #64748b;">
+                                    Não consegue escanear? 
+                                </p>
+                                <button type="button"
+                                        onclick="mostrarCanvasAssinaturaInlineParticipante('${participanteId}')"
+                                        style="background: transparent; border: none; color: #10b981; font-weight: 600; font-size: 14px; cursor: pointer; text-decoration: underline; padding: 6px 10px; border-radius: 8px;">
+                                    <i class="fas fa-pen-fancy"></i> Assinar aqui mesmo
+                                </button>
                             </div>
                         </div>
                         
-                        <div style="background: white; border: 2px solid #e2e8f0; border-radius: 16px; padding: 20px; display: inline-block;">
-                            <img src="${qrUrl}" 
-                                alt="QR Code para assinatura" 
-                                style="width: 240px; height: 240px; display: block;"
-                                id="qrCodeParticipanteImage">
-                            <p style="margin: 12px 0 0; font-size: 13px; color: #64748b;">
-                                <i class="fas fa-mobile-alt"></i> 
-                                Aponte a câmera do celular
-                            </p>
-                        </div>
-                        
-                        <div style="margin-top: 16px;">
-                            <button onclick="copiarLinkAssinatura('${urlAssinatura}')"
-                                    class="btn-copiar-link">
-                                <i class="fas fa-link"></i> Copiar link de assinatura
-                            </button>
+                        <!-- ÁREA DO CANVAS INLINE -->
+                        <div id="participanteCanvasView" style="display: none;">
+                            <div style="background: #f0fdf4; border-radius: 12px; padding: 14px; margin-bottom: 16px; text-align: left;">
+                                <div style="display: flex; gap: 8px;">
+                                    <i class="fas fa-info-circle" style="color: #047857;"></i>
+                                    <span style="font-size: 13px; color: #047857;">
+                                        Peça para o participante assinar no espaço abaixo.
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div id="participanteModalCanvasWrapper" 
+                                 style="position: relative; background: white; border: 3px dashed #cbd5e0; border-radius: 16px; overflow: hidden; height: 260px; margin-bottom: 14px; touch-action: none;">
+                                <canvas id="participanteModalCanvas" style="width: 100%; height: 100%; display: block;"></canvas>
+                                <div id="participanteModalPlaceholder" 
+                                     style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #94a3b8; pointer-events: none; width: 100%;">
+                                    <i class="fas fa-pen-fancy" style="font-size: 28px; display: block; margin-bottom: 5px;"></i>
+                                    <span style="font-size: 13px;">Assine aqui</span>
+                                </div>
+                            </div>
+                            
+                            <div style="display: flex; gap: 10px;">
+                                <button type="button"
+                                        onclick="limparCanvasInlineParticipante()"
+                                        style="flex: 1; padding: 12px; background: #f1f5f9; color: #475569; border: none; border-radius: 10px; font-weight: 600; font-size: 14px; cursor: pointer;">
+                                    <i class="fas fa-eraser"></i> Limpar
+                                </button>
+                                <button type="button"
+                                        id="participanteBtnConfirmarInline"
+                                        onclick="salvarAssinaturaInlineParticipante('${participanteId}')"
+                                        disabled
+                                        style="flex: 2; padding: 12px; background: #cbd5e0; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 14px; cursor: not-allowed;">
+                                    <i class="fas fa-check"></i> Confirmar Assinatura
+                                </button>
+                            </div>
+                            
+                            <div style="margin-top: 14px;">
+                                <button type="button"
+                                        onclick="voltarParaQRCodeParticipante()"
+                                        style="background: transparent; border: none; color: #64748b; font-size: 13px; cursor: pointer; text-decoration: underline;">
+                                    <i class="fas fa-arrow-left"></i> Voltar para o QR Code
+                                </button>
+                            </div>
                         </div>
                     </div>
                     
@@ -1707,6 +1767,7 @@ function abrirModalAssinaturaParticipante(participanteId, urlAssinatura) {
         
         <style>
             @keyframes spin { to { transform: rotate(360deg); } }
+            @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         </style>
     `;
     
@@ -3448,46 +3509,108 @@ function abrirModalAssinaturaQR(urlAssinatura) {
                     </div>
                     
                     <div class="modal-body" style="padding: 30px; text-align: center;">
-                        <div id="statusAssinaturaQR" style="margin-bottom: 20px;">
-                            <div style="background: #fef3c7; border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 12px; text-align: left;">
-                                <div style="width: 40px; height: 40px; border-radius: 50%; border: 4px solid #f59e0b; border-top-color: transparent; animation: spin 1s linear infinite; flex-shrink: 0;"></div>
-                                <div>
-                                    <strong style="color: #92400e;">Aguardando assinatura...</strong>
-                                    <p style="margin: 3px 0 0; font-size: 13px; color: #78350f;">
-                                        Peça para o responsável escanear o QR Code abaixo
-                                    </p>
+                        
+                        <!-- ÁREA DO QR CODE -->
+                        <div id="supervisaoQrView">
+                            <div id="statusAssinaturaQR" style="margin-bottom: 20px;">
+                                <div style="background: #fef3c7; border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 12px; text-align: left;">
+                                    <div style="width: 40px; height: 40px; border-radius: 50%; border: 4px solid #f59e0b; border-top-color: transparent; animation: spin 1s linear infinite; flex-shrink: 0;"></div>
+                                    <div>
+                                        <strong style="color: #92400e;">Aguardando assinatura...</strong>
+                                        <p style="margin: 3px 0 0; font-size: 13px; color: #78350f;">
+                                            Peça para o responsável escanear o QR Code abaixo
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        
-                        <div style="background: white; border: 2px solid #e2e8f0; border-radius: 16px; padding: 20px; display: inline-block;">
-                            <img src="${qrUrl}" 
-                                alt="QR Code para assinatura" 
-                                style="width: 260px; height: 260px; display: block;"
-                                id="qrCodeImage">
-                            <p style="margin: 12px 0 0; font-size: 13px; color: #64748b;">
-                                <i class="fas fa-mobile-alt"></i> 
-                                Aponte a câmera do celular
-                            </p>
-                        </div>
-                        
-                        <div style="margin-top: 20px; padding: 14px; background: #f0f9ff; border-radius: 12px; font-size: 13px; color: #075985; text-align: left;">
-                            <div style="display: flex; gap: 8px; margin-bottom: 6px;">
-                                <i class="fas fa-info-circle"></i>
-                                <span><strong>O responsável assina direto no celular dele.</strong> Assim que ele confirmar, você verá aqui automaticamente.</span>
+                            
+                            <div style="background: white; border: 2px solid #e2e8f0; border-radius: 16px; padding: 20px; display: inline-block;">
+                                <img src="${qrUrl}" 
+                                    alt="QR Code para assinatura" 
+                                    style="width: 260px; height: 260px; display: block;"
+                                    id="qrCodeImage">
+                                <p style="margin: 12px 0 0; font-size: 13px; color: #64748b;">
+                                    <i class="fas fa-mobile-alt"></i> 
+                                    Aponte a câmera do celular
+                                </p>
                             </div>
-                            <div style="display: flex; gap: 8px;">
-                                <i class="fas fa-clock"></i>
-                                <span>Sessão válida por <strong>30 minutos</strong>.</span>
+                            
+                            <div style="margin-top: 20px; padding: 14px; background: #f0f9ff; border-radius: 12px; font-size: 13px; color: #075985; text-align: left;">
+                                <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+                                    <i class="fas fa-info-circle"></i>
+                                    <span><strong>O responsável assina direto no celular dele.</strong> Assim que ele confirmar, você verá aqui automaticamente.</span>
+                                </div>
+                                <div style="display: flex; gap: 8px;">
+                                    <i class="fas fa-clock"></i>
+                                    <span>Sessão válida por <strong>30 minutos</strong>.</span>
+                                </div>
+                            </div>
+                            
+                            <div style="margin-top: 16px;">
+                                <button onclick="copiarLinkAssinatura('${urlAssinatura}')"
+                                        class="btn-copiar-link">
+                                    <i class="fas fa-link"></i> Copiar link de assinatura
+                                </button>
+                            </div>
+                            
+                            <!-- LINK PARA ASSINAR AQUI -->
+                            <div style="margin-top: 14px; padding-top: 14px; border-top: 1px dashed #cbd5e1;">
+                                <p style="margin: 0 0 8px; font-size: 12px; color: #64748b;">
+                                    Não consegue escanear? 
+                                </p>
+                                <button type="button"
+                                        onclick="mostrarCanvasAssinaturaInline('supervisao')"
+                                        style="background: transparent; border: none; color: #0ea5e9; font-weight: 600; font-size: 14px; cursor: pointer; text-decoration: underline; padding: 6px 10px; border-radius: 8px;">
+                                    <i class="fas fa-pen-fancy"></i> Assinar aqui mesmo
+                                </button>
                             </div>
                         </div>
                         
-                        <div style="margin-top: 16px;">
-                            <button onclick="copiarLinkAssinatura('${urlAssinatura}')"
-                                    class="btn-copiar-link">
-                                <i class="fas fa-link"></i> Copiar link de assinatura
-                            </button>
+                        <!-- ÁREA DO CANVAS INLINE -->
+                        <div id="supervisaoCanvasView" style="display: none;">
+                            <div style="background: #f0f9ff; border-radius: 12px; padding: 14px; margin-bottom: 16px; text-align: left;">
+                                <div style="display: flex; gap: 8px;">
+                                    <i class="fas fa-info-circle" style="color: #0369a1;"></i>
+                                    <span style="font-size: 13px; color: #0369a1;">
+                                        Peça para o responsável assinar no espaço abaixo com o dedo ou mouse.
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div id="supervisaoModalCanvasWrapper" 
+                                 style="position: relative; background: white; border: 3px dashed #cbd5e0; border-radius: 16px; overflow: hidden; height: 260px; margin-bottom: 14px; touch-action: none;">
+                                <canvas id="supervisaoModalCanvas" style="width: 100%; height: 100%; display: block;"></canvas>
+                                <div id="supervisaoModalPlaceholder" 
+                                     style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #94a3b8; pointer-events: none; width: 100%;">
+                                    <i class="fas fa-pen-fancy" style="font-size: 28px; display: block; margin-bottom: 5px;"></i>
+                                    <span style="font-size: 13px;">Assine aqui</span>
+                                </div>
+                            </div>
+                            
+                            <div style="display: flex; gap: 10px;">
+                                <button type="button"
+                                        onclick="limparCanvasInline('supervisao')"
+                                        style="flex: 1; padding: 12px; background: #f1f5f9; color: #475569; border: none; border-radius: 10px; font-weight: 600; font-size: 14px; cursor: pointer;">
+                                    <i class="fas fa-eraser"></i> Limpar
+                                </button>
+                                <button type="button"
+                                        id="supervisaoBtnConfirmarInline"
+                                        onclick="salvarAssinaturaInline('supervisao')"
+                                        disabled
+                                        style="flex: 2; padding: 12px; background: #cbd5e0; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 14px; cursor: not-allowed;">
+                                    <i class="fas fa-check"></i> Confirmar Assinatura
+                                </button>
+                            </div>
+                            
+                            <div style="margin-top: 14px;">
+                                <button type="button"
+                                        onclick="voltarParaQRCode('supervisao')"
+                                        style="background: transparent; border: none; color: #64748b; font-size: 13px; cursor: pointer; text-decoration: underline;">
+                                    <i class="fas fa-arrow-left"></i> Voltar para o QR Code
+                                </button>
+                            </div>
                         </div>
+                        
                     </div>
                     
                     <div class="modal-footer" style="border-top: 1px solid #e5e7eb; padding: 15px 25px; justify-content: space-between;">
@@ -3504,12 +3627,556 @@ function abrirModalAssinaturaQR(urlAssinatura) {
         
         <style>
             @keyframes spin { to { transform: rotate(360deg); } }
+            @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         </style>
     `;
     
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     estadoSessaoAssinatura.supervisao.modalInstance = new bootstrap.Modal(safeGet('modalAssinaturaQR'));
     estadoSessaoAssinatura.supervisao.modalInstance.show();
+}
+
+// ============================================
+// 🆕 CANVAS INLINE DA SUPERVISÃO
+// ============================================
+let __inlineCanvasStateSup = {
+    ctx: null, canvas: null, wrapper: null, placeholder: null,
+    desenhando: false, temAssinatura: false, lastX: 0, lastY: 0, inicializado: false
+};
+
+function mostrarCanvasAssinaturaInline(modulo) {
+    const qrView = safeGet('supervisaoQrView');
+    const canvasView = safeGet('supervisaoCanvasView');
+    if (!qrView || !canvasView) return;
+    
+    qrView.style.display = 'none';
+    canvasView.style.display = 'block';
+    
+    setTimeout(() => inicializarCanvasInlineSup(), 50);
+}
+
+function voltarParaQRCode(modulo) {
+    const qrView = safeGet('supervisaoQrView');
+    const canvasView = safeGet('supervisaoCanvasView');
+    if (!qrView || !canvasView) return;
+    
+    canvasView.style.display = 'none';
+    qrView.style.display = 'block';
+}
+
+function inicializarCanvasInlineSup() {
+    const canvas = safeGet('supervisaoModalCanvas');
+    const wrapper = safeGet('supervisaoModalCanvasWrapper');
+    const placeholder = safeGet('supervisaoModalPlaceholder');
+    if (!canvas || !wrapper) return;
+    
+    __inlineCanvasStateSup.canvas = canvas;
+    __inlineCanvasStateSup.wrapper = wrapper;
+    __inlineCanvasStateSup.placeholder = placeholder;
+    __inlineCanvasStateSup.desenhando = false;
+    __inlineCanvasStateSup.temAssinatura = false;
+    
+    const rect = wrapper.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+        setTimeout(() => inicializarCanvasInlineSup(), 100);
+        return;
+    }
+    
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(dpr, dpr);
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#0ea5e9';
+    __inlineCanvasStateSup.ctx = ctx;
+    
+    const btn = safeGet('supervisaoBtnConfirmarInline');
+    if (btn) {
+        btn.disabled = true;
+        btn.style.background = '#cbd5e0';
+        btn.style.cursor = 'not-allowed';
+    }
+    
+    if (placeholder) placeholder.style.opacity = '1';
+    if (wrapper) {
+        wrapper.style.borderColor = '#cbd5e0';
+        wrapper.style.borderStyle = 'dashed';
+    }
+    
+    if (__inlineCanvasStateSup.inicializado) return;
+    __inlineCanvasStateSup.inicializado = true;
+    
+    const getPos = (e) => {
+        const rect = canvas.getBoundingClientRect();
+        let cx, cy;
+        if (e.touches?.length > 0) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
+        else if (e.changedTouches?.length > 0) { cx = e.changedTouches[0].clientX; cy = e.changedTouches[0].clientY; }
+        else { cx = e.clientX; cy = e.clientY; }
+        return { x: cx - rect.left, y: cy - rect.top };
+    };
+    
+    const iniciar = (e) => {
+        e.preventDefault();
+        __inlineCanvasStateSup.desenhando = true;
+        __inlineCanvasStateSup.temAssinatura = true;
+        const p = getPos(e);
+        __inlineCanvasStateSup.lastX = p.x;
+        __inlineCanvasStateSup.lastY = p.y;
+        if (wrapper) {
+            wrapper.style.borderColor = '#0ea5e9';
+            wrapper.style.borderStyle = 'solid';
+        }
+        if (placeholder) placeholder.style.opacity = '0';
+        
+        if (btn) {
+            btn.disabled = false;
+            btn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+            btn.style.cursor = 'pointer';
+        }
+    };
+    
+    const desenhar = (e) => {
+        if (!__inlineCanvasStateSup.desenhando) return;
+        e.preventDefault();
+        const p = getPos(e);
+        __inlineCanvasStateSup.ctx.beginPath();
+        __inlineCanvasStateSup.ctx.moveTo(__inlineCanvasStateSup.lastX, __inlineCanvasStateSup.lastY);
+        __inlineCanvasStateSup.ctx.lineTo(p.x, p.y);
+        __inlineCanvasStateSup.ctx.stroke();
+        __inlineCanvasStateSup.lastX = p.x;
+        __inlineCanvasStateSup.lastY = p.y;
+    };
+    
+    const parar = (e) => {
+        if (e?.preventDefault) e.preventDefault();
+        __inlineCanvasStateSup.desenhando = false;
+    };
+    
+    canvas.addEventListener('touchstart', iniciar, { passive: false });
+    canvas.addEventListener('touchmove', desenhar, { passive: false });
+    canvas.addEventListener('touchend', parar, { passive: false });
+    canvas.addEventListener('touchcancel', parar, { passive: false });
+    canvas.addEventListener('mousedown', iniciar);
+    canvas.addEventListener('mousemove', desenhar);
+    canvas.addEventListener('mouseup', parar);
+    canvas.addEventListener('mouseleave', () => { if (__inlineCanvasStateSup.desenhando) parar(); });
+}
+
+function limparCanvasInline(modulo) {
+    const canvas = __inlineCanvasStateSup.canvas;
+    const ctx = __inlineCanvasStateSup.ctx;
+    if (!canvas || !ctx) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    __inlineCanvasStateSup.temAssinatura = false;
+    
+    if (__inlineCanvasStateSup.placeholder) __inlineCanvasStateSup.placeholder.style.opacity = '1';
+    if (__inlineCanvasStateSup.wrapper) {
+        __inlineCanvasStateSup.wrapper.style.borderColor = '#cbd5e0';
+        __inlineCanvasStateSup.wrapper.style.borderStyle = 'dashed';
+    }
+    
+    const btn = safeGet('supervisaoBtnConfirmarInline');
+    if (btn) {
+        btn.disabled = true;
+        btn.style.background = '#cbd5e0';
+        btn.style.cursor = 'not-allowed';
+    }
+}
+
+async function salvarAssinaturaInline(modulo) {
+    if (!__inlineCanvasStateSup.temAssinatura || !__inlineCanvasStateSup.canvas) {
+        mostrarToastConcluido('⚠️ Assine antes de confirmar', 'warning');
+        return;
+    }
+    
+    const sessaoId = estadoSessaoAssinatura.supervisao?.sessaoId;
+    if (!sessaoId) {
+        mostrarToastConcluido('⚠️ Sessão não encontrada', 'error');
+        return;
+    }
+    
+    const btn = safeGet('supervisaoBtnConfirmarInline');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+    }
+    
+    try {
+        const base64 = __inlineCanvasStateSup.canvas.toDataURL('image/png');
+        
+        const response = await fetch(`/api/sessoes-assinatura/${sessaoId}/assinar`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                assinaturaBase64: base64,
+                assinanteNome: 'Responsável'
+            })
+        });
+        
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Erro ao salvar');
+        
+        estadoSessaoAssinatura.supervisao.assinaturaCapturada = base64;
+        
+        const canvasView = safeGet('supervisaoCanvasView');
+        if (canvasView) {
+            const agora = new Date().toLocaleString('pt-BR');
+            canvasView.innerHTML = `
+                <div style="animation: fadeIn 0.3s ease;">
+                    <div style="background: linear-gradient(135deg, #10b981, #059669); border-radius: 14px; padding: 16px 20px; margin-bottom: 16px; display: flex; align-items: center; gap: 14px; color: white; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);">
+                        <div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.25); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <i class="fas fa-check" style="font-size: 22px;"></i>
+                        </div>
+                        <div style="flex: 1; text-align: left;">
+                            <h4 style="margin: 0 0 2px; font-size: 16px; font-weight: 700;">Assinatura Registrada!</h4>
+                            <p style="margin: 0; font-size: 13px; opacity: 0.95;">Confirmada em ${agora}</p>
+                        </div>
+                    </div>
+                    <div style="text-align: left; margin-bottom: 10px;">
+                        <span style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;"><i class="fas fa-signature"></i> Assinatura capturada</span>
+                    </div>
+                    <div style="position: relative; background: #f0fdf4; border: 3px solid #10b981; border-radius: 16px; overflow: hidden; height: 220px; display: flex; align-items: center; justify-content: center; padding: 12px; box-sizing: border-box; box-shadow: inset 0 2px 8px rgba(16, 185, 129, 0.08);">
+                        <img src="${base64}" alt="Assinatura" style="max-width: 100%; max-height: 100%; object-fit: contain; display: block;">
+                        <div style="position: absolute; top: 10px; right: 10px; background: #10b981; color: white; padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 700; display: flex; align-items: center; gap: 4px; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);">
+                            <i class="fas fa-lock" style="font-size: 9px;"></i> VERIFICADA
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px; margin-top: 16px;">
+                        <button type="button" onclick="refazerAssinaturaSupervisao()" style="flex: 1; padding: 12px; background: #fef3c7; color: #92400e; border: 2px solid #f59e0b; border-radius: 10px; font-weight: 600; font-size: 13px; cursor: pointer;">
+                            <i class="fas fa-redo"></i> Refazer
+                        </button>
+                        <button type="button" onclick="fecharModalAssinaturaQR()" style="flex: 2; padding: 12px; background: linear-gradient(135deg, #0ea5e9, #0284c7); color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 13px; cursor: pointer;">
+                            <i class="fas fa-check-circle"></i> Concluir
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        pararPollingAssinatura();
+        
+        atualizarStatusAssinado({
+            assinaturaBase64: base64,
+            assinadaPorNome: 'Responsável',
+            assinadaEm: new Date().toISOString()
+        });
+        
+        mostrarToastConcluido('✅ Assinatura registrada com sucesso!', 'success');
+        
+    } catch (e) {
+        console.error('Erro:', e);
+        mostrarToastConcluido('❌ ' + e.message, 'error');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Assinatura';
+        }
+    }
+}
+
+// ============================================
+// 🆕 CANVAS INLINE DO PARTICIPANTE
+// ============================================
+let __inlineCanvasStatePart = {
+    ctx: null, canvas: null, wrapper: null, placeholder: null,
+    desenhando: false, temAssinatura: false, lastX: 0, lastY: 0, inicializado: false, participanteId: null
+};
+
+function mostrarCanvasAssinaturaInlineParticipante(participanteId) {
+    const qrView = safeGet('participanteQrView');
+    const canvasView = safeGet('participanteCanvasView');
+    if (!qrView || !canvasView) return;
+    
+    qrView.style.display = 'none';
+    canvasView.style.display = 'block';
+    
+    __inlineCanvasStatePart.participanteId = participanteId;
+    
+    setTimeout(() => inicializarCanvasInlinePart(), 50);
+}
+
+function voltarParaQRCodeParticipante() {
+    const qrView = safeGet('participanteQrView');
+    const canvasView = safeGet('participanteCanvasView');
+    if (!qrView || !canvasView) return;
+    
+    canvasView.style.display = 'none';
+    qrView.style.display = 'block';
+}
+
+function inicializarCanvasInlinePart() {
+    const canvas = safeGet('participanteModalCanvas');
+    const wrapper = safeGet('participanteModalCanvasWrapper');
+    const placeholder = safeGet('participanteModalPlaceholder');
+    if (!canvas || !wrapper) return;
+    
+    __inlineCanvasStatePart.canvas = canvas;
+    __inlineCanvasStatePart.wrapper = wrapper;
+    __inlineCanvasStatePart.placeholder = placeholder;
+    __inlineCanvasStatePart.desenhando = false;
+    __inlineCanvasStatePart.temAssinatura = false;
+    
+    const rect = wrapper.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+        setTimeout(() => inicializarCanvasInlinePart(), 100);
+        return;
+    }
+    
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(dpr, dpr);
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#059669';
+    __inlineCanvasStatePart.ctx = ctx;
+    
+    const btn = safeGet('participanteBtnConfirmarInline');
+    if (btn) {
+        btn.disabled = true;
+        btn.style.background = '#cbd5e0';
+        btn.style.cursor = 'not-allowed';
+    }
+    
+    if (placeholder) placeholder.style.opacity = '1';
+    if (wrapper) {
+        wrapper.style.borderColor = '#cbd5e0';
+        wrapper.style.borderStyle = 'dashed';
+    }
+    
+    if (__inlineCanvasStatePart.inicializado) return;
+    __inlineCanvasStatePart.inicializado = true;
+    
+    const getPos = (e) => {
+        const rect = canvas.getBoundingClientRect();
+        let cx, cy;
+        if (e.touches?.length > 0) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
+        else if (e.changedTouches?.length > 0) { cx = e.changedTouches[0].clientX; cy = e.changedTouches[0].clientY; }
+        else { cx = e.clientX; cy = e.clientY; }
+        return { x: cx - rect.left, y: cy - rect.top };
+    };
+    
+    const iniciar = (e) => {
+        e.preventDefault();
+        __inlineCanvasStatePart.desenhando = true;
+        __inlineCanvasStatePart.temAssinatura = true;
+        const p = getPos(e);
+        __inlineCanvasStatePart.lastX = p.x;
+        __inlineCanvasStatePart.lastY = p.y;
+        if (wrapper) {
+            wrapper.style.borderColor = '#10b981';
+            wrapper.style.borderStyle = 'solid';
+        }
+        if (placeholder) placeholder.style.opacity = '0';
+        
+        if (btn) {
+            btn.disabled = false;
+            btn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+            btn.style.cursor = 'pointer';
+        }
+    };
+    
+    const desenhar = (e) => {
+        if (!__inlineCanvasStatePart.desenhando) return;
+        e.preventDefault();
+        const p = getPos(e);
+        __inlineCanvasStatePart.ctx.beginPath();
+        __inlineCanvasStatePart.ctx.moveTo(__inlineCanvasStatePart.lastX, __inlineCanvasStatePart.lastY);
+        __inlineCanvasStatePart.ctx.lineTo(p.x, p.y);
+        __inlineCanvasStatePart.ctx.stroke();
+        __inlineCanvasStatePart.lastX = p.x;
+        __inlineCanvasStatePart.lastY = p.y;
+    };
+    
+    const parar = (e) => {
+        if (e?.preventDefault) e.preventDefault();
+        __inlineCanvasStatePart.desenhando = false;
+    };
+    
+    canvas.addEventListener('touchstart', iniciar, { passive: false });
+    canvas.addEventListener('touchmove', desenhar, { passive: false });
+    canvas.addEventListener('touchend', parar, { passive: false });
+    canvas.addEventListener('touchcancel', parar, { passive: false });
+    canvas.addEventListener('mousedown', iniciar);
+    canvas.addEventListener('mousemove', desenhar);
+    canvas.addEventListener('mouseup', parar);
+    canvas.addEventListener('mouseleave', () => { if (__inlineCanvasStatePart.desenhando) parar(); });
+}
+
+function limparCanvasInlineParticipante() {
+    const canvas = __inlineCanvasStatePart.canvas;
+    const ctx = __inlineCanvasStatePart.ctx;
+    if (!canvas || !ctx) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    __inlineCanvasStatePart.temAssinatura = false;
+    
+    if (__inlineCanvasStatePart.placeholder) __inlineCanvasStatePart.placeholder.style.opacity = '1';
+    if (__inlineCanvasStatePart.wrapper) {
+        __inlineCanvasStatePart.wrapper.style.borderColor = '#cbd5e0';
+        __inlineCanvasStatePart.wrapper.style.borderStyle = 'dashed';
+    }
+    
+    const btn = safeGet('participanteBtnConfirmarInline');
+    if (btn) {
+        btn.disabled = true;
+        btn.style.background = '#cbd5e0';
+        btn.style.cursor = 'not-allowed';
+    }
+}
+
+async function salvarAssinaturaInlineParticipante(participanteId) {
+    if (!__inlineCanvasStatePart.temAssinatura || !__inlineCanvasStatePart.canvas) {
+        mostrarToastConcluido('⚠️ Assine antes de confirmar', 'warning');
+        return;
+    }
+    
+    const participante = __participantesAtendimento.find(p => p.id === participanteId);
+    if (!participante || !participante.sessaoId) {
+        mostrarToastConcluido('⚠️ Sessão não encontrada', 'error');
+        return;
+    }
+    
+    const btn = safeGet('participanteBtnConfirmarInline');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+    }
+    
+    try {
+        const base64 = __inlineCanvasStatePart.canvas.toDataURL('image/png');
+        
+        const response = await fetch(`/api/sessoes-assinatura/${participante.sessaoId}/assinar`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                assinaturaBase64: base64,
+                assinanteNome: participante.usuarioNome
+            })
+        });
+        
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Erro ao salvar');
+        
+        participante.assinaturaCapturada = base64;
+        
+        const canvasView = safeGet('participanteCanvasView');
+        if (canvasView) {
+            const agora = new Date().toLocaleString('pt-BR');
+            canvasView.innerHTML = `
+                <div style="animation: fadeIn 0.3s ease;">
+                    <div style="background: linear-gradient(135deg, #10b981, #059669); border-radius: 14px; padding: 16px 20px; margin-bottom: 16px; display: flex; align-items: center; gap: 14px; color: white; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);">
+                        <div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.25); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <i class="fas fa-check" style="font-size: 22px;"></i>
+                        </div>
+                        <div style="flex: 1; text-align: left;">
+                            <h4 style="margin: 0 0 2px; font-size: 16px; font-weight: 700;">Assinatura Registrada!</h4>
+                            <p style="margin: 0; font-size: 13px; opacity: 0.95;">${escapeHTML(participante.usuarioNome)} • ${agora}</p>
+                        </div>
+                    </div>
+                    <div style="text-align: left; margin-bottom: 10px;">
+                        <span style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;"><i class="fas fa-signature"></i> Assinatura capturada</span>
+                    </div>
+                    <div style="position: relative; background: #f0fdf4; border: 3px solid #10b981; border-radius: 16px; overflow: hidden; height: 220px; display: flex; align-items: center; justify-content: center; padding: 12px; box-sizing: border-box; box-shadow: inset 0 2px 8px rgba(16, 185, 129, 0.08);">
+                        <img src="${base64}" alt="Assinatura" style="max-width: 100%; max-height: 100%; object-fit: contain; display: block;">
+                        <div style="position: absolute; top: 10px; right: 10px; background: #10b981; color: white; padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 700; display: flex; align-items: center; gap: 4px; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);">
+                            <i class="fas fa-lock" style="font-size: 9px;"></i> VERIFICADA
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px; margin-top: 16px;">
+                        <button type="button" onclick="refazerAssinaturaParticipante('${participanteId}')" style="flex: 1; padding: 12px; background: #fef3c7; color: #92400e; border: 2px solid #f59e0b; border-radius: 10px; font-weight: 600; font-size: 13px; cursor: pointer;">
+                            <i class="fas fa-redo"></i> Refazer
+                        </button>
+                        <button type="button" onclick="fecharModalAssinaturaParticipante()" style="flex: 2; padding: 12px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 13px; cursor: pointer;">
+                            <i class="fas fa-check-circle"></i> Concluir
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        if (participante.monitoramentoInterval) {
+            clearInterval(participante.monitoramentoInterval);
+            participante.monitoramentoInterval = null;
+        }
+        
+        renderizarParticipantesAdicionados();
+        renderizarEditParticipantes();
+        
+        mostrarToastConcluido(`✅ Assinatura de ${participante.usuarioNome} registrada!`, 'success');
+        
+    } catch (e) {
+        console.error('Erro:', e);
+        mostrarToastConcluido('❌ ' + e.message, 'error');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Assinatura';
+        }
+    }
+}
+
+async function refazerAssinaturaParticipante(participanteId) {
+    const participante = __participantesAtendimento.find(p => p.id === participanteId);
+    if (!participante) return;
+    
+    const confirmar = await confirm('Refazer a assinatura? A atual será descartada.');
+    if (!confirmar) return;
+    
+    participante.assinaturaCapturada = null;
+    
+    // Restaura a view para o canvas
+    const canvasView = safeGet('participanteCanvasView');
+    if (canvasView) {
+        const qrUrl = participante.qrCodeDataUrl || '';
+        canvasView.innerHTML = `
+            <div style="background: #f0fdf4; border-radius: 12px; padding: 14px; margin-bottom: 16px; text-align: left;">
+                <div style="display: flex; gap: 8px;">
+                    <i class="fas fa-info-circle" style="color: #047857;"></i>
+                    <span style="font-size: 13px; color: #047857;">
+                        Peça para o participante assinar no espaço abaixo.
+                    </span>
+                </div>
+            </div>
+            <div id="participanteModalCanvasWrapper" style="position: relative; background: white; border: 3px dashed #cbd5e0; border-radius: 16px; overflow: hidden; height: 260px; margin-bottom: 14px; touch-action: none;">
+                <canvas id="participanteModalCanvas" style="width: 100%; height: 100%; display: block;"></canvas>
+                <div id="participanteModalPlaceholder" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #94a3b8; pointer-events: none; width: 100%;">
+                    <i class="fas fa-pen-fancy" style="font-size: 28px; display: block; margin-bottom: 5px;"></i>
+                    <span style="font-size: 13px;">Assine aqui</span>
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button type="button" onclick="limparCanvasInlineParticipante()" style="flex: 1; padding: 12px; background: #f1f5f9; color: #475569; border: none; border-radius: 10px; font-weight: 600; font-size: 14px; cursor: pointer;">
+                    <i class="fas fa-eraser"></i> Limpar
+                </button>
+                <button type="button" id="participanteBtnConfirmarInline" onclick="salvarAssinaturaInlineParticipante('${participanteId}')" disabled style="flex: 2; padding: 12px; background: #cbd5e0; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 14px; cursor: not-allowed;">
+                    <i class="fas fa-check"></i> Confirmar Assinatura
+                </button>
+            </div>
+        `;
+    }
+    
+    __inlineCanvasStatePart.inicializado = false;
+    setTimeout(() => inicializarCanvasInlinePart(), 100);
+    
+    renderizarParticipantesAdicionados();
+    renderizarEditParticipantes();
+    
+    mostrarToastConcluido('✏️ Assinatura apagada. Pode assinar novamente.', 'info');
 }
 
 function fecharModalAssinaturaQR() {
@@ -3519,7 +4186,16 @@ function fecharModalAssinaturaQR() {
     const modalEl = safeGet('modalAssinaturaQR');
     if (modalEl) setTimeout(() => modalEl.remove(), 300);
     
-    mostrarBlocoCompactoAssinatura();
+    // Se já foi assinado, mostra o bloco verde. Se não, o amarelo.
+    if (estadoSessaoAssinatura.supervisao.assinaturaCapturada) {
+        atualizarStatusAssinado({
+            assinaturaBase64: estadoSessaoAssinatura.supervisao.assinaturaCapturada,
+            assinadaPorNome: 'Responsável',
+            assinadaEm: new Date().toISOString()
+        });
+    } else {
+        mostrarBlocoCompactoAssinatura();
+    }
 }
 
 function mostrarBlocoCompactoAssinatura() {
@@ -6713,6 +7389,15 @@ window.refazerAssinaturaSupervisao = refazerAssinaturaSupervisao;
 window.mostrarTelaAssinatura = mostrarTelaAssinatura;
 window.limparAssinaturaTela = limparAssinaturaTela;
 window.salvarAssinaturaTela = salvarAssinaturaTela;
+window.mostrarCanvasAssinaturaInline = mostrarCanvasAssinaturaInline;
+window.voltarParaQRCode = voltarParaQRCode;
+window.limparCanvasInline = limparCanvasInline;
+window.salvarAssinaturaInline = salvarAssinaturaInline;
+window.mostrarCanvasAssinaturaInlineParticipante = mostrarCanvasAssinaturaInlineParticipante;
+window.voltarParaQRCodeParticipante = voltarParaQRCodeParticipante;
+window.limparCanvasInlineParticipante = limparCanvasInlineParticipante;
+window.salvarAssinaturaInlineParticipante = salvarAssinaturaInlineParticipante;
+window.refazerAssinaturaParticipante = refazerAssinaturaParticipante;
 
 // Múltiplos Participantes
 window.toggleMaisParticipantes = toggleMaisParticipantes;

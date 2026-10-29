@@ -3021,7 +3021,7 @@ class SetorPedagogico {
             }
         }, 1000);
     }
-
+    
     // ============================================
     // LISTA DE 2ªS CHAMADAS
     // ============================================
@@ -3036,7 +3036,7 @@ class SetorPedagogico {
         const turma = document.getElementById('filtroListaSegundaChamadaTurma')?.value || '';
         const motivo = document.getElementById('filtroListaSegundaChamadaMotivo')?.value || '';
         const tipoProvaPerdida = document.getElementById('filtroListaSegundaChamadaTipoProva')?.value || '';
-        const periodoProvaFiltro = document.getElementById('filtroListaSegundaChamadaPeriodoProva')?.value || ''; // 🆕
+        const periodoProvaFiltro = document.getElementById('filtroListaSegundaChamadaPeriodoProva')?.value || '';
         const dataInicio = document.getElementById('filtroListaSegundaChamadaDataInicio')?.value || '';
         const dataFim = document.getElementById('filtroListaSegundaChamadaDataFim')?.value || '';
 
@@ -3052,7 +3052,6 @@ class SetorPedagogico {
         if (turma) url += `&turma=${encodeURIComponent(turma)}`;
         if (motivo) url += `&motivo=${encodeURIComponent(motivo)}`;
         if (tipoProvaPerdida) url += `&tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}`;
-        // 🆕
         if (periodoProvaFiltro && periodoProvaFiltro !== 'todos') {
             url += `&periodoProva=${encodeURIComponent(periodoProvaFiltro)}`;
         }
@@ -3141,15 +3140,20 @@ class SetorPedagogico {
                                             : '<span class="badge bg-secondary">Sem</span>'}
                                     </td>
                                     <td>
-                                        <button class="btn btn-sm btn-primary" onclick="setorPedagogico.imprimirSegundaChamada('${a.id}')" title="Imprimir">
-                                            <i class="fas fa-print"></i>
-                                        </button>
-                                        <button class="btn btn-sm btn-warning" onclick="setorPedagogico.abrirEditarSegundaChamada('${a.id}')" title="Editar">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                        <button class="btn btn-sm btn-danger" onclick="setorPedagogico.excluirSegundaChamada('${a.id}')" title="Excluir">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
+                                        <div class="d-flex gap-1">
+                                            <button class="btn btn-sm btn-info" onclick="setorPedagogico.verDetalhesSegundaChamada('${a.id}')" title="Ver detalhes">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-primary" onclick="setorPedagogico.imprimirSegundaChamada('${a.id}')" title="Imprimir">
+                                                <i class="fas fa-print"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-warning" onclick="setorPedagogico.abrirEditarSegundaChamada('${a.id}')" title="Editar">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-danger" onclick="setorPedagogico.excluirSegundaChamada('${a.id}')" title="Excluir">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>`).join('')}
                         </tbody>
@@ -3167,7 +3171,199 @@ class SetorPedagogico {
                     </button>
                 </div>`;
         }
-}
+    }
+
+    // ============================================
+    // 🔍 VER DETALHES DA 2ª CHAMADA
+    // ============================================
+    async verDetalhesSegundaChamada(id) {
+        if (!id) return;
+
+        try {
+            const r = await fetch(`/api/gestao-geral/autorizacao/${id}`, {
+                headers: { 'Authorization': `Bearer ${this.token}` }
+            });
+
+            const d = await r.json();
+
+            if (!d.success || !d.autorizacao) {
+                this.showToast('Erro ao carregar os detalhes do registro', 'error');
+                return;
+            }
+
+            const a = d.autorizacao;
+            const old = document.getElementById('modalVer2Chamada');
+            if (old) old.remove();
+
+            // ============================================
+            // Bloco de assinatura
+            // ============================================
+            let assinaturaHTML = '';
+            if (a.assinaturaBase64) {
+                assinaturaHTML = `
+                    <div style="margin-top: 20px;">
+                        <label style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; display: block; margin-bottom: 8px;">
+                            <i class="fas fa-signature"></i> Assinatura do Responsável
+                        </label>
+                        <div style="background: #f0fdf4; border: 2px solid #10b981; border-radius: 12px; padding: 12px; text-align: center;">
+                            <img src="${a.assinaturaBase64}"
+                                 alt="Assinatura"
+                                 style="max-width: 100%; max-height: 130px; object-fit: contain;">
+                            ${a.assinadaPorNome ? `<p style="margin: 8px 0 0; font-size: 12px; color: #065f46;"><strong>Assinado por:</strong> ${this.escapeHtml(a.assinadaPorNome)}</p>` : ''}
+                            ${a.assinadaEm ? `<p style="margin: 2px 0 0; font-size: 11px; color: #065f46;">${new Date(a.assinadaEm).toLocaleString('pt-BR')}</p>` : ''}
+                        </div>
+                    </div>
+                `;
+            } else if (a.precisaAssinatura) {
+                assinaturaHTML = `
+                    <div style="margin-top: 20px;">
+                        <label style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; display: block; margin-bottom: 8px;">
+                            <i class="fas fa-signature"></i> Assinatura do Responsável
+                        </label>
+                        <div style="background: #fef3c7; border: 2px dashed #f59e0b; border-radius: 12px; padding: 14px; text-align: center; color: #92400e;">
+                            <i class="fas fa-clock"></i> Aguardando assinatura via QR Code
+                        </div>
+                    </div>
+                `;
+            }
+
+            // ============================================
+            // Bloco de responsável
+            // ============================================
+            const temResponsavel = a.responsavelNome || a.responsavelCPF || a.responsavelTelefone;
+            const responsavelHTML = temResponsavel ? `
+                <div style="margin-top: 20px;">
+                    <label style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; display: block; margin-bottom: 8px;">
+                        <i class="fas fa-user-shield"></i> Dados do Responsável
+                    </label>
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div>
+                                <div style="font-size: 11px; color: #94a3b8;">Nome</div>
+                                <div style="font-weight: 600; color: #1e293b;">${this.escapeHtml(a.responsavelNome || '-')}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 11px; color: #94a3b8;">CPF</div>
+                                <div style="font-weight: 600; color: #1e293b;">${this.escapeHtml(a.responsavelCPF || '-')}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 11px; color: #94a3b8;">Telefone</div>
+                                <div style="font-weight: 600; color: #1e293b;">${this.escapeHtml(a.responsavelTelefone || '-')}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ` : '';
+
+            // ============================================
+            // Modal
+            // ============================================
+            const modalHtml = `
+                <div class="modal fade" id="modalVer2Chamada" tabindex="-1">
+                    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+                        <div class="modal-content" style="border-radius: 16px; border: none; overflow: hidden;">
+
+                            <div class="modal-header" style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; border: none; padding: 20px 25px;">
+                                <h5 class="modal-title" style="display: flex; align-items: center; gap: 10px;">
+                                    <i class="fas fa-file-signature"></i> Detalhes da 2ª Chamada
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            </div>
+
+                            <div class="modal-body" style="padding: 25px; background: #f8fafc;">
+
+                                <div style="display: flex; align-items: center; gap: 12px; padding: 14px; background: white; border-radius: 12px; border-left: 4px solid #1e3c72; margin-bottom: 20px;">
+                                    <img src="${a.alunoFoto || this.gerarAvatarSVG(a.alunoNome)}"
+                                         style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 2px solid #e2e8f0;"
+                                         alt="">
+                                    <div style="flex: 1;">
+                                        <h5 style="margin: 0; color: #1e3c72; font-weight: 700;">${this.escapeHtml(a.alunoNome || '-')}</h5>
+                                        <p style="margin: 3px 0 0; font-size: 13px; color: #64748b;">
+                                            <i class="fas fa-id-card"></i> ${this.escapeHtml(a.alunoMatricula || 'Sem matrícula')}
+                                            • <i class="fas fa-graduation-cap"></i> ${this.escapeHtml(a.alunoTurma || '-')}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div class="row g-3" style="margin-bottom: 8px;">
+                                    <div class="col-md-6">
+                                        <div style="background: white; border-radius: 10px; padding: 14px; border: 1px solid #e2e8f0;">
+                                            <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Data do Registro</div>
+                                            <div style="font-size: 15px; font-weight: 600; color: #1e293b;">${a.dataFormatada || '-'}</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div style="background: white; border-radius: 10px; padding: 14px; border: 1px solid #e2e8f0;">
+                                            <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Registrado por</div>
+                                            <div style="font-size: 15px; font-weight: 600; color: #1e293b;">${this.escapeHtml(a.registradoPorNome || a.registradoPor || '-')}</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div style="background: white; border-radius: 10px; padding: 14px; border: 1px solid #e2e8f0;">
+                                            <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Período da Falta</div>
+                                            <div style="font-size: 15px; font-weight: 600; color: #1e3c72;">${this.escapeHtml(a.periodoFaltaFormatado || '-')}</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div style="background: white; border-radius: 10px; padding: 14px; border: 1px solid #e2e8f0;">
+                                            <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Motivo</div>
+                                            <div style="font-size: 14px; font-weight: 600; color: #7c3aed;">${this.escapeHtml(a.motivoLabel || '-')}</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div style="background: white; border-radius: 10px; padding: 14px; border: 1px solid #e2e8f0;">
+                                            <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Tipo de Prova Perdida</div>
+                                            <div style="font-size: 15px; font-weight: 600; color: #d97706;">${this.escapeHtml(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div style="background: white; border-radius: 10px; padding: 14px; border: 1px solid #e2e8f0;">
+                                            <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Período da Prova</div>
+                                            <div style="font-size: 15px; font-weight: 600; color: #0284c7;">${this.escapeHtml(a.periodoProvaFormatado || a.periodoProva || '-')}</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                ${a.observacoes ? `
+                                    <div style="margin-top: 16px;">
+                                        <label style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; display: block; margin-bottom: 8px;">
+                                            <i class="fas fa-comment"></i> Observações
+                                        </label>
+                                        <div style="background: white; border-radius: 10px; padding: 14px; border: 1px solid #e2e8f0; font-size: 13px; color: #475569; white-space: pre-line;">
+                                            ${this.escapeHtml(a.observacoes)}
+                                        </div>
+                                    </div>
+                                ` : ''}
+
+                                ${responsavelHTML}
+                                ${assinaturaHTML}
+
+                            </div>
+
+                            <div class="modal-footer" style="background: white; border-top: 1px solid #e2e8f0; padding: 15px 25px;">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" style="border-radius: 8px;">
+                                    <i class="fas fa-times"></i> Fechar
+                                </button>
+                                <button type="button" class="btn btn-primary" onclick="setorPedagogico.imprimirSegundaChamada('${a.id}')" style="border-radius: 8px;">
+                                    <i class="fas fa-print"></i> Imprimir
+                                </button>
+                                <button type="button" class="btn btn-warning" onclick="bootstrap.Modal.getInstance(document.getElementById('modalVer2Chamada')).hide(); setTimeout(() => setorPedagogico.abrirEditarSegundaChamada('${a.id}'), 300);" style="border-radius: 8px;">
+                                    <i class="fas fa-edit"></i> Editar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            new bootstrap.Modal(document.getElementById('modalVer2Chamada')).show();
+
+        } catch (error) {
+            console.error('Erro ao ver detalhes da 2ª Chamada:', error);
+            this.showToast('Erro ao carregar os detalhes', 'error');
+        }
+    }
 
     renderizarPaginacao2Chamada() {
         const { paginaAtual, totalPaginas, totalRegistros } = this.paginacao2Chamada;
@@ -3440,47 +3636,109 @@ class SetorPedagogico {
                         </div>
 
                         <div class="modal-body" style="padding: 30px; text-align: center;">
-                            <div id="modalAssinaturaStatus" style="margin-bottom: 20px;">
-                                <div style="background: #fef3c7; border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 12px; text-align: left;">
-                                    <div style="width: 40px; height: 40px; border-radius: 50%; border: 4px solid #f59e0b; border-top-color: transparent; animation: spin 1s linear infinite; flex-shrink: 0;"></div>
-                                    <div>
-                                        <strong style="color: #92400e;">Aguardando assinatura...</strong>
-                                        <p style="margin: 3px 0 0; font-size: 13px; color: #78350f;">
-                                            Peça para o responsável escanear o QR Code abaixo
-                                        </p>
+                            
+                            <!-- ÁREA DO QR CODE -->
+                            <div id="pedagogicoQrView">
+                                <div id="modalAssinaturaStatus" style="margin-bottom: 20px;">
+                                    <div style="background: #fef3c7; border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 12px; text-align: left;">
+                                        <div style="width: 40px; height: 40px; border-radius: 50%; border: 4px solid #f59e0b; border-top-color: transparent; animation: spin 1s linear infinite; flex-shrink: 0;"></div>
+                                        <div>
+                                            <strong style="color: #92400e;">Aguardando assinatura...</strong>
+                                            <p style="margin: 3px 0 0; font-size: 13px; color: #78350f;">
+                                                Peça para o responsável escanear o QR Code abaixo
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <div style="background: white; border: 2px solid #e2e8f0; border-radius: 16px; padding: 20px; display: inline-block;">
-                                <img src="${qrUrl}"
-                                    alt="QR Code para assinatura"
-                                    style="width: 260px; height: 260px; display: block;"
-                                    id="qrCodeImage">
-                                <p style="margin: 12px 0 0; font-size: 13px; color: #64748b;">
-                                    <i class="fas fa-mobile-alt"></i>
-                                    Aponte a câmera do celular
-                                </p>
-                            </div>
-
-                            <div style="margin-top: 20px; padding: 14px; background: #f0f9ff; border-radius: 12px; font-size: 13px; color: #0369a1; text-align: left;">
-                                <div style="display: flex; gap: 8px; margin-bottom: 6px;">
-                                    <i class="fas fa-info-circle"></i>
-                                    <span><strong>O responsável assina direto no celular dele</strong>, sem sair da tela. Assim que ele confirmar, você verá aqui automaticamente.</span>
+                                <div style="background: white; border: 2px solid #e2e8f0; border-radius: 16px; padding: 20px; display: inline-block;">
+                                    <img src="${qrUrl}"
+                                        alt="QR Code para assinatura"
+                                        style="width: 260px; height: 260px; display: block;"
+                                        id="qrCodeImage">
+                                    <p style="margin: 12px 0 0; font-size: 13px; color: #64748b;">
+                                        <i class="fas fa-mobile-alt"></i>
+                                        Aponte a câmera do celular
+                                    </p>
                                 </div>
-                                <div style="display: flex; gap: 8px;">
-                                    <i class="fas fa-clock"></i>
-                                    <span>Sessão válida por <strong>30 minutos</strong>.</span>
+
+                                <div style="margin-top: 20px; padding: 14px; background: #f0f9ff; border-radius: 12px; font-size: 13px; color: #0369a1; text-align: left;">
+                                    <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+                                        <i class="fas fa-info-circle"></i>
+                                        <span><strong>O responsável assina direto no celular dele</strong>, sem sair da tela. Assim que ele confirmar, você verá aqui automaticamente.</span>
+                                    </div>
+                                    <div style="display: flex; gap: 8px;">
+                                        <i class="fas fa-clock"></i>
+                                        <span>Sessão válida por <strong>30 minutos</strong>.</span>
+                                    </div>
+                                </div>
+
+                                <div style="margin-top: 16px;">
+                                    <button onclick="setorPedagogico.copiarLinkAssinatura('${urlAssinatura}')"
+                                            class="btn btn-sm btn-outline-secondary"
+                                            style="border-radius: 10px; padding: 8px 16px; font-size: 13px;">
+                                        <i class="fas fa-link"></i> Copiar link de assinatura
+                                    </button>
+                                </div>
+
+                                <!-- LINK PARA ASSINAR AQUI -->
+                                <div style="margin-top: 14px; padding-top: 14px; border-top: 1px dashed #cbd5e1;">
+                                    <p style="margin: 0 0 8px; font-size: 12px; color: #64748b;">
+                                        Não consegue escanear? 
+                                    </p>
+                                    <button type="button"
+                                            onclick="setorPedagogico.mostrarCanvasAssinaturaInline('${modulo}')"
+                                            style="background: transparent; border: none; color: #2a5298; font-weight: 600; font-size: 14px; cursor: pointer; text-decoration: underline; padding: 6px 10px; border-radius: 8px;">
+                                        <i class="fas fa-pen-fancy"></i> Assinar aqui mesmo
+                                    </button>
                                 </div>
                             </div>
 
-                            <div style="margin-top: 16px;">
-                                <button onclick="setorPedagogico.copiarLinkAssinatura('${urlAssinatura}')"
-                                        class="btn btn-sm btn-outline-secondary"
-                                        style="border-radius: 10px; padding: 8px 16px; font-size: 13px;">
-                                    <i class="fas fa-link"></i> Copiar link de assinatura
-                                </button>
+                            <!-- ÁREA DO CANVAS INLINE -->
+                            <div id="pedagogicoCanvasView" style="display: none;">
+                                <div style="background: #f0f9ff; border-radius: 12px; padding: 14px; margin-bottom: 16px; text-align: left;">
+                                    <div style="display: flex; gap: 8px;">
+                                        <i class="fas fa-info-circle" style="color: #0369a1;"></i>
+                                        <span style="font-size: 13px; color: #0369a1;">
+                                            Peça para o responsável assinar no espaço abaixo com o dedo ou mouse.
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div id="pedagogicoModalCanvasWrapper"
+                                     style="position: relative; background: white; border: 3px dashed #cbd5e0; border-radius: 16px; overflow: hidden; height: 260px; margin-bottom: 14px; touch-action: none;">
+                                    <canvas id="pedagogicoModalCanvas" style="width: 100%; height: 100%; display: block;"></canvas>
+                                    <div id="pedagogicoModalPlaceholder"
+                                         style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #94a3b8; pointer-events: none; width: 100%;">
+                                        <i class="fas fa-pen-fancy" style="font-size: 28px; display: block; margin-bottom: 5px;"></i>
+                                        <span style="font-size: 13px;">Assine aqui</span>
+                                    </div>
+                                </div>
+
+                                <div style="display: flex; gap: 10px;">
+                                    <button type="button"
+                                            onclick="setorPedagogico.limparCanvasInline()"
+                                            style="flex: 1; padding: 12px; background: #f1f5f9; color: #475569; border: none; border-radius: 10px; font-weight: 600; font-size: 14px; cursor: pointer;">
+                                        <i class="fas fa-eraser"></i> Limpar
+                                    </button>
+                                    <button type="button"
+                                            id="pedagogicoBtnConfirmarInline"
+                                            onclick="setorPedagogico.salvarAssinaturaInline('${modulo}')"
+                                            disabled
+                                            style="flex: 2; padding: 12px; background: #cbd5e0; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 14px; cursor: not-allowed;">
+                                        <i class="fas fa-check"></i> Confirmar Assinatura
+                                    </button>
+                                </div>
+
+                                <div style="margin-top: 14px;">
+                                    <button type="button"
+                                            onclick="setorPedagogico.voltarParaQRCode()"
+                                            style="background: transparent; border: none; color: #64748b; font-size: 13px; cursor: pointer; text-decoration: underline;">
+                                        <i class="fas fa-arrow-left"></i> Voltar para o QR Code
+                                    </button>
+                                </div>
                             </div>
+
                         </div>
 
                         <div class="modal-footer" style="border-top: 1px solid #e5e7eb; padding: 15px 25px; justify-content: space-between;">
@@ -3497,6 +3755,7 @@ class SetorPedagogico {
 
             <style>
                 @keyframes spin { to { transform: rotate(360deg); } }
+                @keyframes fadeInCanvas { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
             </style>
         `;
 
@@ -3513,6 +3772,255 @@ class SetorPedagogico {
         }, 200);
     }
 
+        // ============================================================================
+    // 🆕 CANVAS INLINE - 2ª CHAMADA
+    // ============================================================================
+    mostrarCanvasAssinaturaInline(modulo) {
+        const qrView = document.getElementById('pedagogicoQrView');
+        const canvasView = document.getElementById('pedagogicoCanvasView');
+        if (!qrView || !canvasView) return;
+
+        qrView.style.display = 'none';
+        canvasView.style.display = 'block';
+
+        setTimeout(() => this.inicializarCanvasInlinePedagogico(), 50);
+    }
+
+    voltarParaQRCode() {
+        const qrView = document.getElementById('pedagogicoQrView');
+        const canvasView = document.getElementById('pedagogicoCanvasView');
+        if (!qrView || !canvasView) return;
+
+        canvasView.style.display = 'none';
+        qrView.style.display = 'block';
+    }
+
+    inicializarCanvasInlinePedagogico() {
+        const canvas = document.getElementById('pedagogicoModalCanvas');
+        const wrapper = document.getElementById('pedagogicoModalCanvasWrapper');
+        const placeholder = document.getElementById('pedagogicoModalPlaceholder');
+        if (!canvas || !wrapper) return;
+
+        if (!this._inlineCanvasPedagogico) {
+            this._inlineCanvasPedagogico = {
+                ctx: null, canvas: null, wrapper: null, placeholder: null,
+                desenhando: false, temAssinatura: false, lastX: 0, lastY: 0, inicializado: false
+            };
+        }
+
+        const state = this._inlineCanvasPedagogico;
+        state.canvas = canvas;
+        state.wrapper = wrapper;
+        state.placeholder = placeholder;
+        state.desenhando = false;
+        state.temAssinatura = false;
+
+        const rect = wrapper.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) {
+            setTimeout(() => this.inicializarCanvasInlinePedagogico(), 100);
+            return;
+        }
+
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        canvas.style.width = rect.width + 'px';
+        canvas.style.height = rect.height + 'px';
+
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#2a5298';
+        state.ctx = ctx;
+
+        const btn = document.getElementById('pedagogicoBtnConfirmarInline');
+        if (btn) {
+            btn.disabled = true;
+            btn.style.background = '#cbd5e0';
+            btn.style.cursor = 'not-allowed';
+        }
+
+        if (placeholder) placeholder.style.opacity = '1';
+        if (wrapper) {
+            wrapper.style.borderColor = '#cbd5e0';
+            wrapper.style.borderStyle = 'dashed';
+        }
+
+        if (state.inicializado) return;
+        state.inicializado = true;
+
+        const getPos = (e) => {
+            const rect = canvas.getBoundingClientRect();
+            let cx, cy;
+            if (e.touches?.length > 0) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
+            else if (e.changedTouches?.length > 0) { cx = e.changedTouches[0].clientX; cy = e.changedTouches[0].clientY; }
+            else { cx = e.clientX; cy = e.clientY; }
+            return { x: cx - rect.left, y: cy - rect.top };
+        };
+
+        const iniciar = (e) => {
+            e.preventDefault();
+            state.desenhando = true;
+            state.temAssinatura = true;
+            const p = getPos(e);
+            state.lastX = p.x;
+            state.lastY = p.y;
+            if (wrapper) {
+                wrapper.style.borderColor = '#2a5298';
+                wrapper.style.borderStyle = 'solid';
+            }
+            if (placeholder) placeholder.style.opacity = '0';
+
+            if (btn) {
+                btn.disabled = false;
+                btn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                btn.style.cursor = 'pointer';
+            }
+        };
+
+        const desenhar = (e) => {
+            if (!state.desenhando) return;
+            e.preventDefault();
+            const p = getPos(e);
+            state.ctx.beginPath();
+            state.ctx.moveTo(state.lastX, state.lastY);
+            state.ctx.lineTo(p.x, p.y);
+            state.ctx.stroke();
+            state.lastX = p.x;
+            state.lastY = p.y;
+        };
+
+        const parar = (e) => {
+            if (e?.preventDefault) e.preventDefault();
+            state.desenhando = false;
+        };
+
+        canvas.addEventListener('touchstart', iniciar, { passive: false });
+        canvas.addEventListener('touchmove', desenhar, { passive: false });
+        canvas.addEventListener('touchend', parar, { passive: false });
+        canvas.addEventListener('touchcancel', parar, { passive: false });
+        canvas.addEventListener('mousedown', iniciar);
+        canvas.addEventListener('mousemove', desenhar);
+        canvas.addEventListener('mouseup', parar);
+        canvas.addEventListener('mouseleave', () => { if (state.desenhando) parar(); });
+    }
+
+    limparCanvasInline() {
+        const state = this._inlineCanvasPedagogico;
+        if (!state || !state.canvas || !state.ctx) return;
+
+        const rect = state.canvas.getBoundingClientRect();
+        state.ctx.clearRect(0, 0, rect.width, rect.height);
+        state.temAssinatura = false;
+
+        if (state.placeholder) state.placeholder.style.opacity = '1';
+        if (state.wrapper) {
+            state.wrapper.style.borderColor = '#cbd5e0';
+            state.wrapper.style.borderStyle = 'dashed';
+        }
+
+        const btn = document.getElementById('pedagogicoBtnConfirmarInline');
+        if (btn) {
+            btn.disabled = true;
+            btn.style.background = '#cbd5e0';
+            btn.style.cursor = 'not-allowed';
+        }
+    }
+
+    async salvarAssinaturaInline(modulo) {
+        const state = this._inlineCanvasPedagogico;
+        if (!state || !state.temAssinatura || !state.canvas) {
+            this.showToast('⚠️ Assine antes de confirmar', 'warning');
+            return;
+        }
+
+        const sessaoId = this.estadoSegundaChamada.sessaoAssinaturaId;
+        if (!sessaoId) {
+            this.showToast('⚠️ Sessão não encontrada', 'error');
+            return;
+        }
+
+        const btn = document.getElementById('pedagogicoBtnConfirmarInline');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+        }
+
+        try {
+            const base64 = state.canvas.toDataURL('image/png');
+
+            const response = await fetch(`/api/sessoes-assinatura/${sessaoId}/assinar`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    assinaturaBase64: base64,
+                    assinanteNome: 'Responsável'
+                })
+            });
+
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || 'Erro ao salvar');
+
+            this.estadoSegundaChamada.assinaturaCapturada = base64;
+
+            const canvasView = document.getElementById('pedagogicoCanvasView');
+            if (canvasView) {
+                const agora = new Date().toLocaleString('pt-BR');
+                canvasView.innerHTML = `
+                    <div style="animation: fadeInCanvas 0.3s ease;">
+                        <div style="background: linear-gradient(135deg, #10b981, #059669); border-radius: 14px; padding: 16px 20px; margin-bottom: 16px; display: flex; align-items: center; gap: 14px; color: white; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);">
+                            <div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.25); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                <i class="fas fa-check" style="font-size: 22px;"></i>
+                            </div>
+                            <div style="flex: 1; text-align: left;">
+                                <h4 style="margin: 0 0 2px; font-size: 16px; font-weight: 700;">Assinatura Registrada!</h4>
+                                <p style="margin: 0; font-size: 13px; opacity: 0.95;">Confirmada em ${agora}</p>
+                            </div>
+                        </div>
+                        <div style="text-align: left; margin-bottom: 10px;">
+                            <span style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;"><i class="fas fa-signature"></i> Assinatura capturada</span>
+                        </div>
+                        <div style="position: relative; background: #f0fdf4; border: 3px solid #10b981; border-radius: 16px; overflow: hidden; height: 220px; display: flex; align-items: center; justify-content: center; padding: 12px; box-sizing: border-box; box-shadow: inset 0 2px 8px rgba(16, 185, 129, 0.08);">
+                            <img src="${base64}" alt="Assinatura" style="max-width: 100%; max-height: 100%; object-fit: contain; display: block;">
+                            <div style="position: absolute; top: 10px; right: 10px; background: #10b981; color: white; padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 700; display: flex; align-items: center; gap: 4px; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);">
+                                <i class="fas fa-lock" style="font-size: 9px;"></i> VERIFICADA
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 10px; margin-top: 16px;">
+                            <button type="button" onclick="setorPedagogico.refazerAssinatura('${modulo}')" style="flex: 1; padding: 12px; background: #fef3c7; color: #92400e; border: 2px solid #f59e0b; border-radius: 10px; font-weight: 600; font-size: 13px; cursor: pointer;">
+                                <i class="fas fa-redo"></i> Refazer
+                            </button>
+                            <button type="button" onclick="setorPedagogico.fecharModalAssinatura()" style="flex: 2; padding: 12px; background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 13px; cursor: pointer;">
+                                <i class="fas fa-check-circle"></i> Concluir
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            this.pararMonitoramentoSessao(modulo);
+
+            this.atualizarStatusAssinado(modulo, {
+                assinaturaBase64: base64,
+                assinadaPorNome: 'Responsável',
+                assinadaEm: new Date().toISOString()
+            });
+
+            this.showToast('✅ Assinatura registrada com sucesso!', 'success');
+
+        } catch (e) {
+            console.error('Erro:', e);
+            this.showToast('❌ ' + e.message, 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Assinatura';
+            }
+        }
+    }
+
     fecharModalAssinatura() {
         if (this.modalAssinaturaInstance) {
             this.modalAssinaturaInstance.hide();
@@ -3520,7 +4028,16 @@ class SetorPedagogico {
         const modalEl = document.getElementById('modalAssinaturaQR');
         if (modalEl) setTimeout(() => modalEl.remove(), 300);
 
-        this.mostrarBlocoCompactoAssinatura();
+        // 🆕 Se já foi assinado, mostra o bloco verde. Senão, o amarelo.
+        if (this.estadoSegundaChamada.assinaturaCapturada) {
+            this.atualizarStatusAssinado('segundaChamada', {
+                assinaturaBase64: this.estadoSegundaChamada.assinaturaCapturada,
+                assinadaPorNome: 'Responsável',
+                assinadaEm: new Date().toISOString()
+            });
+        } else {
+            this.mostrarBlocoCompactoAssinatura();
+        }
     }
 
     mostrarBlocoCompactoAssinatura() {
@@ -5255,7 +5772,7 @@ class SetorPedagogico {
 
     gerarHTMLImpressaoSegundaChamada(a, qrCodeUrl) {
         const logo = '/uploads/logo-iema.png';
-        const carimbo = '/icons/assinatura_gestao.ico';
+        const carimbo = '/icons/assinatura_gpeda.ico';
         const dataGeracao = new Date().toLocaleString('pt-BR');
 
         const entrada = new Date(a.data);
