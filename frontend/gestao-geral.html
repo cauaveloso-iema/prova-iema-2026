@@ -2593,13 +2593,16 @@
                                         </div>
                                     </div>
 
-                                    <div id="blocoDadosResponsavelAtendimento" style="display:none;">
+                                    <!-- 🆕 DADOS DO RESPONSÁVEL (opcional no aluno, obrigatório no responsável) -->
+                                    <div id="blocoDadosResponsavelAtendimento">
                                         <div class="card mb-3 dados-responsavel-card">
                                             <div class="card-body">
-                                                <h6 class="dados-responsavel-titulo"><i class="fas fa-user-shield"></i> Dados do Responsável</h6>
+                                                <h6 class="dados-responsavel-titulo" id="atendimentoTituloDadosResponsavel">
+                                                    <i class="fas fa-user-shield"></i> Dados do Responsável <small class="text-muted">(opcional)</small>
+                                                </h6>
                                                 <div class="row">
                                                     <div class="col-md-6 mb-3">
-                                                        <label class="form-label">Nome do Responsável <span class="text-danger">*</span></label>
+                                                        <label class="form-label" id="atendimentoResponsavelNomeLabel">Nome do Responsável <small class="text-muted">(opcional)</small></label>
                                                         <input type="text" id="atendimentoResponsavelNome" class="form-control" placeholder="Nome completo do responsável">
                                                     </div>
                                                     <div class="col-md-3 mb-3">
@@ -2607,11 +2610,11 @@
                                                         <input type="text" id="atendimentoResponsavelCPF" class="form-control" placeholder="000.000.000-00" maxlength="14" oninput="formatarCPF(this)">
                                                     </div>
                                                     <div class="col-md-3 mb-3">
-                                                        <label class="form-label">Telefone</label>
+                                                        <label class="form-label">Telefone <small class="text-muted">(opcional)</small></label>
                                                         <input type="text" id="atendimentoResponsavelTelefone" class="form-control" placeholder="(00) 00000-0000" maxlength="15" oninput="formatarTelefone(this)">
                                                     </div>
                                                     <div class="col-md-6 mb-3">
-                                                        <label class="form-label">Parentesco</label>
+                                                        <label class="form-label">Parentesco <small class="text-muted">(opcional)</small></label>
                                                         <input type="text" id="atendimentoResponsavelParentesco" class="form-control" placeholder="Ex: Mãe, Pai, Avó...">
                                                     </div>
                                                 </div>
@@ -2621,6 +2624,7 @@
 
                                     <div class="mb-3" id="campoMotivoAtendimento">
                                         <label class="form-label">Motivo do Atendimento <span class="text-danger">*</span></label>
+                                        <small class="text-muted d-block mb-2"><i class="fas fa-info-circle"></i> Você pode marcar mais de um motivo.</small>
                                         <div class="tipos-tarefa-grid">
                                             <div class="tipo-card" data-motivo="comportamento" onclick="selecionarMotivoAtendimento('comportamento')">
                                                 <i class="fas fa-users-slash"></i><span>Comportamento</span>
@@ -2659,6 +2663,7 @@
 
                                     <div class="mb-3" id="campoProvidenciasAtendimento">
                                         <label class="form-label">Providências / Acordos <span class="text-danger">*</span></label>
+                                        <small class="text-muted d-block mb-2"><i class="fas fa-info-circle"></i> Você pode marcar mais de uma providência.</small>
                                         <div class="tipos-tarefa-grid">
                                             <div class="tipo-card" data-providencia="orientacao_verbal" onclick="selecionarProvidenciaAtendimento('orientacao_verbal')">
                                                 <i class="fas fa-comment"></i><span>Orientação Verbal</span>

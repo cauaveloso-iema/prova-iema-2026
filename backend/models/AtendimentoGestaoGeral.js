@@ -2,6 +2,8 @@
 // MODEL: Atendimento Gestão Geral
 // Atendimentos ao Aluno e aos Pais/Responsáveis
 // Com assinatura via QR Code (Responsável + Aluno)
+// + Multi-seleção de motivos/providências
+// + Dados opcionais do responsável em atendimento ao aluno
 // ============================================
 
 const mongoose = require('mongoose');
@@ -33,7 +35,8 @@ const atendimentoSchema = new mongoose.Schema({
   alunoFoto: { type: String, default: '' },
 
   // ============================================
-  // DADOS DO RESPONSÁVEL (só quando tipoAtendimento = 'responsavel')
+  // DADOS DO RESPONSÁVEL
+  // 🆕 Agora SEMPRE podem ser preenchidos (aluno ou responsável)
   // ============================================
   responsavelNome: { type: String, default: '' },
   responsavelCPF: { type: String, default: '' },
@@ -50,6 +53,10 @@ const atendimentoSchema = new mongoose.Schema({
     default: Date.now
   },
 
+  // ============================================
+  // 🆕 MOTIVOS (multi-seleção)
+  // motivo principal fica em `motivo` (compatibilidade)
+  // ============================================
   motivo: {
     type: String,
     required: true,
@@ -65,9 +72,28 @@ const atendimentoSchema = new mongoose.Schema({
       'outros'
     ]
   },
+  motivos: {
+    type: [String],
+    enum: [
+      'comportamento',
+      'desempenho_academico',
+      'frequencia',
+      'relacionamento',
+      'saude',
+      'familia',
+      'disciplina',
+      'orientacao',
+      'outros'
+    ],
+    default: []
+  },
   motivoLabel: { type: String, default: '' },
   descricaoMotivo: { type: String, required: true },
 
+  // ============================================
+  // 🆕 PROVIDÊNCIAS (multi-seleção)
+  // providencia principal fica em `providencias`
+  // ============================================
   providencias: {
     type: String,
     required: true,
@@ -83,6 +109,22 @@ const atendimentoSchema = new mongoose.Schema({
       'suspensao',
       'outros'
     ]
+  },
+  providenciasList: {
+    type: [String],
+    enum: [
+      'orientacao_verbal',
+      'advertencia_verbal',
+      'advertencia_escrita',
+      'notificacao_responsavel',
+      'reuniao_responsavel',
+      'encaminhamento_psicologia',
+      'encaminhamento_assistente_social',
+      'acompanhamento_pedagogico',
+      'suspensao',
+      'outros'
+    ],
+    default: []
   },
   providenciasLabel: { type: String, default: '' },
   descricaoProvidencias: { type: String, required: true },
@@ -137,11 +179,35 @@ const atendimentoSchema = new mongoose.Schema({
 atendimentoSchema.index({ tipoAtendimento: 1, dataAtendimento: -1 });
 atendimentoSchema.index({ alunoTurma: 1, dataAtendimento: -1 });
 atendimentoSchema.index({ alunoId: 1, dataAtendimento: -1 });
+atendimentoSchema.index({ motivos: 1, dataAtendimento: -1 });
+atendimentoSchema.index({ providenciasList: 1, dataAtendimento: -1 });
 
 // ============================================
 // HOOKS
 // ============================================
 atendimentoSchema.pre('save', function (next) {
+  // Sincroniza motivo principal ↔ motivos[]
+  if (this.motivo && (!Array.isArray(this.motivos) || this.motivos.length === 0)) {
+    this.motivos = [this.motivo];
+  }
+  if (Array.isArray(this.motivos) && this.motivos.length > 0 && !this.motivo) {
+    this.motivo = this.motivos[0];
+  }
+  if (Array.isArray(this.motivos)) {
+    this.motivos = [...new Set(this.motivos)];
+  }
+
+  // Sincroniza providências principal ↔ providenciasList[]
+  if (this.providencias && (!Array.isArray(this.providenciasList) || this.providenciasList.length === 0)) {
+    this.providenciasList = [this.providencias];
+  }
+  if (Array.isArray(this.providenciasList) && this.providenciasList.length > 0 && !this.providencias) {
+    this.providencias = this.providenciasList[0];
+  }
+  if (Array.isArray(this.providenciasList)) {
+    this.providenciasList = [...new Set(this.providenciasList)];
+  }
+
   this.atualizadoEm = new Date();
   next();
 });
@@ -164,6 +230,11 @@ atendimentoSchema.statics.getMotivoLabel = function (motivo) {
   return labels[motivo] || motivo;
 };
 
+atendimentoSchema.statics.getMotivosLabels = function (motivos) {
+  if (!Array.isArray(motivos) || motivos.length === 0) return '';
+  return motivos.map(m => this.getMotivoLabel(m)).join(' + ');
+};
+
 atendimentoSchema.statics.getProvidenciaLabel = function (providencia) {
   const labels = {
     orientacao_verbal: 'Orientação Verbal',
@@ -178,6 +249,11 @@ atendimentoSchema.statics.getProvidenciaLabel = function (providencia) {
     outros: 'Outros'
   };
   return labels[providencia] || providencia;
+};
+
+atendimentoSchema.statics.getProvidenciasLabels = function (providencias) {
+  if (!Array.isArray(providencias) || providencias.length === 0) return '';
+  return providencias.map(p => this.getProvidenciaLabel(p)).join(' + ');
 };
 
 // ============================================

@@ -2,6 +2,8 @@
 // ============================================
 // ROTAS: ATENDIMENTOS - GESTÃO GERAL
 // Atendimento ao Aluno + Atendimento aos Pais/Responsáveis
+// + Multi-seleção de motivos/providências
+// + Dados opcionais do responsável em atendimento ao aluno
 // ============================================
 
 const express = require('express');
@@ -53,7 +55,7 @@ router.get('/health', (req, res) => {
     success: true,
     status: 'online',
     service: 'Atendimentos - Gestão Geral',
-    versao: '1.0',
+    versao: '1.1-multi-select',
     timestamp: new Date().toISOString()
   });
 });
@@ -127,9 +129,9 @@ router.get('/aluno/:id', authenticateToken, verificarGestaoGeral, async (req, re
 
     const totalAtendimentos = await AtendimentoGestaoGeral.countDocuments({ alunoId: aluno._id });
 
+    // 🆕 Busca o último responsável de QUALQUER atendimento que tenha dados preenchidos
     const ultimoAtendResponsavel = await AtendimentoGestaoGeral.findOne({
       alunoId: aluno._id,
-      tipoAtendimento: 'responsavel',
       responsavelNome: { $ne: '' }
     })
       .sort({ dataAtendimento: -1 })
@@ -167,6 +169,7 @@ router.get('/aluno/:id', authenticateToken, verificarGestaoGeral, async (req, re
 
 // ============================================
 // 📝 REGISTRAR ATENDIMENTO
+// 🆕 Aceita multi-seleção + responsável em qualquer tipo
 // ============================================
 router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
@@ -178,8 +181,11 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
       responsavelTelefone = '',
       responsavelParentesco = '',
       dataAtendimento,
+      // 🆕 multi-seleção
+      motivos,
       motivo,
       descricaoMotivo,
+      providenciasList,
       providencias,
       descricaoProvidencias,
       observacoes = '',
@@ -197,14 +203,50 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
     if (!alunoId) {
       return res.status(400).json({ success: false, error: 'Aluno é obrigatório' });
     }
-    if (!motivo) {
-      return res.status(400).json({ success: false, error: 'Motivo é obrigatório' });
+
+    // 🆕 Normaliza motivos
+    let motivosFinal = Array.isArray(motivos) && motivos.length > 0
+      ? motivos
+      : (motivo ? [motivo] : []);
+    motivosFinal = [...new Set(motivosFinal.filter(Boolean))];
+
+    if (motivosFinal.length === 0) {
+      return res.status(400).json({ success: false, error: 'Selecione pelo menos um motivo' });
     }
+
+    const motivosValidos = [
+      'comportamento', 'desempenho_academico', 'frequencia', 'relacionamento',
+      'saude', 'familia', 'disciplina', 'orientacao', 'outros'
+    ];
+    for (const m of motivosFinal) {
+      if (!motivosValidos.includes(m)) {
+        return res.status(400).json({ success: false, error: `Motivo inválido: ${m}` });
+      }
+    }
+
+    // 🆕 Normaliza providências
+    let providenciasFinal = Array.isArray(providenciasList) && providenciasList.length > 0
+      ? providenciasList
+      : (providencias ? [providencias] : []);
+    providenciasFinal = [...new Set(providenciasFinal.filter(Boolean))];
+
+    if (providenciasFinal.length === 0) {
+      return res.status(400).json({ success: false, error: 'Selecione pelo menos uma providência' });
+    }
+
+    const providenciasValidas = [
+      'orientacao_verbal', 'advertencia_verbal', 'advertencia_escrita',
+      'notificacao_responsavel', 'reuniao_responsavel', 'encaminhamento_psicologia',
+      'encaminhamento_assistente_social', 'acompanhamento_pedagogico', 'suspensao', 'outros'
+    ];
+    for (const p of providenciasFinal) {
+      if (!providenciasValidas.includes(p)) {
+        return res.status(400).json({ success: false, error: `Providência inválida: ${p}` });
+      }
+    }
+
     if (!descricaoMotivo || descricaoMotivo.trim() === '') {
       return res.status(400).json({ success: false, error: 'Descrição do motivo é obrigatória' });
-    }
-    if (!providencias) {
-      return res.status(400).json({ success: false, error: 'Providências são obrigatórias' });
     }
     if (!descricaoProvidencias || descricaoProvidencias.trim() === '') {
       return res.status(400).json({ success: false, error: 'Descrição das providências é obrigatória' });
@@ -223,6 +265,7 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
       if (!isNaN(parsed.getTime())) dataFinal = parsed;
     }
 
+    // 🆕 Nome do responsável é obrigatório APENAS quando o tipo é "responsavel"
     if (tipoAtendimento === 'responsavel') {
       if (!responsavelNome || responsavelNome.trim() === '') {
         return res.status(400).json({
@@ -326,17 +369,20 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
       alunoCurso: aluno.curso || '',
       alunoFoto: aluno.fotoPerfil || '',
 
-      responsavelNome: tipoAtendimento === 'responsavel' ? responsavelNome : '',
-      responsavelCPF: tipoAtendimento === 'responsavel' ? responsavelCPF : '',
-      responsavelTelefone: tipoAtendimento === 'responsavel' ? responsavelTelefone : '',
-      responsavelParentesco: tipoAtendimento === 'responsavel' ? responsavelParentesco : '',
+      // 🆕 Dados do responsável SEMPRE podem ser preenchidos
+      responsavelNome: (responsavelNome || '').trim(),
+      responsavelCPF: (responsavelCPF || '').trim(),
+      responsavelTelefone: (responsavelTelefone || '').trim(),
+      responsavelParentesco: (responsavelParentesco || '').trim(),
 
       dataAtendimento: dataFinal,
-      motivo,
-      motivoLabel: AtendimentoGestaoGeral.getMotivoLabel(motivo),
+      motivo: motivosFinal[0],
+      motivos: motivosFinal,
+      motivoLabel: AtendimentoGestaoGeral.getMotivosLabels(motivosFinal),
       descricaoMotivo: descricaoMotivo.trim(),
-      providencias,
-      providenciasLabel: AtendimentoGestaoGeral.getProvidenciaLabel(providencias),
+      providencias: providenciasFinal[0],
+      providenciasList: providenciasFinal,
+      providenciasLabel: AtendimentoGestaoGeral.getProvidenciasLabels(providenciasFinal),
       descricaoProvidencias: descricaoProvidencias.trim(),
       observacoes: observacoes || '',
 
@@ -372,8 +418,10 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
         id: atendimento._id,
         tipoAtendimento: atendimento.tipoAtendimento,
         motivo: atendimento.motivo,
+        motivos: atendimento.motivos,
         motivoLabel: atendimento.motivoLabel,
         providencias: atendimento.providencias,
+        providenciasList: atendimento.providenciasList,
         providenciasLabel: atendimento.providenciasLabel,
         dataAtendimento: atendimento.dataAtendimento,
         dataAtendimentoFormatada: dataFormatada,
@@ -415,8 +463,9 @@ router.get('/listar', authenticateToken, verificarGestaoGeral, async (req, res) 
       query.alunoTurma = turma;
     }
 
+    // 🆕 Busca no array de motivos
     if (motivo && motivo !== 'todos') {
-      query.motivo = motivo;
+      query.motivos = motivo;
     }
 
     if (alunoNome && alunoNome.trim()) {
@@ -453,31 +502,37 @@ router.get('/listar', authenticateToken, verificarGestaoGeral, async (req, res) 
       page: pageNum,
       limit: limitNum,
       totalPages: Math.ceil(total / limitNum),
-      atendimentos: atendimentos.map(a => ({
-        id: a._id,
-        tipoAtendimento: a.tipoAtendimento,
-        alunoId: a.alunoId,
-        alunoNome: a.alunoNome,
-        alunoMatricula: a.alunoMatricula,
-        alunoTurma: a.alunoTurma,
-        alunoCurso: a.alunoCurso,
-        responsavelNome: a.responsavelNome,
-        responsavelCPF: a.responsavelCPF,
-        responsavelTelefone: a.responsavelTelefone,
-        responsavelParentesco: a.responsavelParentesco,
-        motivo: a.motivo,
-        motivoLabel: AtendimentoGestaoGeral.getMotivoLabel(a.motivo),
-        providencias: a.providencias,
-        providenciasLabel: AtendimentoGestaoGeral.getProvidenciaLabel(a.providencias),
-        dataAtendimento: a.dataAtendimento,
-        dataFormatada: new Date(a.dataAtendimento).toLocaleDateString('pt-BR'),
-        registradoPor: a.registradoPorNome,
-        temAssinatura: a.temAssinatura,
-        statusAssinatura: a.statusAssinatura,
-        temAssinaturaAluno: a.temAssinaturaAluno,
-        statusAssinaturaAluno: a.statusAssinaturaAluno,
-        criadoEm: a.criadoEm
-      }))
+      atendimentos: atendimentos.map(a => {
+        const motivosArr = (a.motivos && a.motivos.length > 0) ? a.motivos : [a.motivo];
+        const providenciasArr = (a.providenciasList && a.providenciasList.length > 0) ? a.providenciasList : [a.providencias];
+        return {
+          id: a._id,
+          tipoAtendimento: a.tipoAtendimento,
+          alunoId: a.alunoId,
+          alunoNome: a.alunoNome,
+          alunoMatricula: a.alunoMatricula,
+          alunoTurma: a.alunoTurma,
+          alunoCurso: a.alunoCurso,
+          responsavelNome: a.responsavelNome,
+          responsavelCPF: a.responsavelCPF,
+          responsavelTelefone: a.responsavelTelefone,
+          responsavelParentesco: a.responsavelParentesco,
+          motivo: a.motivo,
+          motivos: motivosArr,
+          motivoLabel: AtendimentoGestaoGeral.getMotivosLabels(motivosArr),
+          providencias: a.providencias,
+          providenciasList: providenciasArr,
+          providenciasLabel: AtendimentoGestaoGeral.getProvidenciasLabels(providenciasArr),
+          dataAtendimento: a.dataAtendimento,
+          dataFormatada: new Date(a.dataAtendimento).toLocaleDateString('pt-BR'),
+          registradoPor: a.registradoPorNome,
+          temAssinatura: a.temAssinatura,
+          statusAssinatura: a.statusAssinatura,
+          temAssinaturaAluno: a.temAssinaturaAluno,
+          statusAssinaturaAluno: a.statusAssinaturaAluno,
+          criadoEm: a.criadoEm
+        };
+      })
     });
   } catch (error) {
     console.error('Erro ao listar atendimentos:', error);
@@ -486,7 +541,7 @@ router.get('/listar', authenticateToken, verificarGestaoGeral, async (req, res) 
 });
 
 // ============================================
-// 📊 DASHBOARD  🆕 MOVIDO PARA ANTES DE /:id
+// 📊 DASHBOARD
 // ============================================
 router.get('/dashboard', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
@@ -523,9 +578,22 @@ router.get('/dashboard', authenticateToken, verificarGestaoGeral, async (req, re
       AtendimentoGestaoGeral.countDocuments(matchTipo)
     ]);
 
+    // 🆕 Agrupa pelo array de motivos
     const porMotivo = await AtendimentoGestaoGeral.aggregate([
       { $match: { ...matchTipo, dataAtendimento: { $gte: ultimos30Dias } } },
-      { $group: { _id: '$motivo', count: { $sum: 1 } } },
+      {
+        $project: {
+          motivosEfetivos: {
+            $cond: [
+              { $gt: [{ $size: { $ifNull: ['$motivos', []] } }, 0] },
+              '$motivos',
+              ['$motivo']
+            ]
+          }
+        }
+      },
+      { $unwind: '$motivosEfetivos' },
+      { $group: { _id: '$motivosEfetivos', count: { $sum: 1 } } },
       { $sort: { count: -1 } }
     ]);
 
@@ -643,9 +711,21 @@ router.get('/relatorio/geral', authenticateToken, verificarGestaoGeral, async (r
       porTurma[a.alunoTurma].total++;
       porTurma[a.alunoTurma].alunos.add(a.alunoId.toString());
 
-      porMotivo[a.motivo] = (porMotivo[a.motivo] || 0) + 1;
+      // 🆕 Conta TODOS os motivos
+      const motivosArr = (a.motivos && a.motivos.length > 0) ? a.motivos : [a.motivo];
+      motivosArr.forEach(m => {
+        porMotivo[m] = (porMotivo[m] || 0) + 1;
+      });
+
       porTipo[a.tipoAtendimento] = (porTipo[a.tipoAtendimento] || 0) + 1;
-      porProvidencia[a.providencias] = (porProvidencia[a.providencias] || 0) + 1;
+
+      // 🆕 Conta TODAS as providências
+      const providenciasArr = (a.providenciasList && a.providenciasList.length > 0)
+        ? a.providenciasList
+        : [a.providencias];
+      providenciasArr.forEach(p => {
+        porProvidencia[p] = (porProvidencia[p] || 0) + 1;
+      });
     });
 
     Object.values(porTurma).forEach(t => {
@@ -685,22 +765,27 @@ router.get('/relatorio/geral', authenticateToken, verificarGestaoGeral, async (r
         label: AtendimentoGestaoGeral.getProvidenciaLabel(p),
         count: c
       })).sort((a, b) => b.count - a.count),
-      registros: atendimentos.slice(0, 100).map(a => ({
-        id: a._id,
-        tipoAtendimento: a.tipoAtendimento,
-        alunoNome: a.alunoNome,
-        alunoTurma: a.alunoTurma,
-        responsavelNome: a.responsavelNome,
-        motivo: a.motivo,
-        motivoLabel: AtendimentoGestaoGeral.getMotivoLabel(a.motivo),
-        providenciasLabel: AtendimentoGestaoGeral.getProvidenciaLabel(a.providencias),
-        dataAtendimento: a.dataAtendimento,
-        dataFormatada: new Date(a.dataAtendimento).toLocaleDateString('pt-BR'),
-        registradoPor: a.registradoPorNome,
-        temAssinatura: a.temAssinatura,
-        temAssinaturaAluno: a.temAssinaturaAluno,
-        criadoEm: a.criadoEm
-      }))
+      registros: atendimentos.slice(0, 100).map(a => {
+        const motivosArr = (a.motivos && a.motivos.length > 0) ? a.motivos : [a.motivo];
+        const providenciasArr = (a.providenciasList && a.providenciasList.length > 0) ? a.providenciasList : [a.providencias];
+        return {
+          id: a._id,
+          tipoAtendimento: a.tipoAtendimento,
+          alunoNome: a.alunoNome,
+          alunoTurma: a.alunoTurma,
+          responsavelNome: a.responsavelNome,
+          motivo: a.motivo,
+          motivos: motivosArr,
+          motivoLabel: AtendimentoGestaoGeral.getMotivosLabels(motivosArr),
+          providenciasLabel: AtendimentoGestaoGeral.getProvidenciasLabels(providenciasArr),
+          dataAtendimento: a.dataAtendimento,
+          dataFormatada: new Date(a.dataAtendimento).toLocaleDateString('pt-BR'),
+          registradoPor: a.registradoPorNome,
+          temAssinatura: a.temAssinatura,
+          temAssinaturaAluno: a.temAssinaturaAluno,
+          criadoEm: a.criadoEm
+        };
+      })
     });
   } catch (error) {
     console.error('Erro no relatório geral:', error);
@@ -741,8 +826,13 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarGestaoGeral, a
         };
       }
       porAluno[key].total++;
-      porAluno[key].motivos[a.motivo] = (porAluno[key].motivos[a.motivo] || 0) + 1;
-      porMotivo[a.motivo] = (porMotivo[a.motivo] || 0) + 1;
+
+      // 🆕 Conta todos os motivos
+      const motivosArr = (a.motivos && a.motivos.length > 0) ? a.motivos : [a.motivo];
+      motivosArr.forEach(m => {
+        porAluno[key].motivos[m] = (porAluno[key].motivos[m] || 0) + 1;
+        porMotivo[m] = (porMotivo[m] || 0) + 1;
+      });
     });
 
     res.json({
@@ -759,17 +849,21 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarGestaoGeral, a
         label: AtendimentoGestaoGeral.getMotivoLabel(m),
         count: c
       })).sort((a, b) => b.count - a.count),
-      registros: atendimentos.slice(0, 100).map(a => ({
-        id: a._id,
-        tipoAtendimento: a.tipoAtendimento,
-        alunoNome: a.alunoNome,
-        alunoMatricula: a.alunoMatricula,
-        motivoLabel: AtendimentoGestaoGeral.getMotivoLabel(a.motivo),
-        providenciasLabel: AtendimentoGestaoGeral.getProvidenciaLabel(a.providencias),
-        dataAtendimento: a.dataAtendimento,
-        dataFormatada: new Date(a.dataAtendimento).toLocaleDateString('pt-BR'),
-        registradoPor: a.registradoPorNome
-      }))
+      registros: atendimentos.slice(0, 100).map(a => {
+        const motivosArr = (a.motivos && a.motivos.length > 0) ? a.motivos : [a.motivo];
+        const providenciasArr = (a.providenciasList && a.providenciasList.length > 0) ? a.providenciasList : [a.providencias];
+        return {
+          id: a._id,
+          tipoAtendimento: a.tipoAtendimento,
+          alunoNome: a.alunoNome,
+          alunoMatricula: a.alunoMatricula,
+          motivoLabel: AtendimentoGestaoGeral.getMotivosLabels(motivosArr),
+          providenciasLabel: AtendimentoGestaoGeral.getProvidenciasLabels(providenciasArr),
+          dataAtendimento: a.dataAtendimento,
+          dataFormatada: new Date(a.dataAtendimento).toLocaleDateString('pt-BR'),
+          registradoPor: a.registradoPorNome
+        };
+      })
     });
   } catch (error) {
     console.error('Erro no relatório por turma:', error);
@@ -799,7 +893,10 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarGestaoGeral,
 
     const porMotivo = {};
     atendimentos.forEach(a => {
-      porMotivo[a.motivo] = (porMotivo[a.motivo] || 0) + 1;
+      const motivosArr = (a.motivos && a.motivos.length > 0) ? a.motivos : [a.motivo];
+      motivosArr.forEach(m => {
+        porMotivo[m] = (porMotivo[m] || 0) + 1;
+      });
     });
 
     res.json({
@@ -820,19 +917,23 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarGestaoGeral,
           count: c
         }))
       },
-      registros: atendimentos.map(a => ({
-        id: a._id,
-        tipoAtendimento: a.tipoAtendimento,
-        motivoLabel: AtendimentoGestaoGeral.getMotivoLabel(a.motivo),
-        providenciasLabel: AtendimentoGestaoGeral.getProvidenciaLabel(a.providencias),
-        descricaoMotivo: a.descricaoMotivo,
-        descricaoProvidencias: a.descricaoProvidencias,
-        dataAtendimento: a.dataAtendimento,
-        dataFormatada: new Date(a.dataAtendimento).toLocaleDateString('pt-BR'),
-        registradoPor: a.registradoPorNome,
-        temAssinatura: a.temAssinatura,
-        temAssinaturaAluno: a.temAssinaturaAluno
-      }))
+      registros: atendimentos.map(a => {
+        const motivosArr = (a.motivos && a.motivos.length > 0) ? a.motivos : [a.motivo];
+        const providenciasArr = (a.providenciasList && a.providenciasList.length > 0) ? a.providenciasList : [a.providencias];
+        return {
+          id: a._id,
+          tipoAtendimento: a.tipoAtendimento,
+          motivoLabel: AtendimentoGestaoGeral.getMotivosLabels(motivosArr),
+          providenciasLabel: AtendimentoGestaoGeral.getProvidenciasLabels(providenciasArr),
+          descricaoMotivo: a.descricaoMotivo,
+          descricaoProvidencias: a.descricaoProvidencias,
+          dataAtendimento: a.dataAtendimento,
+          dataFormatada: new Date(a.dataAtendimento).toLocaleDateString('pt-BR'),
+          registradoPor: a.registradoPorNome,
+          temAssinatura: a.temAssinatura,
+          temAssinaturaAluno: a.temAssinaturaAluno
+        };
+      })
     });
   } catch (error) {
     console.error('Erro no relatório por aluno:', error);
@@ -841,12 +942,11 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarGestaoGeral,
 });
 
 // ============================================
-// 🔍 BUSCAR ATENDIMENTO POR ID  🆕 POR ÚLTIMO
-// ============================================
+// 🔍 BUSCAR ATENDIMENTO POR ID
 // ⚠️ ESTA ROTA DEVE SER A ÚLTIMA — captura qualquer /:id
+// ============================================
 router.get('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
-    // Sanity check: impede que rotas nomeadas que escaparam caiam aqui
     const rotasReservadas = [
       'listar', 'dashboard', 'registrar', 'turmas',
       'alunos-por-turma', 'relatorio', 'health', 'aluno'
@@ -862,6 +962,9 @@ router.get('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
     if (!a) {
       return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
     }
+
+    const motivosArr = (a.motivos && a.motivos.length > 0) ? a.motivos : [a.motivo];
+    const providenciasArr = (a.providenciasList && a.providenciasList.length > 0) ? a.providenciasList : [a.providencias];
 
     res.json({
       success: true,
@@ -881,10 +984,12 @@ router.get('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
         dataAtendimento: a.dataAtendimento,
         dataFormatada: new Date(a.dataAtendimento).toLocaleDateString('pt-BR'),
         motivo: a.motivo,
-        motivoLabel: AtendimentoGestaoGeral.getMotivoLabel(a.motivo),
+        motivos: motivosArr,
+        motivoLabel: AtendimentoGestaoGeral.getMotivosLabels(motivosArr),
         descricaoMotivo: a.descricaoMotivo,
         providencias: a.providencias,
-        providenciasLabel: AtendimentoGestaoGeral.getProvidenciaLabel(a.providencias),
+        providenciasList: providenciasArr,
+        providenciasLabel: AtendimentoGestaoGeral.getProvidenciasLabels(providenciasArr),
         descricaoProvidencias: a.descricaoProvidencias,
         observacoes: a.observacoes,
         registradoPor: a.registradoPorNome,
@@ -924,8 +1029,10 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
       responsavelTelefone,
       responsavelParentesco,
       dataAtendimento,
+      motivos,
       motivo,
       descricaoMotivo,
+      providenciasList,
       providencias,
       descricaoProvidencias,
       observacoes
@@ -936,14 +1043,34 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
       return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
     }
 
-    if (motivo) {
-      atendimento.motivo = motivo;
-      atendimento.motivoLabel = AtendimentoGestaoGeral.getMotivoLabel(motivo);
+    // 🆕 Normaliza motivos
+    let motivosFinal = null;
+    if (Array.isArray(motivos) && motivos.length > 0) {
+      motivosFinal = [...new Set(motivos.filter(Boolean))];
+    } else if (motivo) {
+      motivosFinal = [motivo];
     }
-    if (providencias) {
-      atendimento.providencias = providencias;
-      atendimento.providenciasLabel = AtendimentoGestaoGeral.getProvidenciaLabel(providencias);
+
+    if (motivosFinal && motivosFinal.length > 0) {
+      atendimento.motivos = motivosFinal;
+      atendimento.motivo = motivosFinal[0];
+      atendimento.motivoLabel = AtendimentoGestaoGeral.getMotivosLabels(motivosFinal);
     }
+
+    // 🆕 Normaliza providências
+    let providenciasFinal = null;
+    if (Array.isArray(providenciasList) && providenciasList.length > 0) {
+      providenciasFinal = [...new Set(providenciasList.filter(Boolean))];
+    } else if (providencias) {
+      providenciasFinal = [providencias];
+    }
+
+    if (providenciasFinal && providenciasFinal.length > 0) {
+      atendimento.providenciasList = providenciasFinal;
+      atendimento.providencias = providenciasFinal[0];
+      atendimento.providenciasLabel = AtendimentoGestaoGeral.getProvidenciasLabels(providenciasFinal);
+    }
+
     if (descricaoMotivo !== undefined) {
       if (!descricaoMotivo.trim()) {
         return res.status(400).json({ success: false, error: 'Descrição do motivo é obrigatória' });
@@ -963,11 +1090,17 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
       if (!isNaN(parsed.getTime())) atendimento.dataAtendimento = parsed;
     }
 
+    // 🆕 Dados do responsável agora sempre podem ser editados
+    if (responsavelNome !== undefined) atendimento.responsavelNome = (responsavelNome || '').trim();
+    if (responsavelCPF !== undefined) atendimento.responsavelCPF = (responsavelCPF || '').trim();
+    if (responsavelTelefone !== undefined) atendimento.responsavelTelefone = (responsavelTelefone || '').trim();
+    if (responsavelParentesco !== undefined) atendimento.responsavelParentesco = (responsavelParentesco || '').trim();
+
+    // Valida obrigatoriedade do responsável apenas se tipo = responsavel
     if (atendimento.tipoAtendimento === 'responsavel') {
-      if (responsavelNome !== undefined) atendimento.responsavelNome = responsavelNome;
-      if (responsavelCPF !== undefined) atendimento.responsavelCPF = responsavelCPF;
-      if (responsavelTelefone !== undefined) atendimento.responsavelTelefone = responsavelTelefone;
-      if (responsavelParentesco !== undefined) atendimento.responsavelParentesco = responsavelParentesco;
+      if (!atendimento.responsavelNome || atendimento.responsavelNome.trim() === '') {
+        return res.status(400).json({ success: false, error: 'Nome do responsável é obrigatório' });
+      }
     }
 
     atendimento.atualizadoEm = new Date();
@@ -975,15 +1108,24 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
 
     console.log(`✏️ Atendimento editado: ${atendimento.alunoNome} (${atendimento._id}) por ${req.userNome}`);
 
+    const motivosArr = (atendimento.motivos && atendimento.motivos.length > 0)
+      ? atendimento.motivos
+      : [atendimento.motivo];
+    const providenciasArr = (atendimento.providenciasList && atendimento.providenciasList.length > 0)
+      ? atendimento.providenciasList
+      : [atendimento.providencias];
+
     res.json({
       success: true,
       message: 'Atendimento atualizado com sucesso!',
       atendimento: {
         id: atendimento._id,
         motivo: atendimento.motivo,
-        motivoLabel: atendimento.motivoLabel,
+        motivos: motivosArr,
+        motivoLabel: AtendimentoGestaoGeral.getMotivosLabels(motivosArr),
         providencias: atendimento.providencias,
-        providenciasLabel: atendimento.providenciasLabel,
+        providenciasList: providenciasArr,
+        providenciasLabel: AtendimentoGestaoGeral.getProvidenciasLabels(providenciasArr),
         dataAtendimento: atendimento.dataAtendimento,
         dataFormatada: new Date(atendimento.dataAtendimento).toLocaleDateString('pt-BR')
       }

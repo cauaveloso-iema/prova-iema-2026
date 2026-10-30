@@ -2,6 +2,9 @@
 // js/gestao-atendimento.js
 // MÓDULO: ATENDIMENTOS - GESTÃO GERAL
 // Atendimento ao Aluno + Atendimento aos Pais/Responsáveis
+// + Multi-seleção de motivos/providências
+// + Canvas inline (responsável e aluno)
+// + Dados opcionais do responsável em atendimento ao aluno
 // ============================================
 
 // ============================================
@@ -13,8 +16,8 @@ const atendimentoState = {
   scannerAtivo: false,
   alunoAtual: null,
   tipoAtendimento: 'aluno',
-  motivoSelecionado: null,
-  providenciaSelecionada: null,
+  motivosSelecionados: [],       // 🆕 multi-seleção
+  providenciasSelecionadas: [],  // 🆕 multi-seleção
   sessaoAssinaturaResponsavel: {
     sessaoId: null, assinaturaCapturada: null, qrCodeDataUrl: null,
     monitoramentoInterval: null, modalInstance: null
@@ -23,6 +26,8 @@ const atendimentoState = {
     sessaoId: null, assinaturaCapturada: null, qrCodeDataUrl: null,
     monitoramentoInterval: null, modalInstance: null
   },
+  inlineCanvasResp: { ctx: null, canvas: null, wrapper: null, placeholder: null, desenhando: false, temAssinatura: false, lastX: 0, lastY: 0, inicializado: false },
+  inlineCanvasAluno: { ctx: null, canvas: null, wrapper: null, placeholder: null, desenhando: false, temAssinatura: false, lastX: 0, lastY: 0, inicializado: false },
   paginacao: { paginaAtual: 1, porPagina: 10, totalRegistros: 0, totalPaginas: 0 },
   turmasDisponiveis: [],
   alunosPorTurma: [],
@@ -63,9 +68,17 @@ function getAtendimentoMotivoLabel(valor) {
   const m = ATENDIMENTO_MOTIVOS.find(x => x.valor === valor);
   return m ? m.label : valor;
 }
+function getAtendimentoMotivosLabels(valores) {
+  if (!Array.isArray(valores) || valores.length === 0) return '';
+  return valores.map(getAtendimentoMotivoLabel).join(' + ');
+}
 function getAtendimentoProvidenciaLabel(valor) {
   const p = ATENDIMENTO_PROVIDENCIAS.find(x => x.valor === valor);
   return p ? p.label : valor;
+}
+function getAtendimentoProvidenciasLabels(valores) {
+  if (!Array.isArray(valores) || valores.length === 0) return '';
+  return valores.map(getAtendimentoProvidenciaLabel).join(' + ');
 }
 
 // ============================================
@@ -98,6 +111,14 @@ function safeSetTextAtendimento(id, valor) {
   if (el) el.textContent = valor;
 }
 
+function gerarUUIDAtendimento() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
 // ============================================
 // INICIALIZAÇÃO
 // ============================================
@@ -127,7 +148,6 @@ function inicializarModuloAtendimentos() {
     });
   }
 
-  // 🆕 Dashboard — escuta TODOS os IDs possíveis para garantir
   ['atendimento-dashboard-tab', 'atendimentoDashboardTab', 'tab-dashboard-atendimento']
     .forEach(id => {
       const el = document.getElementById(id);
@@ -436,8 +456,8 @@ function exibirAlunoAtendimento(data) {
 function mostrarFormAtendimento() {
   safeGetAtendimento('formAtendimento').style.display = 'block';
 
-  atendimentoState.motivoSelecionado = null;
-  atendimentoState.providenciaSelecionada = null;
+  atendimentoState.motivosSelecionados = [];
+  atendimentoState.providenciasSelecionadas = [];
   document.querySelectorAll('#formAtendimento .tipo-card').forEach(c => c.classList.remove('selected'));
 
   const descMotivo = safeGetAtendimento('atendimentoDescricaoMotivo');
@@ -470,9 +490,32 @@ function mostrarFormAtendimento() {
 function atualizarUIPorTipoAtendimento() {
   const tipo = atendimentoState.tipoAtendimento;
 
+  // 🆕 O bloco do responsável fica SEMPRE visível
+  // (opcional no atendimento ao aluno, obrigatório no atendimento ao responsável)
   const blocoResp = safeGetAtendimento('blocoDadosResponsavelAtendimento');
-  if (blocoResp) blocoResp.style.display = tipo === 'responsavel' ? 'block' : 'none';
+  if (blocoResp) blocoResp.style.display = 'block';
 
+  // 🆕 Ajusta o label do NOME do responsável
+  const lblNomeResp = safeGetAtendimento('atendimentoResponsavelNomeLabel');
+  if (lblNomeResp) {
+    if (tipo === 'responsavel') {
+      lblNomeResp.innerHTML = 'Nome do Responsável <span class="text-danger">*</span>';
+    } else {
+      lblNomeResp.innerHTML = 'Nome do Responsável <small class="text-muted">(opcional)</small>';
+    }
+  }
+
+  // 🆕 Ajusta o título da seção "Dados do Responsável"
+  const tituloBlocoResp = safeGetAtendimento('atendimentoTituloDadosResponsavel');
+  if (tituloBlocoResp) {
+    if (tipo === 'responsavel') {
+      tituloBlocoResp.innerHTML = `<i class="fas fa-user-shield"></i> Dados do Responsável`;
+    } else {
+      tituloBlocoResp.innerHTML = `<i class="fas fa-user-shield"></i> Dados do Responsável <small class="text-muted">(opcional)</small>`;
+    }
+  }
+
+  // Título do formulário
   const tituloForm = safeGetAtendimento('atendimentoTituloForm');
   if (tituloForm) {
     tituloForm.innerHTML = tipo === 'aluno'
@@ -480,6 +523,7 @@ function atualizarUIPorTipoAtendimento() {
       : '<i class="fas fa-user-friends"></i> Atendimento aos Pais/Responsáveis';
   }
 
+  // Bloco de assinatura do aluno só aparece no atendimento ao aluno
   const blocoAssinaturaAluno = safeGetAtendimento('blocoAssinaturaAlunoAtendimento');
   if (blocoAssinaturaAluno) {
     blocoAssinaturaAluno.style.display = tipo === 'aluno' ? 'block' : 'none';
@@ -494,28 +538,52 @@ function atualizarUIPorTipoAtendimento() {
 }
 
 // ============================================
-// SELEÇÃO DE MOTIVO / PROVIDÊNCIA
+// 🆕 SELEÇÃO DE MOTIVO / PROVIDÊNCIA (MULTI-SELEÇÃO)
 // ============================================
 function selecionarMotivoAtendimento(motivo) {
-  atendimentoState.motivoSelecionado = motivo;
-  document.querySelectorAll('#campoMotivoAtendimento .tipo-card').forEach(c => c.classList.remove('selected'));
-  const card = document.querySelector(`#campoMotivoAtendimento .tipo-card[data-motivo="${motivo}"]`);
-  if (card) card.classList.add('selected');
+  if (!motivo) return;
+
+  const idx = atendimentoState.motivosSelecionados.indexOf(motivo);
+  if (idx >= 0) {
+    atendimentoState.motivosSelecionados.splice(idx, 1);
+  } else {
+    atendimentoState.motivosSelecionados.push(motivo);
+  }
+
+  document.querySelectorAll('#campoMotivoAtendimento .tipo-card').forEach(c => {
+    const v = c.getAttribute('data-motivo');
+    if (atendimentoState.motivosSelecionados.includes(v)) c.classList.add('selected');
+    else c.classList.remove('selected');
+  });
 }
 
 function selecionarProvidenciaAtendimento(providencia) {
-  atendimentoState.providenciaSelecionada = providencia;
-  document.querySelectorAll('#campoProvidenciasAtendimento .tipo-card').forEach(c => c.classList.remove('selected'));
-  const card = document.querySelector(`#campoProvidenciasAtendimento .tipo-card[data-providencia="${providencia}"]`);
-  if (card) card.classList.add('selected');
+  if (!providencia) return;
+
+  const idx = atendimentoState.providenciasSelecionadas.indexOf(providencia);
+  if (idx >= 0) {
+    atendimentoState.providenciasSelecionadas.splice(idx, 1);
+  } else {
+    atendimentoState.providenciasSelecionadas.push(providencia);
+  }
+
+  document.querySelectorAll('#campoProvidenciasAtendimento .tipo-card').forEach(c => {
+    const v = c.getAttribute('data-providencia');
+    if (atendimentoState.providenciasSelecionadas.includes(v)) c.classList.add('selected');
+    else c.classList.remove('selected');
+  });
 }
 
 // ============================================
 // REGISTRAR ATENDIMENTO
 // ============================================
 async function registrarAtendimento() {
-  if (!atendimentoState.motivoSelecionado) { notificar('Selecione o motivo do atendimento', 'error'); return; }
-  if (!atendimentoState.providenciaSelecionada) { notificar('Selecione as providências tomadas', 'error'); return; }
+  if (!atendimentoState.motivosSelecionados || atendimentoState.motivosSelecionados.length === 0) {
+    notificar('Selecione pelo menos um motivo do atendimento', 'error'); return;
+  }
+  if (!atendimentoState.providenciasSelecionadas || atendimentoState.providenciasSelecionadas.length === 0) {
+    notificar('Selecione pelo menos uma providência', 'error'); return;
+  }
 
   const descricaoMotivo = (safeGetAtendimento('atendimentoDescricaoMotivo')?.value || '').trim();
   if (!descricaoMotivo) { notificar('Descreva o motivo do atendimento', 'error'); return; }
@@ -531,25 +599,23 @@ async function registrarAtendimento() {
   }
 
   const tipo = atendimentoState.tipoAtendimento;
-  let responsavelNome = '', responsavelCPF = '', responsavelTelefone = '', responsavelParentesco = '';
 
-  if (tipo === 'responsavel') {
-    responsavelNome = (safeGetAtendimento('atendimentoResponsavelNome')?.value || '').trim();
-    responsavelCPF = (safeGetAtendimento('atendimentoResponsavelCPF')?.value || '').trim();
-    responsavelTelefone = (safeGetAtendimento('atendimentoResponsavelTelefone')?.value || '').trim();
-    responsavelParentesco = (safeGetAtendimento('atendimentoResponsavelParentesco')?.value || '').trim();
+  // 🆕 Dados do responsável: sempre capturados (opcionais no aluno, obrigatório no responsável)
+  const responsavelNome = (safeGetAtendimento('atendimentoResponsavelNome')?.value || '').trim();
+  const responsavelCPF = (safeGetAtendimento('atendimentoResponsavelCPF')?.value || '').trim();
+  const responsavelTelefone = (safeGetAtendimento('atendimentoResponsavelTelefone')?.value || '').trim();
+  const responsavelParentesco = (safeGetAtendimento('atendimentoResponsavelParentesco')?.value || '').trim();
 
-    if (!responsavelNome) {
-      notificar('Informe o nome do responsável', 'error');
-      safeGetAtendimento('atendimentoResponsavelNome')?.focus(); return;
-    }
+  if (tipo === 'responsavel' && !responsavelNome) {
+    notificar('Informe o nome do responsável', 'error');
+    safeGetAtendimento('atendimentoResponsavelNome')?.focus(); return;
+  }
 
-    if (responsavelCPF) {
-      const validacao = validarCPFClienteAtendimento(responsavelCPF);
-      if (!validacao.valido) {
-        notificar(`⚠️ CPF inválido!\n\n${validacao.erro}`, 'error', 5000);
-        safeGetAtendimento('atendimentoResponsavelCPF')?.focus(); return;
-      }
+  if (responsavelCPF) {
+    const validacao = validarCPFClienteAtendimento(responsavelCPF);
+    if (!validacao.valido) {
+      notificar(`⚠️ CPF inválido!\n\n${validacao.erro}`, 'error', 5000);
+      safeGetAtendimento('atendimentoResponsavelCPF')?.focus(); return;
     }
   }
 
@@ -580,9 +646,11 @@ async function registrarAtendimento() {
       alunoId: atendimentoState.alunoAtual.id,
       responsavelNome, responsavelCPF, responsavelTelefone, responsavelParentesco,
       dataAtendimento,
-      motivo: atendimentoState.motivoSelecionado,
+      motivos: atendimentoState.motivosSelecionados,
+      motivo: atendimentoState.motivosSelecionados[0],
       descricaoMotivo,
-      providencias: atendimentoState.providenciaSelecionada,
+      providenciasList: atendimentoState.providenciasSelecionadas,
+      providencias: atendimentoState.providenciasSelecionadas[0],
       descricaoProvidencias,
       observacoes: safeGetAtendimento('atendimentoObservacoes')?.value || '',
       precisaAssinatura, assinaturaBase64, sessaoAssinaturaId,
@@ -632,8 +700,8 @@ function limparTelaAtendimento() {
   safeGetAtendimento('atendimentoAlunoInfo').style.display = 'none';
   safeGetAtendimento('formAtendimento').style.display = 'none';
   atendimentoState.alunoAtual = null;
-  atendimentoState.motivoSelecionado = null;
-  atendimentoState.providenciaSelecionada = null;
+  atendimentoState.motivosSelecionados = [];
+  atendimentoState.providenciasSelecionadas = [];
 
   limparSessaoResponsavelAtendimento(true);
   limparSessaoAlunoAtendimento(true);
@@ -660,14 +728,6 @@ function reiniciarScannerAtendimento() {
 // ============================================
 // SESSÕES DE ASSINATURA (Responsável)
 // ============================================
-function gerarUUIDAtendimento() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
-
 async function toggleNecessitaAssinaturaAtendimento() {
   const check = safeGetAtendimento('atendimentoNecessitaAssinatura');
   if (!check) return;
@@ -732,10 +792,12 @@ function montarSnapshotAtendimento() {
     alunoId: aluno.id, alunoNome: aluno.nome, alunoMatricula: aluno.matricula,
     alunoTurma: aluno.turma, alunoCurso: aluno.curso, alunoFoto: aluno.fotoPerfil,
     tipoAtendimento: atendimentoState.tipoAtendimento,
-    motivo: atendimentoState.motivoSelecionado,
-    motivoLabel: getAtendimentoMotivoLabel(atendimentoState.motivoSelecionado),
-    providencias: atendimentoState.providenciaSelecionada,
-    providenciasLabel: getAtendimentoProvidenciaLabel(atendimentoState.providenciaSelecionada),
+    motivo: atendimentoState.motivosSelecionados[0],
+    motivos: atendimentoState.motivosSelecionados,
+    motivoLabel: getAtendimentoMotivosLabels(atendimentoState.motivosSelecionados),
+    providencias: atendimentoState.providenciasSelecionadas[0],
+    providenciasList: atendimentoState.providenciasSelecionadas,
+    providenciasLabel: getAtendimentoProvidenciasLabels(atendimentoState.providenciasSelecionadas),
     descricaoMotivo: safeGetAtendimento('atendimentoDescricaoMotivo')?.value || '',
     descricaoProvidencias: safeGetAtendimento('atendimentoDescricaoProvidencias')?.value || '',
     observacoes: safeGetAtendimento('atendimentoObservacoes')?.value || '',
@@ -745,6 +807,9 @@ function montarSnapshotAtendimento() {
   };
 }
 
+// ============================================
+// MODAL DE ASSINATURA DO RESPONSÁVEL (com canvas inline)
+// ============================================
 function abrirModalAssinaturaResponsavelAtendimento(urlAssinatura) {
   const antigo = safeGetAtendimento('modalAssinaturaResponsavelAtendimento');
   if (antigo) antigo.remove();
@@ -761,22 +826,69 @@ function abrirModalAssinaturaResponsavelAtendimento(urlAssinatura) {
             <button type="button" class="btn-close btn-close-white" onclick="fecharModalAssinaturaResponsavelAtendimento()"></button>
           </div>
           <div class="modal-body" style="padding:30px;text-align:center;">
-            <div style="background:#fef3c7;border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px;text-align:left;margin-bottom:20px;">
-              <div style="width:40px;height:40px;border-radius:50%;border:4px solid #f59e0b;border-top-color:transparent;animation:spin 1s linear infinite;flex-shrink:0;"></div>
-              <div>
-                <strong style="color:#92400e;">Aguardando assinatura...</strong>
-                <p style="margin:3px 0 0;font-size:13px;color:#78350f;">Peça para o responsável escanear o QR Code</p>
+
+            <!-- 🆕 ÁREA DO QR CODE -->
+            <div id="modalAssinaturaRespAtendimentoQRView">
+              <div style="background:#fef3c7;border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px;text-align:left;margin-bottom:20px;">
+                <div style="width:40px;height:40px;border-radius:50%;border:4px solid #f59e0b;border-top-color:transparent;animation:spin 1s linear infinite;flex-shrink:0;"></div>
+                <div>
+                  <strong style="color:#92400e;">Aguardando assinatura...</strong>
+                  <p style="margin:3px 0 0;font-size:13px;color:#78350f;">Peça para o responsável escanear o QR Code</p>
+                </div>
+              </div>
+              <div style="background:white;border:2px solid #e2e8f0;border-radius:16px;padding:20px;display:inline-block;">
+                <img src="${qrUrl}" alt="QR Code" style="width:260px;height:260px;display:block;" id="qrCodeResponsavelAtendimentoImg">
+                <p style="margin:12px 0 0;font-size:13px;color:#64748b;"><i class="fas fa-mobile-alt"></i> Aponte a câmera</p>
+              </div>
+              <div style="margin-top:16px;">
+                <button onclick="copiarLinkAssinaturaAtendimento('${urlAssinatura}')" class="btn-copiar-link">
+                  <i class="fas fa-link"></i> Copiar link de assinatura
+                </button>
+              </div>
+              <div style="margin-top:14px;padding-top:14px;border-top:1px dashed #cbd5e1;">
+                <p style="margin:0 0 8px;font-size:12px;color:#64748b;">Não consegue escanear?</p>
+                <button type="button"
+                        onclick="mostrarCanvasAssinaturaResponsavelAtendimento()"
+                        style="background:transparent;border:none;color:#1e3c72;font-weight:600;font-size:14px;cursor:pointer;text-decoration:underline;padding:6px 10px;border-radius:8px;">
+                  <i class="fas fa-pen-fancy"></i> Assinar aqui mesmo
+                </button>
               </div>
             </div>
-            <div style="background:white;border:2px solid #e2e8f0;border-radius:16px;padding:20px;display:inline-block;">
-              <img src="${qrUrl}" alt="QR Code" style="width:260px;height:260px;display:block;" id="qrCodeResponsavelAtendimentoImg">
-              <p style="margin:12px 0 0;font-size:13px;color:#64748b;"><i class="fas fa-mobile-alt"></i> Aponte a câmera</p>
+
+            <!-- 🆕 ÁREA DO CANVAS INLINE -->
+            <div id="modalAssinaturaRespAtendimentoCanvasView" style="display:none;">
+              <div style="background:#f0f9ff;border-radius:12px;padding:14px;margin-bottom:16px;text-align:left;">
+                <div style="display:flex;gap:8px;">
+                  <i class="fas fa-info-circle" style="color:#0369a1;"></i>
+                  <span style="font-size:13px;color:#0369a1;">Peça para o responsável assinar no espaço abaixo com o dedo ou mouse.</span>
+                </div>
+              </div>
+              <div id="modalRespAtendimentoCanvasWrapper" style="position:relative;background:white;border:3px dashed #cbd5e0;border-radius:16px;overflow:hidden;height:260px;margin-bottom:14px;touch-action:none;">
+                <canvas id="modalRespAtendimentoCanvas" style="width:100%;height:100%;display:block;"></canvas>
+                <div id="modalRespAtendimentoCanvasPlaceholder" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#94a3b8;pointer-events:none;width:100%;">
+                  <i class="fas fa-pen-fancy" style="font-size:28px;display:block;margin-bottom:5px;"></i>
+                  <span style="font-size:13px;">Assine aqui</span>
+                </div>
+              </div>
+              <div style="display:flex;gap:10px;">
+                <button type="button" onclick="limparCanvasResponsavelAtendimento()"
+                        style="flex:1;padding:12px;background:#f1f5f9;color:#475569;border:none;border-radius:10px;font-weight:600;font-size:14px;cursor:pointer;">
+                  <i class="fas fa-eraser"></i> Limpar
+                </button>
+                <button type="button" id="btnConfirmarAssinaturaRespAtendimento" onclick="salvarAssinaturaResponsavelInline()"
+                        disabled
+                        style="flex:2;padding:12px;background:#cbd5e0;color:white;border:none;border-radius:10px;font-weight:600;font-size:14px;cursor:not-allowed;">
+                  <i class="fas fa-check"></i> Confirmar Assinatura
+                </button>
+              </div>
+              <div style="margin-top:14px;">
+                <button type="button" onclick="voltarParaQRCodeResponsavelAtendimento()"
+                        style="background:transparent;border:none;color:#64748b;font-size:13px;cursor:pointer;text-decoration:underline;">
+                  <i class="fas fa-arrow-left"></i> Voltar para o QR Code
+                </button>
+              </div>
             </div>
-            <div style="margin-top:16px;">
-              <button onclick="copiarLinkAssinaturaAtendimento('${urlAssinatura}')" class="btn-copiar-link">
-                <i class="fas fa-link"></i> Copiar link de assinatura
-              </button>
-            </div>
+
           </div>
           <div class="modal-footer" style="border-top:1px solid #e5e7eb;padding:15px 25px;justify-content:space-between;">
             <button type="button" class="btn btn-outline-secondary" onclick="fecharModalAssinaturaResponsavelAtendimento()" style="border-radius:10px;">
@@ -798,13 +910,274 @@ function abrirModalAssinaturaResponsavelAtendimento(urlAssinatura) {
   atendimentoState.sessaoAssinaturaResponsavel.modalInstance.show();
 }
 
+// ============================================
+// 🆕 CANVAS INLINE — RESPONSÁVEL
+// ============================================
+function mostrarCanvasAssinaturaResponsavelAtendimento() {
+  const qrView = safeGetAtendimento('modalAssinaturaRespAtendimentoQRView');
+  const canvasView = safeGetAtendimento('modalAssinaturaRespAtendimentoCanvasView');
+  if (!qrView || !canvasView) return;
+  qrView.style.display = 'none';
+  canvasView.style.display = 'block';
+  setTimeout(() => inicializarCanvasResponsavelAtendimento(), 50);
+}
+
+function voltarParaQRCodeResponsavelAtendimento() {
+  const qrView = safeGetAtendimento('modalAssinaturaRespAtendimentoQRView');
+  const canvasView = safeGetAtendimento('modalAssinaturaRespAtendimentoCanvasView');
+  if (!qrView || !canvasView) return;
+  canvasView.style.display = 'none';
+  qrView.style.display = 'block';
+}
+
+function inicializarCanvasResponsavelAtendimento() {
+  const canvas = safeGetAtendimento('modalRespAtendimentoCanvas');
+  const wrapper = safeGetAtendimento('modalRespAtendimentoCanvasWrapper');
+  const placeholder = safeGetAtendimento('modalRespAtendimentoCanvasPlaceholder');
+  if (!canvas || !wrapper) return;
+
+  const st = atendimentoState.inlineCanvasResp;
+  st.canvas = canvas; st.wrapper = wrapper; st.placeholder = placeholder;
+  st.desenhando = false; st.temAssinatura = false;
+
+  const rect = wrapper.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) {
+    setTimeout(() => inicializarCanvasResponsavelAtendimento(), 100);
+    return;
+  }
+
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.scale(dpr, dpr);
+  ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#1e3c72';
+  st.ctx = ctx;
+
+  const btn = safeGetAtendimento('btnConfirmarAssinaturaRespAtendimento');
+  if (btn) { btn.disabled = true; btn.style.background = '#cbd5e0'; btn.style.cursor = 'not-allowed'; }
+  if (placeholder) placeholder.style.opacity = '1';
+  if (wrapper) { wrapper.style.borderColor = '#cbd5e0'; wrapper.style.borderStyle = 'dashed'; }
+
+  if (st.inicializado) return;
+  st.inicializado = true;
+
+  const getPos = (e) => {
+    const r = canvas.getBoundingClientRect();
+    let cx, cy;
+    if (e.touches?.length > 0) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
+    else if (e.changedTouches?.length > 0) { cx = e.changedTouches[0].clientX; cy = e.changedTouches[0].clientY; }
+    else { cx = e.clientX; cy = e.clientY; }
+    return { x: cx - r.left, y: cy - r.top };
+  };
+
+  const iniciar = (e) => {
+    e.preventDefault();
+    st.desenhando = true; st.temAssinatura = true;
+    const p = getPos(e);
+    st.lastX = p.x; st.lastY = p.y;
+    if (wrapper) { wrapper.style.borderColor = '#1e3c72'; wrapper.style.borderStyle = 'solid'; }
+    if (placeholder) placeholder.style.opacity = '0';
+    const btn = safeGetAtendimento('btnConfirmarAssinaturaRespAtendimento');
+    if (btn) { btn.disabled = false; btn.style.background = 'linear-gradient(135deg,#10b981,#059669)'; btn.style.cursor = 'pointer'; }
+  };
+
+  const desenhar = (e) => {
+    if (!st.desenhando) return;
+    e.preventDefault();
+    const p = getPos(e);
+    st.ctx.beginPath(); st.ctx.moveTo(st.lastX, st.lastY); st.ctx.lineTo(p.x, p.y); st.ctx.stroke();
+    st.lastX = p.x; st.lastY = p.y;
+  };
+
+  const parar = (e) => { if (e?.preventDefault) e.preventDefault(); st.desenhando = false; };
+
+  canvas.addEventListener('touchstart', iniciar, { passive: false });
+  canvas.addEventListener('touchmove', desenhar, { passive: false });
+  canvas.addEventListener('touchend', parar, { passive: false });
+  canvas.addEventListener('touchcancel', parar, { passive: false });
+  canvas.addEventListener('mousedown', iniciar);
+  canvas.addEventListener('mousemove', desenhar);
+  canvas.addEventListener('mouseup', parar);
+  canvas.addEventListener('mouseleave', () => { if (st.desenhando) parar(); });
+}
+
+function limparCanvasResponsavelAtendimento() {
+  const st = atendimentoState.inlineCanvasResp;
+  if (!st.canvas || !st.ctx) return;
+  const rect = st.canvas.getBoundingClientRect();
+  st.ctx.clearRect(0, 0, rect.width, rect.height);
+  st.temAssinatura = false;
+  if (st.placeholder) st.placeholder.style.opacity = '1';
+  if (st.wrapper) { st.wrapper.style.borderColor = '#cbd5e0'; st.wrapper.style.borderStyle = 'dashed'; }
+  const btn = safeGetAtendimento('btnConfirmarAssinaturaRespAtendimento');
+  if (btn) { btn.disabled = true; btn.style.background = '#cbd5e0'; btn.style.cursor = 'not-allowed'; }
+}
+
+async function salvarAssinaturaResponsavelInline() {
+  const st = atendimentoState.inlineCanvasResp;
+  if (!st.temAssinatura || !st.canvas) {
+    notificar('⚠️ Assine antes de confirmar', 'warning'); return;
+  }
+  const sessaoId = atendimentoState.sessaoAssinaturaResponsavel.sessaoId;
+  if (!sessaoId) { notificar('⚠️ Sessão não encontrada', 'error'); return; }
+
+  const btn = safeGetAtendimento('btnConfirmarAssinaturaRespAtendimento');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...'; }
+
+  try {
+    const base64 = st.canvas.toDataURL('image/png');
+    const response = await fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}/assinar`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assinaturaBase64: base64, assinanteNome: 'Responsável' })
+    });
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error || 'Erro ao salvar');
+
+    atendimentoState.sessaoAssinaturaResponsavel.assinaturaCapturada = base64;
+
+    const canvasView = safeGetAtendimento('modalAssinaturaRespAtendimentoCanvasView');
+    if (canvasView) {
+      const dataHora = new Date().toLocaleString('pt-BR');
+      canvasView.innerHTML = `
+        <div style="animation: fadeIn 0.3s ease;">
+          <div style="background:linear-gradient(135deg,#10b981,#059669);border-radius:14px;padding:16px 20px;margin-bottom:16px;display:flex;align-items:center;gap:14px;color:white;box-shadow:0 4px 14px rgba(16,185,129,0.3);">
+            <div style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <i class="fas fa-check" style="font-size:22px;"></i>
+            </div>
+            <div style="flex:1;text-align:left;">
+              <h4 style="margin:0 0 2px;font-size:16px;font-weight:700;">Assinatura Registrada!</h4>
+              <p style="margin:0;font-size:13px;opacity:0.95;">Confirmada em ${dataHora}</p>
+            </div>
+          </div>
+          <div style="text-align:left;margin-bottom:10px;">
+            <span style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:700;letter-spacing:0.5px;">
+              <i class="fas fa-signature"></i> Assinatura capturada
+            </span>
+          </div>
+          <div style="position:relative;background:#f0fdf4;border:3px solid #10b981;border-radius:16px;overflow:hidden;height:220px;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;">
+            <img src="${base64}" style="max-width:100%;max-height:100%;object-fit:contain;display:block;" alt="Assinatura">
+            <div style="position:absolute;top:10px;right:10px;background:#10b981;color:white;padding:4px 10px;border-radius:20px;font-size:10px;font-weight:700;display:flex;align-items:center;gap:4px;">
+              <i class="fas fa-lock" style="font-size:9px;"></i> VERIFICADA
+            </div>
+          </div>
+          <div style="margin-top:12px;padding:10px 14px;background:#f8fafc;border-radius:10px;border-left:3px solid #10b981;text-align:left;">
+            <div style="font-size:12px;color:#475569;line-height:1.6;">
+              <div><strong>Assinante:</strong> Responsável</div>
+              <div><strong>Data/Hora:</strong> ${dataHora}</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:16px;">
+            <button type="button" onclick="refazerAssinaturaResponsavelInline()"
+                    style="flex:1;padding:12px;background:#fef3c7;color:#92400e;border:2px solid #f59e0b;border-radius:10px;font-weight:600;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+              <i class="fas fa-redo"></i> Refazer
+            </button>
+            <button type="button" onclick="fecharModalAssinaturaResponsavelAtendimento()"
+                    style="flex:2;padding:12px;background:linear-gradient(135deg,#1e3c72,#2a5298);color:white;border:none;border-radius:10px;font-weight:600;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+              <i class="fas fa-check-circle"></i> Concluir
+            </button>
+          </div>
+        </div>`;
+    }
+
+    pararMonitoramentoResponsavelAtendimento();
+    atualizarStatusAssinadoResponsavelAtendimento({
+      assinaturaBase64: base64,
+      assinadaPorNome: 'Responsável',
+      assinadaEm: new Date().toISOString()
+    });
+
+    notificar('✅ Assinatura do responsável registrada!', 'success');
+  } catch (e) {
+    console.error(e);
+    notificar('❌ ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Assinatura'; }
+  }
+}
+
+async function refazerAssinaturaResponsavelInline() {
+  const ok = await confirm('Refazer a assinatura do responsável? A atual será descartada.');
+  if (!ok) return;
+
+  const sessaoId = atendimentoState.sessaoAssinaturaResponsavel.sessaoId;
+  if (!sessaoId) { notificar('⚠️ Sessão não encontrada', 'error'); return; }
+
+  try {
+    await fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}/reset`, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${getTokenAtendimento()}` }
+    });
+  } catch (e) {
+    try {
+      await fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${getTokenAtendimento()}` }
+      });
+    } catch (err) { console.warn(err); }
+  }
+
+  atendimentoState.sessaoAssinaturaResponsavel.assinaturaCapturada = null;
+
+  const canvasView = safeGetAtendimento('modalAssinaturaRespAtendimentoCanvasView');
+  if (canvasView) {
+    canvasView.innerHTML = `
+      <div style="background:#f0f9ff;border-radius:12px;padding:14px;margin-bottom:16px;text-align:left;">
+        <div style="display:flex;gap:8px;">
+          <i class="fas fa-info-circle" style="color:#0369a1;"></i>
+          <span style="font-size:13px;color:#0369a1;">Peça para o responsável assinar no espaço abaixo.</span>
+        </div>
+      </div>
+      <div id="modalRespAtendimentoCanvasWrapper" style="position:relative;background:white;border:3px dashed #cbd5e0;border-radius:16px;overflow:hidden;height:260px;margin-bottom:14px;touch-action:none;">
+        <canvas id="modalRespAtendimentoCanvas" style="width:100%;height:100%;display:block;"></canvas>
+        <div id="modalRespAtendimentoCanvasPlaceholder" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#94a3b8;pointer-events:none;width:100%;">
+          <i class="fas fa-pen-fancy" style="font-size:28px;display:block;margin-bottom:5px;"></i>
+          <span style="font-size:13px;">Assine aqui</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <button type="button" onclick="limparCanvasResponsavelAtendimento()"
+                style="flex:1;padding:12px;background:#f1f5f9;color:#475569;border:none;border-radius:10px;font-weight:600;font-size:14px;cursor:pointer;">
+          <i class="fas fa-eraser"></i> Limpar
+        </button>
+        <button type="button" id="btnConfirmarAssinaturaRespAtendimento" onclick="salvarAssinaturaResponsavelInline()" disabled
+                style="flex:2;padding:12px;background:#cbd5e0;color:white;border:none;border-radius:10px;font-weight:600;font-size:14px;cursor:not-allowed;">
+          <i class="fas fa-check"></i> Confirmar Assinatura
+        </button>
+      </div>
+      <div style="margin-top:14px;">
+        <button type="button" onclick="voltarParaQRCodeResponsavelAtendimento()"
+                style="background:transparent;border:none;color:#64748b;font-size:13px;cursor:pointer;text-decoration:underline;">
+          <i class="fas fa-arrow-left"></i> Voltar para o QR Code
+        </button>
+      </div>`;
+  }
+
+  atendimentoState.inlineCanvasResp.inicializado = false;
+  setTimeout(() => inicializarCanvasResponsavelAtendimento(), 100);
+  notificar('✏️ Assinatura apagada. Pode assinar novamente.', 'info');
+}
+
 function fecharModalAssinaturaResponsavelAtendimento() {
   if (atendimentoState.sessaoAssinaturaResponsavel.modalInstance) {
     atendimentoState.sessaoAssinaturaResponsavel.modalInstance.hide();
   }
   const el = safeGetAtendimento('modalAssinaturaResponsavelAtendimento');
   if (el) setTimeout(() => el.remove(), 300);
-  mostrarBlocoCompactoResponsavelAtendimento();
+
+  if (atendimentoState.sessaoAssinaturaResponsavel.assinaturaCapturada) {
+    atualizarStatusAssinadoResponsavelAtendimento({
+      assinaturaBase64: atendimentoState.sessaoAssinaturaResponsavel.assinaturaCapturada,
+      assinadaPorNome: 'Responsável',
+      assinadaEm: new Date().toISOString()
+    });
+  } else {
+    mostrarBlocoCompactoResponsavelAtendimento();
+  }
 }
 
 function mostrarBlocoCompactoResponsavelAtendimento() {
@@ -840,8 +1213,6 @@ function reabrirModalAssinaturaResponsavelAtendimento() {
 
 function iniciarMonitoramentoResponsavelAtendimento(sessaoId) {
   pararMonitoramentoResponsavelAtendimento();
-  console.log('👀 Monitorando sessão (responsável):', sessaoId);
-
   const id = setInterval(async () => {
     try {
       const response = await fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}`);
@@ -1067,22 +1438,69 @@ function abrirModalAssinaturaAlunoAtendimento(urlAssinatura) {
             <button type="button" class="btn-close btn-close-white" onclick="fecharModalAssinaturaAlunoAtendimento()"></button>
           </div>
           <div class="modal-body" style="padding:30px;text-align:center;">
-            <div style="background:#fef3c7;border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px;text-align:left;margin-bottom:20px;">
-              <div style="width:40px;height:40px;border-radius:50%;border:4px solid #f59e0b;border-top-color:transparent;animation:spin 1s linear infinite;flex-shrink:0;"></div>
-              <div>
-                <strong style="color:#92400e;">Aguardando assinatura do aluno...</strong>
-                <p style="margin:3px 0 0;font-size:13px;color:#78350f;">Peça para o aluno escanear o QR Code</p>
+
+            <!-- ÁREA DO QR CODE -->
+            <div id="modalAssinaturaAlunoAtendimentoQRView">
+              <div style="background:#fef3c7;border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px;text-align:left;margin-bottom:20px;">
+                <div style="width:40px;height:40px;border-radius:50%;border:4px solid #f59e0b;border-top-color:transparent;animation:spin 1s linear infinite;flex-shrink:0;"></div>
+                <div>
+                  <strong style="color:#92400e;">Aguardando assinatura do aluno...</strong>
+                  <p style="margin:3px 0 0;font-size:13px;color:#78350f;">Peça para o aluno escanear o QR Code</p>
+                </div>
+              </div>
+              <div style="background:white;border:2px solid #e2e8f0;border-radius:16px;padding:20px;display:inline-block;">
+                <img src="${qrUrl}" alt="QR Code" style="width:260px;height:260px;display:block;" id="qrCodeAlunoAtendimentoImg">
+                <p style="margin:12px 0 0;font-size:13px;color:#64748b;"><i class="fas fa-mobile-alt"></i> Aponte a câmera</p>
+              </div>
+              <div style="margin-top:16px;">
+                <button onclick="copiarLinkAssinaturaAtendimento('${urlAssinatura}')" class="btn-copiar-link">
+                  <i class="fas fa-link"></i> Copiar link de assinatura
+                </button>
+              </div>
+              <div style="margin-top:14px;padding-top:14px;border-top:1px dashed #cbd5e1;">
+                <p style="margin:0 0 8px;font-size:12px;color:#64748b;">Não consegue escanear?</p>
+                <button type="button"
+                        onclick="mostrarCanvasAssinaturaAlunoAtendimento()"
+                        style="background:transparent;border:none;color:#059669;font-weight:600;font-size:14px;cursor:pointer;text-decoration:underline;padding:6px 10px;border-radius:8px;">
+                  <i class="fas fa-pen-fancy"></i> Assinar aqui mesmo
+                </button>
               </div>
             </div>
-            <div style="background:white;border:2px solid #e2e8f0;border-radius:16px;padding:20px;display:inline-block;">
-              <img src="${qrUrl}" alt="QR Code" style="width:260px;height:260px;display:block;" id="qrCodeAlunoAtendimentoImg">
-              <p style="margin:12px 0 0;font-size:13px;color:#64748b;"><i class="fas fa-mobile-alt"></i> Aponte a câmera</p>
+
+            <!-- ÁREA DO CANVAS INLINE -->
+            <div id="modalAssinaturaAlunoAtendimentoCanvasView" style="display:none;">
+              <div style="background:#f0f9ff;border-radius:12px;padding:14px;margin-bottom:16px;text-align:left;">
+                <div style="display:flex;gap:8px;">
+                  <i class="fas fa-info-circle" style="color:#0369a1;"></i>
+                  <span style="font-size:13px;color:#0369a1;">Peça para o aluno assinar no espaço abaixo.</span>
+                </div>
+              </div>
+              <div id="modalAlunoAtendimentoCanvasWrapper" style="position:relative;background:white;border:3px dashed #cbd5e0;border-radius:16px;overflow:hidden;height:260px;margin-bottom:14px;touch-action:none;">
+                <canvas id="modalAlunoAtendimentoCanvas" style="width:100%;height:100%;display:block;"></canvas>
+                <div id="modalAlunoAtendimentoCanvasPlaceholder" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#94a3b8;pointer-events:none;width:100%;">
+                  <i class="fas fa-pen-fancy" style="font-size:28px;display:block;margin-bottom:5px;"></i>
+                  <span style="font-size:13px;">Assine aqui</span>
+                </div>
+              </div>
+              <div style="display:flex;gap:10px;">
+                <button type="button" onclick="limparCanvasAlunoAtendimento()"
+                        style="flex:1;padding:12px;background:#f1f5f9;color:#475569;border:none;border-radius:10px;font-weight:600;font-size:14px;cursor:pointer;">
+                  <i class="fas fa-eraser"></i> Limpar
+                </button>
+                <button type="button" id="btnConfirmarAssinaturaAlunoAtendimento" onclick="salvarAssinaturaAlunoInline()"
+                        disabled
+                        style="flex:2;padding:12px;background:#cbd5e0;color:white;border:none;border-radius:10px;font-weight:600;font-size:14px;cursor:not-allowed;">
+                  <i class="fas fa-check"></i> Confirmar Assinatura
+                </button>
+              </div>
+              <div style="margin-top:14px;">
+                <button type="button" onclick="voltarParaQRCodeAlunoAtendimento()"
+                        style="background:transparent;border:none;color:#64748b;font-size:13px;cursor:pointer;text-decoration:underline;">
+                  <i class="fas fa-arrow-left"></i> Voltar para o QR Code
+                </button>
+              </div>
             </div>
-            <div style="margin-top:16px;">
-              <button onclick="copiarLinkAssinaturaAtendimento('${urlAssinatura}')" class="btn-copiar-link">
-                <i class="fas fa-link"></i> Copiar link de assinatura
-              </button>
-            </div>
+
           </div>
           <div class="modal-footer" style="border-top:1px solid #e5e7eb;padding:15px 25px;justify-content:space-between;">
             <button type="button" class="btn btn-outline-secondary" onclick="fecharModalAssinaturaAlunoAtendimento()" style="border-radius:10px;">
@@ -1104,13 +1522,263 @@ function abrirModalAssinaturaAlunoAtendimento(urlAssinatura) {
   atendimentoState.sessaoAssinaturaAluno.modalInstance.show();
 }
 
+// ============================================
+// 🆕 CANVAS INLINE — ALUNO
+// ============================================
+function mostrarCanvasAssinaturaAlunoAtendimento() {
+  const qrView = safeGetAtendimento('modalAssinaturaAlunoAtendimentoQRView');
+  const canvasView = safeGetAtendimento('modalAssinaturaAlunoAtendimentoCanvasView');
+  if (!qrView || !canvasView) return;
+  qrView.style.display = 'none';
+  canvasView.style.display = 'block';
+  setTimeout(() => inicializarCanvasAlunoAtendimento(), 50);
+}
+
+function voltarParaQRCodeAlunoAtendimento() {
+  const qrView = safeGetAtendimento('modalAssinaturaAlunoAtendimentoQRView');
+  const canvasView = safeGetAtendimento('modalAssinaturaAlunoAtendimentoCanvasView');
+  if (!qrView || !canvasView) return;
+  canvasView.style.display = 'none';
+  qrView.style.display = 'block';
+}
+
+function inicializarCanvasAlunoAtendimento() {
+  const canvas = safeGetAtendimento('modalAlunoAtendimentoCanvas');
+  const wrapper = safeGetAtendimento('modalAlunoAtendimentoCanvasWrapper');
+  const placeholder = safeGetAtendimento('modalAlunoAtendimentoCanvasPlaceholder');
+  if (!canvas || !wrapper) return;
+
+  const st = atendimentoState.inlineCanvasAluno;
+  st.canvas = canvas; st.wrapper = wrapper; st.placeholder = placeholder;
+  st.desenhando = false; st.temAssinatura = false;
+
+  const rect = wrapper.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) {
+    setTimeout(() => inicializarCanvasAlunoAtendimento(), 100);
+    return;
+  }
+
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.scale(dpr, dpr);
+  ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#059669';
+  st.ctx = ctx;
+
+  const btn = safeGetAtendimento('btnConfirmarAssinaturaAlunoAtendimento');
+  if (btn) { btn.disabled = true; btn.style.background = '#cbd5e0'; btn.style.cursor = 'not-allowed'; }
+  if (placeholder) placeholder.style.opacity = '1';
+  if (wrapper) { wrapper.style.borderColor = '#cbd5e0'; wrapper.style.borderStyle = 'dashed'; }
+
+  if (st.inicializado) return;
+  st.inicializado = true;
+
+  const getPos = (e) => {
+    const r = canvas.getBoundingClientRect();
+    let cx, cy;
+    if (e.touches?.length > 0) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
+    else if (e.changedTouches?.length > 0) { cx = e.changedTouches[0].clientX; cy = e.changedTouches[0].clientY; }
+    else { cx = e.clientX; cy = e.clientY; }
+    return { x: cx - r.left, y: cy - r.top };
+  };
+
+  const iniciar = (e) => {
+    e.preventDefault();
+    st.desenhando = true; st.temAssinatura = true;
+    const p = getPos(e);
+    st.lastX = p.x; st.lastY = p.y;
+    if (wrapper) { wrapper.style.borderColor = '#059669'; wrapper.style.borderStyle = 'solid'; }
+    if (placeholder) placeholder.style.opacity = '0';
+    const btn = safeGetAtendimento('btnConfirmarAssinaturaAlunoAtendimento');
+    if (btn) { btn.disabled = false; btn.style.background = 'linear-gradient(135deg,#10b981,#059669)'; btn.style.cursor = 'pointer'; }
+  };
+
+  const desenhar = (e) => {
+    if (!st.desenhando) return;
+    e.preventDefault();
+    const p = getPos(e);
+    st.ctx.beginPath(); st.ctx.moveTo(st.lastX, st.lastY); st.ctx.lineTo(p.x, p.y); st.ctx.stroke();
+    st.lastX = p.x; st.lastY = p.y;
+  };
+
+  const parar = (e) => { if (e?.preventDefault) e.preventDefault(); st.desenhando = false; };
+
+  canvas.addEventListener('touchstart', iniciar, { passive: false });
+  canvas.addEventListener('touchmove', desenhar, { passive: false });
+  canvas.addEventListener('touchend', parar, { passive: false });
+  canvas.addEventListener('touchcancel', parar, { passive: false });
+  canvas.addEventListener('mousedown', iniciar);
+  canvas.addEventListener('mousemove', desenhar);
+  canvas.addEventListener('mouseup', parar);
+  canvas.addEventListener('mouseleave', () => { if (st.desenhando) parar(); });
+}
+
+function limparCanvasAlunoAtendimento() {
+  const st = atendimentoState.inlineCanvasAluno;
+  if (!st.canvas || !st.ctx) return;
+  const rect = st.canvas.getBoundingClientRect();
+  st.ctx.clearRect(0, 0, rect.width, rect.height);
+  st.temAssinatura = false;
+  if (st.placeholder) st.placeholder.style.opacity = '1';
+  if (st.wrapper) { st.wrapper.style.borderColor = '#cbd5e0'; st.wrapper.style.borderStyle = 'dashed'; }
+  const btn = safeGetAtendimento('btnConfirmarAssinaturaAlunoAtendimento');
+  if (btn) { btn.disabled = true; btn.style.background = '#cbd5e0'; btn.style.cursor = 'not-allowed'; }
+}
+
+async function salvarAssinaturaAlunoInline() {
+  const st = atendimentoState.inlineCanvasAluno;
+  if (!st.temAssinatura || !st.canvas) {
+    notificar('⚠️ Assine antes de confirmar', 'warning'); return;
+  }
+  const sessaoId = atendimentoState.sessaoAssinaturaAluno.sessaoId;
+  if (!sessaoId) { notificar('⚠️ Sessão não encontrada', 'error'); return; }
+
+  const btn = safeGetAtendimento('btnConfirmarAssinaturaAlunoAtendimento');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...'; }
+
+  try {
+    const base64 = st.canvas.toDataURL('image/png');
+    const response = await fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}/assinar`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assinaturaBase64: base64, assinanteNome: 'Aluno' })
+    });
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error || 'Erro ao salvar');
+
+    atendimentoState.sessaoAssinaturaAluno.assinaturaCapturada = base64;
+
+    const canvasView = safeGetAtendimento('modalAssinaturaAlunoAtendimentoCanvasView');
+    if (canvasView) {
+      const dataHora = new Date().toLocaleString('pt-BR');
+      canvasView.innerHTML = `
+        <div style="animation: fadeIn 0.3s ease;">
+          <div style="background:linear-gradient(135deg,#10b981,#059669);border-radius:14px;padding:16px 20px;margin-bottom:16px;display:flex;align-items:center;gap:14px;color:white;box-shadow:0 4px 14px rgba(16,185,129,0.3);">
+            <div style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <i class="fas fa-check" style="font-size:22px;"></i>
+            </div>
+            <div style="flex:1;text-align:left;">
+              <h4 style="margin:0 0 2px;font-size:16px;font-weight:700;">Assinatura do Aluno Registrada!</h4>
+              <p style="margin:0;font-size:13px;opacity:0.95;">Confirmada em ${dataHora}</p>
+            </div>
+          </div>
+          <div style="position:relative;background:#f0fdf4;border:3px solid #10b981;border-radius:16px;overflow:hidden;height:220px;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;">
+            <img src="${base64}" style="max-width:100%;max-height:100%;object-fit:contain;display:block;" alt="Assinatura do Aluno">
+            <div style="position:absolute;top:10px;right:10px;background:#10b981;color:white;padding:4px 10px;border-radius:20px;font-size:10px;font-weight:700;display:flex;align-items:center;gap:4px;">
+              <i class="fas fa-lock" style="font-size:9px;"></i> VERIFICADA
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:16px;">
+            <button type="button" onclick="refazerAssinaturaAlunoInline()"
+                    style="flex:1;padding:12px;background:#fef3c7;color:#92400e;border:2px solid #f59e0b;border-radius:10px;font-weight:600;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+              <i class="fas fa-redo"></i> Refazer
+            </button>
+            <button type="button" onclick="fecharModalAssinaturaAlunoAtendimento()"
+                    style="flex:2;padding:12px;background:linear-gradient(135deg,#059669,#10b981);color:white;border:none;border-radius:10px;font-weight:600;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+              <i class="fas fa-check-circle"></i> Concluir
+            </button>
+          </div>
+        </div>`;
+    }
+
+    pararMonitoramentoAlunoAtendimento();
+    atualizarStatusAssinadoAlunoAtendimento({
+      assinaturaBase64: base64,
+      assinadaPorNome: 'Aluno',
+      assinadaEm: new Date().toISOString()
+    });
+
+    notificar('✅ Assinatura do aluno registrada!', 'success');
+  } catch (e) {
+    console.error(e);
+    notificar('❌ ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Assinatura'; }
+  }
+}
+
+async function refazerAssinaturaAlunoInline() {
+  const ok = await confirm('Refazer a assinatura do aluno? A atual será descartada.');
+  if (!ok) return;
+
+  const sessaoId = atendimentoState.sessaoAssinaturaAluno.sessaoId;
+  if (!sessaoId) { notificar('⚠️ Sessão não encontrada', 'error'); return; }
+
+  try {
+    await fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}/reset`, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${getTokenAtendimento()}` }
+    });
+  } catch (e) {
+    try {
+      await fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${getTokenAtendimento()}` }
+      });
+    } catch (err) { console.warn(err); }
+  }
+
+  atendimentoState.sessaoAssinaturaAluno.assinaturaCapturada = null;
+
+  const canvasView = safeGetAtendimento('modalAssinaturaAlunoAtendimentoCanvasView');
+  if (canvasView) {
+    canvasView.innerHTML = `
+      <div style="background:#f0f9ff;border-radius:12px;padding:14px;margin-bottom:16px;text-align:left;">
+        <div style="display:flex;gap:8px;">
+          <i class="fas fa-info-circle" style="color:#0369a1;"></i>
+          <span style="font-size:13px;color:#0369a1;">Peça para o aluno assinar no espaço abaixo.</span>
+        </div>
+      </div>
+      <div id="modalAlunoAtendimentoCanvasWrapper" style="position:relative;background:white;border:3px dashed #cbd5e0;border-radius:16px;overflow:hidden;height:260px;margin-bottom:14px;touch-action:none;">
+        <canvas id="modalAlunoAtendimentoCanvas" style="width:100%;height:100%;display:block;"></canvas>
+        <div id="modalAlunoAtendimentoCanvasPlaceholder" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#94a3b8;pointer-events:none;width:100%;">
+          <i class="fas fa-pen-fancy" style="font-size:28px;display:block;margin-bottom:5px;"></i>
+          <span style="font-size:13px;">Assine aqui</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <button type="button" onclick="limparCanvasAlunoAtendimento()"
+                style="flex:1;padding:12px;background:#f1f5f9;color:#475569;border:none;border-radius:10px;font-weight:600;font-size:14px;cursor:pointer;">
+          <i class="fas fa-eraser"></i> Limpar
+        </button>
+        <button type="button" id="btnConfirmarAssinaturaAlunoAtendimento" onclick="salvarAssinaturaAlunoInline()" disabled
+                style="flex:2;padding:12px;background:#cbd5e0;color:white;border:none;border-radius:10px;font-weight:600;font-size:14px;cursor:not-allowed;">
+          <i class="fas fa-check"></i> Confirmar Assinatura
+        </button>
+      </div>
+      <div style="margin-top:14px;">
+        <button type="button" onclick="voltarParaQRCodeAlunoAtendimento()"
+                style="background:transparent;border:none;color:#64748b;font-size:13px;cursor:pointer;text-decoration:underline;">
+          <i class="fas fa-arrow-left"></i> Voltar para o QR Code
+        </button>
+      </div>`;
+  }
+
+  atendimentoState.inlineCanvasAluno.inicializado = false;
+  setTimeout(() => inicializarCanvasAlunoAtendimento(), 100);
+  notificar('✏️ Assinatura apagada. Pode assinar novamente.', 'info');
+}
+
 function fecharModalAssinaturaAlunoAtendimento() {
   if (atendimentoState.sessaoAssinaturaAluno.modalInstance) {
     atendimentoState.sessaoAssinaturaAluno.modalInstance.hide();
   }
   const el = safeGetAtendimento('modalAssinaturaAlunoAtendimento');
   if (el) setTimeout(() => el.remove(), 300);
-  mostrarBlocoCompactoAlunoAtendimento();
+
+  if (atendimentoState.sessaoAssinaturaAluno.assinaturaCapturada) {
+    atualizarStatusAssinadoAlunoAtendimento({
+      assinaturaBase64: atendimentoState.sessaoAssinaturaAluno.assinaturaCapturada,
+      assinadaPorNome: 'Aluno',
+      assinadaEm: new Date().toISOString()
+    });
+  } else {
+    mostrarBlocoCompactoAlunoAtendimento();
+  }
 }
 
 function mostrarBlocoCompactoAlunoAtendimento() {
@@ -1146,8 +1814,6 @@ function reabrirModalAssinaturaAlunoAtendimento() {
 
 function iniciarMonitoramentoAlunoAtendimento(sessaoId) {
   pararMonitoramentoAlunoAtendimento();
-  console.log('👀 Monitorando sessão (aluno):', sessaoId);
-
   const id = setInterval(async () => {
     try {
       const response = await fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}`);
@@ -1382,8 +2048,8 @@ async function carregarListaAtendimentos(pagina = null) {
                 <td><strong>${escapeHTMLAtendimento(a.alunoNome)}</strong></td>
                 <td>${escapeHTMLAtendimento(a.alunoTurma)}</td>
                 <td>${a.responsavelNome ? escapeHTMLAtendimento(a.responsavelNome) : '-'}</td>
-                <td><span class="badge bg-info text-dark">${escapeHTMLAtendimento(a.motivoLabel)}</span></td>
-                <td><span class="badge bg-secondary">${escapeHTMLAtendimento(a.providenciasLabel)}</span></td>
+                <td><span class="badge bg-info text-dark" style="white-space:normal;text-align:left;">${escapeHTMLAtendimento(a.motivoLabel)}</span></td>
+                <td><span class="badge bg-secondary" style="white-space:normal;text-align:left;">${escapeHTMLAtendimento(a.providenciasLabel)}</span></td>
                 <td>
                   ${a.temAssinatura ? '<span class="badge bg-success" title="Responsável"><i class="fas fa-signature"></i> R</span>' : ''}
                   ${a.temAssinaturaAluno ? '<span class="badge bg-primary ms-1" title="Aluno"><i class="fas fa-signature"></i> A</span>' : ''}
@@ -1420,7 +2086,7 @@ async function carregarListaAtendimentos(pagina = null) {
 }
 
 // ============================================
-// 👁️ VER DETALHES DO ATENDIMENTO (NOVO)
+// 👁️ VER DETALHES DO ATENDIMENTO
 // ============================================
 async function verAtendimento(id) {
   if (!id) return;
@@ -1440,28 +2106,25 @@ async function verAtendimento(id) {
     const old = safeGetAtendimento('modalVerAtendimento');
     if (old) old.remove();
 
-    const tipoLabel = a.tipoAtendimento === 'aluno' ? 'Atendimento ao Aluno' : 'Atendimento aos Pais/Responsáveis';
     const tipoBadgeClass = a.tipoAtendimento === 'aluno' ? 'bg-primary' : 'bg-success';
     const dataFmt = a.dataFormatada || new Date(a.dataAtendimento).toLocaleDateString('pt-BR');
 
-    // Bloco do responsável (só aparece se tipo responsavel)
-    let blocoResponsavel = '';
-    if (a.tipoAtendimento === 'responsavel' && (a.responsavelNome || a.responsavelCPF || a.responsavelTelefone || a.responsavelParentesco)) {
-      blocoResponsavel = `
-        <div class="card mb-3" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;">
-          <div class="card-body p-3">
-            <h6 style="color: #1e3c72; margin-bottom: 12px; font-size: 13px; text-transform: uppercase; font-weight: 700;">
-              <i class="fas fa-user-shield"></i> Dados do Responsável
-            </h6>
-            <div class="row g-2">
-              ${a.responsavelNome ? `<div class="col-md-6"><small class="text-muted d-block" style="font-size: 11px;">Nome</small><strong style="font-size: 14px;">${escapeHTMLAtendimento(a.responsavelNome)}</strong></div>` : ''}
-              ${a.responsavelCPF ? `<div class="col-md-3"><small class="text-muted d-block" style="font-size: 11px;">CPF</small><strong style="font-size: 14px;">${escapeHTMLAtendimento(a.responsavelCPF)}</strong></div>` : ''}
-              ${a.responsavelTelefone ? `<div class="col-md-3"><small class="text-muted d-block" style="font-size: 11px;">Telefone</small><strong style="font-size: 14px;">${escapeHTMLAtendimento(a.responsavelTelefone)}</strong></div>` : ''}
-              ${a.responsavelParentesco ? `<div class="col-md-6"><small class="text-muted d-block" style="font-size: 11px;">Parentesco</small><strong style="font-size: 14px;">${escapeHTMLAtendimento(a.responsavelParentesco)}</strong></div>` : ''}
-            </div>
+    // 🆕 Bloco do responsável agora aparece SEMPRE que houver dados (aluno ou responsável)
+    const temDadosResponsavel = a.responsavelNome || a.responsavelCPF || a.responsavelTelefone || a.responsavelParentesco;
+    const blocoResponsavel = temDadosResponsavel ? `
+      <div class="card mb-3" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;">
+        <div class="card-body p-3">
+          <h6 style="color: #1e3c72; margin-bottom: 12px; font-size: 13px; text-transform: uppercase; font-weight: 700;">
+            <i class="fas fa-user-shield"></i> Dados do Responsável
+          </h6>
+          <div class="row g-2">
+            ${a.responsavelNome ? `<div class="col-md-6"><small class="text-muted d-block" style="font-size: 11px;">Nome</small><strong style="font-size: 14px;">${escapeHTMLAtendimento(a.responsavelNome)}</strong></div>` : ''}
+            ${a.responsavelCPF ? `<div class="col-md-3"><small class="text-muted d-block" style="font-size: 11px;">CPF</small><strong style="font-size: 14px;">${escapeHTMLAtendimento(a.responsavelCPF)}</strong></div>` : ''}
+            ${a.responsavelTelefone ? `<div class="col-md-3"><small class="text-muted d-block" style="font-size: 11px;">Telefone</small><strong style="font-size: 14px;">${escapeHTMLAtendimento(a.responsavelTelefone)}</strong></div>` : ''}
+            ${a.responsavelParentesco ? `<div class="col-md-6"><small class="text-muted d-block" style="font-size: 11px;">Parentesco</small><strong style="font-size: 14px;">${escapeHTMLAtendimento(a.responsavelParentesco)}</strong></div>` : ''}
           </div>
-        </div>`;
-    }
+        </div>
+      </div>` : '';
 
     // Bloco de assinatura do responsável
     let assinaturaRespHTML = '';
@@ -1513,17 +2176,13 @@ async function verAtendimento(id) {
       <div class="modal fade" id="modalVerAtendimento" tabindex="-1">
         <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
           <div class="modal-content" style="border-radius: 16px; border: none; overflow: hidden;">
-
             <div class="modal-header" style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; border: none; padding: 20px 25px;">
               <h5 class="modal-title" style="display: flex; align-items: center; gap: 10px;">
                 <i class="fas fa-eye"></i> Detalhes do Atendimento
               </h5>
               <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-
             <div class="modal-body" style="padding: 25px; background: #f8fafc;">
-
-              <!-- Card do Aluno -->
               <div class="d-flex align-items-center gap-3 p-3 mb-4" style="background: white; border-radius: 12px; border-left: 4px solid #1e3c72; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
                 <img src="${gerarAvatarSVGAtendimento(a.alunoNome)}" style="width: 60px; height: 60px; border-radius: 50%; border: 2px solid #1e3c72;" alt="">
                 <div style="flex: 1;">
@@ -1539,31 +2198,29 @@ async function verAtendimento(id) {
                 </span>
               </div>
 
-              <!-- Grid de Informações -->
               <div class="row g-3 mb-3">
                 <div class="col-md-4">
                   <div class="p-3 bg-white rounded" style="border: 1px solid #e2e8f0;">
-                    <label class="text-muted small fw-bold d-block mb-1" style="font-size: 11px;">DATA DO ATENDIMENTO</label>
+                    <label class="text-muted small fw-bold d-block mb-1" style="font-size: 11px;">DATA</label>
                     <span style="font-size: 15px; font-weight: 600; color: #1e293b;">${dataFmt}</span>
                   </div>
                 </div>
                 <div class="col-md-4">
                   <div class="p-3 bg-white rounded" style="border: 1px solid #e2e8f0;">
-                    <label class="text-muted small fw-bold d-block mb-1" style="font-size: 11px;">MOTIVO</label>
-                    <span class="badge bg-info text-dark" style="font-size: 13px; padding: 6px 12px;">${escapeHTMLAtendimento(a.motivoLabel)}</span>
+                    <label class="text-muted small fw-bold d-block mb-1" style="font-size: 11px;">MOTIVO(S)</label>
+                    <span class="badge bg-info text-dark" style="font-size: 12px; padding: 6px 12px; white-space: normal; text-align: left;">${escapeHTMLAtendimento(a.motivoLabel)}</span>
                   </div>
                 </div>
                 <div class="col-md-4">
                   <div class="p-3 bg-white rounded" style="border: 1px solid #e2e8f0;">
                     <label class="text-muted small fw-bold d-block mb-1" style="font-size: 11px;">PROVIDÊNCIAS</label>
-                    <span class="badge bg-secondary" style="font-size: 13px; padding: 6px 12px;">${escapeHTMLAtendimento(a.providenciasLabel)}</span>
+                    <span class="badge bg-secondary" style="font-size: 12px; padding: 6px 12px; white-space: normal; text-align: left;">${escapeHTMLAtendimento(a.providenciasLabel)}</span>
                   </div>
                 </div>
               </div>
 
               ${blocoResponsavel}
 
-              <!-- Descrição do Motivo -->
               <div class="mb-3">
                 <label class="text-muted small fw-bold d-block mb-2" style="font-size: 11px;">DESCRIÇÃO DO MOTIVO</label>
                 <div class="p-3 bg-white rounded" style="border: 1px solid #e2e8f0; font-size: 13px; color: #475569; white-space: pre-line;">
@@ -1571,7 +2228,6 @@ async function verAtendimento(id) {
                 </div>
               </div>
 
-              <!-- Descrição das Providências -->
               <div class="mb-3">
                 <label class="text-muted small fw-bold d-block mb-2" style="font-size: 11px;">DESCRIÇÃO DAS PROVIDÊNCIAS</label>
                 <div class="p-3 bg-white rounded" style="border: 1px solid #e2e8f0; font-size: 13px; color: #475569; white-space: pre-line;">
@@ -1596,16 +2252,13 @@ async function verAtendimento(id) {
                   Registrado por: <strong>${escapeHTMLAtendimento(a.registradoPor || 'Sistema')}</strong>
                 </small>
               </div>
-
             </div>
-
             <div class="modal-footer" style="background: white; border-top: 1px solid #e2e8f0; padding: 15px 25px;">
               <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" style="border-radius: 8px;">Fechar</button>
               <button type="button" class="btn btn-primary" onclick="imprimirAtendimento('${a.id}')" style="border-radius: 8px;">
                 <i class="fas fa-print"></i> Imprimir Documento
               </button>
             </div>
-
           </div>
         </div>
       </div>`;
@@ -1746,8 +2399,9 @@ function gerarHTMLImpressaoAtendimento(a, qrCodeUrl) {
     ? new Date(a.dataAtendimento).toLocaleDateString('pt-BR')
     : '-';
 
+  const temDadosResponsavel = a.responsavelNome || a.responsavelCPF || a.responsavelTelefone || a.responsavelParentesco;
   let blocoResponsavelHTML = '';
-  if (a.tipoAtendimento === 'responsavel' && (a.responsavelNome || a.responsavelCPF || a.responsavelTelefone || a.responsavelParentesco)) {
+  if (temDadosResponsavel) {
     blocoResponsavelHTML = `
       <div class="section-title">👤 Dados do Responsável</div>
       <div class="info-grid">
@@ -1939,25 +2593,37 @@ async function abrirEditarAtendimento(id) {
     const old = safeGetAtendimento('modalEditarAtendimento');
     if (old) old.remove();
 
-    const motivosOpts = ATENDIMENTO_MOTIVOS.map(m =>
-      `<option value="${m.valor}" ${a.motivo === m.valor ? 'selected' : ''}>${m.label}</option>`
-    ).join('');
-    const providenciasOpts = ATENDIMENTO_PROVIDENCIAS.map(p =>
-      `<option value="${p.valor}" ${a.providencias === p.valor ? 'selected' : ''}>${p.label}</option>`
-    ).join('');
+    const motivosArr = a.motivos || [a.motivo];
+    const providenciasArr = a.providenciasList || [a.providencias];
+
+    // 🆕 Cards multi-seleção
+    const cardsMotivos = ATENDIMENTO_MOTIVOS.map(m => {
+      const sel = motivosArr.includes(m.valor);
+      return `<div class="tipo-card ${sel ? 'selected' : ''}" data-tipo="${m.valor}" onclick="toggleMotivoEdicaoAtendimento('${m.valor}')">
+        <i class="${m.icone}"></i><span>${m.label}</span>
+      </div>`;
+    }).join('');
+
+    const cardsProvidencias = ATENDIMENTO_PROVIDENCIAS.map(p => {
+      const sel = providenciasArr.includes(p.valor);
+      return `<div class="tipo-card ${sel ? 'selected' : ''}" data-tipo="${p.valor}" onclick="toggleProvidenciaEdicaoAtendimento('${p.valor}')">
+        <i class="${p.icone}"></i><span>${p.label}</span>
+      </div>`;
+    }).join('');
 
     let dataInput = '';
     if (a.dataAtendimento) {
       dataInput = getDataLocalISOAtendimento(new Date(a.dataAtendimento));
     }
 
-    const blocoResp = a.tipoAtendimento === 'responsavel' ? `
+    // 🆕 Bloco do responsável agora SEMPRE no modal de edição
+    const blocoResp = `
       <div class="card mb-3" style="background:#f8fafc;border:1px solid #e2e8f0;">
         <div class="card-body">
-          <h6 style="margin-bottom:15px;color:#1e3c72;"><i class="fas fa-user-shield"></i> Dados do Responsável</h6>
+          <h6 style="margin-bottom:15px;color:#1e3c72;"><i class="fas fa-user-shield"></i> Dados do Responsável <small class="text-muted">(${a.tipoAtendimento === 'responsavel' ? 'obrigatório' : 'opcional'})</small></h6>
           <div class="row">
             <div class="col-md-6 mb-3">
-              <label class="form-label">Nome do Responsável <span class="text-danger">*</span></label>
+              <label class="form-label">Nome do Responsável ${a.tipoAtendimento === 'responsavel' ? '<span class="text-danger">*</span>' : ''}</label>
               <input type="text" id="editAtendResponsavelNome" class="form-control" value="${escapeHTMLAtendimento(a.responsavelNome || '')}">
             </div>
             <div class="col-md-3 mb-3">
@@ -1974,7 +2640,7 @@ async function abrirEditarAtendimento(id) {
             </div>
           </div>
         </div>
-      </div>` : '';
+      </div>`;
 
     const modalHtml = `
       <div class="modal fade" id="modalEditarAtendimento" tabindex="-1">
@@ -1987,6 +2653,8 @@ async function abrirEditarAtendimento(id) {
             <div class="modal-body">
               <input type="hidden" id="editAtendId" value="${a.id}">
               <input type="hidden" id="editAtendTipo" value="${a.tipoAtendimento}">
+              <input type="hidden" id="editAtendMotivos" value="${motivosArr.join(',')}">
+              <input type="hidden" id="editAtendProvidencias" value="${providenciasArr.join(',')}">
 
               <div style="display:flex;align-items:center;gap:12px;padding:12px;background:#eef2ff;border-radius:10px;margin-bottom:16px;">
                 <img src="${gerarAvatarSVGAtendimento(a.alunoNome)}" style="width:50px;height:50px;border-radius:50%;" alt="">
@@ -2010,8 +2678,9 @@ async function abrirEditarAtendimento(id) {
               ${blocoResp}
 
               <div class="mb-3">
-                <label class="form-label">Motivo <span class="text-danger">*</span></label>
-                <select id="editAtendMotivo" class="form-select">${motivosOpts}</select>
+                <label class="form-label">Motivo(s) <span class="text-danger">*</span></label>
+                <small class="text-muted d-block mb-2"><i class="fas fa-info-circle"></i> Pode marcar mais de um.</small>
+                <div class="tipos-tarefa-grid" id="editAtendMotivosGrid">${cardsMotivos}</div>
               </div>
 
               <div class="mb-3">
@@ -2020,8 +2689,9 @@ async function abrirEditarAtendimento(id) {
               </div>
 
               <div class="mb-3">
-                <label class="form-label">Providências <span class="text-danger">*</span></label>
-                <select id="editAtendProvidencias" class="form-select">${providenciasOpts}</select>
+                <label class="form-label">Providência(s) <span class="text-danger">*</span></label>
+                <small class="text-muted d-block mb-2"><i class="fas fa-info-circle"></i> Pode marcar mais de uma.</small>
+                <div class="tipos-tarefa-grid" id="editAtendProvidenciasGrid">${cardsProvidencias}</div>
               </div>
 
               <div class="mb-3">
@@ -2050,32 +2720,68 @@ async function abrirEditarAtendimento(id) {
   }
 }
 
+function toggleMotivoEdicaoAtendimento(motivo) {
+  const hidden = safeGetAtendimento('editAtendMotivos');
+  if (!hidden) return;
+  let arr = hidden.value ? hidden.value.split(',').filter(Boolean) : [];
+  const idx = arr.indexOf(motivo);
+  if (idx >= 0) arr.splice(idx, 1); else arr.push(motivo);
+  hidden.value = arr.join(',');
+  document.querySelectorAll('#editAtendMotivosGrid .tipo-card').forEach(c => {
+    if (arr.includes(c.getAttribute('data-tipo'))) c.classList.add('selected');
+    else c.classList.remove('selected');
+  });
+}
+
+function toggleProvidenciaEdicaoAtendimento(providencia) {
+  const hidden = safeGetAtendimento('editAtendProvidencias');
+  if (!hidden) return;
+  let arr = hidden.value ? hidden.value.split(',').filter(Boolean) : [];
+  const idx = arr.indexOf(providencia);
+  if (idx >= 0) arr.splice(idx, 1); else arr.push(providencia);
+  hidden.value = arr.join(',');
+  document.querySelectorAll('#editAtendProvidenciasGrid .tipo-card').forEach(c => {
+    if (arr.includes(c.getAttribute('data-tipo'))) c.classList.add('selected');
+    else c.classList.remove('selected');
+  });
+}
+
 async function salvarEdicaoAtendimento() {
   const id = safeGetAtendimento('editAtendId')?.value;
   const tipo = safeGetAtendimento('editAtendTipo')?.value;
   const data = safeGetAtendimento('editAtendData')?.value;
-  const motivo = safeGetAtendimento('editAtendMotivo')?.value;
+  const motivosStr = safeGetAtendimento('editAtendMotivos')?.value || '';
+  const motivos = motivosStr.split(',').filter(Boolean);
   const descricaoMotivo = (safeGetAtendimento('editAtendDescricaoMotivo')?.value || '').trim();
-  const providencias = safeGetAtendimento('editAtendProvidencias')?.value;
+  const providenciasStr = safeGetAtendimento('editAtendProvidencias')?.value || '';
+  const providencias = providenciasStr.split(',').filter(Boolean);
   const descricaoProvidencias = (safeGetAtendimento('editAtendDescricaoProvidencias')?.value || '').trim();
   const observacoes = safeGetAtendimento('editAtendObservacoes')?.value || '';
 
-  if (!motivo || !descricaoMotivo || !providencias || !descricaoProvidencias || !data) {
+  if (motivos.length === 0 || !descricaoMotivo || providencias.length === 0 || !descricaoProvidencias || !data) {
     notificar('Preencha todos os campos obrigatórios');
     return;
   }
 
   const body = {
-    motivo, descricaoMotivo, providencias, descricaoProvidencias, observacoes,
+    motivos,
+    motivo: motivos[0],
+    descricaoMotivo,
+    providenciasList: providencias,
+    providencias: providencias[0],
+    descricaoProvidencias,
+    observacoes,
     dataAtendimento: data
   };
 
-  if (tipo === 'responsavel') {
-    body.responsavelNome = safeGetAtendimento('editAtendResponsavelNome')?.value || '';
-    body.responsavelCPF = safeGetAtendimento('editAtendResponsavelCPF')?.value || '';
-    body.responsavelTelefone = safeGetAtendimento('editAtendResponsavelTelefone')?.value || '';
-    body.responsavelParentesco = safeGetAtendimento('editAtendResponsavelParentesco')?.value || '';
-    if (!body.responsavelNome) { notificar('Nome do responsável é obrigatório'); return; }
+  // 🆕 Sempre envia dados do responsável (opcionais no aluno, obrigatórios no responsável)
+  body.responsavelNome = safeGetAtendimento('editAtendResponsavelNome')?.value || '';
+  body.responsavelCPF = safeGetAtendimento('editAtendResponsavelCPF')?.value || '';
+  body.responsavelTelefone = safeGetAtendimento('editAtendResponsavelTelefone')?.value || '';
+  body.responsavelParentesco = safeGetAtendimento('editAtendResponsavelParentesco')?.value || '';
+
+  if (tipo === 'responsavel' && !body.responsavelNome.trim()) {
+    notificar('Nome do responsável é obrigatório'); return;
   }
 
   try {
@@ -2131,92 +2837,61 @@ async function excluirAtendimento(id) {
 // DASHBOARD
 // ============================================
 async function carregarDashboardAtendimentos() {
-  console.log('📊 [Atendimentos] Carregando dashboard...');
   try {
     const r = await fetch('/api/gestao-atendimento/dashboard', {
       headers: { 'Authorization': `Bearer ${getTokenAtendimento()}` }
     });
-    if (!r.ok) {
-      console.error('Dashboard HTTP', r.status);
-      return;
-    }
+    if (!r.ok) return;
     const d = await r.json();
-    if (!d.success) {
-      console.error('Dashboard error:', d.error);
-      return;
-    }
+    if (!d.success) return;
 
     safeSetTextAtendimento('AtendimentoTotalHoje', d.metricas?.hoje || 0);
     safeSetTextAtendimento('AtendimentoTotalSemana', d.metricas?.semana || 0);
     safeSetTextAtendimento('AtendimentoTotalMes', d.metricas?.mes || 0);
     safeSetTextAtendimento('AtendimentoTotalGeral', d.metricas?.total || 0);
 
-    // Chart: por motivo
     const ctxMotivos = safeGetAtendimento('AtendimentoChartMotivos');
     if (ctxMotivos && d.porMotivo && typeof Chart !== 'undefined') {
-      if (atendimentoState.charts.motivos) {
-        try { atendimentoState.charts.motivos.destroy(); } catch (e) {}
-      }
+      if (atendimentoState.charts.motivos) { try { atendimentoState.charts.motivos.destroy(); } catch (e) {} }
       atendimentoState.charts.motivos = new Chart(ctxMotivos.getContext('2d'), {
         type: 'doughnut',
         data: {
           labels: d.porMotivo.map(m => m.label),
-          datasets: [{
-            data: d.porMotivo.map(m => m.count),
-            backgroundColor: ['#1e3c72', '#2a5298', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#dbeafe', '#f59e0b', '#10b981']
-          }]
+          datasets: [{ data: d.porMotivo.map(m => m.count),
+            backgroundColor: ['#1e3c72', '#2a5298', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#dbeafe', '#f59e0b', '#10b981'] }]
         },
         options: { responsive: true, maintainAspectRatio: true }
       });
-    } else if (!ctxMotivos) {
-      console.warn('⚠️ Canvas AtendimentoChartMotivos não encontrado');
     }
 
-    // Chart: por dia
     const ctxDia = safeGetAtendimento('AtendimentoChartAtrasos');
     if (ctxDia && d.tendencias?.ultimos7Dias && typeof Chart !== 'undefined') {
-      if (atendimentoState.charts.atendimentos) {
-        try { atendimentoState.charts.atendimentos.destroy(); } catch (e) {}
-      }
+      if (atendimentoState.charts.atendimentos) { try { atendimentoState.charts.atendimentos.destroy(); } catch (e) {} }
       atendimentoState.charts.atendimentos = new Chart(ctxDia.getContext('2d'), {
         type: 'line',
         data: {
           labels: d.tendencias.ultimos7Dias.map(x => x.dia),
-          datasets: [{
-            label: 'Atendimentos',
-            data: d.tendencias.ultimos7Dias.map(x => x.atendimentos),
-            borderColor: '#1e3c72',
-            backgroundColor: 'rgba(30,60,114,0.1)',
-            fill: true,
-            tension: 0.4
-          }]
+          datasets: [{ label: 'Atendimentos', data: d.tendencias.ultimos7Dias.map(x => x.atendimentos),
+            borderColor: '#1e3c72', backgroundColor: 'rgba(30,60,114,0.1)', fill: true, tension: 0.4 }]
         },
         options: { responsive: true, maintainAspectRatio: true }
       });
     }
 
-    // Chart: por turma
     const ctxTurma = safeGetAtendimento('AtendimentoChartTurmas');
     if (ctxTurma && d.tendencias?.porTurma && typeof Chart !== 'undefined') {
-      if (atendimentoState.charts.turmas) {
-        try { atendimentoState.charts.turmas.destroy(); } catch (e) {}
-      }
+      if (atendimentoState.charts.turmas) { try { atendimentoState.charts.turmas.destroy(); } catch (e) {} }
       atendimentoState.charts.turmas = new Chart(ctxTurma.getContext('2d'), {
         type: 'bar',
         data: {
           labels: d.tendencias.porTurma.map(t => t.turma),
-          datasets: [{
-            label: 'Atendimentos',
-            data: d.tendencias.porTurma.map(t => t.count),
-            backgroundColor: '#2a5298',
-            borderRadius: 8
-          }]
+          datasets: [{ label: 'Atendimentos', data: d.tendencias.porTurma.map(t => t.count),
+            backgroundColor: '#2a5298', borderRadius: 8 }]
         },
         options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } }
       });
     }
 
-    // Reincidentes
     const reinc = safeGetAtendimento('AtendimentoAlunosReincidentes');
     if (reinc) {
       const lista = d.tendencias?.alunosReincidentes || [];
@@ -2238,8 +2913,6 @@ async function carregarDashboardAtendimentos() {
         reinc.innerHTML = `<p class="text-muted text-center py-3"><i class="fas fa-check-circle text-success"></i> Nenhum aluno reincidente</p>`;
       }
     }
-
-    console.log('✅ [Atendimentos] Dashboard renderizado');
   } catch (e) {
     console.error('Erro no dashboard de atendimentos:', e);
   }
@@ -2512,7 +3185,6 @@ function exibirRelatorioAtendimento(data, tipo) {
       <div class="card"><div class="card-body">
         <h5><i class="fas fa-chart-bar"></i> Relatório Geral de Atendimentos</h5>
         <p>Total: <strong>${data.totalRegistros || 0}</strong></p>
-
         <h6 class="mt-4">Por Tipo de Atendimento</h6>
         <div class="row">${(data.porTipo || []).map(t => `
           <div class="col-md-4 mb-2">
@@ -2520,7 +3192,6 @@ function exibirRelatorioAtendimento(data, tipo) {
               <strong>${escapeHTMLAtendimento(t.label)}</strong>: ${t.count}
             </div>
           </div>`).join('')}</div>
-
         <h6 class="mt-4">Por Motivo</h6>
         <div class="row">${(data.porMotivo || []).map(m => `
           <div class="col-md-4 mb-2">
@@ -2528,7 +3199,6 @@ function exibirRelatorioAtendimento(data, tipo) {
               <strong>${escapeHTMLAtendimento(m.label)}</strong>: ${m.count}
             </div>
           </div>`).join('')}</div>
-
         <h6 class="mt-4">Por Providência</h6>
         <div class="row">${(data.porProvidencia || []).map(p => `
           <div class="col-md-4 mb-2">
@@ -2536,7 +3206,6 @@ function exibirRelatorioAtendimento(data, tipo) {
               <strong>${escapeHTMLAtendimento(p.label)}</strong>: ${p.count}
             </div>
           </div>`).join('')}</div>
-
         <h6 class="mt-4">Por Turma</h6>
         <div class="table-responsive">
           <table class="table table-sm">
@@ -2553,7 +3222,6 @@ function exibirRelatorioAtendimento(data, tipo) {
         <h5>Relatório da Turma: ${escapeHTMLAtendimento(data.turma || '')}</h5>
         <p>Total: <strong>${data.estatisticas?.totalRegistros || 0}</strong></p>
         <p>Alunos: <strong>${data.estatisticas?.totalAlunos || 0}</strong></p>
-
         <h6 class="mt-4">Por Aluno</h6>
         <div class="table-responsive">
           <table class="table table-sm">
@@ -2574,7 +3242,6 @@ function exibirRelatorioAtendimento(data, tipo) {
         <h5>Relatório: ${escapeHTMLAtendimento(data.aluno?.nome || '')}</h5>
         <p>Turma: ${escapeHTMLAtendimento(data.aluno?.turma || 'N/A')} | Matrícula: ${escapeHTMLAtendimento(data.aluno?.matricula || 'N/A')}</p>
         <p>Total: <strong>${data.estatisticas?.totalRegistros || 0}</strong></p>
-
         <h6 class="mt-4">Histórico</h6>
         <div class="table-responsive">
           <table class="table table-sm">
@@ -2585,8 +3252,8 @@ function exibirRelatorioAtendimento(data, tipo) {
               <tr>
                 <td>${a.dataFormatada}</td>
                 <td><span class="badge ${a.tipoAtendimento === 'aluno' ? 'bg-primary' : 'bg-success'}">${a.tipoAtendimento === 'aluno' ? 'Aluno' : 'Responsável'}</span></td>
-                <td>${escapeHTMLAtendimento(a.motivoLabel)}</td>
-                <td>${escapeHTMLAtendimento(a.providenciasLabel)}</td>
+                <td style="white-space:normal;">${escapeHTMLAtendimento(a.motivoLabel)}</td>
+                <td style="white-space:normal;">${escapeHTMLAtendimento(a.providenciasLabel)}</td>
               </tr>`).join('')}
             </tbody>
           </table>
@@ -2742,7 +3409,7 @@ function gerarHTMLRelatorioAtendimento(data) {
 }
 
 // ============================================
-// EXPOSIÇÃO GLOBAL (para onclick inline no HTML)
+// EXPOSIÇÃO GLOBAL
 // ============================================
 window.setModoBuscaAtendimento = setModoBuscaAtendimento;
 window.selecionarMotivoAtendimento = selecionarMotivoAtendimento;
@@ -2756,17 +3423,35 @@ window.fecharModalAssinaturaResponsavelAtendimento = fecharModalAssinaturaRespon
 window.reabrirModalAssinaturaResponsavelAtendimento = reabrirModalAssinaturaResponsavelAtendimento;
 window.cancelarSessaoResponsavelAtendimento = cancelarSessaoResponsavelAtendimento;
 window.refazerAssinaturaResponsavelAtendimento = refazerAssinaturaResponsavelAtendimento;
+
+// 🆕 Canvas inline do responsável
+window.mostrarCanvasAssinaturaResponsavelAtendimento = mostrarCanvasAssinaturaResponsavelAtendimento;
+window.voltarParaQRCodeResponsavelAtendimento = voltarParaQRCodeResponsavelAtendimento;
+window.limparCanvasResponsavelAtendimento = limparCanvasResponsavelAtendimento;
+window.salvarAssinaturaResponsavelInline = salvarAssinaturaResponsavelInline;
+window.refazerAssinaturaResponsavelInline = refazerAssinaturaResponsavelInline;
+
 window.abrirModalAssinaturaAlunoAtendimento = abrirModalAssinaturaAlunoAtendimento;
 window.fecharModalAssinaturaAlunoAtendimento = fecharModalAssinaturaAlunoAtendimento;
 window.reabrirModalAssinaturaAlunoAtendimento = reabrirModalAssinaturaAlunoAtendimento;
 window.cancelarSessaoAlunoAtendimento = cancelarSessaoAlunoAtendimento;
 window.refazerAssinaturaAlunoAtendimento = refazerAssinaturaAlunoAtendimento;
+
+// 🆕 Canvas inline do aluno
+window.mostrarCanvasAssinaturaAlunoAtendimento = mostrarCanvasAssinaturaAlunoAtendimento;
+window.voltarParaQRCodeAlunoAtendimento = voltarParaQRCodeAlunoAtendimento;
+window.limparCanvasAlunoAtendimento = limparCanvasAlunoAtendimento;
+window.salvarAssinaturaAlunoInline = salvarAssinaturaAlunoInline;
+window.refazerAssinaturaAlunoInline = refazerAssinaturaAlunoInline;
+
 window.copiarLinkAssinaturaAtendimento = copiarLinkAssinaturaAtendimento;
 window.carregarListaAtendimentos = carregarListaAtendimentos;
 window.imprimirAtendimento = imprimirAtendimento;
-window.verAtendimento = verAtendimento;      // 🆕
+window.verAtendimento = verAtendimento;
 window.abrirEditarAtendimento = abrirEditarAtendimento;
 window.salvarEdicaoAtendimento = salvarEdicaoAtendimento;
+window.toggleMotivoEdicaoAtendimento = toggleMotivoEdicaoAtendimento;
+window.toggleProvidenciaEdicaoAtendimento = toggleProvidenciaEdicaoAtendimento;
 window.excluirAtendimento = excluirAtendimento;
 window.carregarDashboardAtendimentos = carregarDashboardAtendimentos;
 window.toggleRelatorioFiltrosAtendimento = toggleRelatorioFiltrosAtendimento;
