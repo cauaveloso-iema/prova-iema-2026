@@ -1364,6 +1364,14 @@ function mostrarFormRegistro() {
     safeGet('motivoOutrosTexto').value = '';
     safeGet('campoOutros').style.display = 'none';
     
+    // 🆕 Limpa dados do responsável
+    const respNomeEl = safeGet('atrasoResponsavelNome');
+    const respCPFEl = safeGet('atrasoResponsavelCPF');
+    const respTelEl = safeGet('atrasoResponsavelTelefone');
+    if (respNomeEl) respNomeEl.value = '';
+    if (respCPFEl) respCPFEl.value = '';
+    if (respTelEl) respTelEl.value = '';
+    
     // Limpa assinatura do RESPONSÁVEL
     limparEstadoSessaoAssinatura('atraso');
     const checkAssinatura = safeGet('atrasoNecessitaAssinatura');
@@ -1460,6 +1468,20 @@ async function registrarAtraso() {
         }
     }
     
+    // 🆕 Dados do responsável (opcionais, mas se CPF preenchido, valida)
+    const responsavelNome = (safeGet('atrasoResponsavelNome')?.value || '').trim();
+    const responsavelCPF = (safeGet('atrasoResponsavelCPF')?.value || '').trim();
+    const responsavelTelefone = (safeGet('atrasoResponsavelTelefone')?.value || '').trim();
+    
+    if (responsavelCPF) {
+        const validacao = validarCPFCliente(responsavelCPF);
+        if (!validacao.valido) {
+            notificar(`⚠️ CPF do responsável inválido!\n\n${validacao.erro}`, 'error', 5000);
+            safeGet('atrasoResponsavelCPF')?.focus();
+            return;
+        }
+    }
+    
     // Assinatura do RESPONSÁVEL
     const precisaAssinatura = safeGet('atrasoNecessitaAssinatura')?.checked || false;
     const assinaturaBase64 = estadoSessaoAssinatura.atraso?.assinaturaCapturada || '';
@@ -1500,8 +1522,8 @@ async function registrarAtraso() {
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({
                 alunoId: currentAluno.id,
-                motivos: __motivosSelecionados,     // 🆕 array
-                motivo: __motivosSelecionados[0],   // compatibilidade
+                motivos: __motivosSelecionados,
+                motivo: __motivosSelecionados[0],
                 descricao,
                 observacoes: safeGet('observacoes')?.value || '',
                 dataHora: dataHoraCompleta.toISOString(),
@@ -1510,6 +1532,11 @@ async function registrarAtraso() {
                     horarioPrevisto: safeGet('horarioPrevisto')?.value || '',
                     horarioChegada: safeGet('horarioChegada')?.value || ''
                 },
+                // 🆕 Dados do responsável
+                responsavelNome,
+                responsavelCPF,
+                responsavelTelefone,
+                
                 precisaAssinatura: precisaAssinatura,
                 assinaturaBase64: assinaturaBase64,
                 sessaoAssinaturaId: sessaoAssinaturaId,
@@ -1929,6 +1956,9 @@ function renderizarPaginacaoAtrasos() {
 // ============================================
 // 👁️ VER ATRASO (COM ASSINATURAS)
 // ============================================
+// ============================================
+// 👁️ VER ATRASO (COM ASSINATURAS)
+// ============================================
 async function verAtraso(atrasoId) {
     if (!atrasoId) return;
     
@@ -1953,12 +1983,13 @@ async function verAtraso(atrasoId) {
 
         // Assinatura do Responsável
         if (a.temAssinatura && a.assinaturaBase64) {
+            const nomeAssinante = a.assinadaPorNome || a.responsavelNome || 'Responsável';
             assinaturasHTML += `
                 <div class="mb-3">
                     <strong><i class="fas fa-signature"></i> Assinatura do Responsável:</strong>
                     <div style="background: #f0fdf4; border: 2px solid #10b981; border-radius: 10px; padding: 10px; margin-top: 6px;">
                         <img src="${a.assinaturaBase64}" style="max-width: 100%; max-height: 120px;" alt="Assinatura do Responsável">
-                        ${a.assinadaPorNome ? `<p style="margin: 6px 0 0; font-size: 12px; color: #065f46;">Assinado por: <strong>${escapeHTML(a.assinadaPorNome)}</strong></p>` : ''}
+                        <p style="margin: 6px 0 0; font-size: 12px; color: #065f46;">Assinado por: <strong>${escapeHTML(nomeAssinante)}</strong></p>
                         ${a.assinadaEm ? `<p style="margin: 2px 0 0; font-size: 11px; color: #065f46;">Em: ${new Date(a.assinadaEm).toLocaleString('pt-BR')}</p>` : ''}
                     </div>
                 </div>`;
@@ -1992,6 +2023,30 @@ async function verAtraso(atrasoId) {
                     </div>
                 </div>`;
         }
+        
+        // 🆕 BLOCO DO RESPONSÁVEL (se preenchido)
+        const temDadosResponsavel = a.responsavelNome || a.responsavelCPF || a.responsavelTelefone;
+        const blocoResponsavelHTML = temDadosResponsavel ? `
+            <div class="mb-3">
+                <strong><i class="fas fa-user-shield"></i> Dados do Responsável:</strong>
+                <div class="p-3 bg-white rounded mt-2" style="border: 1px solid #e2e8f0;">
+                    <div class="row">
+                        <div class="col-md-6 mb-2 mb-md-0">
+                            <span class="text-muted" style="font-size: 12px;">Nome</span><br>
+                            <strong style="font-size: 14px;">${escapeHTML(a.responsavelNome || 'Não informado')}</strong>
+                        </div>
+                        <div class="col-md-3 mb-2 mb-md-0">
+                            <span class="text-muted" style="font-size: 12px;">CPF</span><br>
+                            <strong style="font-size: 14px;">${escapeHTML(a.responsavelCPF || '-')}</strong>
+                        </div>
+                        <div class="col-md-3">
+                            <span class="text-muted" style="font-size: 12px;">Telefone</span><br>
+                            <strong style="font-size: 14px;">${escapeHTML(a.responsavelTelefone || '-')}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        ` : '';
         
         // 🆕 Badges de todos os motivos
         const badgesMotivos = motivosArr.map(m => {
@@ -2056,10 +2111,12 @@ async function verAtraso(atrasoId) {
                                 </div>
                             ` : ''}
                             
+                            ${blocoResponsavelHTML}
+                            
                             ${assinaturasHTML}
                             
                             <div class="mb-3">
-                                <strong><i class="fas fa-user-tie"></i> Registrado por:</strong>
+                                <strong><i class="fas fa-user-tie"></i> Registrado por (Gestão):</strong>
                                 <p class="mb-0">${escapeHTML(a.registradoPor || '-')}</p>
                             </div>
                         </div>
@@ -2132,7 +2189,7 @@ async function editarAtraso(atrasoId) {
         
         const modalHtml = `
             <div class="modal fade" id="modalEditarAtraso" tabindex="-1">
-                <div class="modal-dialog modal-lg">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
                     <div class="modal-content">
                         <div class="modal-header" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white;">
                             <h5 class="modal-title">
@@ -2180,6 +2237,29 @@ async function editarAtraso(atrasoId) {
                             <div class="mb-3">
                                 <label class="form-label">Observações</label>
                                 <textarea id="editAtrasoObservacoes" class="form-control" rows="2">${escapeHTML(a.observacoes || '')}</textarea>
+                            </div>
+                            
+                            <!-- 🆕 DADOS DO RESPONSÁVEL -->
+                            <div class="card mb-3" style="background: #f8fafc; border: 1px solid #e2e8f0;">
+                                <div class="card-body">
+                                    <h6 style="margin-bottom: 15px; color: #1e3c72;">
+                                        <i class="fas fa-user-shield"></i> Dados do Responsável <small class="text-muted">(opcional)</small>
+                                    </h6>
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Nome do Responsável</label>
+                                            <input type="text" id="editAtrasoResponsavelNome" class="form-control" value="${escapeHTML(a.responsavelNome || '')}" placeholder="Nome completo do responsável">
+                                        </div>
+                                        <div class="col-md-3 mb-3">
+                                            <label class="form-label">CPF</label>
+                                            <input type="text" id="editAtrasoResponsavelCPF" class="form-control" value="${escapeHTML(a.responsavelCPF || '')}" maxlength="14" oninput="formatarCPF(this)" placeholder="000.000.000-00">
+                                        </div>
+                                        <div class="col-md-3 mb-3">
+                                            <label class="form-label">Telefone</label>
+                                            <input type="text" id="editAtrasoResponsavelTelefone" class="form-control" value="${escapeHTML(a.responsavelTelefone || '')}" maxlength="15" oninput="formatarTelefone(this)" placeholder="(00) 00000-0000">
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <div class="modal-footer">
@@ -2238,6 +2318,11 @@ async function salvarEdicaoAtraso() {
     const observacoes = safeGet('editAtrasoObservacoes')?.value || '';
     const motivoOutros = safeGet('editAtrasoMotivoOutros')?.value || '';
     
+    // 🆕 Dados do responsável
+    const responsavelNome = (safeGet('editAtrasoResponsavelNome')?.value || '').trim();
+    const responsavelCPF = (safeGet('editAtrasoResponsavelCPF')?.value || '').trim();
+    const responsavelTelefone = (safeGet('editAtrasoResponsavelTelefone')?.value || '').trim();
+    
     if (motivos.length === 0) {
         notificar('Selecione pelo menos um motivo', 'error');
         return;
@@ -2253,6 +2338,16 @@ async function salvarEdicaoAtraso() {
         return;
     }
     
+    // 🆕 Valida CPF se preenchido
+    if (responsavelCPF) {
+        const validacao = validarCPFCliente(responsavelCPF);
+        if (!validacao.valido) {
+            notificar(`⚠️ CPF inválido!\n\n${validacao.erro}`, 'error', 5000);
+            safeGet('editAtrasoResponsavelCPF')?.focus();
+            return;
+        }
+    }
+    
     try {
         const response = await fetch(`/api/gestao-geral/atraso/${atrasoId}`, {
             method: 'PUT',
@@ -2266,7 +2361,11 @@ async function salvarEdicaoAtraso() {
                 dataHora: new Date(dataHora).toISOString(),
                 descricao,
                 observacoes,
-                detalhes: { motivoOutros }
+                detalhes: { motivoOutros },
+                // 🆕 Dados do responsável
+                responsavelNome,
+                responsavelCPF,
+                responsavelTelefone
             })
         });
         const data = await response.json();
@@ -2365,6 +2464,17 @@ function gerarHTMLImpressaoAtraso(a, qrCodeUrl) {
     `).join('');
     
     const motivoOutrosTexto = a.detalhes?.motivoOutros ? ` <em>(${escapeHTML(a.detalhes.motivoOutros)})</em>` : '';
+    
+    // 🆕 BLOCO DO RESPONSÁVEL (se preenchido)
+    const temResponsavel = a.responsavelNome || a.responsavelCPF || a.responsavelTelefone;
+    const responsavelHTML = temResponsavel ? `
+        <div class="section-title">👤 Responsável</div>
+        <div class="detalhes-compactos">
+            ${a.responsavelNome ? `<span class="det-item"><strong>Nome:</strong> ${escapeHTML(a.responsavelNome)}</span>` : ''}
+            ${a.responsavelCPF ? `<span class="det-item"><strong>CPF:</strong> ${escapeHTML(a.responsavelCPF)}</span>` : ''}
+            ${a.responsavelTelefone ? `<span class="det-item"><strong>Telefone:</strong> ${escapeHTML(a.responsavelTelefone)}</span>` : ''}
+        </div>
+    ` : '';
     
     // Assinaturas
     const temResp = !!(a.assinaturaBase64 && a.assinaturaBase64.length > 100);
@@ -2473,6 +2583,9 @@ function gerarHTMLImpressaoAtraso(a, qrCodeUrl) {
             
             .descricao-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; padding: 5px 8px; font-size: 8.5pt; line-height: 1.3; min-height: 30px; max-height: 80px; overflow: hidden; word-wrap: break-word; }
             
+            .detalhes-compactos { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; padding: 4px 6px; font-size: 8pt; line-height: 1.35; }
+            .det-item { display: inline-block; margin-right: 10px; margin-bottom: 2px; }
+            
             .assinaturas { display: flex; justify-content: space-around; margin-top: 15px; gap: 15px; }
             .assinatura { flex: 1; text-align: center; font-size: 7.5pt; position: relative; }
             .assinatura-container { position: relative; border-bottom: 1px solid #000; min-height: 14mm; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; }
@@ -2536,6 +2649,8 @@ function gerarHTMLImpressaoAtraso(a, qrCodeUrl) {
             <div class="section-title">💬 Observações</div>
             <div class="descricao-box" style="min-height: 20px; max-height: 40px;">${escapeHTML(a.observacoes).replace(/\n/g, '<br>')}</div>
         ` : ''}
+        
+        ${responsavelHTML}
         
         ${assinaturasHTML}
         
@@ -6851,7 +6966,11 @@ async function toggleNecessitaAssinatura(modulo) {
                 data: dataStr,
                 dataFormatada: dataStr ? new Date(dataStr + 'T12:00:00').toLocaleDateString('pt-BR') : '',
                 entradaCompleta: horaChegada,
-                horarioPrevisto: safeGet('horarioPrevisto')?.value || ''
+                horarioPrevisto: safeGet('horarioPrevisto')?.value || '',
+                // 🆕 Dados do responsável
+                responsavelNome: safeGet('atrasoResponsavelNome')?.value || '',
+                responsavelCPF: safeGet('atrasoResponsavelCPF')?.value || '',
+                responsavelTelefone: safeGet('atrasoResponsavelTelefone')?.value || ''
             };
         } else {
             const P = getPrefixo(modulo);
@@ -6872,7 +6991,6 @@ async function toggleNecessitaAssinatura(modulo) {
             let labelMod = motivosLabelMod[motivoInput] || motivoInput;
             if (motivoInput === 'outros' && motivoOutrosMod) labelMod = `Outros (${motivoOutrosMod})`;
 
-            // Campos base para todos os módulos
             snapshot = {
                 ...snapshot,
                 motivo: motivoInput,
@@ -6885,7 +7003,6 @@ async function toggleNecessitaAssinatura(modulo) {
                 data: safeGet(`${I}Data`)?.value || ''
             };
 
-            // Adiciona campos específicos de cada módulo
             if (modulo === 'autorizacao') {
                 const dEntrada = safeGet('autorizacaoDataEntrada')?.value || '';
                 const hEntrada = safeGet('autorizacaoHorarioEntrada')?.value || '';
@@ -7054,7 +7171,11 @@ function montarSnapshotAtendimento(modulo) {
             motivoLabel: labelMotivos,
             descricao: safeGet('descricao')?.value || '',
             observacoes: safeGet('observacoes')?.value || '',
-            dataHora: safeGet('atrasoData')?.value || ''
+            dataHora: safeGet('atrasoData')?.value || '',
+            // 🆕 Dados do responsável
+            responsavelNome: safeGet('atrasoResponsavelNome')?.value || '',
+            responsavelCPF: safeGet('atrasoResponsavelCPF')?.value || '',
+            responsavelTelefone: safeGet('atrasoResponsavelTelefone')?.value || ''
         };
     }
 
@@ -7135,7 +7256,6 @@ function montarSnapshotAtendimento(modulo) {
         uniformePeriodoInicio: uIni || null,
         uniformePeriodoFim: uFim || null,
         uniformePeriodoFormatado: uFormatado,
-        // 🆕 ENTRADA / SAÍDA
         dataEntrada: dEntrada || null,
         dataSaida: dSaida || null,
         horarioEntrada: hEntrada || null,
@@ -8087,7 +8207,11 @@ async function toggleNecessitaAssinaturaAluno(modulo) {
             data: dataStr,
             entradaCompleta: horaChegada,
             horarioPrevisto: safeGet('horarioPrevisto')?.value || '',
-            tipoAssinante: 'aluno'
+            tipoAssinante: 'aluno',
+            // 🆕 Dados do responsável (mesmo sendo assinatura do aluno, mantém)
+            responsavelNome: safeGet('atrasoResponsavelNome')?.value || '',
+            responsavelCPF: safeGet('atrasoResponsavelCPF')?.value || '',
+            responsavelTelefone: safeGet('atrasoResponsavelTelefone')?.value || ''
         };
         
         console.log('%c📦 ENVIANDO (ALUNO - ATRASO):', 'background:#059669;color:white;padding:4px;font-weight:bold;', snapshot);
@@ -8151,46 +8275,114 @@ function abrirModalAssinaturaAluno(modulo, urlAssinatura) {
                     </div>
                     
                     <div class="modal-body" style="padding: 30px; text-align: center;">
-                        <div id="modalAssinaturaAlunoStatus" style="margin-bottom: 20px;">
-                            <div style="background: #fef3c7; border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 12px; text-align: left;">
-                                <div style="width: 40px; height: 40px; border-radius: 50%; border: 4px solid #f59e0b; border-top-color: transparent; animation: spin 1s linear infinite; flex-shrink: 0;"></div>
-                                <div>
-                                    <strong style="color: #92400e;">Aguardando assinatura do aluno...</strong>
-                                    <p style="margin: 3px 0 0; font-size: 13px; color: #78350f;">
-                                        Peça para o aluno escanear o QR Code abaixo
-                                    </p>
+                        
+                        <!-- ============================================ -->
+                        <!-- 🆕 ÁREA DO QR CODE (padrão)                  -->
+                        <!-- ============================================ -->
+                        <div id="modalAssinaturaAlunoQRView">
+                            <div id="modalAssinaturaAlunoStatus" style="margin-bottom: 20px;">
+                                <div style="background: #fef3c7; border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 12px; text-align: left;">
+                                    <div style="width: 40px; height: 40px; border-radius: 50%; border: 4px solid #f59e0b; border-top-color: transparent; animation: spin 1s linear infinite; flex-shrink: 0;"></div>
+                                    <div>
+                                        <strong style="color: #92400e;">Aguardando assinatura do aluno...</strong>
+                                        <p style="margin: 3px 0 0; font-size: 13px; color: #78350f;">
+                                            Peça para o aluno escanear o QR Code abaixo
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        
-                        <div style="background: white; border: 2px solid #e2e8f0; border-radius: 16px; padding: 20px; display: inline-block;">
-                            <img src="${qrUrl}" 
-                                alt="QR Code para assinatura do aluno" 
-                                style="width: 260px; height: 260px; display: block;"
-                                id="qrCodeAlunoImage">
-                            <p style="margin: 12px 0 0; font-size: 13px; color: #64748b;">
-                                <i class="fas fa-mobile-alt"></i> 
-                                Aponte a câmera do celular
-                            </p>
-                        </div>
-                        
-                        <div style="margin-top: 20px; padding: 14px; background: #f0f9ff; border-radius: 12px; font-size: 13px; color: #0369a1; text-align: left;">
-                            <div style="display: flex; gap: 8px; margin-bottom: 6px;">
-                                <i class="fas fa-info-circle"></i>
-                                <span><strong>O aluno assina direto no celular dele</strong>. Assim que confirmar, você verá aqui automaticamente.</span>
+                            
+                            <div style="background: white; border: 2px solid #e2e8f0; border-radius: 16px; padding: 20px; display: inline-block;">
+                                <img src="${qrUrl}" 
+                                    alt="QR Code para assinatura do aluno" 
+                                    style="width: 260px; height: 260px; display: block;"
+                                    id="qrCodeAlunoImage">
+                                <p style="margin: 12px 0 0; font-size: 13px; color: #64748b;">
+                                    <i class="fas fa-mobile-alt"></i> 
+                                    Aponte a câmera do celular
+                                </p>
                             </div>
-                            <div style="display: flex; gap: 8px;">
-                                <i class="fas fa-clock"></i>
-                                <span>Sessão válida por <strong>30 minutos</strong>.</span>
+                            
+                            <div style="margin-top: 20px; padding: 14px; background: #f0f9ff; border-radius: 12px; font-size: 13px; color: #0369a1; text-align: left;">
+                                <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+                                    <i class="fas fa-info-circle"></i>
+                                    <span><strong>O aluno assina direto no celular dele</strong>. Assim que confirmar, você verá aqui automaticamente.</span>
+                                </div>
+                                <div style="display: flex; gap: 8px;">
+                                    <i class="fas fa-clock"></i>
+                                    <span>Sessão válida por <strong>30 minutos</strong>.</span>
+                                </div>
+                            </div>
+                            
+                            <div style="margin-top: 16px;">
+                                <button onclick="gestaoGeral.copiarLinkAssinatura('${urlAssinatura}')"
+                                        class="btn-copiar-link">
+                                    <i class="fas fa-link"></i> Copiar link de assinatura
+                                </button>
+                            </div>
+                            
+                            <!-- ============================================ -->
+                            <!-- 🆕 LINK: ASSINAR AQUI MESMO                 -->
+                            <!-- ============================================ -->
+                            <div style="margin-top: 14px; padding-top: 14px; border-top: 1px dashed #cbd5e1;">
+                                <p style="margin: 0 0 8px; font-size: 12px; color: #64748b;">
+                                    Não consegue escanear? 
+                                </p>
+                                <button type="button"
+                                        onclick="gestaoGeral.mostrarCanvasAssinaturaAlunoInline('${modulo}')"
+                                        style="background: transparent; border: none; color: #059669; font-weight: 600; font-size: 14px; cursor: pointer; text-decoration: underline; padding: 6px 10px; border-radius: 8px;">
+                                    <i class="fas fa-pen-fancy"></i> Assinar aqui mesmo
+                                </button>
                             </div>
                         </div>
                         
-                        <div style="margin-top: 16px;">
-                            <button onclick="gestaoGeral.copiarLinkAssinatura('${urlAssinatura}')"
-                                    class="btn-copiar-link">
-                                <i class="fas fa-link"></i> Copiar link de assinatura
-                            </button>
+                        <!-- ============================================ -->
+                        <!-- 🆕 ÁREA DO CANVAS DO ALUNO (oculta)          -->
+                        <!-- ============================================ -->
+                        <div id="modalAssinaturaAlunoCanvasView" style="display: none;">
+                            <div style="background: #f0f9ff; border-radius: 12px; padding: 14px; margin-bottom: 16px; text-align: left;">
+                                <div style="display: flex; gap: 8px;">
+                                    <i class="fas fa-info-circle" style="color: #0369a1;"></i>
+                                    <span style="font-size: 13px; color: #0369a1;">
+                                        Peça para o aluno assinar no espaço abaixo com o dedo ou mouse.
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div id="modalAlunoCanvasWrapper" 
+                                 style="position: relative; background: white; border: 3px dashed #cbd5e0; border-radius: 16px; overflow: hidden; height: 260px; margin-bottom: 14px; touch-action: none;">
+                                <canvas id="modalAlunoCanvasAssinatura" style="width: 100%; height: 100%; display: block;"></canvas>
+                                <div id="modalAlunoCanvasPlaceholder" 
+                                     style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #94a3b8; pointer-events: none; width: 100%;">
+                                    <i class="fas fa-pen-fancy" style="font-size: 28px; display: block; margin-bottom: 5px;"></i>
+                                    <span style="font-size: 13px;">Assine aqui</span>
+                                </div>
+                            </div>
+                            
+                            <div style="display: flex; gap: 10px;">
+                                <button type="button"
+                                        onclick="gestaoGeral.limparCanvasAlunoInline()"
+                                        style="flex: 1; padding: 12px; background: #f1f5f9; color: #475569; border: none; border-radius: 10px; font-weight: 600; font-size: 14px; cursor: pointer;">
+                                    <i class="fas fa-eraser"></i> Limpar
+                                </button>
+                                <button type="button"
+                                        id="btnConfirmarAssinaturaAlunoInline"
+                                        onclick="gestaoGeral.salvarAssinaturaAlunoInline('${modulo}')"
+                                        disabled
+                                        style="flex: 2; padding: 12px; background: #cbd5e0; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 14px; cursor: not-allowed;">
+                                    <i class="fas fa-check"></i> Confirmar Assinatura
+                                </button>
+                            </div>
+                            
+                            <div style="margin-top: 14px;">
+                                <button type="button"
+                                        onclick="gestaoGeral.voltarParaQRCodeAluno('${modulo}')"
+                                        style="background: transparent; border: none; color: #64748b; font-size: 13px; cursor: pointer; text-decoration: underline;">
+                                    <i class="fas fa-arrow-left"></i> Voltar para o QR Code
+                                </button>
+                            </div>
                         </div>
+                        
                     </div>
                     
                     <div class="modal-footer" style="border-top: 1px solid #e5e7eb; padding: 15px 25px; justify-content: space-between;">
@@ -8217,6 +8409,443 @@ function abrirModalAssinaturaAluno(modulo, urlAssinatura) {
             img.style.height = '200px';
         }
     }, 200);
+}
+
+// ============================================
+// 🆕 CANVAS INLINE DO ALUNO (IDs prefixados com "Aluno")
+// ============================================
+let __inlineCanvasAlunoState = {
+    ctx: null,
+    canvas: null,
+    wrapper: null,
+    placeholder: null,
+    desenhando: false,
+    temAssinatura: false,
+    lastX: 0,
+    lastY: 0,
+    inicializado: false,
+    modulo: null
+};
+
+function mostrarCanvasAssinaturaAlunoInline(modulo) {
+    const qrView = safeGet('modalAssinaturaAlunoQRView');
+    const canvasView = safeGet('modalAssinaturaAlunoCanvasView');
+    if (!qrView || !canvasView) return;
+    
+    qrView.style.display = 'none';
+    canvasView.style.display = 'block';
+    
+    __inlineCanvasAlunoState.modulo = modulo;
+    
+    setTimeout(() => {
+        inicializarCanvasAlunoInline(modulo);
+    }, 50);
+}
+
+function voltarParaQRCodeAluno(modulo) {
+    const qrView = safeGet('modalAssinaturaAlunoQRView');
+    const canvasView = safeGet('modalAssinaturaAlunoCanvasView');
+    if (!qrView || !canvasView) return;
+    
+    canvasView.style.display = 'none';
+    qrView.style.display = 'block';
+}
+
+function inicializarCanvasAlunoInline(modulo) {
+    const canvas = safeGet('modalAlunoCanvasAssinatura');
+    const wrapper = safeGet('modalAlunoCanvasWrapper');
+    const placeholder = safeGet('modalAlunoCanvasPlaceholder');
+    if (!canvas || !wrapper) return;
+    
+    // Reset do estado
+    __inlineCanvasAlunoState.canvas = canvas;
+    __inlineCanvasAlunoState.wrapper = wrapper;
+    __inlineCanvasAlunoState.placeholder = placeholder;
+    __inlineCanvasAlunoState.desenhando = false;
+    __inlineCanvasAlunoState.temAssinatura = false;
+    
+    // Ajusta o canvas ao tamanho do wrapper
+    const rect = wrapper.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+        setTimeout(() => inicializarCanvasAlunoInline(modulo), 100);
+        return;
+    }
+    
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(dpr, dpr);
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#059669';
+    __inlineCanvasAlunoState.ctx = ctx;
+    
+    // Desabilita botão confirmar
+    const btn = safeGet('btnConfirmarAssinaturaAlunoInline');
+    if (btn) {
+        btn.disabled = true;
+        btn.style.background = '#cbd5e0';
+        btn.style.cursor = 'not-allowed';
+    }
+    
+    if (placeholder) placeholder.style.opacity = '1';
+    if (wrapper) {
+        wrapper.style.borderColor = '#cbd5e0';
+        wrapper.style.borderStyle = 'dashed';
+    }
+    
+    // Se já inicializou os listeners, não repete
+    if (__inlineCanvasAlunoState.inicializado) return;
+    __inlineCanvasAlunoState.inicializado = true;
+    
+    const getPos = (e) => {
+        const rect = canvas.getBoundingClientRect();
+        let cx, cy;
+        if (e.touches?.length > 0) {
+            cx = e.touches[0].clientX;
+            cy = e.touches[0].clientY;
+        } else if (e.changedTouches?.length > 0) {
+            cx = e.changedTouches[0].clientX;
+            cy = e.changedTouches[0].clientY;
+        } else {
+            cx = e.clientX;
+            cy = e.clientY;
+        }
+        return { x: cx - rect.left, y: cy - rect.top };
+    };
+    
+    const iniciar = (e) => {
+        e.preventDefault();
+        __inlineCanvasAlunoState.desenhando = true;
+        __inlineCanvasAlunoState.temAssinatura = true;
+        const p = getPos(e);
+        __inlineCanvasAlunoState.lastX = p.x;
+        __inlineCanvasAlunoState.lastY = p.y;
+        if (wrapper) {
+            wrapper.style.borderColor = '#059669';
+            wrapper.style.borderStyle = 'solid';
+        }
+        if (placeholder) placeholder.style.opacity = '0';
+        
+        const btn = safeGet('btnConfirmarAssinaturaAlunoInline');
+        if (btn) {
+            btn.disabled = false;
+            btn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+            btn.style.cursor = 'pointer';
+        }
+    };
+    
+    const desenhar = (e) => {
+        if (!__inlineCanvasAlunoState.desenhando) return;
+        e.preventDefault();
+        const p = getPos(e);
+        __inlineCanvasAlunoState.ctx.beginPath();
+        __inlineCanvasAlunoState.ctx.moveTo(__inlineCanvasAlunoState.lastX, __inlineCanvasAlunoState.lastY);
+        __inlineCanvasAlunoState.ctx.lineTo(p.x, p.y);
+        __inlineCanvasAlunoState.ctx.stroke();
+        __inlineCanvasAlunoState.lastX = p.x;
+        __inlineCanvasAlunoState.lastY = p.y;
+    };
+    
+    const parar = (e) => {
+        if (e?.preventDefault) e.preventDefault();
+        __inlineCanvasAlunoState.desenhando = false;
+    };
+    
+    canvas.addEventListener('touchstart', iniciar, { passive: false });
+    canvas.addEventListener('touchmove', desenhar, { passive: false });
+    canvas.addEventListener('touchend', parar, { passive: false });
+    canvas.addEventListener('touchcancel', parar, { passive: false });
+    canvas.addEventListener('mousedown', iniciar);
+    canvas.addEventListener('mousemove', desenhar);
+    canvas.addEventListener('mouseup', parar);
+    canvas.addEventListener('mouseleave', () => {
+        if (__inlineCanvasAlunoState.desenhando) parar();
+    });
+}
+
+function limparCanvasAlunoInline() {
+    const canvas = __inlineCanvasAlunoState.canvas;
+    const ctx = __inlineCanvasAlunoState.ctx;
+    const wrapper = __inlineCanvasAlunoState.wrapper;
+    const placeholder = __inlineCanvasAlunoState.placeholder;
+    if (!canvas || !ctx) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    __inlineCanvasAlunoState.temAssinatura = false;
+    
+    if (placeholder) placeholder.style.opacity = '1';
+    if (wrapper) {
+        wrapper.style.borderColor = '#cbd5e0';
+        wrapper.style.borderStyle = 'dashed';
+    }
+    
+    const btn = safeGet('btnConfirmarAssinaturaAlunoInline');
+    if (btn) {
+        btn.disabled = true;
+        btn.style.background = '#cbd5e0';
+        btn.style.cursor = 'not-allowed';
+    }
+}
+
+async function salvarAssinaturaAlunoInline(modulo) {
+    if (!__inlineCanvasAlunoState.temAssinatura || !__inlineCanvasAlunoState.canvas) {
+        notificar('⚠️ Assine antes de confirmar', 'warning');
+        return;
+    }
+    
+    const sessaoId = estadoSessaoAssinaturaAluno[modulo]?.sessaoId;
+    if (!sessaoId) {
+        notificar('⚠️ Sessão não encontrada', 'error');
+        return;
+    }
+    
+    const btn = safeGet('btnConfirmarAssinaturaAlunoInline');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+    }
+    
+    try {
+        const base64 = __inlineCanvasAlunoState.canvas.toDataURL('image/png');
+        
+        // Mesma rota pública usada pela tela de assinatura via URL
+        const response = await fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}/assinar`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                assinaturaBase64: base64,
+                assinanteNome: 'Aluno'
+            })
+        });
+        
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Erro ao salvar');
+        
+        // ============================================
+        // ATUALIZA O ESTADO LOCAL
+        // ============================================
+        estadoSessaoAssinaturaAluno[modulo].assinaturaCapturada = base64;
+        
+        // ============================================
+        // 🆕 MOSTRA A ASSINATURA DENTRO DO MODAL
+        // ============================================
+        const canvasView = safeGet('modalAssinaturaAlunoCanvasView');
+        if (canvasView) {
+            const agora = new Date();
+            const dataHora = agora.toLocaleString('pt-BR');
+            
+            canvasView.innerHTML = `
+                <div style="animation: fadeIn 0.3s ease;">
+                    <!-- BANNER DE SUCESSO -->
+                    <div style="background: linear-gradient(135deg, #10b981, #059669); 
+                                border-radius: 14px; padding: 16px 20px; margin-bottom: 16px;
+                                display: flex; align-items: center; gap: 14px; color: white;
+                                box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);">
+                        <div style="width: 44px; height: 44px; border-radius: 50%; 
+                                    background: rgba(255,255,255,0.25); 
+                                    display: flex; align-items: center; justify-content: center;
+                                    flex-shrink: 0;">
+                            <i class="fas fa-check" style="font-size: 22px;"></i>
+                        </div>
+                        <div style="flex: 1; text-align: left;">
+                            <h4 style="margin: 0 0 2px; font-size: 16px; font-weight: 700;">
+                                Assinatura do Aluno Registrada!
+                            </h4>
+                            <p style="margin: 0; font-size: 13px; opacity: 0.95;">
+                                Confirmada em ${dataHora}
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- PREVIEW DA ASSINATURA -->
+                    <div style="text-align: left; margin-bottom: 10px;">
+                        <span style="font-size: 11px; color: #64748b; 
+                                     text-transform: uppercase; font-weight: 700; 
+                                     letter-spacing: 0.5px;">
+                            <i class="fas fa-signature"></i> Assinatura capturada
+                        </span>
+                    </div>
+                    
+                    <div style="position: relative; background: #f0fdf4; 
+                                border: 3px solid #10b981; border-radius: 16px; 
+                                overflow: hidden; height: 220px; 
+                                display: flex; align-items: center; justify-content: center;
+                                padding: 12px; box-sizing: border-box;
+                                box-shadow: inset 0 2px 8px rgba(16, 185, 129, 0.08);">
+                        <img src="${base64}" 
+                             alt="Assinatura do Aluno" 
+                             style="max-width: 100%; max-height: 100%; 
+                                    object-fit: contain; display: block;">
+                        
+                        <div style="position: absolute; top: 10px; right: 10px;
+                                    background: #10b981; color: white;
+                                    padding: 4px 10px; border-radius: 20px;
+                                    font-size: 10px; font-weight: 700;
+                                    display: flex; align-items: center; gap: 4px;
+                                    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);">
+                            <i class="fas fa-lock" style="font-size: 9px;"></i>
+                            VERIFICADA
+                        </div>
+                    </div>
+                    
+                    <!-- INFO DO ASSINANTE -->
+                    <div style="margin-top: 12px; padding: 10px 14px; 
+                                background: #f8fafc; border-radius: 10px;
+                                border-left: 3px solid #10b981; text-align: left;">
+                        <div style="font-size: 12px; color: #475569; line-height: 1.6;">
+                            <div><strong>Assinante:</strong> Aluno</div>
+                            <div><strong>Data/Hora:</strong> ${dataHora}</div>
+                            <div><strong>Sessão:</strong> <code style="font-size: 10px; color: #64748b;">${sessaoId.substring(0, 8)}...</code></div>
+                        </div>
+                    </div>
+                    
+                    <!-- BOTÕES DE AÇÃO -->
+                    <div style="display: flex; gap: 10px; margin-top: 16px;">
+                        <button type="button"
+                                onclick="gestaoGeral.refazerAssinaturaAlunoInline('${modulo}')"
+                                style="flex: 1; padding: 12px; background: #fef3c7; color: #92400e;
+                                       border: 2px solid #f59e0b; border-radius: 10px; 
+                                       font-weight: 600; font-size: 13px; cursor: pointer;
+                                       display: flex; align-items: center; justify-content: center; gap: 6px;">
+                            <i class="fas fa-redo"></i> Refazer
+                        </button>
+                        <button type="button"
+                                onclick="gestaoGeral.fecharModalAssinaturaAluno('${modulo}')"
+                                style="flex: 2; padding: 12px; 
+                                       background: linear-gradient(135deg, #059669, #10b981); 
+                                       color: white; border: none; border-radius: 10px;
+                                       font-weight: 600; font-size: 13px; cursor: pointer;
+                                       display: flex; align-items: center; justify-content: center; gap: 6px;
+                                       box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);">
+                            <i class="fas fa-check-circle"></i> Concluir
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Para o monitoramento (a sessão já está assinada)
+        pararMonitoramentoSessaoAluno(modulo);
+        
+        // Atualiza o bloco compacto (fica escondido atrás do modal)
+        atualizarStatusAssinadoAluno(modulo, {
+            assinaturaBase64: base64,
+            assinadaPorNome: 'Aluno',
+            assinadaEm: new Date().toISOString()
+        });
+        
+        notificar('✅ Assinatura do aluno registrada com sucesso!', 'success');
+        
+    } catch (e) {
+        console.error('Erro ao salvar assinatura inline do aluno:', e);
+        notificar('❌ ' + e.message, 'error');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Assinatura';
+        }
+    }
+}
+
+async function refazerAssinaturaAlunoInline(modulo) {
+    const confirmar = await confirm('Refazer a assinatura do aluno? A atual será descartada.');
+    if (!confirmar) return;
+    
+    const sessaoId = estadoSessaoAssinaturaAluno[modulo]?.sessaoId;
+    if (!sessaoId) {
+        notificar('⚠️ Sessão não encontrada', 'error');
+        return;
+    }
+    
+    try {
+        await fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}/reset`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+    } catch (e) {
+        console.warn('Rota /reset não disponível, tentando cancelar e recriar...', e);
+        try {
+            await fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+        } catch (err) {
+            console.warn(err);
+        }
+    }
+    
+    estadoSessaoAssinaturaAluno[modulo].assinaturaCapturada = null;
+    
+    // Restaura a view do canvas (recria o HTML original)
+    const canvasView = safeGet('modalAssinaturaAlunoCanvasView');
+    if (canvasView) {
+        canvasView.innerHTML = `
+            <div style="background: #f0f9ff; border-radius: 12px; padding: 14px; margin-bottom: 16px; text-align: left;">
+                <div style="display: flex; gap: 8px;">
+                    <i class="fas fa-info-circle" style="color: #0369a1;"></i>
+                    <span style="font-size: 13px; color: #0369a1;">
+                        Peça para o aluno assinar no espaço abaixo com o dedo ou mouse.
+                    </span>
+                </div>
+            </div>
+            
+            <div id="modalAlunoCanvasWrapper" 
+                 style="position: relative; background: white; border: 3px dashed #cbd5e0; 
+                        border-radius: 16px; overflow: hidden; height: 260px; 
+                        margin-bottom: 14px; touch-action: none;">
+                <canvas id="modalAlunoCanvasAssinatura" style="width: 100%; height: 100%; display: block;"></canvas>
+                <div id="modalAlunoCanvasPlaceholder" 
+                     style="position: absolute; top: 50%; left: 50%; 
+                            transform: translate(-50%, -50%); text-align: center; 
+                            color: #94a3b8; pointer-events: none; width: 100%;">
+                    <i class="fas fa-pen-fancy" style="font-size: 28px; display: block; margin-bottom: 5px;"></i>
+                    <span style="font-size: 13px;">Assine aqui</span>
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 10px;">
+                <button type="button"
+                        onclick="gestaoGeral.limparCanvasAlunoInline()"
+                        style="flex: 1; padding: 12px; background: #f1f5f9; color: #475569; 
+                               border: none; border-radius: 10px; font-weight: 600; 
+                               font-size: 14px; cursor: pointer;">
+                    <i class="fas fa-eraser"></i> Limpar
+                </button>
+                <button type="button"
+                        id="btnConfirmarAssinaturaAlunoInline"
+                        onclick="gestaoGeral.salvarAssinaturaAlunoInline('${modulo}')"
+                        disabled
+                        style="flex: 2; padding: 12px; background: #cbd5e0; color: white; 
+                               border: none; border-radius: 10px; font-weight: 600; 
+                               font-size: 14px; cursor: not-allowed;">
+                    <i class="fas fa-check"></i> Confirmar Assinatura
+                </button>
+            </div>
+            
+            <div style="margin-top: 14px;">
+                <button type="button"
+                        onclick="gestaoGeral.voltarParaQRCodeAluno('${modulo}')"
+                        style="background: transparent; border: none; color: #64748b; 
+                               font-size: 13px; cursor: pointer; text-decoration: underline;">
+                    <i class="fas fa-arrow-left"></i> Voltar para o QR Code
+                </button>
+            </div>
+        `;
+    }
+    
+    __inlineCanvasAlunoState.inicializado = false;
+    setTimeout(() => {
+        inicializarCanvasAlunoInline(modulo);
+    }, 100);
+    
+    notificar('✏️ Assinatura do aluno apagada. Pode assinar novamente.', 'info');
 }
 
 function fecharModalAssinaturaAluno(modulo) {
@@ -9300,17 +9929,17 @@ window.validarCPFCliente = validarCPFCliente;
         refazerAssinatura: typeof refazerAssinatura !== 'undefined' ? refazerAssinatura : null,
 
         // ============================================
-        // 🆕 CANVAS INLINE (Assinatura direto no modal)
+        // CANVAS INLINE (Responsável)
         // Responsável assina na própria tela da gestão
         // ============================================
         mostrarCanvasAssinaturaInline: typeof mostrarCanvasAssinaturaInline !== 'undefined' ? mostrarCanvasAssinaturaInline : null,
         voltarParaQRCode: typeof voltarParaQRCode !== 'undefined' ? voltarParaQRCode : null,
         limparCanvasInline: typeof limparCanvasInline !== 'undefined' ? limparCanvasInline : null,
         salvarAssinaturaInline: typeof salvarAssinaturaInline !== 'undefined' ? salvarAssinaturaInline : null,
-        refazerAssinaturaInline: typeof refazerAssinaturaInline !== 'undefined' ? refazerAssinaturaInline : null,  // 🆕
+        refazerAssinaturaInline: typeof refazerAssinaturaInline !== 'undefined' ? refazerAssinaturaInline : null,
 
         // ============================================
-        // 🆕 ALUNO (Apenas Atrasos)
+        // ALUNO (Apenas Atrasos)
         // ============================================
         toggleNecessitaAssinaturaAluno: typeof toggleNecessitaAssinaturaAluno !== 'undefined' ? toggleNecessitaAssinaturaAluno : null,
         abrirModalAssinaturaAluno: typeof abrirModalAssinaturaAluno !== 'undefined' ? abrirModalAssinaturaAluno : null,
@@ -9318,6 +9947,16 @@ window.validarCPFCliente = validarCPFCliente;
         reabrirModalAssinaturaAluno: typeof reabrirModalAssinaturaAluno !== 'undefined' ? reabrirModalAssinaturaAluno : null,
         cancelarSessaoAssinaturaAluno: typeof cancelarSessaoAssinaturaAluno !== 'undefined' ? cancelarSessaoAssinaturaAluno : null,
         refazerAssinaturaAluno: typeof refazerAssinaturaAluno !== 'undefined' ? refazerAssinaturaAluno : null,
+
+        // ============================================
+        // 🆕 CANVAS INLINE (Aluno)
+        // Aluno assina na própria tela da gestão
+        // ============================================
+        mostrarCanvasAssinaturaAlunoInline: typeof mostrarCanvasAssinaturaAlunoInline !== 'undefined' ? mostrarCanvasAssinaturaAlunoInline : null,
+        voltarParaQRCodeAluno: typeof voltarParaQRCodeAluno !== 'undefined' ? voltarParaQRCodeAluno : null,
+        limparCanvasAlunoInline: typeof limparCanvasAlunoInline !== 'undefined' ? limparCanvasAlunoInline : null,
+        salvarAssinaturaAlunoInline: typeof salvarAssinaturaAlunoInline !== 'undefined' ? salvarAssinaturaAlunoInline : null,
+        refazerAssinaturaAlunoInline: typeof refazerAssinaturaAlunoInline !== 'undefined' ? refazerAssinaturaAlunoInline : null,
 
         // ============================================
         // COMUM (tela de assinatura via URL)

@@ -489,6 +489,29 @@
                                                 placeholder="Informações complementares..."></textarea>
                                     </div>
 
+                                    <!-- 🆕 DADOS DO RESPONSÁVEL (opcionais) -->
+                                    <div class="card mb-3 dados-responsavel-card">
+                                        <div class="card-body">
+                                            <h6 class="dados-responsavel-titulo">
+                                                <i class="fas fa-user-shield"></i> Dados do Responsável <small class="text-muted">(opcional)</small>
+                                            </h6>
+                                            <div class="row">
+                                                <div class="col-md-6 mb-3">
+                                                    <label class="form-label">Nome do Responsável</label>
+                                                    <input type="text" id="atrasoResponsavelNome" class="form-control" placeholder="Nome completo do responsável">
+                                                </div>
+                                                <div class="col-md-3 mb-3">
+                                                    <label class="form-label">CPF</label>
+                                                    <input type="text" id="atrasoResponsavelCPF" class="form-control" placeholder="000.000.000-00" maxlength="14" oninput="formatarCPF(this)">
+                                                </div>
+                                                <div class="col-md-3 mb-3">
+                                                    <label class="form-label">Telefone</label>
+                                                    <input type="text" id="atrasoResponsavelTelefone" class="form-control" placeholder="(00) 00000-0000" maxlength="15" oninput="formatarTelefone(this)">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <!-- ASSINATURA POR QR CODE (ATRASO) -->
                                     <div class="assinatura-wrapper">
                                         <div class="form-check p-3 mb-2 assinatura-check">

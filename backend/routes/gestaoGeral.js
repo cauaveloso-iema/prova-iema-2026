@@ -50,7 +50,7 @@ router.get('/health', (req, res) => {
     success: true,
     status: 'online',
     service: 'Gestão Geral',
-    versao: '2.2-assinatura-dupla',
+    versao: '2.3-atraso-responsavel',
     timestamp: new Date().toISOString()
   });
 });
@@ -545,6 +545,7 @@ router.get('/atraso/buscar-aluno', authenticateToken, verificarGestaoGeral, asyn
 // ============================================
 // 📝 REGISTRAR ATRASO (com assinatura via QR Code)
 // Suporta assinatura do RESPONSÁVEL e do ALUNO
+// 🆕 Aceita dados do responsável (nome, CPF, telefone)
 // ============================================
 router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
@@ -557,7 +558,11 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
       sessaoAssinaturaId = null,
       precisaAssinaturaAluno = false,
       assinaturaAlunoBase64 = '',
-      sessaoAssinaturaAlunoId = null
+      sessaoAssinaturaAlunoId = null,
+      // 🆕 Dados do responsável (opcionais)
+      responsavelNome = '',
+      responsavelCPF = '',
+      responsavelTelefone = ''
     } = req.body;
     
     // Normaliza motivos: aceita array `motivos` ou string `motivo`
@@ -611,7 +616,7 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
           return res.status(400).json({ success: false, error: 'Assinatura muito grande (máx 500KB)' });
         }
         assinaturaValida = assinaturaBase64;
-        assinadaPorNome = gestor?.nome || req.userNome || 'Responsável';
+        assinadaPorNome = responsavelNome || gestor?.nome || req.userNome || 'Responsável';
         assinadaEm = new Date();
       }
     }
@@ -623,7 +628,7 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
         });
         if (sessao && sessao.assinaturaBase64) {
           assinaturaValida = sessao.assinaturaBase64;
-          assinadaPorNome = sessao.assinadaPorNome;
+          assinadaPorNome = sessao.assinadaPorNome || responsavelNome || 'Responsável';
           assinadaEm = sessao.assinadaEm;
           sessao.status = 'cancelado';
           await sessao.save();
@@ -685,6 +690,12 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
       descricao: descricao.trim(),
       observacoes: observacoes || '',
       detalhes: detalhes || {},
+      
+      // 🆕 Dados do responsável
+      responsavelNome: (responsavelNome || '').trim(),
+      responsavelCPF: (responsavelCPF || '').trim(),
+      responsavelTelefone: (responsavelTelefone || '').trim(),
+      
       registradoPor: req.userId,
       registradoPorNome: gestor?.nome || req.userNome || 'Gestão Geral',
       
@@ -725,7 +736,10 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
         temAssinatura: atraso.temAssinatura,
         statusAssinatura: atraso.statusAssinatura,
         temAssinaturaAluno: atraso.temAssinaturaAluno,
-        statusAssinaturaAluno: atraso.statusAssinaturaAluno
+        statusAssinaturaAluno: atraso.statusAssinaturaAluno,
+        responsavelNome: atraso.responsavelNome,
+        responsavelCPF: atraso.responsavelCPF,
+        responsavelTelefone: atraso.responsavelTelefone
       }
     });
   } catch (error) {
@@ -902,6 +916,10 @@ router.get('/atraso/listar', authenticateToken, verificarGestaoGeral, async (req
           dataHora: a.dataHora,
           dataHoraFormatada: new Date(a.dataHora).toLocaleString('pt-BR'),
           registradoPor: a.registradoPorNome,
+          // 🆕 Dados do responsável
+          responsavelNome: a.responsavelNome || '',
+          responsavelCPF: a.responsavelCPF || '',
+          responsavelTelefone: a.responsavelTelefone || '',
           temAssinatura: a.temAssinatura,
           statusAssinatura: a.statusAssinatura,
           temAssinaturaAluno: a.temAssinaturaAluno,
@@ -950,6 +968,13 @@ router.get('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
         descricao: atraso.descricao,
         observacoes: atraso.observacoes,
         detalhes: atraso.detalhes,
+        
+        // 🆕 Dados do responsável
+        responsavelNome: atraso.responsavelNome || '',
+        responsavelCPF: atraso.responsavelCPF || '',
+        responsavelTelefone: atraso.responsavelTelefone || '',
+        
+        // Quem registrou (gestor logado)
         registradoPor: atraso.registradoPorNome,
         
         precisaAssinatura: atraso.precisaAssinatura || false,
@@ -979,7 +1004,11 @@ router.get('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
 // Editar
 router.put('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
-    const { motivos, motivo, dataHora, descricao, observacoes, detalhes } = req.body;
+    const { 
+      motivos, motivo, dataHora, descricao, observacoes, detalhes,
+      // 🆕 Dados do responsável
+      responsavelNome, responsavelCPF, responsavelTelefone
+    } = req.body;
 
     const atraso = await Atraso.findById(req.params.id);
     if (!atraso) {
@@ -1028,6 +1057,11 @@ router.put('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
     if (observacoes !== undefined) atraso.observacoes = observacoes;
     if (detalhes !== undefined) atraso.detalhes = { ...atraso.detalhes, ...detalhes };
 
+    // 🆕 Dados do responsável (opcionais)
+    if (responsavelNome !== undefined) atraso.responsavelNome = (responsavelNome || '').trim();
+    if (responsavelCPF !== undefined) atraso.responsavelCPF = (responsavelCPF || '').trim();
+    if (responsavelTelefone !== undefined) atraso.responsavelTelefone = (responsavelTelefone || '').trim();
+
     atraso.updatedAt = new Date();
     await atraso.save();
 
@@ -1046,7 +1080,10 @@ router.put('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
         dataHora: atraso.dataHora,
         dataHoraFormatada: new Date(atraso.dataHora).toLocaleString('pt-BR'),
         descricao: atraso.descricao,
-        observacoes: atraso.observacoes
+        observacoes: atraso.observacoes,
+        responsavelNome: atraso.responsavelNome,
+        responsavelCPF: atraso.responsavelCPF,
+        responsavelTelefone: atraso.responsavelTelefone
       }
     });
   } catch (error) {
@@ -1112,6 +1149,9 @@ router.get('/atraso/relatorio/aluno/:alunoId', authenticateToken, verificarGesta
           descricao: a.descricao,
           observacoes: a.observacoes, 
           registradoPor: a.registradoPorNome,
+          responsavelNome: a.responsavelNome || '',
+          responsavelCPF: a.responsavelCPF || '',
+          responsavelTelefone: a.responsavelTelefone || '',
           createdAt: a.createdAt
         };
       })

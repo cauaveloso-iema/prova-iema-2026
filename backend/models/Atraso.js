@@ -33,6 +33,14 @@ const AtrasoSchema = new mongoose.Schema({
     tempoAtrasoMinutos: Number
   },
   
+  // ============================================
+  // 🆕 DADOS DO RESPONSÁVEL (opcionais)
+  // Mesmo padrão da Autorização
+  // ============================================
+  responsavelNome: { type: String, default: '' },
+  responsavelCPF: { type: String, default: '' },
+  responsavelTelefone: { type: String, default: '' },
+  
   registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   registradoPorNome: String,
   
