@@ -28,126 +28,6 @@
     <script src="/js/core-security.js"></script>
 
     <link rel="stylesheet" href="css/protagonismo.css">
-
-    <style>
-        .aniversario-card {
-            background: white;
-            border-radius: 12px;
-            padding: 12px;
-            margin-bottom: 8px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            border-left: 4px solid #ec4899;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-            transition: transform 0.2s;
-        }
-        .aniversario-card:hover { transform: translateX(4px); }
-        .aniversario-avatar {
-            width: 45px; height: 45px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #ec4899, #be185d);
-            color: white;
-            display: flex; align-items: center; justify-content: center;
-            font-weight: bold;
-            flex-shrink: 0;
-            overflow: hidden;
-        }
-        .aniversario-avatar img { width: 100%; height: 100%; object-fit: cover; }
-        .aniversario-info { flex: 1; min-width: 0; }
-        .aniversario-nome { font-weight: 600; color: #1f2937; font-size: 14px; }
-        .aniversario-detalhes { font-size: 12px; color: #6b7280; }
-        .aniversario-dia {
-            background: #fce7f3;
-            color: #be185d;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-weight: 700;
-            font-size: 13px;
-            flex-shrink: 0;
-        }
-        .mes-header {
-            background: linear-gradient(135deg, #ec4899, #be185d);
-            color: white;
-            padding: 10px 16px;
-            border-radius: 10px 10px 0 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            font-weight: 600;
-        }
-        .mes-body {
-            background: #fdf2f8;
-            padding: 12px;
-            border-radius: 0 0 10px 10px;
-            margin-bottom: 12px;
-        }
-        .proximo-aniversario-card {
-            background: white;
-            border-radius: 12px;
-            padding: 16px;
-            text-align: center;
-            box-shadow: 0 2px 12px rgba(236,72,153,0.15);
-            border-top: 4px solid #ec4899;
-        }
-        .proximo-aniversario-card .dias {
-            font-size: 32px;
-            font-weight: 800;
-            color: #ec4899;
-            line-height: 1;
-        }
-        .proximo-aniversario-card .dias-label {
-            font-size: 11px;
-            color: #9ca3af;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 8px;
-        }
-        .proximo-aniversario-card .nome {
-            font-weight: 700;
-            color: #1f2937;
-            font-size: 15px;
-            margin-top: 8px;
-        }
-        .proximo-aniversario-card .data {
-            font-size: 12px;
-            color: #6b7280;
-            margin-top: 4px;
-        }
-        .badge-hoje {
-            background: #10b981;
-            color: white;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 10px;
-            font-weight: 700;
-        }
-        .badge-manual {
-            background: #f59e0b;
-            color: white;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 10px;
-            font-weight: 700;
-        }
-        .badge-auto {
-            background: #3b82f6;
-            color: white;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 10px;
-            font-weight: 700;
-        }
-        .config-section-title {
-            font-weight: 600;
-            color: #be185d;
-            font-size: 14px;
-            margin-bottom: 12px;
-            padding-bottom: 8px;
-            border-bottom: 2px solid #fce7f3;
-        }
-    </style>
 </head>
 <body>
     <div class="container">
@@ -1178,6 +1058,31 @@
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                     <button type="button" class="btn btn-primary" onclick="salvarConfigAniversarios()">
                         <i class="fas fa-save"></i> Salvar Configurações
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL VER DETALHES DO ANIVERSARIANTE -->
+    <div class="modal fade" id="modalVerAniversario" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header" style="background: linear-gradient(135deg, #ec4899, #be185d); color: white;">
+                    <h5 class="modal-title"><i class="fas fa-info-circle"></i> Detalhes do Aniversariante</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" style="filter: brightness(0) invert(1);"></button>
+                </div>
+                <div class="modal-body text-center p-4">
+                    <div id="detalheAniversarioAvatar" class="mb-3"></div>
+                    <h4 id="detalheAniversarioNome" class="fw-bold text-dark mb-1"></h4>
+                    
+                    <div id="detalheAniversarioInfo" class="mt-4 p-3 rounded" style="background: #fdf2f8; border: 1px dashed #fbcfe8;">
+                        <!-- Informações preenchidas via JS -->
+                    </div>
+                </div>
+                <div class="modal-footer justify-content-center border-0 pb-4">
+                    <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i> Fechar
                     </button>
                 </div>
             </div>

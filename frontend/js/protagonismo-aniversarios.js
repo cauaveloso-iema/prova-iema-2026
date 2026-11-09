@@ -133,48 +133,69 @@ async function carregarAniversarios() {
 }
 window.carregarAniversarios = carregarAniversarios;
 
+// ============================================
+// RENDERIZAÇÃO DO CARD DO ANIVERSARIANTE
+// ============================================
 function renderAniversarioCard(a, mes) {
     const hoje = new Date();
     const isHoje = (hoje.getMonth() + 1) === mes && hoje.getDate() === a.dia;
+    const cardId = `collapse_${a.id}`;
 
     const avatar = a.fotoPerfil
         ? `<img src="${a.fotoPerfil.startsWith('/') ? window.location.origin + a.fotoPerfil : a.fotoPerfil}" alt="${a.nome}">`
         : a.nome.charAt(0).toUpperCase();
 
-    const origemBadge = a.origem === 'manual'
-        ? `<span class="badge-manual">Manual</span>`
-        : `<span class="badge-auto">Auto</span>`;
-
-    const hojeBadge = isHoje ? `<span class="badge-hoje">🎉 HOJE!</span>` : '';
-
+    const hojeBadge = isHoje ? `<span class="badge-hoje ms-1">🎉 HOJE!</span>` : '';
+    const origemTexto = a.origem === 'manual' ? 'Manual' : 'Auto';
+    const origemClasse = a.origem === 'manual' ? 'badge-manual' : 'badge-auto';
+    
     const roleLabel = a.role && a.role !== 'aluno' && a.role !== 'manual'
-        ? `<span class="badge bg-secondary ms-1" style="font-size:9px;text-transform:uppercase;">${a.role}</span>`
+        ? `<span class="badge bg-secondary role-badge">${a.role.replace('_', ' ')}</span>`
         : '';
 
     return `
-        <div class="aniversario-card">
-            <div class="aniversario-avatar">${avatar}</div>
-            <div class="aniversario-info">
-                <div class="aniversario-nome">
-                    ${a.nome} ${hojeBadge} ${roleLabel}
+        <div class="aniversario-card-wrapper">
+            <div class="aniversario-header" data-bs-toggle="collapse" data-bs-target="#${cardId}" aria-expanded="false" aria-controls="${cardId}">
+                <div class="aniversario-avatar">${avatar}</div>
+                
+                <div class="aniversario-info">
+                    <div class="aniversario-nome" title="${escapeHTML(a.nome)}">
+                        ${escapeHTML(a.nome)} ${hojeBadge}
+                    </div>
+                    <div class="aniversario-detalhes">
+                        ${a.turma ? `<i class="fas fa-users"></i> ${a.turma}` : ''}
+                        ${a.curso ? ` • ${a.curso}` : ''}
+                    </div>
                 </div>
-                <div class="aniversario-detalhes">
-                    ${a.turma ? `<i class="fas fa-users"></i> ${a.turma}` : ''}
-                    ${a.curso ? ` • ${a.curso}` : ''}
-                    ${origemBadge}
+                
+                <div class="aniversario-direita">
+                    <div class="aniversario-status">
+                        <div class="aniversario-dia">Dia ${a.dia}</div>
+                        <span class="${origemClasse}">${origemTexto}</span>
+                    </div>
+                    <i class="fas fa-chevron-down aniversario-seta ms-2"></i>
                 </div>
             </div>
-            <div class="d-flex align-items-center gap-2">
-                <div class="aniversario-dia">Dia ${a.dia}</div>
-                <button class="btn btn-sm btn-outline-secondary" onclick="editarAniversario('${a.id}')" title="Editar">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-info" onclick="testarNotificacaoAniversario('${a.id}')" title="Testar notificação">
-                    <i class="fas fa-paper-plane"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="excluirAniversario('${a.id}', '${a.nome.replace(/'/g, "\\'")}')" title="Excluir">
-                    <i class="fas fa-trash"></i>
-                </button>
+            
+            <div class="collapse" id="${cardId}">
+                <div class="aniversario-body-acoes">
+                    ${roleLabel ? `<div class="w-100 mb-2">${roleLabel}</div>` : ''}
+                    
+                    <div class="botoes-acoes">
+                        <button class="btn btn-sm btn-outline-primary" onclick="verDetalhesAniversario('${a.id}')">
+                            <i class="fas fa-eye"></i> Ver
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="editarAniversario('${a.id}')">
+                            <i class="fas fa-edit"></i> Editar
+                        </button>
+                        <button class="btn btn-sm btn-outline-info" onclick="testarNotificacaoAniversario('${a.id}')">
+                            <i class="fas fa-paper-plane"></i> Testar
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="excluirAniversario('${a.id}', '${escapeHTML(a.nome).replace(/'/g, "\\'")}')">
+                            <i class="fas fa-trash"></i> Excluir
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     `;
@@ -192,6 +213,93 @@ function toggleMesAniv(mes) {
     }
 }
 window.toggleMesAniv = toggleMesAniv;
+
+// ============================================
+// FUNÇÃO VER DETALHES (COM TRATAMENTO DE DATA)
+// ============================================
+async function verDetalhesAniversario(id) {
+    try {
+        const resp = await fetch(`${API_ANIV}/aniversarios`, { headers: headersAniv() });
+        const data = await resp.json();
+
+        let pessoa = null;
+        if (data.success && data.porMes) {
+            for (const m of data.porMes) {
+                pessoa = m.aniversariantes.find(a => a.id === id);
+                if (pessoa) break;
+            }
+        }
+
+        if (!pessoa) {
+            mostrarAlertaAniv('Aniversariante não encontrado.', 'error');
+            return;
+        }
+
+        const avatar = pessoa.fotoPerfil
+            ? `<img src="${pessoa.fotoPerfil.startsWith('/') ? window.location.origin + pessoa.fotoPerfil : pessoa.fotoPerfil}" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 3px solid #ec4899;">`
+            : `<div style="width: 100px; height: 100px; border-radius: 50%; background: #ec4899; color: white; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; font-weight: bold; margin: 0 auto;">${pessoa.nome.charAt(0).toUpperCase()}</div>`;
+
+        document.getElementById('detalheAniversarioAvatar').innerHTML = avatar;
+        document.getElementById('detalheAniversarioNome').textContent = pessoa.nome;
+        
+        const origemTexto = pessoa.origem === 'manual' ? 'Manual' : 'Automático (Banco)';
+        const origemCor = pessoa.origem === 'manual' ? 'text-warning' : 'text-primary';
+        
+        let dataFormatada = 'Não informada';
+        if (pessoa.dataNascimento) {
+            try {
+                const dataObj = new Date(pessoa.dataNascimento);
+                if (!isNaN(dataObj.getTime())) {
+                    // Adiciona o fuso para não voltar um dia no Brasil
+                    dataFormatada = new Date(dataObj.getTime() + dataObj.getTimezoneOffset() * 60000).toLocaleDateString('pt-BR');
+                }
+            } catch (e) {}
+        }
+        
+        document.getElementById('detalheAniversarioInfo').innerHTML = `
+            <div class="row mt-3 text-start">
+                <div class="col-6 mb-2">
+                    <small class="text-muted d-block">Data de Nascimento</small>
+                    <strong>${dataFormatada}</strong>
+                </div>
+                <div class="col-6 mb-2">
+                    <small class="text-muted d-block">Dia do Mês</small>
+                    <strong>Dia ${pessoa.dia}</strong>
+                </div>
+                <div class="col-6 mb-2">
+                    <small class="text-muted d-block">Turma</small>
+                    <strong>${pessoa.turma || 'Não informada'}</strong>
+                </div>
+                <div class="col-6 mb-2">
+                    <small class="text-muted d-block">Curso</small>
+                    <strong>${pessoa.curso || 'Não informado'}</strong>
+                </div>
+                <div class="col-6 mb-2">
+                    <small class="text-muted d-block">Telefone</small>
+                    <strong>${pessoa.telefone || 'Não informado'}</strong>
+                </div>
+                <div class="col-6 mb-2">
+                    <small class="text-muted d-block">E-mail</small>
+                    <strong style="word-break: break-all; font-size: 13px;">${pessoa.email || 'Não informado'}</strong>
+                </div>
+                <div class="col-12 mt-3">
+                    <small class="text-muted d-block">Origem do Cadastro</small>
+                    <span class="fw-bold ${origemCor}">
+                        <i class="fas ${pessoa.origem === 'manual' ? 'fa-user-edit' : 'fa-robot'}"></i> ${origemTexto}
+                    </span>
+                </div>
+            </div>
+        `;
+
+        const modal = new bootstrap.Modal(document.getElementById('modalVerAniversario'));
+        modal.show();
+
+    } catch (err) {
+        console.error(err);
+        mostrarAlertaAniv('Erro ao carregar detalhes.', 'error');
+    }
+}
+window.verDetalhesAniversario = verDetalhesAniversario;
 
 // ============================================
 // PRÓXIMOS ANIVERSÁRIOS
@@ -221,7 +329,7 @@ async function carregarProximosAniversarios() {
                             <div class="proximo-aniversario-card">
                                 <div class="dias">${label}</div>
                                 <div class="dias-label">${sublabel}</div>
-                                <div class="nome">${p.nome}</div>
+                                <div class="nome">${escapeHTML(p.nome)}</div>
                                 <div class="data">
                                     ${p.dia}/${String(p.mes).padStart(2, '0')}
                                     ${p.turma ? ` • ${p.turma}` : ''}
@@ -433,7 +541,7 @@ async function buscarPerfisAniversario(q) {
                 <a href="#" class="list-group-item list-group-item-action" onclick="selecionarPerfilAniversario('${u.id}'); return false;">
                     <div class="d-flex justify-content-between align-items-center gap-2">
                         <div>
-                            <strong>${u.nome}</strong> ${roleLabel}
+                            <strong>${escapeHTML(u.nome)}</strong> ${roleLabel}
                             <br>
                             <small class="text-muted">
                                 ${u.matricula ? `Mat: ${u.matricula}` : ''}
@@ -493,20 +601,17 @@ function preencherCamposComPerfil(u) {
     document.getElementById('aniversarioEmail').value = u.email || '';
     document.getElementById('aniversarioTelefone').value = u.telefone || '';
 
-    // Se tiver data de nascimento no banco, preenche. Se não, limpa para o admin digitar.
     document.getElementById('aniversarioData').value = u.dataNascimento || '';
 
     const campoTurma = document.getElementById('aniversarioTurma');
     const campoCurso = document.getElementById('aniversarioCurso');
     
-    // Só preenche turma/curso se for aluno ou tiver dados específicos
     if (u.role === 'aluno' || u.turma || u.curso) {
         campoTurma.value = u.turma || '';
         campoCurso.value = u.curso || '';
         campoTurma.disabled = false;
         campoCurso.disabled = false;
     } else {
-        // Outros perfis (professor, admin, etc.): limpa e desabilita
         campoTurma.value = '';
         campoCurso.value = '';
         campoTurma.disabled = true;
