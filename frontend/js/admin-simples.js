@@ -1953,12 +1953,17 @@ class AdminSimples {
             const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
             const isAdminNormal = userData.role === 'admin';
 
-            const response = await fetch('/api/admin/usuarios?limit=1000', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            // Busca usuários e turmas em paralelo para popular o filtro
+            const [response, turmasRes] = await Promise.all([
+                fetch('/api/admin/usuarios?limit=1000', { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch('/api/admin/turmas?limit=1000', { headers: { 'Authorization': `Bearer ${token}` } })
+            ]);
 
             if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
+            
             const data = await response.json();
+            const turmasData = await turmasRes.json().catch(() => ({ success: false }));
+
             if (!data.success) throw new Error(data.error || 'Erro ao carregar usuários');
 
             let usuarios = data.usuarios || [];
@@ -1967,6 +1972,10 @@ class AdminSimples {
             }
 
             this.usuarios = usuarios;
+            const turmas = turmasData.success ? (turmasData.turmas || []) : [];
+
+            // Gerar opções do select de turmas
+            const opcoesTurmas = turmas.map(t => `<option value="${t.nome}">${t.nome}</option>`).join('');
 
             content.innerHTML = `
                 <div class="section-header">
@@ -1977,9 +1986,9 @@ class AdminSimples {
                 </div>
 
                 <div class="filters-bar">
-                    <div class="filter-group">
+                    <div class="filter-group" style="flex: 2;">
                         <label><i class="fas fa-search"></i> Buscar</label>
-                        <input type="text" id="buscaUsuario" placeholder="Nome, email ou matrícula..."
+                        <input type="text" id="buscaUsuario" placeholder="Nome, email, CPF ou matrícula..."
                             class="form-control" onkeyup="adminSimples.filtrarUsuarios()" autocomplete="off">
                     </div>
                     <div class="filter-group">
@@ -2004,7 +2013,22 @@ class AdminSimples {
                             <option value="admin">Admins</option>
                         </select>
                     </div>
-                    <div class="filter-actions">
+                    <div class="filter-group">
+                        <label><i class="fas fa-circle"></i> Status</label>
+                        <select id="filtroStatus" class="form-control" onchange="adminSimples.filtrarUsuarios()">
+                            <option value="todos">Todos</option>
+                            <option value="ativo">Ativos</option>
+                            <option value="inativo">Inativos</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label><i class="fas fa-school"></i> Turma</label>
+                        <select id="filtroTurma" class="form-control" onchange="adminSimples.filtrarUsuarios()">
+                            <option value="todos">Todas</option>
+                            ${opcoesTurmas}
+                        </select>
+                    </div>
+                    <div class="filter-actions" style="margin-top: 25px;">
                         <button class="btn-filter" onclick="adminSimples.limparFiltrosUsuarios()">
                             <i class="fas fa-eraser"></i> Limpar
                         </button>
@@ -2310,15 +2334,31 @@ class AdminSimples {
     filtrarUsuarios() {
         const busca = document.getElementById('buscaUsuario')?.value.toLowerCase() || '';
         const role = document.getElementById('filtroRole')?.value || 'todos';
+        const status = document.getElementById('filtroStatus')?.value || 'todos';
+        const turma = document.getElementById('filtroTurma')?.value || 'todos';
 
         const usuariosSemSuper = this.usuarios.filter(u => u.role !== 'super_admin');
 
         this.usuariosFiltrados = usuariosSemSuper.filter(u => {
+            // Filtro de texto (Nome, email, matricula ou CPF)
             const matchBusca = busca === '' ||
                 (u.nome && u.nome.toLowerCase().includes(busca)) ||
-                (u.email && u.email.toLowerCase().includes(busca));
+                (u.email && u.email.toLowerCase().includes(busca)) ||
+                (u.matricula && u.matricula.toLowerCase().includes(busca)) ||
+                (u.cpf && u.cpf.includes(busca));
+
+            // Filtro de Perfil
             const matchRole = role === 'todos' || u.role === role;
-            return matchBusca && matchRole;
+
+            // Filtro de Status
+            let matchStatus = true;
+            if (status === 'ativo') matchStatus = u.ativo === true;
+            else if (status === 'inativo') matchStatus = u.ativo === false;
+
+            // Filtro de Turma
+            const matchTurma = turma === 'todos' || (u.turma && u.turma === turma);
+
+            return matchBusca && matchRole && matchStatus && matchTurma;
         });
 
         this.paginaAtualUsuario = 1;
@@ -2328,8 +2368,15 @@ class AdminSimples {
     limparFiltrosUsuarios() {
         const buscaInput = document.getElementById('buscaUsuario');
         if (buscaInput) buscaInput.value = '';
+        
         const selectRole = document.getElementById('filtroRole');
         if (selectRole) selectRole.value = 'todos';
+
+        const selectStatus = document.getElementById('filtroStatus');
+        if (selectStatus) selectStatus.value = 'todos';
+
+        const selectTurma = document.getElementById('filtroTurma');
+        if (selectTurma) selectTurma.value = 'todos';
 
         this.usuariosFiltrados = [...this.usuarios];
         this.paginaAtualUsuario = 1;

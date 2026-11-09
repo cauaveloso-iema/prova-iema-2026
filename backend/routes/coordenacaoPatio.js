@@ -1,5 +1,5 @@
 // ============================================================================
-// COORDENAÇÃO DE PÁTIO - EducaPleno
+// COORDENAÇÃO DE PÁTIO - EducaPleno (🆕 CORRIGIDO — FUSO BRASÍLIA)
 // ============================================================================
 // Descrição: Rotas para controle de refeições dos alunos
 //
@@ -13,8 +13,6 @@
 //   - GET  /api/coordenacao-patio/registros/:data
 //   - GET  /api/coordenacao-patio/estatisticas
 //   - GET  /api/coordenacao-patio/relatorio
-//
-// Autor: Equipe de Desenvolvimento
 // ============================================================================
 
 const express = require('express');
@@ -54,6 +52,47 @@ try {
   Turma = require('../models/Turma');
 } catch (err) {
   console.warn('[coordenacao-patio] Model Turma não disponível:', err.message);
+}
+
+// ============================================================================
+// 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
+// ============================================================================
+/**
+ * Data ATUAL no fuso de Brasília (YYYY-MM-DD).
+ */
+function getDataHojeBR() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(new Date());
+}
+
+/**
+ * Hora ATUAL no fuso de Brasília (0-23).
+ */
+function getHoraAtualBR() {
+  const horaStr = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit',
+    hour12: false
+  }).format(new Date());
+  return parseInt(horaStr, 10);
+}
+
+/**
+ * Data de N dias atrás no fuso de Brasília (YYYY-MM-DD).
+ */
+function getDataNDiasAtrasBR(n) {
+  const agora = new Date();
+  const passado = new Date(agora.getTime() - n * 24 * 60 * 60 * 1000);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(passado);
 }
 
 // ============================================
@@ -98,25 +137,31 @@ const verificarCoordenacaoPatio = (req, res, next) => {
 };
 
 // ============================================
-// 🏥 HEALTH CHECK - Rota de teste
+// 🏥 HEALTH CHECK
 // ============================================
 router.get('/health', (req, res) => {
   res.json({
     success: true,
     status: 'online',
     service: 'Coordenação do Pátio',
+    versao: '2.0-fuso-br',
     models: {
       Refeicao: !!Refeicao,
       RodizioRefeicao: !!RodizioRefeicao,
       Turma: !!Turma,
       User: !!User
     },
+    _debug: {
+      hojeBR: getDataHojeBR(),
+      horaBR: getHoraAtualBR(),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    },
     timestamp: new Date().toISOString()
   });
 });
 
 // ============================================
-// 📋 LISTAR TURMAS (para filtros)
+// 📋 LISTAR TURMAS
 // ============================================
 router.get('/turmas',
   authenticateToken,
@@ -165,7 +210,6 @@ router.get('/alunos',
 
       let query = { role: 'aluno', ativo: true };
 
-      // Filtros opcionais
       if (turma) query.turma = turma;
       if (curso) query.curso = curso;
       if (search) {
@@ -181,7 +225,6 @@ router.get('/alunos',
         .sort({ nome: 1 })
         .lean();
 
-      // Obter turmas únicas para filtro
       const turmas = await User.distinct('turma', {
         role: 'aluno',
         ativo: true,
@@ -222,7 +265,7 @@ router.get('/alunos',
 );
 
 // ============================================
-// 🔍 BUSCAR ALUNO POR QR CODE (ID) - COM VERIFICAÇÃO DE RODÍZIO
+// 🔍 BUSCAR ALUNO POR QR CODE (🆕 CORRIGIDO — HORA/DATA em BRT)
 // ============================================
 router.get('/aluno/:id',
   authenticateToken,
@@ -231,7 +274,6 @@ router.get('/aluno/:id',
     try {
       const alunoId = req.params.id;
 
-      // Validar se o ID é válido (24 caracteres hexadecimais)
       if (!alunoId || !alunoId.match(/^[0-9a-fA-F]{24}$/)) {
         logger.info(`❌ ID inválido: ${alunoId}`);
         return res.status(400).json({
@@ -252,7 +294,6 @@ router.get('/aluno/:id',
         });
       }
 
-      // Se não for aluno, retornar mensagem amigável
       if (aluno.role !== 'aluno') {
         logger.info(`⚠️ Usuário ${aluno.nome} não é aluno (role: ${aluno.role})`);
         return res.status(400).json({
@@ -261,7 +302,7 @@ router.get('/aluno/:id',
         });
       }
 
-      // 🔥 VERIFICAR RODÍZIO DE ALMOÇO (se for aluno)
+      // 🔥 VERIFICAR RODÍZIO
       let podeAlmocarRodizio = true;
       let mensagemRodizio = '';
 
@@ -279,9 +320,11 @@ router.get('/aluno/:id',
         }
       }
 
-      const agora = new Date();
-      const horaAtual = agora.getHours();
-      const dataAtual = agora.toISOString().split('T')[0];
+      // ============================================
+      // 🆕 CORREÇÃO PRINCIPAL: hora e data em BRT
+      // ============================================
+      const horaAtual = getHoraAtualBR();
+      const dataAtual = getDataHojeBR();
 
       let tipoRefeicao = null;
       let horarioPermitido = false;
@@ -308,13 +351,11 @@ router.get('/aluno/:id',
         mensagemHorario = '❌ Fora do horário de refeições (Refeições: 8h-10h, 11h-13h, 14h-16h)';
       }
 
-      // 🔥 SE FOR ALMOÇO E NÃO PODE PELO RODÍZIO, BLOQUEAR
       if (tipoRefeicao === 'almoco' && !podeAlmocarRodizio) {
         horarioPermitido = false;
         mensagemHorario = `❌ ${mensagemRodizio}`;
       }
 
-      // 🔥 VERIFICAR PERFIL ALIMENTAR
       const perfilAlimentar = aluno.perfilAlimentar || 'nao_informado';
       const refeicoesPermitidas = aluno.refeicoesQueParticipa || [];
 
@@ -391,6 +432,11 @@ router.get('/aluno/:id',
           podeAlmocar: podeAlmocarRodizio,
           mensagem: mensagemRodizio
         },
+        _debug: {
+          horaBR: horaAtual,
+          dataBR: dataAtual,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
         mensagemRefeicao
       });
 
@@ -406,7 +452,7 @@ router.get('/aluno/:id',
 );
 
 // ============================================
-// 📝 REGISTRAR REFEIÇÃO DO ALUNO
+// 📝 REGISTRAR REFEIÇÃO (🆕 CORRIGIDO)
 // ============================================
 router.post('/registrar-refeicao',
   authenticateToken,
@@ -422,11 +468,12 @@ router.post('/registrar-refeicao',
         });
       }
 
-      const agora = new Date();
-      const horaAtual = agora.getHours();
-      const dataAtual = agora.toISOString().split('T')[0];
+      // ============================================
+      // 🆕 CORREÇÃO: hora e data em BRT
+      // ============================================
+      const horaAtual = getHoraAtualBR();
+      const dataAtual = getDataHojeBR();
 
-      // Validar tipo de refeição
       if (!['manha', 'almoco', 'tarde'].includes(tipoRefeicao)) {
         return res.status(400).json({
           success: false,
@@ -434,7 +481,6 @@ router.post('/registrar-refeicao',
         });
       }
 
-      // Validar horário
       let horarioPermitido = false;
       if (tipoRefeicao === 'manha' && horaAtual >= 8 && horaAtual <= 10) horarioPermitido = true;
       if (tipoRefeicao === 'almoco' && horaAtual >= 11 && horaAtual <= 13) horarioPermitido = true;
@@ -443,11 +489,10 @@ router.post('/registrar-refeicao',
       if (!horarioPermitido) {
         return res.status(400).json({
           success: false,
-          error: `Horário não permitido para ${tipoRefeicao === 'manha' ? 'LANCHE DA MANHÃ' : tipoRefeicao === 'almoco' ? 'ALMOÇO' : 'LANCHE DA TARDE'}`
+          error: `Horário não permitido para ${tipoRefeicao === 'manha' ? 'LANCHE DA MANHÃ' : tipoRefeicao === 'almoco' ? 'ALMOÇO' : 'LANCHE DA TARDE'} (hora atual: ${horaAtual}h BRT)`
         });
       }
 
-      // Buscar aluno
       const aluno = await User.findById(alunoId)
         .select('nome turma matricula fotoPerfil perfilAlimentar refeicoesQueParticipa role');
 
@@ -458,7 +503,6 @@ router.post('/registrar-refeicao',
         });
       }
 
-      // 🔥 VERIFICAR PERFIL ALIMENTAR
       const perfilAlimentar = aluno.perfilAlimentar || 'nao_informado';
       const refeicoesPermitidas = aluno.refeicoesQueParticipa || [];
 
@@ -477,7 +521,7 @@ router.post('/registrar-refeicao',
         });
       }
 
-      // 🔥 NOVA VERIFICAÇÃO: Verificar rodízio para ALMOÇO
+      // Rodízio
       if (tipoRefeicao === 'almoco' && aluno.turma && RodizioRefeicao) {
         try {
           const rodizioCheck = await RodizioRefeicao.turmaPodeAlmocarHoje(aluno.turma);
@@ -500,7 +544,7 @@ router.post('/registrar-refeicao',
         }
       }
 
-      // Verificar se já registrou esta refeição hoje
+      // Já comeu?
       const jaComeu = await Refeicao.alunoJaComeu(alunoId, tipoRefeicao, dataAtual);
       if (jaComeu) {
         return res.status(400).json({
@@ -509,7 +553,7 @@ router.post('/registrar-refeicao',
         });
       }
 
-      // Verificar limite diário
+      // Limite diário
       const refeicoesHoje = await Refeicao.countDocuments({
         alunoId,
         data: dataAtual
@@ -522,18 +566,17 @@ router.post('/registrar-refeicao',
         });
       }
 
-      // Buscar dados do coordenador
       const coordenador = await User.findById(req.userId).select('nome');
 
-      // Registrar refeição
+      // 🆕 CORREÇÃO: salva data em BRT e horário exato
       const refeicao = new Refeicao({
         alunoId: aluno._id,
         alunoNome: aluno.nome,
         alunoTurma: aluno.turma || 'Não informada',
         alunoFoto: aluno.fotoPerfil,
         tipoRefeicao,
-        horario: agora,
-        data: dataAtual,
+        horario: new Date(),
+        data: dataAtual, // 🆕 YYYY-MM-DD em BRT
         validadoPor: req.userId,
         validadoPorNome: coordenador?.nome || req.userNome || 'Coordenador',
         horarioPermitido,
@@ -542,7 +585,7 @@ router.post('/registrar-refeicao',
 
       await refeicao.save();
 
-      logger.info(`✅ Refeição registrada: ${aluno.nome} - ${tipoRefeicao}`);
+      logger.info(`✅ Refeição registrada: ${aluno.nome} - ${tipoRefeicao} (${dataAtual} ${horaAtual}h BRT)`);
 
       res.json({
         success: true,
@@ -551,12 +594,17 @@ router.post('/registrar-refeicao',
           id: refeicao._id,
           tipo: refeicao.tipoRefeicao,
           horario: refeicao.horario,
+          data: refeicao.data,
           refeicoesHoje: refeicoesHoje + 1
         },
         rodizio: tipoRefeicao === 'almoco' ? {
           verificado: true,
           autorizado: true
-        } : undefined
+        } : undefined,
+        _debug: {
+          horaBR: horaAtual,
+          dataBR: dataAtual
+        }
       });
 
     } catch (error) {
@@ -570,14 +618,15 @@ router.post('/registrar-refeicao',
 );
 
 // ============================================
-// 📊 CONSULTAR REGISTROS DO DIA
+// 📊 REGISTROS DE HOJE (🆕 CORRIGIDO)
 // ============================================
 router.get('/registros-hoje',
   authenticateToken,
   verificarCoordenacaoPatio,
   async (req, res) => {
     try {
-      const dataAtual = new Date().toISOString().split('T')[0];
+      // 🆕 Data em BRT
+      const dataAtual = getDataHojeBR();
 
       const registros = await Refeicao.find({ data: dataAtual })
         .sort({ horario: -1 })
@@ -604,7 +653,11 @@ router.get('/registros-hoje',
           horario: r.horario,
           validadoPorNome: r.validadoPorNome,
           observacao: r.observacao
-        }))
+        })),
+        _debug: {
+          dataBR: dataAtual,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        }
       });
 
     } catch (error) {
@@ -618,7 +671,7 @@ router.get('/registros-hoje',
 );
 
 // ============================================
-// 📊 CONSULTAR REGISTROS POR DATA
+// 📊 REGISTROS POR DATA
 // ============================================
 router.get('/registros/:data',
   authenticateToken,
@@ -627,7 +680,6 @@ router.get('/registros/:data',
     try {
       const { data } = req.params;
 
-      // Validar formato da data (YYYY-MM-DD)
       if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) {
         return res.status(400).json({
           success: false,
@@ -671,19 +723,18 @@ router.get('/registros/:data',
 );
 
 // ============================================
-// 📊 ESTATÍSTICAS DO DIA
+// 📊 ESTATÍSTICAS (🆕 CORRIGIDO)
 // ============================================
 router.get('/estatisticas',
   authenticateToken,
   verificarCoordenacaoPatio,
   async (req, res) => {
     try {
-      const dataAtual = new Date().toISOString().split('T')[0];
+      // 🆕 Data em BRT
+      const dataAtual = getDataHojeBR();
 
-      // Total de alunos ativos
       const totalAlunos = await User.countDocuments({ role: 'aluno', ativo: true });
 
-      // Refeições registradas hoje
       const refeicoesHoje = await Refeicao.find({ data: dataAtual }).lean();
 
       const refeicoesPorTurma = {};
@@ -695,7 +746,6 @@ router.get('/estatisticas',
         refeicoesPorTurma[r.alunoTurma].total++;
       });
 
-      // Alunos que já comeram pelo menos uma refeição hoje
       const alunosQueComeram = new Set(refeicoesHoje.map(r => r.alunoId.toString()));
 
       res.json({
@@ -705,7 +755,11 @@ router.get('/estatisticas',
         alunosQueComeram: alunosQueComeram.size,
         refeicoesHoje: refeicoesHoje.length,
         refeicoesPorTurma,
-        porcentagem: totalAlunos > 0 ? ((alunosQueComeram.size / totalAlunos) * 100).toFixed(1) : 0
+        porcentagem: totalAlunos > 0 ? ((alunosQueComeram.size / totalAlunos) * 100).toFixed(1) : 0,
+        _debug: {
+          dataBR: dataAtual,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        }
       });
 
     } catch (error) {
@@ -719,7 +773,7 @@ router.get('/estatisticas',
 );
 
 // ============================================
-// 📊 RELATÓRIO POR PERÍODO
+// 📊 RELATÓRIO POR PERÍODO (🆕 CORRIGIDO)
 // ============================================
 router.get('/relatorio',
   authenticateToken,
@@ -737,10 +791,9 @@ router.get('/relatorio',
       } else if (dataFim) {
         query.data = { $lte: dataFim };
       } else {
-        // Últimos 7 dias por padrão
-        const seteDiasAtras = new Date();
-        seteDiasAtras.setDate(seteDiasAtras.getDate() - 7);
-        query.data = { $gte: seteDiasAtras.toISOString().split('T')[0] };
+        // 🆕 Últimos 7 dias em BRT
+        const seteDiasAtras = getDataNDiasAtrasBR(7);
+        query.data = { $gte: seteDiasAtras };
       }
 
       if (turma) {
@@ -751,7 +804,6 @@ router.get('/relatorio',
         .sort({ data: -1, horario: -1 })
         .lean();
 
-      // Agrupar por data e tipo
       const porData = {};
       registros.forEach(r => {
         if (!porData[r.data]) {

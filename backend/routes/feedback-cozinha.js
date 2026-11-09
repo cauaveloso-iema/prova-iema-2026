@@ -1,5 +1,5 @@
 // ============================================================================
-// FEEDBACK COZINHA - EducaPleno
+// FEEDBACK COZINHA - EducaPleno (🆕 CORRIGIDO — FUSO BRASÍLIA)
 // ============================================================================
 const express = require('express');
 const router = express.Router();
@@ -8,6 +8,23 @@ const mongoose = require('mongoose');
 
 const FeedbackRefeicao = require('../models/FeedbackRefeicao');
 const User = require('../models/User');
+
+// ============================================================================
+// 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
+// ============================================================================
+function getDataHojeBR() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());
+}
+
+function getHoraAtualBR() {
+  return parseInt(new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit', hour12: false
+  }).format(new Date()), 10);
+}
 
 // ============================================================================
 // MIDDLEWARES
@@ -37,7 +54,16 @@ const verificarPermissao = (req, res, next) => {
 // 🏥 HEALTH CHECK
 // ============================================================================
 router.get('/health', (req, res) => {
-  res.json({ success: true, status: 'online', service: 'Feedback Cozinha', timestamp: new Date().toISOString() });
+  res.json({ 
+    success: true, status: 'online', service: 'Feedback Cozinha',
+    versao: '2.0-fuso-br',
+    _debug: {
+      hojeBR: getDataHojeBR(),
+      horaBR: getHoraAtualBR(),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    },
+    timestamp: new Date().toISOString() 
+  });
 });
 
 // ============================================================================
@@ -146,12 +172,14 @@ router.post('/enviar', async (req, res) => {
 });
 
 // ============================================================================
-// 📊 ESTATÍSTICAS
+// 🆕 ESTATÍSTICAS (CORRIGIDO — data BRT)
 // ============================================================================
 router.get('/estatisticas', authenticateToken, verificarPermissao, async (req, res) => {
   try {
     const { data, tipoRefeicao } = req.query;
-    const hoje = data || new Date().toISOString().split('T')[0];
+    
+    // 🆕 Se não vier data, usa hoje em BRT (não UTC)
+    const hoje = data || getDataHojeBR();
 
     const filtro = { data: hoje };
     if (tipoRefeicao && tipoRefeicao !== 'todos') filtro.tipoRefeicao = tipoRefeicao;
@@ -195,7 +223,12 @@ router.get('/estatisticas', authenticateToken, verificarPermissao, async (req, r
         identificados
       },
       ultimosFeedbacks: feedbacks.slice(0, 50),
-      data: hoje
+      data: hoje,
+      _debug: {
+        hojeBR: getDataHojeBR(),
+        dataConsultada: hoje,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      }
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

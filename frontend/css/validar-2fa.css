@@ -1,3 +1,12 @@
+/* ============================================================
+   VALIDAR-2FA.CSS — EducaPleno
+   Versão 3.0 — Estilos base da tela de verificação 2FA
+   Inclui: layout, componentes, biometria (WebAuthn) e pós-login
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   RESET LOCAL
+   ------------------------------------------------------------ */
 * {
     margin: 0;
     padding: 0;
@@ -29,6 +38,9 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
+/* ------------------------------------------------------------
+   HEADER
+   ------------------------------------------------------------ */
 .header {
     background: linear-gradient(135deg, #1e2b4f 0%, #2a3a6b 100%);
     padding: 36px 30px;
@@ -86,11 +98,17 @@ body {
     z-index: 1;
 }
 
+/* ------------------------------------------------------------
+   CONTENT
+   ------------------------------------------------------------ */
 .content {
     padding: 32px;
     background: white;
 }
 
+/* ------------------------------------------------------------
+   PHONE INFO
+   ------------------------------------------------------------ */
 .phone-info {
     background: #f0f4ff;
     border-radius: 16px;
@@ -127,6 +145,9 @@ body {
     font-weight: 700;
 }
 
+/* ------------------------------------------------------------
+   TIMER
+   ------------------------------------------------------------ */
 .timer {
     background: #f8fafc;
     border-radius: 40px;
@@ -147,6 +168,9 @@ body {
     font-size: 22px;
 }
 
+/* ------------------------------------------------------------
+   TABS
+   ------------------------------------------------------------ */
 .tabs {
     display: flex;
     gap: 10px;
@@ -180,6 +204,9 @@ body {
     margin-right: 8px;
 }
 
+/* ------------------------------------------------------------
+   FORM
+   ------------------------------------------------------------ */
 .form-group {
     margin-bottom: 20px;
 }
@@ -233,6 +260,9 @@ input:focus {
     cursor: not-allowed;
 }
 
+/* ------------------------------------------------------------
+   BACKUP SECTION
+   ------------------------------------------------------------ */
 .backup-section {
     margin-top: 32px;
     padding-top: 28px;
@@ -352,6 +382,9 @@ input:focus {
     box-shadow: 0 15px 25px -8px #1e4fd9;
 }
 
+/* ------------------------------------------------------------
+   FOOTER
+   ------------------------------------------------------------ */
 .footer {
     display: flex;
     justify-content: center;
@@ -376,6 +409,9 @@ input:focus {
     color: #1e2b4f;
 }
 
+/* ------------------------------------------------------------
+   ALERTS
+   ------------------------------------------------------------ */
 .alert {
     padding: 16px 20px;
     border-radius: 14px;
@@ -415,6 +451,9 @@ input:focus {
     display: none !important;
 }
 
+/* ------------------------------------------------------------
+   BADGES / BOXES
+   ------------------------------------------------------------ */
 .first-time-badge {
     background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
     color: white;
@@ -457,7 +496,9 @@ input:focus {
     gap: 12px;
 }
 
-/* ===== NOVO LAYOUT PARA MENSAGEM DE CÓDIGOS JÁ EXIBIDOS ===== */
+/* ------------------------------------------------------------
+   MESSAGE CARD (códigos já exibidos)
+   ------------------------------------------------------------ */
 .message-card {
     background: white;
     border-radius: 24px;
@@ -632,4 +673,242 @@ input:focus {
 @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
+}
+
+/* ============================================================
+   BIOMETRIA (WEBAUTHN) — MOVIDO DO INLINE DO HTML
+   ============================================================ */
+.biometric-section {
+    text-align: center;
+    margin: 20px 0;
+    padding: 22px 18px;
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    border-radius: 16px;
+    border: 1px solid #bfdbfe;
+    animation: fadeInBio 0.4s ease;
+}
+
+@keyframes fadeInBio {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.btn-biometric {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: #fff;
+    border: none;
+    padding: 14px 28px;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+    font-family: inherit;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+    width: 100%;
+    max-width: 340px;
+}
+
+.btn-biometric:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 22px rgba(37, 99, 235, 0.35);
+}
+
+.btn-biometric:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.btn-biometric:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.btn-biometric i.fa-fingerprint,
+.btn-biometric i.fa-face-smile {
+    font-size: 1.35rem;
+}
+
+.biometric-hint {
+    margin-top: 10px;
+    font-size: 0.8rem;
+    color: #475569;
+    line-height: 1.4;
+}
+
+.biometric-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 18px 0 8px;
+    color: #94a3b8;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.biometric-divider::before,
+.biometric-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #cbd5e1;
+}
+
+/* ============================================================
+   CARD "ATIVAR BIOMETRIA" (pós-login 2FA bem-sucedido)
+   ============================================================ */
+.ativar-biometria-box {
+    margin-top: 16px;
+    padding: 24px 20px;
+    background: #f0fdf4;
+    border: 2px dashed #86efac;
+    border-radius: 16px;
+    font-size: 0.95rem;
+    color: #166534;
+    animation: slideUp 0.3s ease;
+    text-align: center;
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.ativar-biometria-box strong {
+    font-size: 1.15rem;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.ativar-biometria-box strong i {
+    font-size: 1.4rem;
+    color: #15803d;
+}
+
+.ativar-biometria-box .btn-ativar {
+    background: linear-gradient(135deg, #16a34a, #15803d);
+    color: #fff;
+    border: none;
+    padding: 14px 24px;
+    border-radius: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-family: inherit;
+    transition: all 0.2s;
+    width: 100%;
+    font-size: 1rem;
+}
+
+.ativar-biometria-box .btn-ativar:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(22, 163, 74, 0.3);
+}
+
+.ativar-biometria-box .btn-ativar:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-pular {
+    background: transparent;
+    border: 1px solid #cbd5e1;
+    border-radius: 12px;
+    padding: 14px 24px;
+    font-weight: 600;
+    cursor: pointer;
+    color: #64748b;
+    font-family: inherit;
+    transition: all 0.2s;
+    width: 100%;
+    font-size: 1rem;
+}
+
+.btn-pular:hover {
+    background: #f8fafc;
+    color: #334155;
+}
+
+/* ============================================================
+   QR CODE (container do QR e chave secreta)
+   ============================================================ */
+.qr-container {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+#qrCodeDisplay {
+    width: 200px;
+    height: 200px;
+    margin: 0 auto 15px;
+    background: #f8fafc;
+    border-radius: 16px;
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #e2e8f0;
+}
+
+#qrCodeDisplay > i {
+    font-size: 60px;
+    color: #1e2b4f;
+    opacity: 0.5;
+}
+
+.qr-hint {
+    color: #4b5563;
+    font-size: 0.9rem;
+    margin-bottom: 10px;
+}
+
+.secret-box {
+    background: #f1f5f9;
+    padding: 12px;
+    border-radius: 8px;
+    font-family: monospace;
+    font-size: 14px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    border: 2px dashed #cbd5e1;
+    margin: 15px 0;
+    display: none;
+    word-break: break-all;
+}
+
+/* ============================================================
+   LINK DO APP
+   ============================================================ */
+#appDownloadLink {
+    text-align: center;
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #e2e8f0;
+}
+
+#appDownloadLink a {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    padding: 8px 20px;
+    border-radius: 30px;
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid #059669;
+    transition: all 0.3s;
+}
+
+#appDownloadLink a:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 14px rgba(5, 150, 105, 0.3);
 }

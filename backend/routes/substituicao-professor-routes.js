@@ -8,6 +8,32 @@ function getPermissaoModulo() { return require('../models/PermissaoModulo'); }
 function getUserModel() { return require('../models/User'); }
 
 // ============================================
+// 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
+// ============================================
+function getDataHojeBR() {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(new Date());
+}
+
+function getMesAtualBR() {
+    return getDataHojeBR().substring(0, 7);
+}
+
+function getDiaSemanaBR(dataStr) {
+    // 🆕 Recebe "YYYY-MM-DD" e retorna o dia da semana em BRT (0=Dom..6=Sáb)
+    const d = new Date(dataStr + 'T12:00:00.000-03:00');
+    return d.getUTCDay();
+}
+
+function formatarDataBR(dataStr) {
+    // 🆕 Recebe "YYYY-MM-DD" e retorna a data formatada pt-BR SEM risco de virar 1 dia
+    if (!dataStr) return '';
+    return new Date(dataStr + 'T12:00:00.000-03:00').toLocaleDateString('pt-BR');
+}
+
+// ============================================
 // MIDDLEWARES
 // ============================================
 const authenticateToken = async (req, res, next) => {
@@ -203,7 +229,8 @@ router.get('/turmas', authenticateToken, verificarPermissaoModulo, async (req, r
 });
 
 // ============================================
-// REGISTRAR (com suporte a "sem substituto" + múltiplos horários)
+// 🆕 REGISTRAR (com suporte a "sem substituto" + múltiplos horários)
+// CORRIGIDO: data → diaSemana agora calculado em BRT
 // ============================================
 router.post('/registrar', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
@@ -272,9 +299,10 @@ router.post('/registrar', authenticateToken, verificarPermissaoModulo, async (re
         }
         
         // ============ MONTAR DADOS ============
-        const dataObj = new Date(data + 'T12:00:00');
+        // 🆕 diaSemana calculado em BRT (antes usava getDay() que dependia do fuso do servidor)
         const diasSemana = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
-        const diaSemana = diasSemana[dataObj.getDay()];
+        const diaSemanaIndex = getDiaSemanaBR(data);
+        const diaSemana = diasSemana[diaSemanaIndex];
         const mesReferencia = data.substring(0, 7);
         
         const novaSubstituicao = new Substituicao({
@@ -366,7 +394,8 @@ router.get('/listar', authenticateToken, verificarPermissaoModulo, async (req, r
                 horarios: getHorariosDe(s),
                 horario: s.horario,
                 data: s.data,
-                dataFormatada: new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR'),
+                // 🆕 Data formatada em BRT (antes usava fuso do servidor)
+                dataFormatada: formatarDataBR(s.data),
                 diaSemana: s.diaSemana, motivo: s.motivo, motivoDetalhes: s.motivoDetalhes,
                 observacoes: s.observacoes, mesReferencia: s.mesReferencia,
                 substitutoAusente: s.substitutoAusente || false,
@@ -430,9 +459,9 @@ router.put('/:id', authenticateToken, verificarPermissaoModulo, async (req, res)
         if (data) {
             substituicao.data = data;
             substituicao.mesReferencia = data.substring(0, 7);
-            const dataObj = new Date(data + 'T12:00:00');
+            // 🆕 diaSemana calculado em BRT (antes usava getDay() com fuso do servidor)
             const dias = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
-            substituicao.diaSemana = dias[dataObj.getDay()];
+            substituicao.diaSemana = dias[getDiaSemanaBR(data)];
         }
         if (motivo) substituicao.motivo = motivo;
         if (motivoDetalhes !== undefined) substituicao.motivoDetalhes = motivoDetalhes;
@@ -474,12 +503,13 @@ router.delete('/:id', authenticateToken, verificarPermissaoModulo, async (req, r
 });
 
 // ============================================
-// DASHBOARD
+// 🆕 DASHBOARD (CORRIGIDO — MÊS PADRÃO EM BRT)
 // ============================================
 router.get('/dashboard/resumo', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const Substituicao = getSubstituicaoModel();
-        const mes = req.query.mes || new Date().toISOString().substring(0, 7);
+        // 🆕 Mês padrão em BRT (antes usava toISOString → UTC)
+        const mes = req.query.mes || getMesAtualBR();
         const filtro = { mesReferencia: mes, ativo: true };
         
         const [
@@ -519,7 +549,13 @@ router.get('/dashboard/resumo', authenticateToken, verificarPermissaoModulo, asy
         };
         
         res.json({
-            success: true, mesReferencia: mes,
+            success: true,
+            mesReferencia: mes,
+            _debug: {
+                hojeBR: getDataHojeBR(),
+                mesAtualBR: getMesAtualBR(),
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
             resumo: {
                 totalMes,
                 mediaDiaria: substituicoesPorDia.length > 0 ? (totalMes / substituicoesPorDia.length).toFixed(1) : 0,
@@ -594,7 +630,8 @@ router.get('/relatorio/gerar', authenticateToken, verificarPermissaoModulo, asyn
                 horarios: getHorariosDe(s),
                 horario: s.horario,
                 data: s.data,
-                dataFormatada: new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR'),
+                // 🆕 Data formatada em BRT
+                dataFormatada: formatarDataBR(s.data),
                 diaSemana: s.diaSemana, motivo: s.motivo,
                 motivoLabel: motivosLabels[s.motivo] || s.motivo,
                 motivoDetalhes: s.motivoDetalhes, observacoes: s.observacoes,
@@ -611,11 +648,10 @@ router.get('/relatorio/gerar', authenticateToken, verificarPermissaoModulo, asyn
 
 // ============================================================================
 // 🔥 NOVAS ROTAS: GERENCIAMENTO DE PROFESSORES PELO SETOR PEDAGÓGICO
-// (CRUD completo usando a mesma verificação de permissão do módulo)
 // ============================================================================
 
 // ============================================
-// 🔍 BUSCAR PROFESSOR POR ID (com detalhes completos)
+// 🔍 BUSCAR PROFESSOR POR ID
 // ============================================
 router.get('/professores/:id', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
@@ -740,7 +776,7 @@ router.post('/professores', authenticateToken, verificarPermissaoModulo, async (
             });
         }
         
-        // 🔥 CORREÇÃO CRÍTICA: sanitizar eixo (undefined em vez de string vazia)
+        // 🔥 CORREÇÃO CRÍTICA: sanitizar eixo
         const eixoLimpo = sanitizarEixo(eixo);
         
         console.log(`🔍 Eixo recebido: ${JSON.stringify(eixo)} → sanitizado: ${JSON.stringify(eixoLimpo)}`);
@@ -752,13 +788,13 @@ router.post('/professores', authenticateToken, verificarPermissaoModulo, async (
             cpf: cpfLimpo,
             telefone: telefone ? telefone.replace(/\D/g, '') : '',
             matricula: matricula.trim(),
-            eixo: eixoLimpo,                            // ✅ undefined se vazio
+            eixo: eixoLimpo,
             departamento: departamento || '',
             titulacao: titulacao || '',
             password: password,
             role: 'professor',
             ativo: ativo !== false,
-            forcePasswordChange: true, // Deve trocar no primeiro login
+            forcePasswordChange: true,
             passwordChangedAt: null,
             loginAttempts: 0,
             lockUntil: null,
@@ -809,7 +845,6 @@ router.post('/professores', authenticateToken, verificarPermissaoModulo, async (
     } catch (error) {
         console.error('❌ Erro ao criar professor:', error);
         
-        // Tratamento de erros específicos do Mongoose
         if (error.code === 11000) {
             const campo = Object.keys(error.keyPattern || {})[0] || 'campo';
             return res.status(400).json({ 
@@ -844,7 +879,6 @@ router.put('/professores/:id', authenticateToken, verificarPermissaoModulo, asyn
         
         console.log(`✏️ [SETOR PEDAGÓGICO] Editando professor ${id}`);
         
-        // Validar ObjectId
         if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
             return res.status(400).json({ success: false, error: 'ID inválido' });
         }
@@ -915,7 +949,7 @@ router.put('/professores/:id', authenticateToken, verificarPermissaoModulo, asyn
         if (telefone !== undefined) professor.telefone = telefone.replace(/\D/g, '');
         if (matricula !== undefined) professor.matricula = matricula.trim();
         
-        // 🔥 CORREÇÃO CRÍTICA: sanitizar eixo (undefined em vez de string vazia)
+        // 🔥 CORREÇÃO CRÍTICA: sanitizar eixo
         if (eixo !== undefined) {
             const eixoLimpo = sanitizarEixo(eixo);
             console.log(`🔍 Eixo no PUT: recebido=${JSON.stringify(eixo)} → sanitizado=${JSON.stringify(eixoLimpo)}`);
@@ -923,7 +957,6 @@ router.put('/professores/:id', authenticateToken, verificarPermissaoModulo, asyn
             if (eixoLimpo !== undefined) {
                 professor.eixo = eixoLimpo;
             } else {
-                // Se era undefined antes, não mexe. Se tinha valor, remove.
                 professor.eixo = undefined;
             }
         }
@@ -969,7 +1002,7 @@ router.put('/professores/:id', authenticateToken, verificarPermissaoModulo, asyn
 });
 
 // ============================================
-// 📚 LISTAR EIXOS DISPONÍVEIS (para dropdown do form)
+// 📚 LISTAR EIXOS DISPONÍVEIS
 // ============================================
 router.get('/eixos', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
@@ -1007,7 +1040,6 @@ router.delete('/professores/:id', authenticateToken, verificarPermissaoModulo, a
         
         console.log(`🗑️ [SETOR PEDAGÓGICO] Excluindo professor ${id}`);
         
-        // Validar ObjectId
         if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
             return res.status(400).json({ success: false, error: 'ID inválido' });
         }

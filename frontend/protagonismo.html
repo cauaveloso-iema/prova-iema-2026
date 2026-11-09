@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <!-- PWA Meta Tags -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#f97316">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -19,7 +18,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <!-- Acessibilidade -->
     <script src="js/vlibras-oficial.js"></script>
     <script src="js/acessibilidade.js"></script>
     <script src="js/toggle-buttons.js"></script>
@@ -30,14 +28,134 @@
     <script src="/js/core-security.js"></script>
 
     <link rel="stylesheet" href="css/protagonismo.css">
+
+    <style>
+        .aniversario-card {
+            background: white;
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-left: 4px solid #ec4899;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            transition: transform 0.2s;
+        }
+        .aniversario-card:hover { transform: translateX(4px); }
+        .aniversario-avatar {
+            width: 45px; height: 45px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ec4899, #be185d);
+            color: white;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold;
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+        .aniversario-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .aniversario-info { flex: 1; min-width: 0; }
+        .aniversario-nome { font-weight: 600; color: #1f2937; font-size: 14px; }
+        .aniversario-detalhes { font-size: 12px; color: #6b7280; }
+        .aniversario-dia {
+            background: #fce7f3;
+            color: #be185d;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 13px;
+            flex-shrink: 0;
+        }
+        .mes-header {
+            background: linear-gradient(135deg, #ec4899, #be185d);
+            color: white;
+            padding: 10px 16px;
+            border-radius: 10px 10px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .mes-body {
+            background: #fdf2f8;
+            padding: 12px;
+            border-radius: 0 0 10px 10px;
+            margin-bottom: 12px;
+        }
+        .proximo-aniversario-card {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            box-shadow: 0 2px 12px rgba(236,72,153,0.15);
+            border-top: 4px solid #ec4899;
+        }
+        .proximo-aniversario-card .dias {
+            font-size: 32px;
+            font-weight: 800;
+            color: #ec4899;
+            line-height: 1;
+        }
+        .proximo-aniversario-card .dias-label {
+            font-size: 11px;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        .proximo-aniversario-card .nome {
+            font-weight: 700;
+            color: #1f2937;
+            font-size: 15px;
+            margin-top: 8px;
+        }
+        .proximo-aniversario-card .data {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 4px;
+        }
+        .badge-hoje {
+            background: #10b981;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 700;
+        }
+        .badge-manual {
+            background: #f59e0b;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 700;
+        }
+        .badge-auto {
+            background: #3b82f6;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 700;
+        }
+        .config-section-title {
+            font-weight: 600;
+            color: #be185d;
+            font-size: 14px;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #fce7f3;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
         <!-- ============================================= -->
-        <!-- NOVO HEADER: RELÓGIO À ESQUERDA / PERFIL À DIREITA -->
+        <!-- HEADER: RELÓGIO À ESQUERDA / PERFIL À DIREITA -->
         <!-- ============================================= -->
         <div class="header-top">
-            
+
             <!-- Lado Esquerdo: Relógio -->
             <div class="relogio-card">
                 <i class="far fa-clock"></i>
@@ -46,11 +164,11 @@
                     <div class="relogio-data" id="relogioData">Carregando...</div>
                 </div>
             </div>
-            
+
             <!-- Lado Direito: Notificações + Perfil -->
             <div class="d-flex align-items-center gap-3">
 
-                <!-- 🔔 SINO OCULTO (aberto pelo menu do usuário) -->
+                <!-- SINO OCULTO -->
                 <div class="notificacoes-container" id="containerSinoOriginal" style="position: relative;">
                     <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn"
                             title="Notificações e Lembretes" style="display: none;">
@@ -103,7 +221,6 @@
                         </div>
                     </div>
                 </div>
-                <!-- FIM DO SINO -->
 
                 <!-- Perfil do Usuário -->
                 <div class="user-menu-container" id="userMenuContainer">
@@ -139,6 +256,12 @@
                             <div class="icon-box bg-blue"><i class="fas fa-bell"></i></div>
                             <div class="item-text">Notificações</div>
                             <span class="badge-count" id="menuNotifBadge" style="display: none;">0</span>
+                        </div>
+
+                        <!-- NOVO: Aniversários -->
+                        <div class="dropdown-item" onclick="irParaAniversarios(event)" title="Aniversários">
+                            <div class="icon-box" style="background:#ec4899;"><i class="fas fa-birthday-cake"></i></div>
+                            <div class="item-text">Aniversários</div>
                         </div>
 
                         <div class="dropdown-item" onclick="abrirModalQRCode()" title="Gerar QR Code Público">
@@ -231,6 +354,11 @@
                         </button>
                     </li>
                     <li class="nav-item">
+                        <button class="nav-link" id="aba-aniversarios" data-bs-toggle="tab" data-bs-target="#tab-aniversarios" type="button">
+                            <i class="fas fa-birthday-cake"></i> Aniversários
+                        </button>
+                    </li>
+                    <li class="nav-item">
                         <button class="nav-link" id="aba-config" data-bs-toggle="tab" data-bs-target="#tab-config" type="button">
                             <i class="fas fa-cog"></i> Configurações
                         </button>
@@ -239,9 +367,7 @@
 
                 <div class="tab-content mt-3">
 
-                    <!-- ================================
-                         ABA DASHBOARD
-                    ================================= -->
+                    <!-- DASHBOARD -->
                     <div class="tab-pane fade show active" id="tab-dashboard">
                         <div class="stats-grid">
                             <div class="stat-card">
@@ -264,12 +390,18 @@
                                 <div class="stat-number" id="totalCandidatos">0</div>
                                 <div class="stat-label">Candidatos</div>
                             </div>
-                            <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div class="stat-card">
+                                <i class="fas fa-birthday-cake fa-2x"></i>
+                                <div class="stat-number" id="totalAniversarios">0</div>
+                                <div class="stat-label">Aniversários</div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center mb-3 mt-3">
                             <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i> Visão Geral</h5>
                             <button class="btn btn-danger btn-sm" onclick="exportarPDFDashboard()">
                                 <i class="fas fa-file-pdf"></i> Exportar PDF
                             </button>
-                        </div>
                         </div>
 
                         <div class="row">
@@ -318,9 +450,7 @@
                         </div>
                     </div>
 
-                    <!-- ================================
-                         ABA CLUBES
-                    ================================= -->
+                    <!-- CLUBES -->
                     <div class="tab-pane fade" id="tab-clubes">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h5><i class="fas fa-users me-2"></i> Gerenciar Clubes</h5>
@@ -342,9 +472,7 @@
                         </div>
                     </div>
 
-                    <!-- ================================
-                         ABA INSCRIÇÕES
-                    ================================= -->
+                    <!-- INSCRIÇÕES -->
                     <div class="tab-pane fade" id="tab-inscricoes">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h5 class="mb-0"><i class="fas fa-clipboard-list me-2"></i> Inscrições Recebidas</h5>
@@ -395,9 +523,7 @@
                         </div>
                     </div>
 
-                    <!-- ================================
-                         ABA TUTORIA
-                    ================================= -->
+                    <!-- TUTORIA -->
                     <div class="tab-pane fade" id="tab-tutoria">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <div>
@@ -426,9 +552,7 @@
                         <div id="listaTutores"></div>
                     </div>
 
-                    <!-- ================================
-                         ABA CANDIDATOS
-                    ================================= -->
+                    <!-- CANDIDATOS -->
                     <div class="tab-pane fade" id="tab-candidatos">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h5 class="mb-0"><i class="fas fa-vote-yea me-2"></i> Candidatos a Líder/Vice</h5>
@@ -462,9 +586,7 @@
                         <div id="listaCandidatos"></div>
                     </div>
 
-                    <!-- ================================
-                         ABA ELEIÇÃO
-                    ================================= -->
+                    <!-- ELEIÇÃO -->
                     <div class="tab-pane fade" id="tab-eleicao">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h5 class="mb-0"><i class="fas fa-trophy me-2"></i> Resultados da Eleição</h5>
@@ -486,9 +608,67 @@
                         <div id="resultadosEleicao"></div>
                     </div>
 
-                    <!-- ================================
-                         ABA CONFIGURAÇÕES
-                    ================================= -->
+                    <!-- ANIVERSÁRIOS -->
+                    <div class="tab-pane fade" id="tab-aniversarios">
+                        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                            <h5 class="mb-0"><i class="fas fa-birthday-cake me-2" style="color:#ec4899;"></i> Aniversários</h5>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button class="btn btn-success btn-sm" onclick="sincronizarAniversarios()" title="Buscar datas de nascimento do banco">
+                                    <i class="fas fa-sync-alt"></i> Sincronizar do Banco
+                                </button>
+                                <button class="btn btn-primary btn-sm" onclick="abrirModalAniversario()">
+                                    <i class="fas fa-plus"></i> Novo Aniversário
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" onclick="abrirConfigAniversarios()">
+                                    <i class="fas fa-cog"></i> Configurações
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Próximos aniversários -->
+                        <div class="card mb-4" id="cardProximosAniversarios">
+                            <div class="card-header" style="background: linear-gradient(135deg, #ec4899, #be185d); color: white;">
+                                <i class="fas fa-hourglass-half me-2"></i> Próximos Aniversários (60 dias)
+                            </div>
+                            <div class="card-body" id="listaProximosAniversarios">
+                                <p class="text-muted mb-0">Carregando...</p>
+                            </div>
+                        </div>
+
+                        <!-- Filtros -->
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label">Buscar por nome</label>
+                                <input type="text" id="buscaAniversario" class="form-control"
+                                       placeholder="Digite o nome..." oninput="carregarAniversarios()">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Filtrar por mês</label>
+                                <select id="filtroMesAniversario" class="form-select" onchange="carregarAniversarios()">
+                                    <option value="">Todos os meses</option>
+                                    <option value="1">Janeiro</option>
+                                    <option value="2">Fevereiro</option>
+                                    <option value="3">Março</option>
+                                    <option value="4">Abril</option>
+                                    <option value="5">Maio</option>
+                                    <option value="6">Junho</option>
+                                    <option value="7">Julho</option>
+                                    <option value="8">Agosto</option>
+                                    <option value="9">Setembro</option>
+                                    <option value="10">Outubro</option>
+                                    <option value="11">Novembro</option>
+                                    <option value="12">Dezembro</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Lista por mês -->
+                        <div id="listaAniversariosPorMes">
+                            <p class="text-muted text-center">Carregando aniversários...</p>
+                        </div>
+                    </div>
+
+                    <!-- CONFIGURAÇÕES -->
                     <div class="tab-pane fade" id="tab-config">
                         <h5><i class="fas fa-cog me-2"></i> Configurações do Protagonismo</h5>
 
@@ -554,15 +734,29 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Config de Aniversários inline -->
+                        <div class="row mt-4">
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-header" style="background: linear-gradient(135deg, #ec4899, #be185d); color: white;">
+                                        <i class="fas fa-birthday-cake me-2"></i> Configurações de Aniversários
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="configAniversariosInline">
+                                            <p class="text-muted">Carregando configurações...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- ================================
-         MODAL CLUBE
-    ================================= -->
+    <!-- MODAL CLUBE -->
     <div class="modal fade" id="modalClube" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
@@ -648,9 +842,7 @@
         </div>
     </div>
 
-    <!-- ================================
-         MODAL TUTOR
-    ================================= -->
+    <!-- MODAL TUTOR -->
     <div class="modal fade" id="modalTutor" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -696,9 +888,7 @@
         </div>
     </div>
 
-    <!-- ================================
-         MODAL CANDIDATO
-    ================================= -->
+    <!-- MODAL CANDIDATO -->
     <div class="modal fade" id="modalCandidato" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -750,9 +940,7 @@
         </div>
     </div>
 
-    <!-- ================================
-         MODAL QR CODE
-    ================================= -->
+    <!-- MODAL QR CODE -->
     <div class="modal fade" id="modalQRCode" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
@@ -818,9 +1006,190 @@
         </div>
     </div>
 
+    <!-- MODAL NOVO ANIVERSÁRIO -->
+    <div class="modal fade" id="modalAniversario" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header" style="background: linear-gradient(135deg, #ec4899, #be185d); color: white;">
+                    <h5 class="modal-title"><i class="fas fa-birthday-cake"></i> <span id="modalAniversarioTitulo">Novo Aniversário</span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" style="filter: brightness(0) invert(1);"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formAniversario">
+                        <input type="hidden" id="aniversarioId">
+                        <input type="hidden" id="aniversarioUsuarioId">
+
+                        <!-- 🔍 PICKER DE USUÁRIO DO BANCO (SELECT + BUSCA) -->
+                        <div class="mb-4" style="background:#fdf2f8;padding:14px;border-radius:10px;border:2px dashed #ec4899;">
+                            <label class="form-label" style="font-weight:600;color:#be185d;">
+                                <i class="fas fa-users me-1"></i> Selecionar perfil do banco (opcional)
+                            </label>
+                            
+                            <select id="selectUsuarioAniversario" class="form-select mb-2" onchange="selecionarPerfilPorSelect(this.value)">
+                                <option value="">Carregando perfis...</option>
+                            </select>
+
+                            <div class="d-flex align-items-center gap-2 mt-2">
+                                <hr class="flex-grow-1 m-0">
+                                <small class="text-muted text-nowrap">ou busque digitando</small>
+                                <hr class="flex-grow-1 m-0">
+                            </div>
+
+                            <input type="text" id="buscaUsuarioAniversario" class="form-control mt-2"
+                                placeholder="Digite nome, email ou matrícula..."
+                                autocomplete="off">
+                            <small class="text-muted d-block mt-1">
+                                Selecione um perfil para preencher automaticamente. Deixe em branco para cadastro manual.
+                            </small>
+                            <div id="resultadosBuscaUsuario" class="list-group mt-2"
+                                style="max-height:200px;overflow-y:auto;display:none;"></div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Nome <span class="text-danger">*</span></label>
+                            <input type="text" id="aniversarioNome" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Data de Nascimento <span class="text-danger">*</span></label>
+                            <input type="date" id="aniversarioData" class="form-control" required>
+                            <small class="text-muted">O mês e dia serão extraídos automaticamente.</small>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">E-mail</label>
+                                <input type="email" id="aniversarioEmail" class="form-control">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Telefone</label>
+                                <input type="tel" id="aniversarioTelefone" class="form-control">
+                            </div>
+                        </div>
+                        
+                        <!-- CAMPOS OPCIONAIS (aluno) -->
+                        <div class="row" id="camposAlunoAniversario">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Turma <small class="text-muted">(opcional)</small></label>
+                                <input type="text" id="aniversarioTurma" class="form-control">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Curso <small class="text-muted">(opcional)</small></label>
+                                <input type="text" id="aniversarioCurso" class="form-control">
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="salvarAniversario()">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CONFIG ANIVERSÁRIOS -->
+    <div class="modal fade" id="modalConfigAniversarios" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header" style="background: linear-gradient(135deg, #ec4899, #be185d); color: white;">
+                    <h5 class="modal-title"><i class="fas fa-cog"></i> Configurações de Aniversários</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" style="filter: brightness(0) invert(1);"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="config-section-title">
+                        <i class="fas fa-clock me-2"></i> Quando avisar
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="cfgAnivAvisarNoDia">
+                                <label class="form-check-label" for="cfgAnivAvisarNoDia">
+                                    <strong>Avisar no dia do aniversário</strong>
+                                </label>
+                            </div>
+                            <small class="text-muted">Notifica no dia do aniversário no horário definido abaixo.</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Horário de envio no dia</label>
+                            <input type="time" id="cfgAnivHorario" class="form-control">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="cfgAnivAvisarAntecedencia">
+                                <label class="form-check-label" for="cfgAnivAvisarAntecedencia">
+                                    <strong>Avisar com antecedência</strong>
+                                </label>
+                            </div>
+                            <small class="text-muted">Envia um lembrete antes do aniversário.</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Minutos antes</label>
+                            <input type="number" id="cfgAnivMinutos" class="form-control" min="5" max="10080" value="60">
+                            <small class="text-muted">Ex: 30 = 30 minutos antes; 1440 = 1 dia antes.</small>
+                        </div>
+                    </div>
+
+                    <div class="config-section-title mt-4">
+                        <i class="fas fa-users me-2"></i> Quem notificar
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="cfgAnivNotifAniversariante">
+                                <label class="form-check-label" for="cfgAnivNotifAniversariante">Aniversariante</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="cfgAnivNotifProtagonistas">
+                                <label class="form-check-label" for="cfgAnivNotifProtagonistas">Protagonistas</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="cfgAnivNotifAdmins">
+                                <label class="form-check-label" for="cfgAnivNotifAdmins">Admins</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="config-section-title mt-4">
+                        <i class="fas fa-envelope me-2"></i> Canais extras
+                    </div>
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="cfgAnivEnviarEmail">
+                        <label class="form-check-label" for="cfgAnivEnviarEmail">Enviar também por e-mail</label>
+                    </div>
+
+                    <div class="config-section-title mt-4">
+                        <i class="fas fa-comment-alt me-2"></i> Mensagem padrão
+                    </div>
+                    <div class="mb-3">
+                        <textarea id="cfgAnivMensagem" class="form-control" rows="3"
+                                  placeholder="Use {nome} para o nome do aniversariante"></textarea>
+                        <small class="text-muted">Exemplo: "🎉 Feliz aniversário, {nome}! Que seu dia seja especial!"</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="salvarConfigAniversarios()">
+                        <i class="fas fa-save"></i> Salvar Configurações
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="js/protagonismo.js"></script>
     <script src="js/protagonismo-header.js"></script>
+
+    <!-- Scripts de aniversários -->
+    <script src="js/protagonismo-aniversarios.js"></script>
 
     <!-- Escalonamento Mobile -->
     <script>
@@ -847,7 +1216,6 @@
         })();
     </script>
 
-    <!-- Service Worker -->
     <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(registrations => {

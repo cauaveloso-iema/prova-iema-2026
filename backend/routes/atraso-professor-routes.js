@@ -4,6 +4,40 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 
 // ============================================
+// 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
+// ============================================
+/**
+ * Retorna a data ATUAL no fuso de Brasília (America/Sao_Paulo)
+ * no formato YYYY-MM-DD, independente do fuso do servidor.
+ */
+function getDataHojeBR() {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).format(new Date());
+}
+
+/**
+ * Retorna o MÊS ATUAL no fuso de Brasília (YYYY-MM).
+ */
+function getMesAtualBR() {
+    return getDataHojeBR().substring(0, 7);
+}
+
+/**
+ * Valida se uma string "YYYY-MM-DD" é uma data válida.
+ */
+function isDataValida(dataStr) {
+    if (!dataStr || typeof dataStr !== 'string') return false;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dataStr)) return false;
+    const d = new Date(dataStr + 'T12:00:00.000Z');
+    if (isNaN(d.getTime())) return false;
+    return d.toISOString().substring(0, 10) === dataStr;
+}
+
+// ============================================
 // HELPERS
 // ============================================
 function getAtrasoModel() { return require('../models/AtrasoProfessor'); }
@@ -44,7 +78,7 @@ const verificarPermissaoModulo = async (req, res, next) => {
         
         const PermissaoModulo = getPermissaoModulo();
         const permissao = await PermissaoModulo.findOne({ 
-            modulo: 'substituicao_professores_setor_pedagogico', // Reutiliza a mesma permissão
+            modulo: 'substituicao_professores_setor_pedagogico',
             ativo: true
         });
         
@@ -140,7 +174,7 @@ router.get('/turmas', authenticateToken, verificarPermissaoModulo, async (req, r
 });
 
 // ============================================
-// ROTA: REGISTRAR ATRASO
+// ROTA: REGISTRAR ATRASO (🆕 valida data futura)
 // ============================================
 router.post('/registrar', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
@@ -166,6 +200,20 @@ router.post('/registrar', authenticateToken, verificarPermissaoModulo, async (re
         
         if (!data) {
             return res.status(400).json({ success: false, error: 'Informe a data' });
+        }
+        
+        // 🆕 Valida formato da data
+        if (!isDataValida(data)) {
+            return res.status(400).json({ success: false, error: 'Data inválida. Use o formato YYYY-MM-DD.' });
+        }
+        
+        // 🆕 Bloqueia data futura (usa fuso BRT)
+        const hojeBR = getDataHojeBR();
+        if (data > hojeBR) {
+            return res.status(400).json({ 
+                success: false, 
+                error: `Não é permitido registrar atraso com data futura. Hoje é ${hojeBR.split('-').reverse().join('/')}.` 
+            });
         }
         
         if (!horario || horario < 1 || horario > 9) {
@@ -329,7 +377,240 @@ router.get('/listar', authenticateToken, verificarPermissaoModulo, async (req, r
 });
 
 // ============================================
-// ROTA: BUSCAR ATRASO POR ID
+// 🆕 ROTA: DASHBOARD - RESUMO (movida para cima de /:id)
+// ============================================
+router.get('/dashboard/resumo', authenticateToken, verificarPermissaoModulo, async (req, res) => {
+    try {
+        const Atraso = getAtrasoModel();
+        
+        // 🆕 CORREÇÃO: usa mês atual no fuso BRT (não UTC)
+        const mes = req.query.mes || getMesAtualBR();
+        
+        // 🆕 Valida formato do mês (YYYY-MM)
+        if (!/^\d{4}-\d{2}$/.test(mes)) {
+            return res.status(400).json({ success: false, error: 'Mês inválido. Use o formato YYYY-MM.' });
+        }
+        
+        const filtro = { mesReferencia: mes, ativo: true };
+        
+        const [
+            totalMes,
+            porMotivo,
+            porProfessor,
+            porHorario,
+            atrasosPorDia,
+            ultimosAtrasos,
+            porTurma,
+            totalMinutos
+        ] = await Promise.all([
+            Atraso.countDocuments(filtro),
+            
+            Atraso.aggregate([
+                { $match: filtro },
+                { $group: { _id: '$motivo', count: { $sum: 1 } } },
+                { $sort: { count: -1 } }
+            ]),
+            
+            Atraso.aggregate([
+                { $match: filtro },
+                {
+                    $group: {
+                        _id: '$professorId',
+                        nome: { $first: '$professorNome' },
+                        eixo: { $first: '$professorEixo' },
+                        matricula: { $first: '$professorMatricula' },
+                        count: { $sum: 1 },
+                        totalMinutos: { $sum: '$minutosAtraso' }
+                    }
+                },
+                { $sort: { count: -1 } },
+                { $limit: 10 }
+            ]),
+            
+            Atraso.aggregate([
+                { $match: filtro },
+                { $group: { _id: '$horario', count: { $sum: 1 } } },
+                { $sort: { _id: 1 } }
+            ]),
+            
+            Atraso.aggregate([
+                { $match: filtro },
+                { $group: { _id: '$data', count: { $sum: 1 } } },
+                { $sort: { _id: 1 } }
+            ]),
+            
+            Atraso.find(filtro)
+                .sort({ createdAt: -1 })
+                .limit(10)
+                .lean(),
+            
+            Atraso.aggregate([
+                { $match: { ...filtro, turma: { $ne: '', $exists: true } } },
+                { $group: { _id: '$turma', count: { $sum: 1 } } },
+                { $sort: { count: -1 } },
+                { $limit: 15 }
+            ]),
+            
+            Atraso.aggregate([
+                { $match: filtro },
+                { $group: { _id: null, total: { $sum: '$minutosAtraso' } } }
+            ])
+        ]);
+        
+        const diasComAtraso = atrasosPorDia.length || 1;
+        const mediaDiaria = (totalMes / diasComAtraso).toFixed(1);
+        
+        const totalMin = totalMinutos[0]?.total || 0;
+        const horas = Math.floor(totalMin / 60);
+        const mins = totalMin % 60;
+        const totalFormatado = horas > 0 ? `${horas}h ${mins}min` : `${mins}min`;
+        
+        res.json({
+            success: true,
+            mesReferencia: mes,
+            _debug: {
+                mesAtualBR: getMesAtualBR(),
+                hojeBR: getDataHojeBR()
+            },
+            resumo: {
+                totalMes,
+                mediaDiaria,
+                totalMinutos: totalMin,
+                totalFormatado
+            },
+            porMotivo: porMotivo.map(m => ({
+                motivo: m._id,
+                label: MOTIVOS_LABELS[m._id] || m._id,
+                count: m.count
+            })),
+            professoresMaisAtrasam: porProfessor.map(p => ({
+                id: p._id,
+                nome: p.nome,
+                eixo: p.eixo,
+                matricula: p.matricula,
+                count: p.count,
+                totalMinutos: p.totalMinutos
+            })),
+            porHorario: porHorario.map(h => ({
+                horario: h._id,
+                count: h.count
+            })),
+            atrasosPorDia: atrasosPorDia.map(d => ({
+                data: d._id,
+                count: d.count
+            })),
+            porTurma: porTurma.map(t => ({
+                turma: t._id || 'Sem turma',
+                count: t.count
+            })),
+            ultimosAtrasos: ultimosAtrasos.map(a => ({
+                id: a._id,
+                professorNome: a.professorNome,
+                professorEixo: a.professorEixo,
+                data: a.data,
+                dataFormatada: new Date(a.data + 'T12:00:00').toLocaleDateString('pt-BR'),
+                horario: a.horario,
+                minutosAtraso: a.minutosAtraso,
+                motivo: a.motivo,
+                motivoLabel: MOTIVOS_LABELS[a.motivo] || a.motivo,
+                registradoEm: a.registradoEm
+            }))
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro no dashboard de atrasos:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================
+// 🆕 ROTA: RELATÓRIO (movida para cima de /:id)
+// ============================================
+router.get('/relatorio/gerar', authenticateToken, verificarPermissaoModulo, async (req, res) => {
+    try {
+        const Atraso = getAtrasoModel();
+        const {
+            mes,
+            dataInicio,
+            dataFim,
+            professorId,
+            motivo
+        } = req.query;
+        
+        let filtro = { ativo: true };
+        
+        if (mes) filtro.mesReferencia = mes;
+        
+        if (dataInicio || dataFim) {
+            filtro.data = {};
+            if (dataInicio) filtro.data.$gte = dataInicio;
+            if (dataFim) filtro.data.$lte = dataFim;
+        }
+        
+        if (professorId) filtro.professorId = professorId;
+        if (motivo) filtro.motivo = motivo;
+        
+        const atrasos = await Atraso.find(filtro)
+            .sort({ data: -1, horario: 1 })
+            .lean();
+        
+        // Estatísticas
+        const porMotivo = {};
+        const porProfessor = {};
+        const porHorario = {};
+        let totalMinutos = 0;
+        
+        atrasos.forEach(a => {
+            const labelMotivo = MOTIVOS_LABELS[a.motivo] || a.motivo;
+            porMotivo[labelMotivo] = (porMotivo[labelMotivo] || 0) + 1;
+            porProfessor[a.professorNome] = (porProfessor[a.professorNome] || 0) + 1;
+            porHorario[a.horario] = (porHorario[a.horario] || 0) + 1;
+            totalMinutos += a.minutosAtraso || 0;
+        });
+        
+        const horas = Math.floor(totalMinutos / 60);
+        const mins = totalMinutos % 60;
+        const totalFormatado = horas > 0 ? `${horas}h ${mins}min` : `${mins}min`;
+        
+        res.json({
+            success: true,
+            total: atrasos.length,
+            totalMinutos,
+            totalFormatado,
+            estatisticas: {
+                porMotivo,
+                porProfessor,
+                porHorario
+            },
+            atrasos: atrasos.map(a => ({
+                id: a._id,
+                professorNome: a.professorNome,
+                professorEixo: a.professorEixo,
+                professorMatricula: a.professorMatricula,
+                data: a.data,
+                dataFormatada: new Date(a.data + 'T12:00:00').toLocaleDateString('pt-BR'),
+                diaSemana: a.diaSemana,
+                horario: a.horario,
+                horarioChegada: a.horarioChegada,
+                minutosAtraso: a.minutosAtraso,
+                turma: a.turma,
+                observacoes: a.observacoes,
+                motivo: a.motivo,
+                motivoLabel: MOTIVOS_LABELS[a.motivo] || a.motivo,
+                motivoDetalhes: a.motivoDetalhes,
+                registradoPor: a.registradoPorNome,
+                registradoEm: a.registradoEm
+            }))
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao gerar relatório de atrasos:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================
+// ROTA: BUSCAR ATRASO POR ID (deve vir DEPOIS das rotas específicas)
 // ============================================
 router.get('/:id', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
@@ -347,7 +628,7 @@ router.get('/:id', authenticateToken, verificarPermissaoModulo, async (req, res)
 });
 
 // ============================================
-// ROTA: EDITAR ATRASO
+// ROTA: EDITAR ATRASO (🆕 valida data futura)
 // ============================================
 router.put('/:id', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
@@ -367,6 +648,21 @@ router.put('/:id', authenticateToken, verificarPermissaoModulo, async (req, res)
         
         if (!atraso) {
             return res.status(404).json({ success: false, error: 'Atraso não encontrado' });
+        }
+        
+        // 🆕 Valida data se foi alterada
+        if (data) {
+            if (!isDataValida(data)) {
+                return res.status(400).json({ success: false, error: 'Data inválida. Use o formato YYYY-MM-DD.' });
+            }
+            
+            const hojeBR = getDataHojeBR();
+            if (data > hojeBR) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: `Não é permitido registrar atraso com data futura. Hoje é ${hojeBR.split('-').reverse().join('/')}.` 
+                });
+            }
         }
         
         // Verificar duplicidade se mudou data/horário
@@ -442,240 +738,6 @@ router.delete('/:id', authenticateToken, verificarPermissaoModulo, async (req, r
         res.json({ success: true, message: 'Atraso excluído com sucesso!' });
         
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-// ============================================
-// ROTA: DASHBOARD - RESUMO
-// ============================================
-router.get('/dashboard/resumo', authenticateToken, verificarPermissaoModulo, async (req, res) => {
-    try {
-        const Atraso = getAtrasoModel();
-        const mes = req.query.mes || new Date().toISOString().substring(0, 7);
-        const filtro = { mesReferencia: mes, ativo: true };
-        
-        const [
-            totalMes,
-            porMotivo,
-            porProfessor,
-            porHorario,
-            atrasosPorDia,
-            ultimosAtrasos,
-            porTurma,
-            totalMinutos
-        ] = await Promise.all([
-            // Total do mês
-            Atraso.countDocuments(filtro),
-            
-            // Por motivo
-            Atraso.aggregate([
-                { $match: filtro },
-                { $group: { _id: '$motivo', count: { $sum: 1 } } },
-                { $sort: { count: -1 } }
-            ]),
-            
-            // Professores que mais atrasaram
-            Atraso.aggregate([
-                { $match: filtro },
-                {
-                    $group: {
-                        _id: '$professorId',
-                        nome: { $first: '$professorNome' },
-                        eixo: { $first: '$professorEixo' },
-                        matricula: { $first: '$professorMatricula' },
-                        count: { $sum: 1 },
-                        totalMinutos: { $sum: '$minutosAtraso' }
-                    }
-                },
-                { $sort: { count: -1 } },
-                { $limit: 10 }
-            ]),
-            
-            // Por horário
-            Atraso.aggregate([
-                { $match: filtro },
-                { $group: { _id: '$horario', count: { $sum: 1 } } },
-                { $sort: { _id: 1 } }
-            ]),
-            
-            // Por dia
-            Atraso.aggregate([
-                { $match: filtro },
-                { $group: { _id: '$data', count: { $sum: 1 } } },
-                { $sort: { _id: 1 } }
-            ]),
-            
-            // Últimos atrasos
-            Atraso.find(filtro)
-                .sort({ createdAt: -1 })
-                .limit(10)
-                .lean(),
-            
-            // Por turma
-            Atraso.aggregate([
-                { $match: { ...filtro, turma: { $ne: '', $exists: true } } },
-                { $group: { _id: '$turma', count: { $sum: 1 } } },
-                { $sort: { count: -1 } },
-                { $limit: 15 }
-            ]),
-            
-            // Total de minutos
-            Atraso.aggregate([
-                { $match: filtro },
-                { $group: { _id: null, total: { $sum: '$minutosAtraso' } } }
-            ])
-        ]);
-        
-        // Calcular média diária
-        const diasComAtraso = atrasosPorDia.length || 1;
-        const mediaDiaria = (totalMes / diasComAtraso).toFixed(1);
-        
-        // Total de minutos formatado
-        const totalMin = totalMinutos[0]?.total || 0;
-        const horas = Math.floor(totalMin / 60);
-        const mins = totalMin % 60;
-        const totalFormatado = horas > 0 ? `${horas}h ${mins}min` : `${mins}min`;
-        
-        res.json({
-            success: true,
-            mesReferencia: mes,
-            resumo: {
-                totalMes,
-                mediaDiaria,
-                totalMinutos: totalMin,
-                totalFormatado
-            },
-            porMotivo: porMotivo.map(m => ({
-                motivo: m._id,
-                label: MOTIVOS_LABELS[m._id] || m._id,
-                count: m.count
-            })),
-            professoresMaisAtrasam: porProfessor.map(p => ({
-                id: p._id,
-                nome: p.nome,
-                eixo: p.eixo,
-                matricula: p.matricula,
-                count: p.count,
-                totalMinutos: p.totalMinutos
-            })),
-            porHorario: porHorario.map(h => ({
-                horario: h._id,
-                count: h.count
-            })),
-            atrasosPorDia: atrasosPorDia.map(d => ({
-                data: d._id,
-                count: d.count
-            })),
-            porTurma: porTurma.map(t => ({
-                turma: t._id || 'Sem turma',
-                count: t.count
-            })),
-            ultimosAtrasos: ultimosAtrasos.map(a => ({
-                id: a._id,
-                professorNome: a.professorNome,
-                professorEixo: a.professorEixo,
-                data: a.data,
-                dataFormatada: new Date(a.data + 'T12:00:00').toLocaleDateString('pt-BR'),
-                horario: a.horario,
-                minutosAtraso: a.minutosAtraso,
-                motivo: a.motivo,
-                motivoLabel: MOTIVOS_LABELS[a.motivo] || a.motivo,
-                registradoEm: a.registradoEm
-            }))
-        });
-        
-    } catch (error) {
-        console.error('❌ Erro no dashboard de atrasos:', error);
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-// ============================================
-// ROTA: RELATÓRIO
-// ============================================
-router.get('/relatorio/gerar', authenticateToken, verificarPermissaoModulo, async (req, res) => {
-    try {
-        const Atraso = getAtrasoModel();
-        const {
-            mes,
-            dataInicio,
-            dataFim,
-            professorId,
-            motivo
-        } = req.query;
-        
-        let filtro = { ativo: true };
-        
-        if (mes) filtro.mesReferencia = mes;
-        
-        if (dataInicio || dataFim) {
-            filtro.data = {};
-            if (dataInicio) filtro.data.$gte = dataInicio;
-            if (dataFim) filtro.data.$lte = dataFim;
-        }
-        
-        if (professorId) filtro.professorId = professorId;
-        if (motivo) filtro.motivo = motivo;
-        
-        const atrasos = await Atraso.find(filtro)
-            .sort({ data: -1, horario: 1 })
-            .lean();
-        
-        // Estatísticas
-        const porMotivo = {};
-        const porProfessor = {};
-        const porHorario = {};
-        let totalMinutos = 0;
-        
-        atrasos.forEach(a => {
-            const labelMotivo = MOTIVOS_LABELS[a.motivo] || a.motivo;
-            porMotivo[labelMotivo] = (porMotivo[labelMotivo] || 0) + 1;
-            
-            porProfessor[a.professorNome] = (porProfessor[a.professorNome] || 0) + 1;
-            
-            porHorario[a.horario] = (porHorario[a.horario] || 0) + 1;
-            
-            totalMinutos += a.minutosAtraso || 0;
-        });
-        
-        const horas = Math.floor(totalMinutos / 60);
-        const mins = totalMinutos % 60;
-        const totalFormatado = horas > 0 ? `${horas}h ${mins}min` : `${mins}min`;
-        
-        res.json({
-            success: true,
-            total: atrasos.length,
-            totalMinutos,
-            totalFormatado,
-            estatisticas: {
-                porMotivo,
-                porProfessor,
-                porHorario
-            },
-            atrasos: atrasos.map(a => ({
-                id: a._id,
-                professorNome: a.professorNome,
-                professorEixo: a.professorEixo,
-                professorMatricula: a.professorMatricula,
-                data: a.data,
-                dataFormatada: new Date(a.data + 'T12:00:00').toLocaleDateString('pt-BR'),
-                diaSemana: a.diaSemana,
-                horario: a.horario,
-                horarioChegada: a.horarioChegada,
-                minutosAtraso: a.minutosAtraso,
-                turma: a.turma,
-                observacoes: a.observacoes,
-                motivo: a.motivo,
-                motivoLabel: MOTIVOS_LABELS[a.motivo] || a.motivo,
-                motivoDetalhes: a.motivoDetalhes,
-                registradoPor: a.registradoPorNome,
-                registradoEm: a.registradoEm
-            }))
-        });
-        
-    } catch (error) {
-        console.error('❌ Erro ao gerar relatório de atrasos:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });

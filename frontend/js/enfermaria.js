@@ -49,6 +49,11 @@ let __atendimentosRecentesPaginacao = {
     limit: 20
 };
 
+// 🔧 CORREÇÃO: Guarda de concorrência + cache curto para evitar carregamentos duplicados
+let __carregandoRecentes = false;
+let __ultimaCargaRecentes = 0;
+const CACHE_RECENTES_MS = 5000;
+
 // ============================================
 // UTILITÁRIOS
 // ============================================
@@ -243,6 +248,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             carregarAtendimentosAtivos(),
             carregarTurmasParaRelatorio(),
             carregarTurmasParaManual(),
+            carregarTurmasParaDashboardRecentes(), // 🔧 CORREÇÃO: popula filtro de turmas do dashboard
             carregarDashboard()
         ]);
     } catch (error) {
@@ -275,6 +281,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     safeGet('dashboard-tab')?.addEventListener('shown.bs.tab', () => {
         carregarDashboard();
         configurarFiltrosAtendimentosRecentes();
+        // 🔧 CORREÇÃO: a guarda interna de carregarAtendimentosRecentes evita chamada duplicada
         carregarAtendimentosRecentes(1);
         atualizarContadorAtendimentosAntigos();
     });
@@ -315,6 +322,33 @@ async function carregarFotoPerfil() {
         }
     } catch (error) {
         console.error('Erro ao carregar foto:', error);
+    }
+}
+
+// ============================================
+// 🔧 CORREÇÃO: CARREGAR TURMAS PARA O FILTRO DO DASHBOARD
+// Popula o select 'filtroAtendimentosRecentesTurma' que antes ficava vazio
+// ============================================
+async function carregarTurmasParaDashboardRecentes() {
+    try {
+        const response = await fetch('/api/enfermaria/turmas', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        if (data.success && Array.isArray(data.turmas)) {
+            const select = safeGet('filtroAtendimentosRecentesTurma');
+            if (select) {
+                const valorAtual = select.value;
+                select.innerHTML = '<option value="">Todas as turmas</option>';
+                data.turmas.forEach(turma => {
+                    select.innerHTML += `<option value="${escapeHTML(turma)}">${escapeHTML(turma)}</option>`;
+                });
+                if (valorAtual) select.value = valorAtual;
+                console.log(`✅ ${data.turmas.length} turma(s) carregada(s) no filtro do dashboard`);
+            }
+        }
+    } catch (error) {
+        console.error('Erro ao carregar turmas do dashboard:', error);
     }
 }
 
@@ -626,15 +660,6 @@ async function abrirNotificacaoEnfermaria(id, link) {
     } catch (error) {
         console.error('❌ Erro ao processar clique:', error);
     }
-}
-
-// ============================================
-// 🔥 5.3 PULAR PARA O LINK (fallback)
-// ============================================
-function escapeHTML(str) {
-    if (typeof str !== 'string') return '';
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-              .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 // ============================================
@@ -1658,7 +1683,7 @@ async function verificarAtendimento24h(atendimentoId, acao) {
             atualizarContadorAtendimentosAntigos();
             
             if (acao === 'ja_encerrou') {
-                carregarAtendimentosRecentes(1);
+                carregarAtendimentosRecentes(1, true); // 🔧 CORREÇÃO: forçar atualização
             }
         } else {
             if(typeof window.mostrarToast === 'function') window.mostrarToast('❌ ' + (data.error || 'Erro ao verificar'));
@@ -2233,7 +2258,7 @@ async function salvarEdicaoAtendimento() {
             setTimeout(() => safeGet('modalEditarAtendimento')?.remove(), 300);
             
             carregarAtendimentosAtivos();
-            carregarAtendimentosRecentes();
+            carregarAtendimentosRecentes(1, true); // 🔧 CORREÇÃO: forçar atualização
             carregarDashboard();
         } else {
             if(typeof window.mostrarToast === 'function') window.mostrarToast('❌ ' + (data.error || 'Erro ao salvar'));
@@ -2703,7 +2728,7 @@ async function excluirAtendimento(atendimentoId, alunoNome) {
             }
             
             carregarAtendimentosAtivos();
-            carregarAtendimentosRecentes();
+            carregarAtendimentosRecentes(1, true); // 🔧 CORREÇÃO: forçar atualização
             carregarDashboard();
         } else {
             if (data.code === 'ADMIN_NAO_CRIADOR') {
@@ -2919,52 +2944,81 @@ async function carregarDashboard() {
 
 // ============================================
 // 🆕 DASHBOARD - ATENDIMENTOS RECENTES
+// 🔧 CORREÇÃO: guarda de concorrência + cache curto + botão de retry
 // ============================================
-async function carregarAtendimentosRecentes(pagina = 1) {
+async function carregarAtendimentosRecentes(pagina = 1, forcar = false) {
     const container = safeGet('listaAtendimentosRecentes');
     if (!container) return;
-    
+
+    // 🔧 Evita chamadas simultâneas (resolve o "travamento" do spinner)
+    if (__carregandoRecentes) {
+        console.log('⏳ Já carregando atendimentos recentes, ignorando chamada duplicada');
+        return;
+    }
+
+    // 🔧 Cache curto: evita recarregar ao trocar de aba rapidamente
+    const agora = Date.now();
+    if (!forcar && pagina === __atendimentosRecentesPaginacao.page &&
+        (agora - __ultimaCargaRecentes) < CACHE_RECENTES_MS &&
+        __atendimentosRecentes.length > 0) {
+        console.log('📦 Usando cache de atendimentos recentes');
+        return;
+    }
+
+    __carregandoRecentes = true;
+
     const busca = (safeGet('filtroAtendimentosRecentesBusca')?.value || '').trim();
     const turma = safeGet('filtroAtendimentosRecentesTurma')?.value || '';
-    
+
     container.innerHTML = `
         <div class="text-center py-4">
             <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
             <p class="text-muted mt-2 mb-0">Carregando atendimentos...</p>
         </div>`;
-    
+
     try {
         const params = new URLSearchParams();
         params.append('limit', '20');
         params.append('page', pagina);
         if (turma) params.append('turma', turma);
         if (busca) params.append('busca', busca);
-        
+
         const response = await fetch(`/api/enfermaria/listar?${params.toString()}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
         const data = await response.json();
-        
+
         if (!data.success || !Array.isArray(data.atendimentos)) {
             container.innerHTML = `<div class="alert alert-warning">Nenhum atendimento encontrado</div>`;
             return;
         }
-        
+
         __atendimentosRecentesPaginacao = {
             page: parseInt(data.paginacao?.page) || pagina,
             total: parseInt(data.paginacao?.total) || data.atendimentos.length,
             pages: parseInt(data.paginacao?.pages) || 1,
             limit: parseInt(data.paginacao?.limit) || 20
         };
-        
+
         __atendimentosRecentes = data.atendimentos;
-        
+        __ultimaCargaRecentes = Date.now();
+
         atualizarContadorAtendimentosRecentes(__atendimentosRecentesPaginacao.total);
         renderizarListaAtendimentosRecentes(data.atendimentos);
         renderizarPaginacaoAtendimentosRecentes();
     } catch (error) {
         console.error('Erro ao carregar atendimentos:', error);
-        container.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Erro ao carregar</div>`;
+        container.innerHTML = `<div class="alert alert-danger">
+            <i class="fas fa-exclamation-triangle"></i> Erro ao carregar
+            <button class="btn btn-sm btn-outline-danger ms-2" onclick="carregarAtendimentosRecentes(1, true)">
+                <i class="fas fa-sync-alt"></i> Tentar novamente
+            </button>
+        </div>`;
+    } finally {
+        __carregandoRecentes = false;
     }
 }
 
@@ -3086,9 +3140,10 @@ function renderizarPaginacaoAtendimentosRecentes() {
     const inicio = (page - 1) * limit + 1;
     const fim = Math.min(page * limit, total);
     
+    // 🔧 CORREÇÃO: forcar=true nos botões de paginação
     pagContainer.innerHTML = `
         <button class="btn btn-sm btn-outline-secondary" 
-                onclick="carregarAtendimentosRecentes(${page - 1})"
+                onclick="carregarAtendimentosRecentes(${page - 1}, true)"
                 ${page <= 1 ? 'disabled' : ''}>
             <i class="fas fa-chevron-left"></i> Anterior
         </button>
@@ -3100,7 +3155,7 @@ function renderizarPaginacaoAtendimentosRecentes() {
         </span>
         
         <button class="btn btn-sm btn-outline-secondary" 
-                onclick="carregarAtendimentosRecentes(${page + 1})"
+                onclick="carregarAtendimentosRecentes(${page + 1}, true)"
                 ${page >= pages ? 'disabled' : ''}>
             Próxima <i class="fas fa-chevron-right"></i>
         </button>
@@ -3114,14 +3169,16 @@ function configurarFiltrosAtendimentosRecentes() {
         let timeout;
         busca.addEventListener('input', () => {
             clearTimeout(timeout);
-            timeout = setTimeout(() => carregarAtendimentosRecentes(1), 300);
+            // 🔧 CORREÇÃO: forcar=true ao filtrar
+            timeout = setTimeout(() => carregarAtendimentosRecentes(1, true), 300);
         });
     }
     
     const turma = safeGet('filtroAtendimentosRecentesTurma');
     if (turma && !turma.dataset.listenerAttached) {
         turma.dataset.listenerAttached = 'true';
-        turma.addEventListener('change', () => carregarAtendimentosRecentes(1));
+        // 🔧 CORREÇÃO: forcar=true ao trocar turma
+        turma.addEventListener('change', () => carregarAtendimentosRecentes(1, true));
     }
 }
 
@@ -3880,6 +3937,9 @@ window.abrirModalVerificacao24h = abrirModalVerificacao24h;
 window.verificarAtendimento24h = verificarAtendimento24h;
 window.atualizarContadorAtendimentosAntigos = atualizarContadorAtendimentosAntigos;
 window.formatarTempoAtendimentoFront = formatarTempoAtendimentoFront;
+
+// 🔧 CORREÇÃO: expor carregador de turmas do dashboard
+window.carregarTurmasParaDashboardRecentes = carregarTurmasParaDashboardRecentes;
 
 // Expor globalmente para o header encontrar
 window.confirmar = confirmar;

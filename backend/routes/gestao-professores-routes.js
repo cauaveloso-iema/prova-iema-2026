@@ -1,6 +1,6 @@
 // routes/gestao-professores-routes.js
 // Rotas para Gestão de Professores - Setor Pedagógico
-// ⚠️ VERSÃO 2.1 — Relatórios corrigidos (por professor, turma, eixo com nomes de componentes)
+// ⚠️ VERSÃO 2.2 — Relatórios corrigidos + Fuso Brasília (BRT)
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
@@ -9,6 +9,46 @@ const mongoose = require('mongoose');
 function getGestaoProfessorModel() { return require('../models/GestaoProfessor'); }
 function getUserModel() { return require('../models/User'); }
 function getPermissaoModuloModel() { return require('../models/PermissaoModulo'); }
+
+// ============================================
+// 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
+// ============================================
+function getDataHojeBR() {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(new Date());
+}
+
+function inicioDoDiaBrasil(dataStr) {
+    if (!dataStr) return null;
+    const base = dataStr.includes('T') ? dataStr.split('T')[0] : dataStr;
+    return new Date(base + 'T00:00:00.000-03:00');
+}
+
+function fimDoDiaBrasil(dataStr) {
+    if (!dataStr) return null;
+    const base = dataStr.includes('T') ? dataStr.split('T')[0] : dataStr;
+    return new Date(base + 'T23:59:59.999-03:00');
+}
+
+function meioDiaBrasil(dataStr) {
+    if (!dataStr) return null;
+    const base = dataStr.includes('T') ? dataStr.split('T')[0] : dataStr;
+    return new Date(base + 'T12:00:00.000-03:00');
+}
+
+function getRangeMesBR(ano, mes) {
+    const mesStr = String(mes).padStart(2, '0');
+    const inicioStr = `${ano}-${mesStr}-01`;
+    const ultimoDia = new Date(ano, mes, 0).getDate();
+    const fimStr = `${ano}-${mesStr}-${String(ultimoDia).padStart(2, '0')}`;
+    return {
+        inicioStr, fimStr,
+        start: inicioDoDiaBrasil(inicioStr),
+        end: fimDoDiaBrasil(fimStr)
+    };
+}
 
 // ============================================
 // MIDDLEWARES
@@ -79,7 +119,6 @@ function parseIntSeguro(valor, padrao = 0) {
     return isNaN(n) ? padrao : n;
 }
 
-// Normaliza aulasRegistradas (compatibilidade com formato antigo periodo1..4)
 function normalizarAulas(aulas) {
     if (aulas === null || aulas === undefined) return 0;
     if (typeof aulas === 'number') return isNaN(aulas) ? 0 : aulas;
@@ -97,7 +136,6 @@ function normalizarAulas(aulas) {
     return 0;
 }
 
-// Detecta período legado (para registros antigos)
 function detectarPeriodoLegado(aulas) {
     if (!aulas || typeof aulas !== 'object') return null;
     if ((parseInt(aulas.periodo1, 10) || 0) > 0) return '1';
@@ -107,7 +145,6 @@ function detectarPeriodoLegado(aulas) {
     return null;
 }
 
-// Normaliza um componente antes de gravar
 function normalizarComponentePayload(c) {
     const aulasRaw = c.aulasRegistradas;
     let periodo = sanitizarString(c.periodo);
@@ -135,9 +172,7 @@ function normalizarComponentePayload(c) {
 // ROTAS
 // ============================================
 
-// ============================================
 // GET /professores
-// ============================================
 router.get('/professores', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const User = getUserModel();
@@ -184,9 +219,7 @@ router.get('/professores', authenticateToken, verificarPermissaoModulo, async (r
     }
 });
 
-// ============================================
 // GET /professores/:id
-// ============================================
 router.get('/professores/:id', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const User = getUserModel();
@@ -231,9 +264,7 @@ router.get('/professores/:id', authenticateToken, verificarPermissaoModulo, asyn
     }
 });
 
-// ============================================
 // GET /turmas
-// ============================================
 router.get('/turmas', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const User = getUserModel();
@@ -276,9 +307,7 @@ router.get('/turmas', authenticateToken, verificarPermissaoModulo, async (req, r
     }
 });
 
-// ============================================
 // GET /componentes-curriculares
-// ============================================
 router.get('/componentes-curriculares', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         let componentes = [];
@@ -329,9 +358,7 @@ router.get('/componentes-curriculares', authenticateToken, verificarPermissaoMod
     }
 });
 
-// ============================================
 // GET /eixos
-// ============================================
 router.get('/eixos', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         let eixos = [];
@@ -369,9 +396,7 @@ router.get('/eixos', authenticateToken, verificarPermissaoModulo, async (req, re
     }
 });
 
-// ============================================
 // GET /periodos
-// ============================================
 router.get('/periodos', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         let periodos = [];
@@ -421,9 +446,7 @@ router.get('/periodos', authenticateToken, verificarPermissaoModulo, async (req,
     }
 });
 
-// ============================================
 // POST /registrar
-// ============================================
 router.post('/registrar', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const GestaoProfessor = getGestaoProfessorModel();
@@ -458,7 +481,8 @@ router.post('/registrar', authenticateToken, verificarPermissaoModulo, async (re
             }
         }
         
-        const dataColetaObj = new Date(dataColeta + 'T12:00:00');
+        // 🆕 Data em BRT (meio-dia)
+        const dataColetaObj = meioDiaBrasil(dataColeta);
         
         const novoRegistro = new GestaoProfessor({
             professorId: professor._id,
@@ -502,9 +526,7 @@ router.post('/registrar', authenticateToken, verificarPermissaoModulo, async (re
     }
 });
 
-// ============================================
 // GET /listar
-// ============================================
 router.get('/listar', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const GestaoProfessor = getGestaoProfessorModel();
@@ -529,10 +551,11 @@ router.get('/listar', authenticateToken, verificarPermissaoModulo, async (req, r
         if (periodo) filtro['componentes.periodo'] = String(periodo);
         if (professorId) filtro.professorId = professorId;
         
+        // 🆕 Filtro de data em BRT
         if (dataInicio || dataFim) {
             filtro.dataColeta = {};
-            if (dataInicio) filtro.dataColeta.$gte = new Date(dataInicio + 'T00:00:00');
-            if (dataFim) filtro.dataColeta.$lte = new Date(dataFim + 'T23:59:59');
+            if (dataInicio) filtro.dataColeta.$gte = inicioDoDiaBrasil(dataInicio);
+            if (dataFim) filtro.dataColeta.$lte = fimDoDiaBrasil(dataFim);
         }
         
         const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -590,9 +613,7 @@ router.get('/listar', authenticateToken, verificarPermissaoModulo, async (req, r
     }
 });
 
-// ============================================
 // GET /:id
-// ============================================
 router.get('/:id', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const GestaoProfessor = getGestaoProfessorModel();
@@ -633,9 +654,7 @@ router.get('/:id', authenticateToken, verificarPermissaoModulo, async (req, res)
     }
 });
 
-// ============================================
 // PUT /:id
-// ============================================
 router.put('/:id', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const GestaoProfessor = getGestaoProfessorModel();
@@ -684,7 +703,8 @@ router.put('/:id', authenticateToken, verificarPermissaoModulo, async (req, res)
         }
         
         if (dataColeta) {
-            registro.dataColeta = new Date(dataColeta + 'T12:00:00');
+            // 🆕 Meio-dia BRT
+            registro.dataColeta = meioDiaBrasil(dataColeta);
         }
         
         if (observacoesGerais !== undefined) {
@@ -711,9 +731,7 @@ router.put('/:id', authenticateToken, verificarPermissaoModulo, async (req, res)
     }
 });
 
-// ============================================
 // DELETE /:id
-// ============================================
 router.delete('/:id', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const GestaoProfessor = getGestaoProfessorModel();
@@ -739,9 +757,7 @@ router.delete('/:id', authenticateToken, verificarPermissaoModulo, async (req, r
     }
 });
 
-// ============================================
 // GET /dashboard/resumo
-// ============================================
 router.get('/dashboard/resumo', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const GestaoProfessor = getGestaoProfessorModel();
@@ -750,11 +766,11 @@ router.get('/dashboard/resumo', authenticateToken, verificarPermissaoModulo, asy
         let filtro = { ativo: true };
         let filtroMes = { ativo: true };
         
+        // 🆕 Range de mês em BRT
         if (mes) {
             const [ano, mesNum] = mes.split('-').map(Number);
-            const inicioMes = new Date(ano, mesNum - 1, 1);
-            const fimMes = new Date(ano, mesNum, 0, 23, 59, 59);
-            filtroMes.dataColeta = { $gte: inicioMes, $lte: fimMes };
+            const range = getRangeMesBR(ano, mesNum);
+            filtroMes.dataColeta = { $gte: range.start, $lte: range.end };
         }
         
         const [
@@ -885,6 +901,11 @@ router.get('/dashboard/resumo', authenticateToken, verificarPermissaoModulo, asy
         
         res.json({
             success: true,
+            _debug: {
+                hojeBR: getDataHojeBR(),
+                mesConsultado: mes || null,
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
             resumo: {
                 totalGeral,
                 totalMes,
@@ -927,9 +948,7 @@ router.get('/dashboard/resumo', authenticateToken, verificarPermissaoModulo, asy
     }
 });
 
-// ============================================
-// GET /relatorio/gerar - ⚠️ VERSÃO CORRIGIDA (relatórios por tipo)
-// ============================================
+// GET /relatorio/gerar
 router.get('/relatorio/gerar', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const GestaoProfessor = getGestaoProfessorModel();
@@ -945,13 +964,13 @@ router.get('/relatorio/gerar', authenticateToken, verificarPermissaoModulo, asyn
         
         let filtro = { ativo: true };
         
+        // 🆕 Filtro de data em BRT
         if (dataInicio || dataFim) {
             filtro.dataColeta = {};
-            if (dataInicio) filtro.dataColeta.$gte = new Date(dataInicio + 'T00:00:00');
-            if (dataFim) filtro.dataColeta.$lte = new Date(dataFim + 'T23:59:59');
+            if (dataInicio) filtro.dataColeta.$gte = inicioDoDiaBrasil(dataInicio);
+            if (dataFim) filtro.dataColeta.$lte = fimDoDiaBrasil(dataFim);
         }
         
-        // Filtros opcionais
         if (eixo) filtro['componentes.eixo'] = eixo;
         if (turma) filtro['componentes.turma'] = turma;
         if (periodo) filtro['componentes.periodo'] = String(periodo);
@@ -959,9 +978,6 @@ router.get('/relatorio/gerar', authenticateToken, verificarPermissaoModulo, asyn
         
         const registros = await GestaoProfessor.find(filtro).sort({ dataColeta: -1 }).lean();
         
-        // ============================================
-        // CONTADORES GERAIS
-        // ============================================
         let totalComponentes = 0;
         let totalAulas = 0;
         
@@ -973,7 +989,7 @@ router.get('/relatorio/gerar', authenticateToken, verificarPermissaoModulo, asyn
         });
         
         // ============================================
-        // TIPO: PROFESSOR (agrupado por professor)
+        // TIPO: PROFESSOR
         // ============================================
         if (tipo === 'professor') {
             const professoresMap = {};
@@ -1043,7 +1059,6 @@ router.get('/relatorio/gerar', authenticateToken, verificarPermissaoModulo, asyn
                 totalComponentes,
                 totalAulas,
                 professores,
-                // Compatibilidade: registros completos
                 registros: registros.map(r => ({
                     id: r._id,
                     professorId: r.professorId,
@@ -1061,7 +1076,7 @@ router.get('/relatorio/gerar', authenticateToken, verificarPermissaoModulo, asyn
         }
         
         // ============================================
-        // TIPO: TURMA (agrupado por turma)
+        // TIPO: TURMA
         // ============================================
         if (tipo === 'turma') {
             const turmasMap = {};
@@ -1136,7 +1151,7 @@ router.get('/relatorio/gerar', authenticateToken, verificarPermissaoModulo, asyn
         }
         
         // ============================================
-        // TIPO: EIXO (agrupado por eixo, com nomes de componentes)
+        // TIPO: EIXO
         // ============================================
         if (tipo === 'eixo') {
             const eixosMap = {};
@@ -1153,7 +1168,7 @@ router.get('/relatorio/gerar', authenticateToken, verificarPermissaoModulo, asyn
                             totalAulas: 0,
                             professoresSet: new Set(),
                             turmasSet: new Set(),
-                            componentesMap: new Map() // nome → { nome, count, aulas }
+                            componentesMap: new Map()
                         };
                     }
                     
@@ -1215,7 +1230,7 @@ router.get('/relatorio/gerar', authenticateToken, verificarPermissaoModulo, asyn
         }
         
         // ============================================
-        // TIPO: GERAL (padrão)
+        // TIPO: GERAL
         // ============================================
         const porEixo = {};
         const porTurma = {};

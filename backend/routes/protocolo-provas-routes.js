@@ -10,6 +10,58 @@ function getProtocoloProva() {
 }
 
 // ============================================
+// 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
+// ============================================
+function getDataHojeBR() {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(new Date());
+}
+
+function getMesAtualBR() {
+    return getDataHojeBR().substring(0, 7);
+}
+
+function getInicioSemanaBR() {
+    const hojeBR = getDataHojeBR();
+    const hojeUTC = new Date(hojeBR + 'T03:00:00.000Z');
+    const diaSemana = hojeUTC.getUTCDay();
+    const inicio = new Date(hojeUTC.getTime() - diaSemana * 24 * 60 * 60 * 1000);
+    return inicio.toISOString().split('T')[0];
+}
+
+function inicioDoDiaBrasil(dataStr) {
+    if (!dataStr) return null;
+    const base = dataStr.includes('T') ? dataStr.split('T')[0] : dataStr;
+    return new Date(base + 'T00:00:00.000-03:00');
+}
+
+function fimDoDiaBrasil(dataStr) {
+    if (!dataStr) return null;
+    const base = dataStr.includes('T') ? dataStr.split('T')[0] : dataStr;
+    return new Date(base + 'T23:59:59.999-03:00');
+}
+
+function meioDiaBrasil(dataStr) {
+    if (!dataStr) return null;
+    const base = dataStr.includes('T') ? dataStr.split('T')[0] : dataStr;
+    return new Date(base + 'T12:00:00.000-03:00');
+}
+
+function getRangeMesBR(ano, mes) {
+    const mesStr = String(mes).padStart(2, '0');
+    const inicioStr = `${ano}-${mesStr}-01`;
+    const ultimoDia = new Date(ano, mes, 0).getDate();
+    const fimStr = `${ano}-${mesStr}-${String(ultimoDia).padStart(2, '0')}`;
+    return {
+        inicioStr, fimStr,
+        start: inicioDoDiaBrasil(inicioStr),
+        end: fimDoDiaBrasil(fimStr)
+    };
+}
+
+// ============================================
 // MIDDLEWARE DE AUTENTICAÇÃO
 // ============================================
 const authenticateToken = async (req, res, next) => {
@@ -46,7 +98,6 @@ const authenticateToken = async (req, res, next) => {
     });
 };
 
-// Middleware: apenas setor_pedagogico, admin ou super_admin
 const apenasSetorPedagogico = (req, res, next) => {
     const rolesPermitidos = ['setor_pedagogico', 'admin', 'super_admin'];
     if (!rolesPermitidos.includes(req.userRole)) {
@@ -68,12 +119,21 @@ const PERIODOS = [1, 2, 3, 4];
 // HEALTH CHECK
 // ============================================
 router.get('/health', (req, res) => {
-    res.json({ success: true, status: 'online', service: 'Protocolo de Provas' });
+    res.json({ 
+        success: true, 
+        status: 'online', 
+        service: 'Protocolo de Provas',
+        versao: '2.0-fuso-br',
+        _debug: {
+            hojeBR: getDataHojeBR(),
+            mesAtualBR: getMesAtualBR(),
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        }
+    });
 });
 
 // ============================================
-// 📚 BUSCAR PROFESSORES (para o select)
-// GET /api/protocolo-provas/professores
+// 📚 BUSCAR PROFESSORES
 // ============================================
 router.get('/professores', authenticateToken, apenasSetorPedagogico, async (req, res) => {
     try {
@@ -110,14 +170,12 @@ router.get('/professores', authenticateToken, apenasSetorPedagogico, async (req,
 });
 
 // ============================================
-// 🏫 BUSCAR TURMAS (para o select)
-// GET /api/protocolo-provas/turmas
+// 🏫 BUSCAR TURMAS
 // ============================================
 router.get('/turmas', authenticateToken, apenasSetorPedagogico, async (req, res) => {
     try {
         const User = require('../models/User');
 
-        // Buscar turmas únicas dos alunos
         const alunos = await User.find({
             role: 'aluno',
             ativo: { $ne: false },
@@ -148,7 +206,6 @@ router.get('/turmas', authenticateToken, apenasSetorPedagogico, async (req, res)
 
 // ============================================
 // 👨‍🎓 BUSCAR ALUNOS DE UMA TURMA
-// GET /api/protocolo-provas/alunos-por-turma?turma=103
 // ============================================
 router.get('/alunos-por-turma', authenticateToken, apenasSetorPedagogico, async (req, res) => {
     try {
@@ -189,8 +246,7 @@ router.get('/alunos-por-turma', authenticateToken, apenasSetorPedagogico, async 
 });
 
 // ============================================
-// 📋 LISTAR PROTOCOLOS (com filtros e paginação)
-// GET /api/protocolo-provas/listar?page=1&limit=10&...
+// 📋 LISTAR PROTOCOLOS
 // ============================================
 router.get('/listar', authenticateToken, apenasSetorPedagogico, async (req, res) => {
     try {
@@ -228,16 +284,11 @@ router.get('/listar', authenticateToken, apenasSetorPedagogico, async (req, res)
             ];
         }
 
+        // 🆕 Filtro de data em BRT
         if (dataInicio || dataFim) {
             filtro.dataRecebimento = {};
-            if (dataInicio) {
-                const inicio = new Date(dataInicio + 'T00:00:00');
-                filtro.dataRecebimento.$gte = inicio;
-            }
-            if (dataFim) {
-                const fim = new Date(dataFim + 'T23:59:59');
-                filtro.dataRecebimento.$lte = fim;
-            }
+            if (dataInicio) filtro.dataRecebimento.$gte = inicioDoDiaBrasil(dataInicio);
+            if (dataFim) filtro.dataRecebimento.$lte = fimDoDiaBrasil(dataFim);
         }
 
         const pageNum = parseInt(page);
@@ -301,7 +352,6 @@ router.get('/listar', authenticateToken, apenasSetorPedagogico, async (req, res)
 
 // ============================================
 // 🔍 BUSCAR UM PROTOCOLO POR ID
-// GET /api/protocolo-provas/:id
 // ============================================
 router.get('/:id', authenticateToken, apenasSetorPedagogico, async (req, res) => {
     try {
@@ -339,7 +389,6 @@ router.get('/:id', authenticateToken, apenasSetorPedagogico, async (req, res) =>
 
 // ============================================
 // ✅ REGISTRAR NOVO PROTOCOLO
-// POST /api/protocolo-provas/registrar
 // ============================================
 router.post('/registrar', authenticateToken, apenasSetorPedagogico, async (req, res) => {
     try {
@@ -357,7 +406,6 @@ router.post('/registrar', authenticateToken, apenasSetorPedagogico, async (req, 
             assinaturaBase64
         } = req.body;
 
-        // ===== VALIDAÇÕES =====
         if (!professorId) {
             return res.status(400).json({ success: false, error: 'Professor é obrigatório' });
         }
@@ -386,7 +434,6 @@ router.post('/registrar', authenticateToken, apenasSetorPedagogico, async (req, 
             return res.status(400).json({ success: false, error: 'Selecione pelo menos uma turma' });
         }
 
-        // Validar cada turma
         for (const t of turmas) {
             if (!t.turma) {
                 return res.status(400).json({ success: false, error: 'Nome da turma é obrigatório' });
@@ -402,7 +449,6 @@ router.post('/registrar', authenticateToken, apenasSetorPedagogico, async (req, 
             }
         }
 
-        // ===== BUSCAR PROFESSOR =====
         const professor = await User.findById(professorId).lean();
 
         if (!professor) {
@@ -413,10 +459,9 @@ router.post('/registrar', authenticateToken, apenasSetorPedagogico, async (req, 
             return res.status(400).json({ success: false, error: 'Usuário não é um professor' });
         }
 
-        // ===== VERIFICAR DUPLICATA =====
-        // Mesmo professor + mesma data + mesmo tipo + mesmo período
-        const dataInicio = new Date(dataRecebimento + 'T00:00:00');
-        const dataFim = new Date(dataRecebimento + 'T23:59:59');
+        // 🆕 Verificação de duplicata em BRT
+        const dataInicio = inicioDoDiaBrasil(dataRecebimento);
+        const dataFim = fimDoDiaBrasil(dataRecebimento);
 
         const duplicado = await ProtocoloProva.findOne({
             professorId: professorId,
@@ -439,7 +484,7 @@ router.post('/registrar', authenticateToken, apenasSetorPedagogico, async (req, 
             });
         }
 
-        // ===== CRIAR PROTOCOLO =====
+        // 🆕 Salvar com data em BRT meio-dia
         const novoProtocolo = new ProtocoloProva({
             professorId: professor._id,
             professorNome: professor.nome,
@@ -450,7 +495,7 @@ router.post('/registrar', authenticateToken, apenasSetorPedagogico, async (req, 
             professorEixo: professor.eixo,
             professorFotoPerfil: professor.fotoPerfil,
 
-            dataRecebimento: new Date(dataRecebimento + 'T12:00:00'),
+            dataRecebimento: meioDiaBrasil(dataRecebimento),
             tipoProva,
             tipoProvaOutros: tipoProva === 'OUTROS' ? tipoProvaOutros : null,
             periodo: parseInt(periodo),
@@ -500,7 +545,6 @@ router.post('/registrar', authenticateToken, apenasSetorPedagogico, async (req, 
 
 // ============================================
 // ✏️ EDITAR PROTOCOLO
-// PUT /api/protocolo-provas/:id
 // ============================================
 router.put('/:id', authenticateToken, apenasSetorPedagogico, async (req, res) => {
     try {
@@ -525,7 +569,6 @@ router.put('/:id', authenticateToken, apenasSetorPedagogico, async (req, res) =>
             observacoes
         } = req.body;
 
-        // Validações (apenas se vierem)
         if (tipoProva && !TIPOS_PROVA.includes(tipoProva)) {
             return res.status(400).json({ success: false, error: 'Tipo de prova inválido' });
         }
@@ -555,9 +598,9 @@ router.put('/:id', authenticateToken, apenasSetorPedagogico, async (req, res) =>
             }
         }
 
-        // Aplicar alterações
         if (dataRecebimento) {
-            protocolo.dataRecebimento = new Date(dataRecebimento + 'T12:00:00');
+            // 🆕 Meio-dia BRT
+            protocolo.dataRecebimento = meioDiaBrasil(dataRecebimento);
         }
         if (tipoProva) protocolo.tipoProva = tipoProva;
         if (tipoProvaOutros !== undefined) {
@@ -603,8 +646,7 @@ router.put('/:id', authenticateToken, apenasSetorPedagogico, async (req, res) =>
 });
 
 // ============================================
-// 🗑️ EXCLUIR PROTOCOLO (soft delete)
-// DELETE /api/protocolo-provas/:id
+// 🗑️ EXCLUIR PROTOCOLO
 // ============================================
 router.delete('/:id', authenticateToken, apenasSetorPedagogico, async (req, res) => {
     try {
@@ -614,7 +656,6 @@ router.delete('/:id', authenticateToken, apenasSetorPedagogico, async (req, res)
             return res.status(400).json({ success: false, error: 'ID inválido' });
         }
 
-        // 🔥 EXCLUSÃO REAL DO BANCO DE DADOS
         const protocolo = await ProtocoloProva.findByIdAndDelete(req.params.id);
 
         if (!protocolo) {
@@ -635,54 +676,53 @@ router.delete('/:id', authenticateToken, apenasSetorPedagogico, async (req, res)
 });
 
 // ============================================
-// 📊 ESTATÍSTICAS / DASHBOARD
-// GET /api/protocolo-provas/dashboard
+// 📊 ESTATÍSTICAS / DASHBOARD (🆕 CORRIGIDO)
 // ============================================
 router.get('/dashboard/resumo', authenticateToken, apenasSetorPedagogico, async (req, res) => {
     try {
         const ProtocoloProva = getProtocoloProva();
 
         const { mes } = req.query;
-        const mesRef = mes || new Date().toISOString().substring(0, 7);
+        // 🆕 Mês em BRT
+        const mesRef = mes || getMesAtualBR();
 
         const [ano, mesNum] = mesRef.split('-').map(Number);
-        const inicioMes = new Date(ano, mesNum - 1, 1);
-        const fimMes = new Date(ano, mesNum, 0, 23, 59, 59);
+        // 🆕 Range de mês em BRT
+        const range = getRangeMesBR(ano, mesNum);
+        const inicioMes = range.start;
+        const fimMes = range.end;
 
-        const hoje = new Date();
-        hoje.setHours(0, 0, 0, 0);
-        const inicioSemana = new Date(hoje);
-        inicioSemana.setDate(hoje.getDate() - 7);
+        // 🆕 Hoje e semana em BRT
+        const hojeStr = getDataHojeBR();
+        const inicioHoje = inicioDoDiaBrasil(hojeStr);
+        const fimHoje = fimDoDiaBrasil(hojeStr);
+        const inicioSemanaStr = getInicioSemanaBR();
+        const inicioSemana = inicioDoDiaBrasil(inicioSemanaStr);
 
-        // Estatísticas gerais
         const [totalGeral, totalMes, totalSemana, totalHoje] = await Promise.all([
             ProtocoloProva.countDocuments({ ativo: true }),
             ProtocoloProva.countDocuments({ ativo: true, dataRecebimento: { $gte: inicioMes, $lte: fimMes } }),
             ProtocoloProva.countDocuments({ ativo: true, dataRecebimento: { $gte: inicioSemana } }),
-            ProtocoloProva.countDocuments({ ativo: true, dataRecebimento: { $gte: hoje } })
+            ProtocoloProva.countDocuments({ ativo: true, dataRecebimento: { $gte: inicioHoje, $lte: fimHoje } })
         ]);
 
-        // Total de provas no mês
         const provasMes = await ProtocoloProva.aggregate([
             { $match: { ativo: true, dataRecebimento: { $gte: inicioMes, $lte: fimMes } } },
             { $group: { _id: null, total: { $sum: '$totalProvas' } } }
         ]);
 
-        // Por tipo de prova
         const porTipo = await ProtocoloProva.aggregate([
             { $match: { ativo: true, dataRecebimento: { $gte: inicioMes, $lte: fimMes } } },
             { $group: { _id: '$tipoProva', count: { $sum: 1 }, provas: { $sum: '$totalProvas' } } },
             { $sort: { count: -1 } }
         ]);
 
-        // Por período
         const porPeriodo = await ProtocoloProva.aggregate([
             { $match: { ativo: true, dataRecebimento: { $gte: inicioMes, $lte: fimMes } } },
             { $group: { _id: '$periodo', count: { $sum: 1 }, provas: { $sum: '$totalProvas' } } },
             { $sort: { _id: 1 } }
         ]);
 
-        // Por professor (top 5)
         const porProfessor = await ProtocoloProva.aggregate([
             { $match: { ativo: true, dataRecebimento: { $gte: inicioMes, $lte: fimMes } } },
             { $group: { 
@@ -695,7 +735,6 @@ router.get('/dashboard/resumo', authenticateToken, apenasSetorPedagogico, async 
             { $limit: 5 }
         ]);
 
-        // Por turma
         const porTurma = await ProtocoloProva.aggregate([
             { $match: { ativo: true, dataRecebimento: { $gte: inicioMes, $lte: fimMes } } },
             { $unwind: '$turmas' },
@@ -708,7 +747,6 @@ router.get('/dashboard/resumo', authenticateToken, apenasSetorPedagogico, async 
             { $limit: 10 }
         ]);
 
-        // Últimos protocolos
         const ultimos = await ProtocoloProva.find({ ativo: true })
             .sort({ createdAt: -1 })
             .limit(5)
@@ -717,6 +755,12 @@ router.get('/dashboard/resumo', authenticateToken, apenasSetorPedagogico, async 
         res.json({
             success: true,
             mes: mesRef,
+            _debug: {
+                hojeBR: hojeStr,
+                inicioSemanaBR: inicioSemanaStr,
+                mesRef,
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
             resumo: {
                 totalGeral,
                 totalMes,
@@ -763,7 +807,6 @@ router.get('/dashboard/resumo', authenticateToken, apenasSetorPedagogico, async 
 
 // ============================================
 // ✍️ ATUALIZAR ASSINATURA
-// PUT /api/protocolo-provas/:id/assinatura
 // ============================================
 router.put('/:id/assinatura', authenticateToken, apenasSetorPedagogico, async (req, res) => {
     try {
@@ -807,7 +850,6 @@ router.put('/:id/assinatura', authenticateToken, apenasSetorPedagogico, async (r
 
 // ============================================
 // 📄 DADOS PARA IMPRESSÃO
-// GET /api/protocolo-provas/:id/imprimir
 // ============================================
 router.get('/:id/imprimir', authenticateToken, apenasSetorPedagogico, async (req, res) => {
     try {

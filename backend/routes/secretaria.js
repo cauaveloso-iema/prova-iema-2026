@@ -7,6 +7,36 @@ const Autorizacao = require('../models/Autorizacao');
 const Declaracao = require('../models/Declaracao');
 
 // ============================================
+// 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
+// ============================================
+function getDataHojeBR() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());
+}
+
+function getInicioSemanaBR() {
+  const hojeBR = getDataHojeBR();
+  const hojeUTC = new Date(hojeBR + 'T03:00:00.000Z');
+  const diaSemana = hojeUTC.getUTCDay();
+  const inicio = new Date(hojeUTC.getTime() - diaSemana * 24 * 60 * 60 * 1000);
+  return inicio.toISOString().split('T')[0];
+}
+
+function getInicioMesBR() {
+  return getDataHojeBR().substring(0, 7) + '-01';
+}
+
+function inicioDoDiaBrasil(dataStr) {
+  return new Date(dataStr + 'T00:00:00.000-03:00');
+}
+
+function fimDoDiaBrasil(dataStr) {
+  return new Date(dataStr + 'T23:59:59.999-03:00');
+}
+
+// ============================================
 // MIDDLEWARES
 // ============================================
 const authenticateToken = (req, res, next) => {
@@ -114,7 +144,17 @@ function formatarRegistro(a) {
 // HEALTH CHECK
 // ============================================
 router.get('/health', (req, res) => {
-  res.json({ success: true, status: 'online', service: 'Secretaria', timestamp: new Date().toISOString() });
+  res.json({
+    success: true,
+    status: 'online',
+    service: 'Secretaria',
+    versao: '2.0-fuso-br',
+    _debug: {
+      hojeBR: getDataHojeBR(),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    },
+    timestamp: new Date().toISOString()
+  });
 });
 
 // ============================================
@@ -415,14 +455,20 @@ router.get('/justificativa/relatorio/aluno/:alunoId', authenticateToken, verific
 });
 
 // ============================================
-// 📊 DASHBOARD
+// 🆕 DASHBOARD (CORRIGIDO — FUSO BRT)
 // ============================================
 router.get('/dashboard', authenticateToken, verificarSecretaria, async (req, res) => {
   try {
-    const hoje = new Date();
-    const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-    const inicioSemana = new Date(hoje);
-    inicioSemana.setDate(hoje.getDate() - hoje.getDay());
+    // 🆕 Datas em BRT
+    const hojeStr = getDataHojeBR();
+    const inicioMesStr = getInicioMesBR();
+    const inicioSemanaStr = getInicioSemanaBR();
+
+    const inicioHoje = inicioDoDiaBrasil(hojeStr);
+    const fimHoje = fimDoDiaBrasil(hojeStr);
+    const inicioMes = inicioDoDiaBrasil(inicioMesStr);
+    const inicioSemana = inicioDoDiaBrasil(inicioSemanaStr);
+
     const ultimos30Dias = new Date();
     ultimos30Dias.setDate(ultimos30Dias.getDate() - 30);
 
@@ -433,10 +479,7 @@ router.get('/dashboard', authenticateToken, verificarSecretaria, async (req, res
       Autorizacao.countDocuments({ ...baseQuery, data: { $gte: inicioSemana } }),
       Autorizacao.countDocuments({
         ...baseQuery,
-        data: {
-          $gte: new Date(hoje.toISOString().split('T')[0] + 'T00:00:00.000-03:00'),
-          $lte: new Date(hoje.toISOString().split('T')[0] + 'T23:59:59.999-03:00')
-        }
+        data: { $gte: inicioHoje, $lte: fimHoje }
       })
     ]);
     const porMotivo = await Autorizacao.aggregate([
@@ -446,6 +489,12 @@ router.get('/dashboard', authenticateToken, verificarSecretaria, async (req, res
     ]);
     res.json({
       success: true,
+      _debug: {
+        hojeBR: hojeStr,
+        inicioMesBR: inicioMesStr,
+        inicioSemanaBR: inicioSemanaStr,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
       metricas: { total: totalGeral, mes: totalMes, semana: totalSemana, hoje: totalHoje },
       porMotivo: porMotivo.map(m => ({ motivo: m._id, label: getMotivoLabel(m._id), count: m.count }))
     });

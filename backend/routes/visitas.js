@@ -15,6 +15,26 @@ const NotificacaoVisita = require('../models/NotificacaoVisita');
 const { mascararCPF, mascararRG, mascararTelefone } = require('../utils/crypto-utils');
 
 // ============================================
+// 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
+// ============================================
+function getDataHojeBR() {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(new Date());
+}
+
+/**
+ * Converte "YYYY-MM-DD" em Date no MEIO-DIA BRT (evita virada de dia)
+ */
+function meioDiaBR(dataStr) {
+    if (!dataStr) return null;
+    if (dataStr instanceof Date) return dataStr;
+    const base = String(dataStr).includes('T') ? String(dataStr).split('T')[0] : String(dataStr);
+    return new Date(base + 'T12:00:00.000-03:00');
+}
+
+// ============================================
 // MIDDLEWARES
 // ============================================
 const authenticateToken = (req, res, next) => {
@@ -77,7 +97,16 @@ const verificarPermissaoVisitas = async (req, res, next) => {
 // HEALTH
 // ============================================
 router.get('/health', (req, res) => {
-  res.json({ success: true, status: 'online', service: 'Autorizacao de Visitas' });
+  res.json({
+    success: true,
+    status: 'online',
+    service: 'Autorizacao de Visitas',
+    versao: '2.0-fuso-br',
+    _debug: {
+      hojeBR: getDataHojeBR(),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    }
+  });
 });
 
 // ============================================
@@ -537,7 +566,8 @@ router.post('/termos', authenticateToken, verificarPermissaoVisitas, async (req,
       local: local.trim(),
       localizacao: localizacao || {},
       
-      dataVisita: new Date(dataVisita),
+      // 🆕 Data em BRT (meio-dia) para evitar virada de dia
+      dataVisita: meioDiaBR(dataVisita),
       cidade: cidade || 'São Luís',
       
       responsaveis: responsaveisIniciais,
@@ -647,7 +677,8 @@ router.put('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (r
     if (updates.horario) termo.horario = updates.horario;
     if (updates.local) termo.local = updates.local.trim();
     if (updates.localizacao) termo.localizacao = updates.localizacao;
-    if (updates.dataVisita) termo.dataVisita = new Date(updates.dataVisita);
+    // 🆕 Data em BRT (meio-dia) para evitar virada de dia
+    if (updates.dataVisita) termo.dataVisita = meioDiaBR(updates.dataVisita);
     if (updates.cidade) termo.cidade = updates.cidade;
     
     await termo.save();
@@ -717,8 +748,9 @@ router.put('/configuracao', authenticateToken, verificarPermissaoVisitas, async 
     const config = await ConfiguracaoVisita.getConfig();
     
     if (typeof visitasAbertas === 'boolean') config.visitasAbertas = visitasAbertas;
-    if (dataAbertura !== undefined) config.dataAbertura = dataAbertura ? new Date(dataAbertura) : null;
-    if (dataFechamento !== undefined) config.dataFechamento = dataFechamento ? new Date(dataFechamento) : null;
+    // 🆕 Datas em BRT (meio-dia)
+    if (dataAbertura !== undefined) config.dataAbertura = dataAbertura ? meioDiaBR(dataAbertura) : null;
+    if (dataFechamento !== undefined) config.dataFechamento = dataFechamento ? meioDiaBR(dataFechamento) : null;
     if (avisoPublico !== undefined) config.avisoPublico = avisoPublico;
     
     config.atualizadoPor = req.userId;

@@ -51,6 +51,7 @@ const EmailService = require('./services/email-service');
 const LoggerService = require('./services/logger-service');
 const OneSignalAdminService = require('./services/onesignal-admin-service');
 const matriculasManager = require('./matriculas');
+const { iniciarCronAniversarios } = require('./services/cron-aniversarios');
 
 // ============================================================================
 // APP EXPRESS + SERVIDOR HTTP
@@ -109,8 +110,10 @@ let groq = null;
 if (process.env.GROQ_API_KEY) {
   groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
   logger.info('✅ Groq configurado');
+  global.groq = groq;
 } else {
   logger.warn('⚠️ Groq API key não configurada');
+  global.groq = null;
 }
 
 // ============================================================================
@@ -764,6 +767,13 @@ const connectToDatabase = async () => {
       logger.warn('⚠️ Erro ao iniciar cron jobs LGPD:', error.message);
     }
 
+    // 🎂 NOVO: Cron de aniversários
+    try {
+      iniciarCronAniversarios();
+    } catch (error) {
+      logger.warn('⚠️ Erro ao iniciar cron de aniversários:', error.message);
+    }
+
     let reconectando = false;
 
     mongoose.connection.on('disconnected', () => {
@@ -1117,6 +1127,50 @@ app.use('/api/tablets', tabletsRoutes);
 const protocoloProvasRoutes = require('./routes/protocolo-provas-routes');
 app.use('/api/protocolo-provas', protocoloProvasRoutes);
 
+// ── Rotas do Módulo de Eventos (blindado) ──
+try {
+    app.use('/api/eventos/modelos', require('./eventos/routes/modelos'));
+    logger.info('✅ Router /api/eventos/modelos registrado');
+} catch (error) {
+    logger.error('❌ Erro ao registrar /api/eventos/modelos:', error.message);
+}
+
+try {
+    app.use('/api/eventos/eventos', require('./eventos/routes/eventos'));
+    logger.info('✅ Router /api/eventos/eventos registrado');
+} catch (error) {
+    logger.error('❌ Erro ao registrar /api/eventos/eventos:', error.message);
+}
+
+try {
+    app.use('/api/eventos/inscricoes', require('./eventos/routes/inscricoes'));
+    logger.info('✅ Router /api/eventos/inscricoes registrado');
+} catch (error) {
+    logger.error('❌ Erro ao registrar /api/eventos/inscricoes:', error.message);
+}
+
+try {
+    app.use('/api/eventos/publico', require('./eventos/routes/publico'));
+    logger.info('✅ Router /api/eventos/publico registrado');
+} catch (error) {
+    logger.error('❌ Erro ao registrar /api/eventos/publico:', error.message);
+}
+
+// ⭐ NOVOS ROUTERS (AVALIADORES E AVALIAÇÕES)
+try {
+    app.use('/api/eventos/avaliadores', require('./eventos/routes/avaliadores'));
+    logger.info('✅ Router /api/eventos/avaliadores registrado');
+} catch (error) {
+    logger.error('❌ Erro ao registrar /api/eventos/avaliadores:', error.message);
+}
+
+try {
+    app.use('/api/eventos/avaliacoes', require('./eventos/routes/avaliacoes'));
+    logger.info('✅ Router /api/eventos/avaliacoes registrado');
+} catch (error) {
+    logger.error('❌ Erro ao registrar /api/eventos/avaliacoes:', error.message);
+}
+
 logger.info('✅ Todos os routers migrados foram registrados');
 
 // ============================================================================
@@ -1163,6 +1217,7 @@ const manutencaoMiddleware = async (req, res, next) => {
     '/recuperar-senha.html',
     '/trocar-senha.html',
     '/manutencao.html',
+    '/eventos/',
     '/css/',
     '/js/',
     '/uploads/'

@@ -39,6 +39,32 @@ try {
 }
 
 // ============================================================================
+// 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
+// Usados para garantir que "hoje" e horários sejam sempre BRT,
+// independentemente do fuso do servidor (UTC, Alpine sem tzdata, etc).
+// ============================================================================
+function getDataHojeBR() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());
+}
+
+function getPartesDataBR(dateObj) {
+  const d = dateObj || new Date();
+  const partes = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(d).split('-');
+  return {
+    ano: parseInt(partes[0], 10),
+    mes: parseInt(partes[1], 10),
+    dia: parseInt(partes[2], 10),
+    str: partes.join('-')
+  };
+}
+
+// ============================================================================
 // IMPORTAÇÃO DE MODELOS
 // ============================================================================
 
@@ -205,6 +231,11 @@ router.get('/health', (req, res) => {
     success: true,
     status: 'online',
     service: 'Provas',
+    versao: '2.0-fuso-br',
+    _debug: {
+      hojeBR: getDataHojeBR(),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    },
     models: {
       Prova: !!Prova,
       Turma: !!Turma,
@@ -445,7 +476,8 @@ router.post('/:id/responder', authenticateToken, async (req, res) => {
 });
 
 // ============================================================================
-// GET /:id/realizar - Aluno obtém prova para realizar
+// 🆕 GET /:id/realizar - Aluno obtém prova para realizar
+// CORRIGIDO: data "hoje" e cálculo de tempo restante agora usam BRT
 // ============================================================================
 router.get('/:id/realizar', authenticateToken, async (req, res) => {
   try {
@@ -476,7 +508,9 @@ router.get('/:id/realizar', authenticateToken, async (req, res) => {
     }
 
     const agora = new Date();
-    const hoje = agora.toISOString().split('T')[0];
+    // 🆕 Data "hoje" calculada em BRT (antes usava toISOString, que é UTC)
+    const hoje = getDataHojeBR();
+    const partes = getPartesDataBR(agora);
 
     // Verificar data limite
     if (prova.dataLimite) {
@@ -515,6 +549,13 @@ router.get('/:id/realizar', authenticateToken, async (req, res) => {
       });
     }
 
+    // 🆕 Tempo restante calculado em BRT (antes usava horário sem offset → fuso do servidor)
+    let tempoRestanteMinutos = null;
+    if (prova.horarioTermino) {
+      const terminoHoje = new Date(`${partes.str}T${prova.horarioTermino}:00.000-03:00`);
+      tempoRestanteMinutos = Math.floor((terminoHoje - agora) / (1000 * 60));
+    }
+
     const provaParaAluno = {
       _id: prova._id,
       titulo: prova.titulo,
@@ -524,9 +565,7 @@ router.get('/:id/realizar', authenticateToken, async (req, res) => {
       horarioTermino: prova.horarioTermino,
       duracaoMinutos: prova.duracaoMinutos,
       dataLimite: prova.dataLimite,
-      tempoRestanteMinutos: prova.horarioTermino ?
-        Math.floor((new Date(`${hoje}T${prova.horarioTermino}:00`) - agora) / (1000 * 60)) :
-        null,
+      tempoRestanteMinutos: tempoRestanteMinutos,
       questoes: prova.questoes.map(q => ({
         pergunta: q.pergunta,
         opcoes: q.opcoes
@@ -535,7 +574,8 @@ router.get('/:id/realizar', authenticateToken, async (req, res) => {
 
     res.json({
       success: true,
-      prova: provaParaAluno
+      prova: provaParaAluno,
+      _debug: { hojeBR: hoje, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }
     });
 
   } catch (error) {
@@ -548,7 +588,8 @@ router.get('/:id/realizar', authenticateToken, async (req, res) => {
 });
 
 // ============================================================================
-// GET /:id/acesso - Validar acesso à prova (com Face ID)
+// 🆕 GET /:id/acesso - Validar acesso à prova (com Face ID)
+// CORRIGIDO: cálculo de horário início/término e expiração do token agora usam BRT
 // ============================================================================
 router.get('/:id/acesso', authenticateToken, async (req, res) => {
   try {
@@ -667,6 +708,7 @@ router.get('/:id/acesso', authenticateToken, async (req, res) => {
 
     // ========== VERIFICAÇÃO DE DATA LIMITE ==========
     const hoje = new Date();
+    const partesHoje = getPartesDataBR(hoje);
 
     if (prova.dataLimite) {
       const dataLimite = new Date(prova.dataLimite);
@@ -689,13 +731,10 @@ router.get('/:id/acesso', authenticateToken, async (req, res) => {
     }
 
     // ========== VERIFICAÇÃO DE HORÁRIO ==========
+    // 🆕 Usa data de hoje em BRT + offset -03:00 explícito (antes usava fuso do servidor)
     if (prova.horarioInicio && prova.horarioTermino) {
-      const ano = hoje.getFullYear();
-      const mes = String(hoje.getMonth() + 1).padStart(2, '0');
-      const dia = String(hoje.getDate()).padStart(2, '0');
-
-      const inicioProva = new Date(`${ano}-${mes}-${dia}T${prova.horarioInicio}:00`);
-      const terminoProva = new Date(`${ano}-${mes}-${dia}T${prova.horarioTermino}:00`);
+      const inicioProva = new Date(`${partesHoje.str}T${prova.horarioInicio}:00.000-03:00`);
+      const terminoProva = new Date(`${partesHoje.str}T${prova.horarioTermino}:00.000-03:00`);
 
       if (hoje < inicioProva) {
         const diffMinutos = Math.floor((inicioProva - hoje) / 60000);
@@ -735,15 +774,14 @@ router.get('/:id/acesso', authenticateToken, async (req, res) => {
     }
 
     // ========== GERAR TOKEN DE ACESSO ==========
+    // 🆕 Expiração calculada em BRT
     let expiracaoToken;
 
     if (prova.horarioTermino && prova.dataLimite) {
       const dataLimite = new Date(prova.dataLimite);
-      const ano = dataLimite.getFullYear();
-      const mes = String(dataLimite.getMonth() + 1).padStart(2, '0');
-      const dia = String(dataLimite.getDate()).padStart(2, '0');
+      const partesData = getPartesDataBR(dataLimite);
 
-      const dataExpiracao = new Date(`${ano}-${mes}-${dia}T${prova.horarioTermino}:00-03:00`);
+      const dataExpiracao = new Date(`${partesData.str}T${prova.horarioTermino}:00.000-03:00`);
       dataExpiracao.setHours(dataExpiracao.getHours() + 1);
 
       expiracaoToken = Math.floor(dataExpiracao.getTime() / 1000);
@@ -770,6 +808,11 @@ router.get('/:id/acesso', authenticateToken, async (req, res) => {
       success: true,
       provaToken: provaToken,
       exigirFaceId: exigirFaceId,
+      _debug: {
+        hojeBR: partesHoje.str,
+        inicioProva: prova.horarioInicio ? `${partesHoje.str}T${prova.horarioInicio}:00.000-03:00` : null,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
       prova: {
         id: prova._id,
         titulo: prova.titulo,

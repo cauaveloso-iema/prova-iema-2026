@@ -6,6 +6,61 @@ const AtendimentoBiblioteca = require('../models/AtendimentoBiblioteca');
 const ConfiguracaoBiblioteca = require('../models/ConfiguracaoBiblioteca');
 
 // ============================================
+// 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
+// ============================================
+/**
+ * Data ATUAL no fuso de Brasília (YYYY-MM-DD), independente do fuso do servidor.
+ */
+function getDataHojeBR() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(new Date());
+}
+
+/**
+ * Data de N dias atrás no fuso de Brasília (YYYY-MM-DD).
+ */
+function getDataNDiasAtrasBR(n) {
+  const agora = new Date();
+  const passado = new Date(agora.getTime() - n * 24 * 60 * 60 * 1000);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(passado);
+}
+
+/**
+ * Primeiro dia do MÊS ATUAL no fuso de Brasília (YYYY-MM-01).
+ */
+function getInicioMesBR() {
+  return getDataHojeBR().substring(0, 7) + '-01';
+}
+
+/**
+ * Primeiro dia da SEMANA ATUAL (domingo) no fuso de Brasília (YYYY-MM-DD).
+ */
+function getInicioSemanaBR() {
+  const hojeBR = getDataHojeBR();
+  const hojeUTC = new Date(hojeBR + 'T03:00:00.000Z');
+  const diaSemana = hojeUTC.getUTCDay();
+  const inicio = new Date(hojeUTC.getTime() - diaSemana * 24 * 60 * 60 * 1000);
+  return inicio.toISOString().split('T')[0];
+}
+
+function inicioDoDiaBrasil(dataStr) {
+  return new Date(dataStr + 'T00:00:00.000-03:00');
+}
+
+function fimDoDiaBrasil(dataStr) {
+  return new Date(dataStr + 'T23:59:59.999-03:00');
+}
+
+// ============================================
 // MIDDLEWARES
 // ============================================
 const authenticateToken = (req, res, next) => {
@@ -199,7 +254,7 @@ router.get('/alunos-por-turma', authenticateToken, verificarBiblioteca, async (r
 });
 
 // ============================================
-// BUSCAR ALUNO
+// BUSCAR ALUNO (🆕 visitasMes com BRT)
 // ============================================
 router.get('/aluno/:id', authenticateToken, verificarBiblioteca, async (req, res) => {
   try {
@@ -213,12 +268,15 @@ router.get('/aluno/:id', authenticateToken, verificarBiblioteca, async (req, res
       alunoId: aluno._id,
       status: 'finalizado'
     });
+
+    // 🆕 CORREÇÃO: início do mês no fuso BRT
+    const inicioMesBR = getInicioMesBR();
+    const inicioMesDate = inicioDoDiaBrasil(inicioMesBR);
+
     const visitasMes = await AtendimentoBiblioteca.countDocuments({
       alunoId: aluno._id,
       status: 'finalizado',
-      createdAt: {
-        $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-      }
+      createdAt: { $gte: inicioMesDate }
     });
 
     res.json({
@@ -248,7 +306,7 @@ router.get('/aluno/:id', authenticateToken, verificarBiblioteca, async (req, res
 });
 
 // ============================================
-// REGISTRAR ENTRADA
+// REGISTRAR ENTRADA (🆕 bloqueia data futura via BRT)
 // ============================================
 router.post('/entrada', authenticateToken, verificarBiblioteca, async (req, res) => {
   try {
@@ -302,8 +360,26 @@ router.post('/entrada', authenticateToken, verificarBiblioteca, async (req, res)
     }
 
     const dataHoraEntrada = dataEntrada ? new Date(dataEntrada) : new Date();
+
+    // 🆕 CORREÇÃO: bloqueia data futura comparando com "agora" real
     if (dataHoraEntrada > new Date()) {
       return res.status(400).json({ success: false, error: 'Data de entrada não pode ser futura' });
+    }
+
+    // 🆕 Valida se a data (dia) não está no futuro em BRT
+    const dataEntradaStr = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(dataHoraEntrada);
+
+    const hojeBR = getDataHojeBR();
+    if (dataEntradaStr > hojeBR) {
+      return res.status(400).json({ 
+        success: false, 
+        error: `Não é possível registrar entrada com data futura. Hoje é ${hojeBR.split('-').reverse().join('/')}.` 
+      });
     }
 
     const atendimento = new AtendimentoBiblioteca({
@@ -454,7 +530,7 @@ router.get('/listar', authenticateToken, verificarBiblioteca, async (req, res) =
       query['entrada.dataHora'] = montarFiltroData(dataInicio, dataFim);
     }
 
-    const limitNum = Math.min(parseInt(limit) || 10, 100); // máximo 100
+    const limitNum = Math.min(parseInt(limit) || 10, 100);
     const pageNum = Math.max(parseInt(page) || 1, 1);
     const skip = (pageNum - 1) * limitNum;
 
@@ -600,65 +676,88 @@ router.delete('/atendimento/:id', authenticateToken, verificarBiblioteca, async 
 });
 
 // ============================================
-// DASHBOARD
+// 🆕 DASHBOARD (CORRIGIDO — FUSO BRASÍLIA)
 // ============================================
 router.get('/dashboard', authenticateToken, verificarBiblioteca, async (req, res) => {
   try {
-    const agora = new Date();
-    const inicioHoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
-    const inicioSemana = new Date(agora); inicioSemana.setDate(agora.getDate() - 7);
-    const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1);
+    // ============================================
+    // 🆕 CORREÇÃO PRINCIPAL: datas no fuso BRT
+    // ============================================
+    const hojeBR = getDataHojeBR();                // "2026-11-04"
+    const inicioMesBR = getInicioMesBR();          // "2026-11-01"
+    const inicioSemanaBR = getInicioSemanaBR();    // domingo da semana
+
+    const inicioHojeDate = inicioDoDiaBrasil(hojeBR);
+    const fimHojeDate = fimDoDiaBrasil(hojeBR);
+    const inicioSemanaDate = inicioDoDiaBrasil(inicioSemanaBR);
+    const inicioMesDate = inicioDoDiaBrasil(inicioMesBR);
 
     const [hoje, semana, mes, total] = await Promise.all([
-      AtendimentoBiblioteca.countDocuments({ 'entrada.dataHora': { $gte: inicioHoje } }),
-      AtendimentoBiblioteca.countDocuments({ 'entrada.dataHora': { $gte: inicioSemana } }),
-      AtendimentoBiblioteca.countDocuments({ 'entrada.dataHora': { $gte: inicioMes } }),
+      AtendimentoBiblioteca.countDocuments({
+        'entrada.dataHora': { $gte: inicioHojeDate, $lte: fimHojeDate }
+      }),
+      AtendimentoBiblioteca.countDocuments({
+        'entrada.dataHora': { $gte: inicioSemanaDate }
+      }),
+      AtendimentoBiblioteca.countDocuments({
+        'entrada.dataHora': { $gte: inicioMesDate }
+      }),
       AtendimentoBiblioteca.countDocuments()
     ]);
 
-    const ultimos7Dias = await AtendimentoBiblioteca.aggregate([
-      { $match: { 'entrada.dataHora': { $gte: inicioSemana } } },
-      { $group: {
-        _id: { $dateToString: { format: '%Y-%m-%d', date: '$entrada.dataHora' } },
-        visitas: { $sum: 1 }
-      }},
-      { $sort: { _id: 1 } }
-    ]);
-
+    // 🆕 CORREÇÃO: ultimos7Dias usando BRT
     const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
     const tendencias7Dias = [];
+
     for (let i = 6; i >= 0; i--) {
-      const d = new Date(); d.setDate(d.getDate() - i);
-      const key = d.toISOString().split('T')[0];
-      const found = ultimos7Dias.find(x => x._id === key);
-      tendencias7Dias.push({ dia: diasSemana[d.getDay()], visitas: found ? found.visitas : 0 });
+      const diaStr = getDataNDiasAtrasBR(i);
+      const count = await AtendimentoBiblioteca.countDocuments({
+        'entrada.dataHora': {
+          $gte: inicioDoDiaBrasil(diaStr),
+          $lte: fimDoDiaBrasil(diaStr)
+        }
+      });
+
+      const dataObj = new Date(diaStr + 'T12:00:00.000-03:00');
+      tendencias7Dias.push({
+        dia: diasSemana[dataObj.getUTCDay()],
+        visitas: count
+      });
     }
 
     const porMotivo = await AtendimentoBiblioteca.aggregate([
-      { $match: { 'entrada.dataHora': { $gte: inicioMes } } },
+      { $match: { 'entrada.dataHora': { $gte: inicioMesDate } } },
       { $group: { _id: '$motivoVisita', count: { $sum: 1 } } },
       { $sort: { count: -1 } }
     ]);
 
     const porTurma = await AtendimentoBiblioteca.aggregate([
-      { $match: { 'entrada.dataHora': { $gte: inicioMes }, alunoTurma: { $ne: '' } } },
+      { $match: { 'entrada.dataHora': { $gte: inicioMesDate }, alunoTurma: { $ne: '' } } },
       { $group: { _id: '$alunoTurma', total: { $sum: 1 } } },
       { $sort: { total: -1 } },
       { $limit: 10 }
     ]);
 
+    // 🆕 CORREÇÃO: distribuicaoHoraria no fuso BRT
     const visitasMes = await AtendimentoBiblioteca.find({
-      'entrada.dataHora': { $gte: inicioMes }
+      'entrada.dataHora': { $gte: inicioMesDate }
     }).select('entrada.dataHora');
 
     const distribuicaoHoraria = new Array(24).fill(0);
     visitasMes.forEach(v => {
-      const hora = new Date(v.entrada.dataHora).getHours();
-      distribuicaoHoraria[hora]++;
+      const horaStr = new Intl.DateTimeFormat('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        hour: '2-digit',
+        hour12: false
+      }).format(new Date(v.entrada.dataHora));
+      const hora = parseInt(horaStr, 10);
+      if (!isNaN(hora) && hora >= 0 && hora < 24) {
+        distribuicaoHoraria[hora]++;
+      }
     });
 
     const alunosFrequentes = await AtendimentoBiblioteca.aggregate([
-      { $match: { 'entrada.dataHora': { $gte: inicioMes }, alunoId: { $ne: null } } },
+      { $match: { 'entrada.dataHora': { $gte: inicioMesDate }, alunoId: { $ne: null } } },
       { $group: {
         _id: '$alunoId',
         alunoNome: { $first: '$alunoNome' },
@@ -671,6 +770,14 @@ router.get('/dashboard', authenticateToken, verificarBiblioteca, async (req, res
 
     res.json({
       success: true,
+      _debug: {
+        hojeBR,
+        inicioHojeDate: inicioHojeDate.toISOString(),
+        fimHojeDate: fimHojeDate.toISOString(),
+        inicioSemanaDate: inicioSemanaDate.toISOString(),
+        inicioMesDate: inicioMesDate.toISOString(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
       metricas: { hoje, semana, mes, total },
       tendencias: {
         ultimos7Dias: tendencias7Dias,
@@ -685,6 +792,7 @@ router.get('/dashboard', authenticateToken, verificarBiblioteca, async (req, res
       }
     });
   } catch (error) {
+    console.error('[GET /dashboard] Erro:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

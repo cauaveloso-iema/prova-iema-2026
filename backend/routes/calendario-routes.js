@@ -15,6 +15,70 @@ const PermissaoModulo = require('../models/PermissaoModulo');
 const CalendarioNotificacaoService = require('../services/calendario-notificacao-service');
 const calendarioNotificacaoService = new CalendarioNotificacaoService();
 
+// ============================================================================
+// 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
+// ============================================================================
+/**
+ * Data ATUAL no fuso de Brasília (YYYY-MM-DD), independente do fuso do servidor.
+ */
+function getDataHojeBR() {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).format(new Date());
+}
+
+/**
+ * Converte "YYYY-MM-DD" para Date no início do dia BRT (00:00:00.000-03:00).
+ */
+function inicioDoDiaBrasil(dataStr) {
+    if (!dataStr || typeof dataStr !== 'string') return null;
+    const base = dataStr.includes('T') ? dataStr.split('T')[0] : dataStr;
+    return new Date(base + 'T00:00:00.000-03:00');
+}
+
+/**
+ * Converte "YYYY-MM-DD" para Date no fim do dia BRT (23:59:59.999-03:00).
+ */
+function fimDoDiaBrasil(dataStr) {
+    if (!dataStr || typeof dataStr !== 'string') return null;
+    const base = dataStr.includes('T') ? dataStr.split('T')[0] : dataStr;
+    return new Date(base + 'T23:59:59.999-03:00');
+}
+
+/**
+ * Retorna { inicio, fim } do mês/ano em BRT.
+ */
+function getRangeMesBR(ano, mes) {
+    const anoNum = parseInt(ano);
+    const mesNum = parseInt(mes);
+    const mesStr = String(mesNum).padStart(2, '0');
+    const inicio = new Date(`${anoNum}-${mesStr}-01T00:00:00.000-03:00`);
+    // Fim: último dia do mês
+    const ultimoDia = new Date(anoNum, mesNum, 0).getDate();
+    const fim = new Date(`${anoNum}-${mesStr}-${String(ultimoDia).padStart(2, '0')}T23:59:59.999-03:00`);
+    return { inicio, fim };
+}
+
+/**
+ * Normaliza data recebida do frontend (pode ser "YYYY-MM-DD" ou ISO completo).
+ */
+function normalizarDataBR(dataStr) {
+    if (!dataStr) return null;
+    if (dataStr instanceof Date) return dataStr;
+    if (typeof dataStr !== 'string') return null;
+
+    // Já é ISO completo (tem T ou Z)
+    if (dataStr.includes('T') || dataStr.includes('Z')) {
+        return new Date(dataStr);
+    }
+
+    // Só a data: assume meio-dia BRT para evitar problemas de fuso
+    return new Date(dataStr + 'T12:00:00.000-03:00');
+}
+
 const SETORES_ADM_EXTRA = [
     'supervisao', 'coordenacao_patio', 'secretaria', 'recepcao',
     'enfermaria', 'cozinha', 'assistente-social', 'psicologia',
@@ -76,7 +140,7 @@ async function resolverUsuarioDoSetor(roleSetor) {
 router.get('/teste', (req, res) => res.json({ success: true, message: 'OK', timestamp: new Date() }));
 
 // ============================================================================
-// LISTAR EVENTOS
+// LISTAR EVENTOS (🆕 correção de fuso em filtros de data)
 // ============================================================================
 router.get('/eventos', authenticateToken, async (req, res) => {
     try {
@@ -141,17 +205,21 @@ router.get('/eventos', authenticateToken, async (req, res) => {
             }
         }
 
+        // 🆕 CORREÇÃO: filtro por mês/ano em BRT
         if (mes && ano) {
-            const di = new Date(ano, mes - 1, 1);
-            const df = new Date(ano, mes, 0, 23, 59, 59);
+            const { inicio: di, fim: df } = getRangeMesBR(ano, mes);
             query.dataInicio = { $gte: di, $lte: df };
         }
+
+        // 🆕 CORREÇÃO: filtro por intervalo em BRT
         if (inicio && fim) {
-            query.dataInicio = {
-                $gte: new Date(inicio + 'T00:00:00-03:00'),
-                $lte: new Date(fim + 'T23:59:59-03:00')
-            };
+            const di = inicioDoDiaBrasil(inicio);
+            const df = fimDoDiaBrasil(fim);
+            if (di && df) {
+                query.dataInicio = { $gte: di, $lte: df };
+            }
         }
+
         if (tipo && tipo !== 'todos') query.tipo = tipo;
 
         if (turmaId && turmaId !== 'todas') {
@@ -209,7 +277,6 @@ router.get('/eventos', authenticateToken, async (req, res) => {
                     email: criador.email,
                     role: criador.role
                 } : null,
-                // 🔥 NOVO: destinatário real
                 usuarioId: e.usuarioId ? {
                     id: e.usuarioId._id,
                     nome: e.usuarioId.nome,
@@ -318,8 +385,6 @@ router.get('/eventos/:id', authenticateToken, async (req, res) => {
                 repetirAte: evento.repetirAte,
                 participantes: evento.participantes,
                 status: evento.status,
-
-                // 🔥 Criador e destinatário SEPARADOS
                 criadoPor: evento.criadoPor ? {
                     id: evento.criadoPor._id,
                     nome: evento.criadoPor.nome,
@@ -332,7 +397,6 @@ router.get('/eventos/:id', authenticateToken, async (req, res) => {
                     email: evento.usuarioId.email,
                     role: evento.usuarioId.role
                 } : null,
-
                 createdAt: evento.createdAt
             }
         });
@@ -343,7 +407,7 @@ router.get('/eventos/:id', authenticateToken, async (req, res) => {
 });
 
 // ============================================================================
-// CRIAR
+// CRIAR (🆕 validação robusta de data)
 // ============================================================================
 router.post('/eventos', authenticateToken, verificarPermissaoCriacao, async (req, res) => {
     try {
@@ -361,6 +425,12 @@ router.post('/eventos', authenticateToken, verificarPermissaoCriacao, async (req
             return res.status(400).json({ success: false, error: 'Data obrigatória' });
         }
 
+        // 🆕 Valida formato da data
+        const dataInicioNorm = dataInicio.includes('T') ? dataInicio.split('T')[0] : dataInicio;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dataInicioNorm)) {
+            return res.status(400).json({ success: false, error: 'Data inválida. Use o formato YYYY-MM-DD.' });
+        }
+
         if (turmaId && !['professor', 'admin', 'super_admin', 'setor_pedagogico'].includes(req.userRole)) {
             const turma = await Turma.findById(turmaId);
             if (!turma || turma.professorId?.toString() !== req.userId) {
@@ -374,7 +444,6 @@ router.post('/eventos', authenticateToken, verificarPermissaoCriacao, async (req
         let criadorId = req.userId;
         let professorDestinoId = criadorId;
 
-        // 🔥 Resolve setorDestino → primeiro usuário ativo do setor
         if ((req.userRole === 'admin' || req.userRole === 'super_admin') && req.body.setorDestino) {
             const usuarioDoSetor = await resolverUsuarioDoSetor(req.body.setorDestino);
 
@@ -387,7 +456,6 @@ router.post('/eventos', authenticateToken, verificarPermissaoCriacao, async (req
 
             professorDestinoId = usuarioDoSetor._id.toString();
         }
-        // Admin pode criar em nome de outro usuário via usuarioId direto
         else if ((req.userRole === 'admin' || req.userRole === 'super_admin') && usuarioId) {
             const usuarioExiste = await User.findById(usuarioId);
             if (usuarioExiste) professorDestinoId = usuarioId;
@@ -396,17 +464,29 @@ router.post('/eventos', authenticateToken, verificarPermissaoCriacao, async (req
         let dataInicioObj;
         let dataFimObj = null;
 
+        // 🆕 CORREÇÃO: usa BRT explicitamente
         if (horarioInicio && !diaInteiro) {
-            dataInicioObj = new Date(`${dataInicio}T${horarioInicio}:00-03:00`);
+            dataInicioObj = new Date(`${dataInicioNorm}T${horarioInicio}:00-03:00`);
         } else {
-            dataInicioObj = new Date(`${dataInicio}T12:00:00-03:00`);
+            dataInicioObj = new Date(`${dataInicioNorm}T12:00:00-03:00`);
+        }
+
+        if (isNaN(dataInicioObj.getTime())) {
+            return res.status(400).json({ success: false, error: 'Data de início inválida' });
         }
 
         if (dataFim) {
+            const dataFimNorm = dataFim.includes('T') ? dataFim.split('T')[0] : dataFim;
             if (horarioFim && !diaInteiro) {
-                dataFimObj = new Date(`${dataFim}T${horarioFim}:00-03:00`);
+                dataFimObj = new Date(`${dataFimNorm}T${horarioFim}:00-03:00`);
             } else {
-                dataFimObj = new Date(`${dataFim}T12:00:00-03:00`);
+                dataFimObj = new Date(`${dataFimNorm}T12:00:00-03:00`);
+            }
+            if (isNaN(dataFimObj.getTime())) {
+                return res.status(400).json({ success: false, error: 'Data de fim inválida' });
+            }
+            if (dataFimObj < dataInicioObj) {
+                return res.status(400).json({ success: false, error: 'Data de fim não pode ser anterior à data de início' });
             }
         }
 
@@ -427,7 +507,7 @@ router.post('/eventos', authenticateToken, verificarPermissaoCriacao, async (req
             provaId,
             notificacaoAtivada: notificacaoAtivada !== false,
             repetir: repetir || 'nao',
-            repetirAte: repetirAte ? new Date(`${repetirAte}T12:00:00-03:00`) : null,
+            repetirAte: repetirAte ? new Date(`${repetirAte.split('T')[0]}T12:00:00-03:00`) : null,
             participantes: participantes || [],
             monitoramento: {
                 ipCriacao: ip,
@@ -435,7 +515,7 @@ router.post('/eventos', authenticateToken, verificarPermissaoCriacao, async (req
                 logs: [{
                     acao: 'criar',
                     usuarioId: criadorId,
-                    detalhes: { titulo, tipo, dataInicio, criadoPara: professorDestinoId, criadoPor: criadorId }
+                    detalhes: { titulo, tipo, dataInicio: dataInicioNorm, criadoPara: professorDestinoId, criadoPor: criadorId }
                 }]
             }
         });
@@ -500,7 +580,7 @@ router.post('/eventos', authenticateToken, verificarPermissaoCriacao, async (req
 });
 
 // ============================================================================
-// ATUALIZAR
+// ATUALIZAR (🆕 datas normalizadas em BRT)
 // ============================================================================
 router.put('/eventos/:id', authenticateToken, verificarPermissaoCriacao, async (req, res) => {
     try {
@@ -531,19 +611,28 @@ router.put('/eventos/:id', authenticateToken, verificarPermissaoCriacao, async (
         if (updates.cor !== undefined && evento.cor !== updates.cor) {
             camposAlterados.push('cor'); evento.cor = updates.cor;
         }
+
+        // 🆕 CORREÇÃO: normaliza dataInicio em BRT
         if (updates.dataInicio !== undefined) {
+            const dataNorm = updates.dataInicio.includes('T') 
+                ? updates.dataInicio.split('T')[0] 
+                : updates.dataInicio;
             const novaData = updates.horarioInicio
-                ? new Date(`${updates.dataInicio}T${updates.horarioInicio}:00-03:00`)
-                : new Date(`${updates.dataInicio}T12:00:00-03:00`);
+                ? new Date(`${dataNorm}T${updates.horarioInicio}:00-03:00`)
+                : new Date(`${dataNorm}T12:00:00-03:00`);
             if (evento.dataInicio.getTime() !== novaData.getTime()) {
                 camposAlterados.push('dataInicio'); evento.dataInicio = novaData;
             }
         }
+
         if (updates.dataFim !== undefined) {
             if (updates.dataFim) {
+                const dataNorm = updates.dataFim.includes('T')
+                    ? updates.dataFim.split('T')[0]
+                    : updates.dataFim;
                 const novaData = updates.horarioFim
-                    ? new Date(`${updates.dataFim}T${updates.horarioFim}:00-03:00`)
-                    : new Date(`${updates.dataFim}T12:00:00-03:00`);
+                    ? new Date(`${dataNorm}T${updates.horarioFim}:00-03:00`)
+                    : new Date(`${dataNorm}T12:00:00-03:00`);
                 if (!evento.dataFim || evento.dataFim.getTime() !== novaData.getTime()) {
                     camposAlterados.push('dataFim'); evento.dataFim = novaData;
                 }
@@ -551,6 +640,7 @@ router.put('/eventos/:id', authenticateToken, verificarPermissaoCriacao, async (
                 camposAlterados.push('dataFim'); evento.dataFim = null;
             }
         }
+
         if (updates.horarioInicio !== undefined && evento.horarioInicio !== updates.horarioInicio) {
             camposAlterados.push('horarioInicio'); evento.horarioInicio = updates.horarioInicio;
         }
@@ -583,7 +673,6 @@ router.put('/eventos/:id', authenticateToken, verificarPermissaoCriacao, async (
             }
         }
 
-        // 🔥 Resolve setorDestino no PUT
         if (isAdmin && updates.setorDestino) {
             const usuarioDoSetor = await resolverUsuarioDoSetor(updates.setorDestino);
             if (usuarioDoSetor && usuarioDoSetor._id.toString() !== evento.usuarioId.toString()) {
@@ -709,7 +798,7 @@ router.post('/notificacoes/verificar', async (req, res) => {
 });
 
 // ============================================================================
-// IMPORTAR PROVAS
+// IMPORTAR PROVAS (🆕 dataLimite em BRT)
 // ============================================================================
 router.post('/importar-provas', authenticateToken, verificarPermissaoCriacao, async (req, res) => {
     try {
@@ -726,7 +815,14 @@ router.post('/importar-provas', authenticateToken, verificarPermissaoCriacao, as
         for (const prova of provas) {
             const existe = await Evento.findOne({ provaId: prova._id });
             if (!existe && prova.dataLimite) {
-                const dataStr = new Date(prova.dataLimite).toISOString().split('T')[0];
+                // 🆕 CORREÇÃO: usa fuso BRT para obter a data (evita pular 1 dia)
+                const dataStr = new Intl.DateTimeFormat('en-CA', {
+                    timeZone: 'America/Sao_Paulo',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit'
+                }).format(new Date(prova.dataLimite));
+
                 const evento = new Evento({
                     usuarioId: req.userId, criadoPor: req.userId,
                     titulo: `📝 ${prova.titulo}`,

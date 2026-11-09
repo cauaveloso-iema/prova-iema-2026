@@ -1,0 +1,17 @@
+/* ============================================================
+   Minhas Avaliações — EducaPleno
+   ============================================================ */
+
+/* A página usa predominantemente classes do Bootstrap (bg-light,
+   card, shadow-sm, badge etc). Este arquivo existe para concentrar
+   eventuais estilos específicos da tela sem voltar a poluir o HTML
+   com <style> inline. */
+
+body {
+    min-height: 100vh;
+}
+
+/* Espaçamento opcional entre o header e o conteúdo */
+#lista-pendentes {
+    min-height: 60px;
+}

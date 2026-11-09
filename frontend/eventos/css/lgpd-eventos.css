@@ -1,0 +1,177 @@
+/* ============================================================
+   Página LGPD — Termo de Privacidade (EducaPleno)
+   ============================================================ */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f0f9ff;
+    min-height: 100vh;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+}
+
+.container {
+    max-width: 900px;
+    width: 100%;
+    margin: 0 auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: white;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+}
+
+/* ---------- Header ---------- */
+.header {
+    background: linear-gradient(135deg, #0ea5e9, #0284c7);
+    color: white;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.header i { font-size: 22px; }
+.header h1 { font-size: 18px; margin: 0; flex: 1; }
+.header .btn-close-x {
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: background 0.2s;
+}
+.header .btn-close-x:hover { background: rgba(255,255,255,0.2); }
+
+/* ---------- Conteúdo ---------- */
+.content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    font-size: 14px;
+    line-height: 1.7;
+    color: #1e293b;
+    text-align: justify;
+    font-family: 'Times New Roman', Times, serif;
+}
+.content h2 {
+    font-size: 16px;
+    color: #075985;
+    margin: 20px 0 10px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-weight: 700;
+}
+.content h3 {
+    font-size: 14px;
+    color: #0369a1;
+    margin: 16px 0 8px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-weight: 700;
+}
+.content p { margin-bottom: 12px; }
+.content ul, .content ol { margin: 8px 0 12px 24px; }
+.content li { margin-bottom: 6px; }
+.content strong { color: #0f172a; }
+
+.ultima-atualizacao {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px dashed #cbd5e1;
+    font-size: 12px;
+    color: #64748b;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* ---------- Aviso de scroll ---------- */
+.aviso-scroll {
+    background: #fef3c7;
+    border: 1px solid #fde68a;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    color: #92400e;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.aviso-scroll.liberado {
+    background: #d1fae5;
+    border-color: #86efac;
+    color: #065f46;
+}
+
+/* ---------- Footer ---------- */
+.footer {
+    padding: 16px 24px;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.footer .status {
+    font-size: 12px;
+    color: #64748b;
+    flex: 1;
+}
+.footer .status.liberado { color: #10b981; font-weight: 700; }
+
+.footer-botoes {
+    display: flex;
+    gap: 8px;
+}
+
+.footer button {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-aceitar {
+    background: #cbd5e0;
+    color: white;
+    cursor: not-allowed;
+}
+.btn-aceitar.ativo {
+    background: linear-gradient(135deg, #10b981, #059669);
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+.btn-aceitar.ativo:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+}
+
+.btn-cancelar {
+    background: #f1f5f9;
+    color: #475569;
+}
+.btn-cancelar:hover { background: #e2e8f0; }
+
+/* ---------- Modo embed (iframe dentro do modal) ---------- */
+.modo-embed { padding: 0; background: white; }
+.modo-embed .container { box-shadow: none; border-radius: 0; }
+.modo-embed .header .btn-close-x { display: none; }
+
+/* ---------- Responsivo ---------- */
+@media (max-width: 600px) {
+    .content { padding: 16px; font-size: 13px; }
+    .header h1 { font-size: 15px; }
+    .footer { flex-direction: column; align-items: stretch; }
+    .footer-botoes { flex-direction: column; }
+    .footer button { width: 100%; }
+}

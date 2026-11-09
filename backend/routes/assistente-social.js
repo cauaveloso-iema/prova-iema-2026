@@ -11,6 +11,59 @@ const Notificacao = require('../models/Notificacao');
 const MASCARA_TEXTO = '🔒 Conteúdo protegido (visível apenas para o profissional responsável)';
 const ROLES_MASCARADOS = ['super_admin'];
 
+// ============================================
+// 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
+// ============================================
+/**
+ * Retorna a data ATUAL no fuso de Brasília (America/Sao_Paulo)
+ * no formato YYYY-MM-DD, independente do fuso do servidor.
+ */
+function getDataHojeBR() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(new Date());
+}
+
+/**
+ * Retorna a data de N dias atrás no fuso de Brasília,
+ * no formato YYYY-MM-DD.
+ */
+function getDataNDiasAtrasBR(n) {
+  const agora = new Date();
+  // Subtrai n dias em milissegundos (mesmo instante, só desloca)
+  const passado = new Date(agora.getTime() - n * 24 * 60 * 60 * 1000);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(passado);
+}
+
+/**
+ * Retorna o primeiro dia do MÊS ATUAL no fuso de Brasília (YYYY-MM-01).
+ */
+function getInicioMesBR() {
+  const hoje = getDataHojeBR(); // "2026-11-04"
+  return `${hoje.substring(0, 7)}-01`; // "2026-11-01"
+}
+
+/**
+ * Retorna o primeiro dia da SEMANA (domingo) no fuso de Brasília (YYYY-MM-DD).
+ */
+function getInicioSemanaBR() {
+  const agora = new Date();
+  // Descobre o "hoje" BRT representado como Date UTC (00:00 BRT = 03:00 UTC)
+  const hojeBR = getDataHojeBR();
+  const hojeUTC = new Date(hojeBR + 'T03:00:00.000Z');
+  const diaSemana = hojeUTC.getUTCDay(); // 0=domingo
+  const inicio = new Date(hojeUTC.getTime() - diaSemana * 24 * 60 * 60 * 1000);
+  return inicio.toISOString().split('T')[0];
+}
+
 function mascararParaAdmin(dados, req) {
   if (!req?.userRole || !ROLES_MASCARADOS.includes(req.userRole)) return dados;
   if (Array.isArray(dados)) return dados.map(item => mascararItem(item, req));
@@ -234,7 +287,7 @@ function fimDoDiaBrasil(dataStr) { return new Date(dataStr + 'T23:59:59.999-03:0
 router.get('/health', (req, res) => {
   res.json({ 
     success: true, status: 'online', service: 'Assistente Social',
-    versao: '2.1-multi-tipos', timestamp: new Date().toISOString()
+    versao: '2.2-fuso-br', timestamp: new Date().toISOString()
   });
 });
 
@@ -407,7 +460,6 @@ router.post('/registrar', authenticateToken, verificarAssistenteSocial, async (r
       ? 'pendente'
       : (assinaturaValida.length > 100 ? 'assinada' : 'nao_necessaria');
     
-    // Prepara detalhes com tipos adicionais
     const detalhesFinal = { ...(detalhes || {}) };
     if (tiposFinal.length > 1) {
       detalhesFinal.tiposTarefaAdicionais = tiposFinal.slice(1);
@@ -577,10 +629,9 @@ router.post('/remarcar', authenticateToken, verificarAssistenteSocial, async (re
       return res.status(403).json({ success: false, error: check.motivo, code: 'ADMIN_NAO_CRIADOR' });
     }
     
-    const dataObj = new Date(dataRemarcacao + 'T00:00:00');
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    if (dataObj < hoje) {
+    // 🆕 Compara com a data de HOJE no fuso de Brasília (não UTC)
+    const hojeBR = getDataHojeBR(); // "2026-11-04"
+    if (dataRemarcacao < hojeBR) {
       return res.status(400).json({ success: false, error: 'A data deve ser hoje ou futura' });
     }
     
@@ -602,6 +653,8 @@ router.post('/remarcar', authenticateToken, verificarAssistenteSocial, async (re
     atendimento.updatedAt = new Date();
     
     await atendimento.save();
+    
+    const dataObj = new Date(dataRemarcacao + 'T12:00:00');
     
     res.json({
       success: true,
@@ -625,15 +678,14 @@ router.get('/remarcacoes/pendentes', authenticateToken, verificarAssistenteSocia
       'remarcacoes.status': 'pendente', status: { $ne: 'cancelado' }
     }).sort({ 'remarcacoes.dataRemarcacao': 1 });
     
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
+    // 🆕 Usa data de hoje no fuso de Brasília para comparação
+    const hojeBR = getDataHojeBR();
     const remarcacoes = [];
     
     atendimentos.forEach(atendimento => {
       const tipos = extrairTiposTarefa(atendimento);
       (atendimento.remarcacoes || []).forEach(rem => {
         if (rem.status !== 'pendente') return;
-        const dataRem = new Date(rem.dataRemarcacao + 'T00:00:00');
         remarcacoes.push({
           id: rem.id.toString(), atendimentoId: atendimento._id,
           alunoId: atendimento.alunoId, alunoNome: atendimento.alunoNome,
@@ -645,8 +697,8 @@ router.get('/remarcacoes/pendentes', authenticateToken, verificarAssistenteSocia
           motivoRemarcacao: rem.motivoRemarcacao,
           observacoesRemarcacao: rem.observacoesRemarcacao,
           status: rem.status,
-          atrasado: dataRem < hoje,
-          hoje: dataRem.getTime() === hoje.getTime(),
+          atrasado: rem.dataRemarcacao < hojeBR,
+          hoje: rem.dataRemarcacao === hojeBR,
           criadaEm: rem.criadaEm, criadaPorNome: rem.criadaPorNome
         });
       });
@@ -856,31 +908,40 @@ router.post('/processar-alertas-24h', async (req, res) => {
 });
 
 // ============================================
-// DASHBOARD (agrupa multi-tipos corretamente)
+// 🆕 DASHBOARD (CORRIGIDO — FUSO BRASÍLIA)
 // ============================================
 router.get('/dashboard', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
-    const hoje = new Date();
-    const hojeStr = hoje.toISOString().split('T')[0];
-    const inicioSemana = new Date(hoje);
-    inicioSemana.setDate(hoje.getDate() - hoje.getDay());
-    const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-    const ultimos30Dias = new Date();
-    ultimos30Dias.setDate(ultimos30Dias.getDate() - 30);
-    
+    // ============================================
+    // 🆕 CORREÇÃO PRINCIPAL: usa data de HOJE no fuso BRT
+    // (não mais hoje.toISOString() que retorna UTC)
+    // ============================================
+    const hojeBR = getDataHojeBR();               // "2026-11-04"
+    const inicioMesBR = getInicioMesBR();         // "2026-11-01"
+    const inicioSemanaBR = getInicioSemanaBR();   // domingo da semana atual
+    const seteDiasAtrasBR = getDataNDiasAtrasBR(7);
+    const trintaDiasAtrasBR = getDataNDiasAtrasBR(30);
+
+    // Converte strings YYYY-MM-DD para Date com offset BRT correto
+    const inicioHojeDate = inicioDoDiaBrasil(hojeBR);
+    const fimHojeDate = fimDoDiaBrasil(hojeBR);
+    const inicioSemanaDate = inicioDoDiaBrasil(inicioSemanaBR);
+    const inicioMesDate = inicioDoDiaBrasil(inicioMesBR);
+    const ultimos30Dias = inicioDoDiaBrasil(trintaDiasAtrasBR);
+
     const [atendimentosHoje, atendimentosSemana, atendimentosMes, total] = await Promise.all([
       AtendimentoAssistenteSocial.countDocuments({
-        'entrada.dataHora': { $gte: inicioDoDiaBrasil(hojeStr), $lte: fimDoDiaBrasil(hojeStr) }
+        'entrada.dataHora': { $gte: inicioHojeDate, $lte: fimHojeDate }
       }),
-      AtendimentoAssistenteSocial.countDocuments({ 'entrada.dataHora': { $gte: inicioSemana } }),
-      AtendimentoAssistenteSocial.countDocuments({ 'entrada.dataHora': { $gte: inicioMes } }),
+      AtendimentoAssistenteSocial.countDocuments({ 'entrada.dataHora': { $gte: inicioSemanaDate } }),
+      AtendimentoAssistenteSocial.countDocuments({ 'entrada.dataHora': { $gte: inicioMesDate } }),
       AtendimentoAssistenteSocial.countDocuments()
     ]);
     
     const emAndamento = await AtendimentoAssistenteSocial.countDocuments({ status: 'em_andamento' });
     const finalizadosHoje = await AtendimentoAssistenteSocial.countDocuments({
       status: 'finalizado',
-      'saida.dataHora': { $gte: inicioDoDiaBrasil(hojeStr), $lte: fimDoDiaBrasil(hojeStr) }
+      'saida.dataHora': { $gte: inicioHojeDate, $lte: fimHojeDate }
     });
     
     const limite24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -918,17 +979,28 @@ router.get('/dashboard', authenticateToken, verificarAssistenteSocial, async (re
       { $sort: { count: -1 } }
     ]);
     
+    // ============================================
+    // 🆕 CORREÇÃO: últimos 7 dias usando BRT
+    // ============================================
     const ultimos7Dias = [];
     for (let i = 6; i >= 0; i--) {
-      const data = new Date();
-      data.setDate(data.getDate() - i);
-      const dataStr = data.toISOString().split('T')[0];
+      const dataStr = getDataNDiasAtrasBR(i); // "2026-11-04", "2026-11-03", ...
       const count = await AtendimentoAssistenteSocial.countDocuments({
-        'entrada.dataHora': { $gte: inicioDoDiaBrasil(dataStr), $lte: fimDoDiaBrasil(dataStr) }
+        'entrada.dataHora': { 
+          $gte: inicioDoDiaBrasil(dataStr), 
+          $lte: fimDoDiaBrasil(dataStr) 
+        }
       });
+      
+      // Para exibir o label do dia (seg, ter, qua...), criamos um Date
+      // com offset BRT e usamos toLocaleDateString com timeZone
+      const dataObj = new Date(dataStr + 'T12:00:00.000-03:00');
       ultimos7Dias.push({
         data: dataStr,
-        dia: data.toLocaleDateString('pt-BR', { weekday: 'short' }),
+        dia: dataObj.toLocaleDateString('pt-BR', { 
+          weekday: 'short', 
+          timeZone: 'America/Sao_Paulo' 
+        }),
         atendimentos: count
       });
     }
@@ -962,6 +1034,13 @@ router.get('/dashboard', authenticateToken, verificarAssistenteSocial, async (re
     
     res.json({
       success: true,
+      // 🆕 Info de debug útil (opcional, pode remover em prod)
+      _debug: {
+        hojeBR,
+        inicioHojeDate: inicioHojeDate.toISOString(),
+        fimHojeDate: fimHojeDate.toISOString(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
       metricas: {
         hoje: atendimentosHoje, semana: atendimentosSemana, mes: atendimentosMes,
         total, emAndamento, finalizadosHoje, atendimentosAntigos
@@ -985,7 +1064,10 @@ router.get('/dashboard', authenticateToken, verificarAssistenteSocial, async (re
         distribuicaoHoraria: horasDistribuicao
       }
     });
-  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+  } catch (error) { 
+    console.error('[GET /dashboard] Erro:', error);
+    res.status(500).json({ success: false, error: error.message }); 
+  }
 });
 
 // ============================================
@@ -1212,7 +1294,6 @@ router.put('/atendimento/:id', authenticateToken, verificarAssistenteSocial, asy
       detalhes, status, saida
     } = req.body;
     
-    // 1) Tipos
     let tiposFinal = null;
     if (Array.isArray(tiposTarefa) && tiposTarefa.length > 0) {
       tiposFinal = [...new Set(tiposTarefa.filter(Boolean))];
@@ -1230,13 +1311,11 @@ router.put('/atendimento/:id', authenticateToken, verificarAssistenteSocial, asy
       tiposAdicionaisFinal = tiposFinal.length > 1 ? tiposFinal.slice(1) : [];
     }
     
-    // 2) Campos simples
     if (descricao) atendimento.entrada.descricao = descricao;
     if (observacoes !== undefined) atendimento.entrada.observacoes = observacoes;
     if (gravidade) atendimento.entrada.gravidade = gravidade;
     if (prioridade) atendimento.prioridade = prioridade;
     
-    // 3) Detalhes via .set() (criptografia correta)
     const detalhesParaSalvar = { ...detalhesAtuaisLimpos };
     if (detalhes && typeof detalhes === 'object') {
       Object.entries(detalhes).forEach(([k, v]) => {
@@ -1270,7 +1349,6 @@ router.put('/atendimento/:id', authenticateToken, verificarAssistenteSocial, asy
     });
     atendimento.markModified('detalhes');
     
-    // 4) Status/Saída
     if (status) atendimento.status = status;
     if (saida) {
       atendimento.saida = { 

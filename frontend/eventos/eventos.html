@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>Módulo de Eventos — EducaPleno</title>
+
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#047857">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="EducaPleno">
+
+    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
+    <link rel="shortcut icon" type="image/x-icon" href="/icons/favicon.ico">
+    <link rel="apple-touch-icon" href="/icons/favicon.ico">
+
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    <script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    OneSignalDeferred.push(async function(OneSignal) {
+        try {
+            await OneSignal.init({
+                appId: "610ac3bc-db81-4ff9-965d-6669489ce406",
+                safari_web_id: "web.onesignal.auto.83a7b8a0-4b7d-4b8a-9c3d-5f2e8a1b9c0d",
+                allowLocalhostAsSecureOrigin: true
+            });
+        } catch(e) { console.warn('OneSignal:', e); }
+    });
+    </script>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="stylesheet" href="/css/mobile.css">
+    <link rel="stylesheet" href="/eventos/css/eventos.css">
+
+    <script src="/js/vlibras-oficial.js" defer></script>
+    <script src="/js/acessibilidade.js" defer></script>
+    <script src="/js/toggle-buttons.js" defer></script>
+    <script src="/js/draggable.js" defer></script>
+    <script src="/js/chatbot-frontend.js" defer></script>
+    <script src="/js/push-client.js" defer></script>
+    <script src="/js/dialog-helper.js" defer></script>
+    <script src="/js/core-security.js" defer></script>
+
+    <style>
+        .modal-backdrop { background-color: rgba(15, 23, 42, 0.7) !important; backdrop-filter: blur(2px); z-index: 1040 !important; }
+        .modal-backdrop.show { opacity: 1 !important; }
+        .modal-content { background-color: #ffffff !important; border: none !important; border-radius: 16px !important; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25) !important; z-index: 1055 !important; }
+        .modal-header { background: linear-gradient(135deg, #065f46, #059669) !important; color: #ffffff !important; border-bottom: none !important; border-radius: 16px 16px 0 0 !important; padding: 18px 24px !important; }
+        .modal-header .modal-title { color: #ffffff !important; font-weight: 700 !important; font-size: 16px !important; }
+        .modal-header .btn-close { filter: invert(1) !important; opacity: 0.8 !important; }
+        .modal-body { background-color: #ffffff !important; padding: 24px !important; }
+        .modal-footer { background-color: #f8fafc !important; border-top: 1px solid #e2e8f0 !important; }
+        #btnLogout { display: none !important; }
+
+        /* ===== NOVOS ESTILOS: Gestão de Usuários ===== */
+        .ev-user-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            padding: 18px;
+            margin-bottom: 14px;
+            transition: box-shadow .2s, border-color .2s;
+        }
+        .ev-user-card:hover {
+            border-color: #cbd5e1;
+            box-shadow: 0 4px 16px rgba(15, 23, 42, .06);
+        }
+        .ev-user-card-header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+        .ev-user-avatar {
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #065f46, #059669);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 15px;
+            flex-shrink: 0;
+            letter-spacing: .5px;
+        }
+        .ev-user-card-header h4 {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 700;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: center;
+        }
+        .ev-user-card-actions {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-left: auto;
+        }
+        .ev-user-card-body {
+            border-top: 1px dashed #e2e8f0;
+            padding-top: 14px;
+        }
+        .ev-user-card-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #475569;
+            margin-bottom: 8px;
+        }
+        .ev-user-card-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+        .ev-user-ev-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #ecfdf5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+            border-radius: 20px;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .ev-user-ev-tag button {
+            background: none;
+            border: none;
+            color: #065f46;
+            cursor: pointer;
+            padding: 0;
+            opacity: .6;
+        }
+        .ev-user-ev-tag button:hover { opacity: 1; }
+        .ev-user-link-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .ev-user-link-row select {
+            flex: 1;
+            padding: 8px 10px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        /* Filtros */
+        .ev-filtros {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr auto;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        .ev-filtros input,
+        .ev-filtros select {
+            padding: 10px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 13px;
+            background: #fff;
+        }
+        .ev-filtros input:focus,
+        .ev-filtros select:focus {
+            outline: none;
+            border-color: #059669;
+            box-shadow: 0 0 0 3px rgba(5, 150, 105, .12);
+        }
+        @media (max-width: 768px) {
+            .ev-filtros { grid-template-columns: 1fr; }
+            .ev-user-card-actions { margin-left: 0; width: 100%; }
+            .ev-user-link-row { flex-direction: column; }
+        }
+
+        /* Modal: senha revelada */
+        .ev-senha-revelada {
+            background: #f1f5f9;
+            border: 1px dashed #94a3b8;
+            border-radius: 10px;
+            padding: 16px;
+            margin: 14px 0;
+            font-size: 22px;
+            letter-spacing: 2px;
+            font-weight: 700;
+            color: #0f172a;
+            user-select: all;
+            cursor: copy;
+        }
+        .ev-senha-revelada code {
+            font-family: 'Courier New', monospace;
+            background: none;
+            color: inherit;
+        }
+
+        /* Badge perigo */
+        .ev-tag-danger { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+        .ev-btn-warning { background: #f59e0b; color: #fff; border: none; }
+        .ev-btn-warning:hover { background: #d97706; }
+    </style>
+</head>
+
+<body class="ev-body">
+
+    <div vw class="enabled">
+        <div vw-access-button class="active"></div>
+        <div vw-plugin-wrapper><div class="vw-plugin-top-wrapper"></div></div>
+    </div>
+
+    <div id="global-loader"><div class="spinner"></div><p id="global-loader-text">Carregando...</p></div>
+    <button class="btn-logout" id="btnLogout" aria-hidden="true"></button>
+
+    <!-- TOPBAR -->
+    <div class="topbar-aluno">
+        <a href="#" class="brand" onclick="event.preventDefault();">
+            <div class="brand-icon"><i class="fas fa-graduation-cap"></i></div>
+            <div class="brand-text"><h2>EducaPleno</h2><span>Módulo de Eventos</span></div>
+        </a>
+        <div class="nav-menu">
+            <button class="nav-item" onclick="abrirTab('dashboard')"><i class="fas fa-chart-pie"></i><span>Dashboard</span></button>
+            <button class="nav-item" onclick="abrirTab('modelos')"><i class="fas fa-file-alt"></i><span>Modelos</span></button>
+            <button class="nav-item" onclick="abrirTab('eventos')"><i class="fas fa-calendar-day"></i><span>Eventos</span></button>
+            <button class="nav-item" onclick="abrirTab('usuarios')"><i class="fas fa-users-cog"></i><span>Usuários</span></button>
+        </div>
+        <div class="actions">
+            <a href="avaliador.html" target="_blank" class="btn-circle-aluno verde-outline"><i class="fas fa-user-check"></i></a>
+            <a href="coordenador.html" target="_blank" class="btn-circle-aluno verde-outline"><i class="fas fa-user-tie"></i></a>
+            <button class="btn-circle-aluno verde-outline" onclick="window.history.back()"><i class="fas fa-arrow-left"></i></button>
+        </div>
+    </div>
+
+    <div class="ev-shell">
+        <div class="aluno-hero ev-hero">
+            <div class="aluno-hero-inner">
+                <div class="hero-info">
+                    <h1><i class="fas fa-calendar-check"></i> <span>Módulo de Eventos</span></h1>
+                    <p class="ev-hero-sub">Modelos, eventos, configuração de avaliações e inscrições — tudo em um só lugar.</p>
+                    <div class="hero-chips">
+                        <span class="hero-chip"><i class="fas fa-file-alt"></i> Modelos dinâmicos</span>
+                        <span class="hero-chip"><i class="fas fa-robot"></i> Extração por IA</span>
+                        <span class="hero-chip"><i class="fas fa-star"></i> Avaliação</span>
+                        <span class="hero-chip"><i class="fas fa-shield-alt"></i> LGPD</span>
+                    </div>
+                </div>
+                <div class="hero-stats">
+                    <div class="hero-stat"><div class="num" id="heroStatModelos">—</div><div class="lbl">Modelos</div></div>
+                    <div class="hero-stat"><div class="num" id="heroStatEventos">—</div><div class="lbl">Eventos</div></div>
+                    <div class="hero-stat"><div class="num" id="heroStatInscricoes">—</div><div class="lbl">Inscrições</div></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="ev-tabs" role="tablist">
+            <button class="ev-tab active" data-tab="dashboard"><i class="fas fa-chart-pie"></i> Dashboard</button>
+            <button class="ev-tab" data-tab="modelos"><i class="fas fa-file-alt"></i> Modelos</button>
+            <button class="ev-tab" data-tab="eventos"><i class="fas fa-calendar-day"></i> Eventos</button>
+            <button class="ev-tab" data-tab="usuarios"><i class="fas fa-users-cog"></i> Gestão de Usuários</button>
+        </div>
+
+        <!-- DASHBOARD -->
+        <div id="panel-dashboard" class="ev-panel active">
+            <div class="ev-grid">
+                <div class="ev-stat"><div class="ev-stat-icon"><i class="fas fa-file-alt"></i></div><h3>Modelos</h3><div class="ev-stat-value" id="stat-modelos">—</div></div>
+                <div class="ev-stat"><div class="ev-stat-icon"><i class="fas fa-calendar-day"></i></div><h3>Eventos</h3><div class="ev-stat-value" id="stat-eventos">—</div></div>
+                <div class="ev-stat ev-stat-success"><div class="ev-stat-icon"><i class="fas fa-check-circle"></i></div><h3>Publicados</h3><div class="ev-stat-value" id="stat-publicados">—</div></div>
+                <div class="ev-stat ev-stat-warning"><div class="ev-stat-icon"><i class="fas fa-pen"></i></div><h3>Rascunhos</h3><div class="ev-stat-value" id="stat-rascunhos">—</div></div>
+                <div class="ev-stat ev-stat-danger"><div class="ev-stat-icon"><i class="fas fa-flag-checkered"></i></div><h3>Encerrados</h3><div class="ev-stat-value" id="stat-encerrados">—</div></div>
+                <div class="ev-stat"><div class="ev-stat-icon"><i class="fas fa-users"></i></div><h3>Inscrições</h3><div class="ev-stat-value" id="stat-inscricoes">—</div></div>
+            </div>
+            <div class="ev-card">
+                <div class="ev-card-header"><h3><i class="fas fa-history"></i> Últimos eventos</h3></div>
+                <div id="ultimos-eventos" class="ev-list"><div class="ev-empty">Carregando...</div></div>
+            </div>
+        </div>
+
+        <!-- MODELOS -->
+        <div id="panel-modelos" class="ev-panel">
+            <div class="ev-card">
+                <div class="ev-card-header"><h3><i class="fas fa-file-upload"></i> Passo 1 — Anexos e Extração Automática</h3></div>
+                <p class="ev-card-sub">Envie os documentos do evento (edital, formulário, termo LGPD, etc).</p>
+                <div class="ev-form-group"><label for="modelo-nome">Nome do Modelo *</label><input type="text" id="modelo-nome" placeholder="Ex: Processo Seletivo 2026"></div>
+                <div class="ev-form-group"><label for="modelo-descricao">Descrição</label><textarea id="modelo-descricao" placeholder="Breve descrição..."></textarea></div>
+                <div class="ev-form-row"><label class="ev-check"><input type="checkbox" id="modelo-requer-avaliacao"> ⭐ Este modelo requer avaliação</label></div>
+                <div class="ev-form-row"><label class="ev-check"><input type="checkbox" id="modelo-permite-multiplas"> 🔁 Permitir múltiplas inscrições</label></div>
+                <div class="ev-form-group">
+                    <label for="modelo-anexos">Anexos (PDF, DOC, DOCX, TXT, ODT)</label>
+                    <input type="file" id="modelo-anexos" multiple accept=".pdf,.doc,.docx,.txt,.odt">
+                    <div id="anexos-tipos-container" style="margin-top: 12px;"></div>
+                </div>
+                <div class="ev-actions">
+                    <button type="button" class="ev-btn ev-btn-primary" id="btn-extrair-ia"><i class="fas fa-robot"></i> Extrair Campos Automaticamente</button>
+                    <span id="ia-status" class="ev-hint"></span>
+                </div>
+            </div>
+            <div class="ev-card">
+                <div class="ev-card-header"><h3><i class="fas fa-list-check"></i> Passo 2 — Revisar Campos</h3></div>
+                <div id="anexos-container"></div>
+                <p id="anexos-vazio" class="ev-empty ev-empty-inline"><i class="fas fa-inbox"></i> Nenhum anexo ainda.</p>
+                <div id="form-modelo-alert"></div>
+                <div class="ev-actions" style="margin-top: 16px;"><button type="button" class="ev-btn ev-btn-primary" id="btn-salvar-modelo"><i class="fas fa-save"></i> Salvar Modelo</button></div>
+            </div>
+            <div class="ev-card">
+                <div class="ev-card-header"><h3><i class="fas fa-list"></i> Modelos Cadastrados</h3></div>
+                <div id="lista-modelos" class="ev-list"><div class="ev-empty">Carregando...</div></div>
+            </div>
+        </div>
+
+        <!-- EVENTOS -->
+        <div id="panel-eventos" class="ev-panel">
+            <div class="ev-card">
+                <div class="ev-card-header"><h3><i class="fas fa-plus-circle"></i> Novo Evento</h3></div>
+                <form id="form-evento">
+                    <div class="ev-form-group"><label for="evento-titulo">Título do Evento *</label><input type="text" id="evento-titulo" required></div>
+                    <div class="ev-form-group"><label for="evento-modelo">Modelo Base *</label><select id="evento-modelo" required><option value="">Selecione...</option></select></div>
+                    <div class="ev-form-group"><label for="evento-descricao">Descrição Pública</label><textarea id="evento-descricao"></textarea></div>
+                    <div class="ev-form-grid">
+                        <div class="ev-form-group"><label for="evento-local">Local</label><input type="text" id="evento-local"></div>
+                        <div class="ev-form-group"><label for="evento-publico">Público-alvo</label><input type="text" id="evento-publico"></div>
+                        <div class="ev-form-group"><label for="evento-vagas">Vagas</label><input type="number" id="evento-vagas"></div>
+                    </div>
+                    <div class="ev-section-title"><i class="fas fa-calendar-alt"></i> Período de Inscrição</div>
+                    <div class="ev-form-grid-2">
+                        <div class="ev-form-group"><label for="evento-data-inicio-inscricao">Início *</label><input type="datetime-local" id="evento-data-inicio-inscricao" required></div>
+                        <div class="ev-form-group"><label for="evento-data-fim-inscricao">Fim *</label><input type="datetime-local" id="evento-data-fim-inscricao" required></div>
+                    </div>
+                    <div class="ev-section-title"><i class="fas fa-flag-checkered"></i> Realização</div>
+                    <div class="ev-form-grid-2">
+                        <div class="ev-form-group"><label for="evento-data-inicio">Início</label><input type="datetime-local" id="evento-data-inicio"></div>
+                        <div class="ev-form-group"><label for="evento-data-fim">Fim</label><input type="datetime-local" id="evento-data-fim"></div>
+                    </div>
+                    <div class="ev-form-group"><label for="evento-status">Status</label><select id="evento-status"><option value="Rascunho">Rascunho</option><option value="Publicado">Publicado</option><option value="Encerrado">Encerrado</option><option value="Cancelado">Cancelado</option></select></div>
+                    <div class="ev-form-group ev-coord-box">
+                        <label>Coordenadores do Evento</label>
+                        <div id="coordenadores-tags" class="ev-tags"></div>
+                        <div class="ev-tags-input">
+                            <select id="evento-coordenadores-select"><option value="">Carregando...</option></select>
+                            <button type="button" class="ev-btn ev-btn-secondary" onclick="adicionarCoordenador()"><i class="fas fa-plus"></i> Add</button>
+                        </div>
+                    </div>
+                    <div id="form-evento-alert"></div>
+                    <button type="submit" class="ev-btn ev-btn-primary" id="btn-salvar-evento"><i class="fas fa-save"></i> Criar Evento</button>
+                </form>
+            </div>
+            <div class="ev-card">
+                <div class="ev-card-header"><h3><i class="fas fa-list"></i> Eventos Cadastrados</h3></div>
+                <div id="lista-eventos" class="ev-list"><div class="ev-empty">Carregando...</div></div>
+            </div>
+        </div>
+
+        <!-- INSCRIÇÕES -->
+        <div id="panel-inscricoes" class="ev-panel">
+            <div class="ev-card">
+                <div class="ev-card-header ev-card-header-row">
+                    <h3><i class="fas fa-users"></i> Inscrições — <span id="insc-evento-titulo">—</span></h3>
+                    <button class="ev-btn ev-btn-secondary ev-btn-sm" id="btn-voltar-eventos"><i class="fas fa-arrow-left"></i> Voltar</button>
+                </div>
+                <p class="ev-card-sub">🔗 Link público: <a id="link-publico" href="#" target="_blank"></a> <button class="ev-btn ev-btn-secondary ev-btn-sm" id="btn-copiar-link"><i class="fas fa-copy"></i> Copiar</button></p>
+            </div>
+            <div class="ev-card">
+                <div class="ev-card-header"><h3><i class="fas fa-list"></i> Inscritos</h3></div>
+                <div id="lista-inscricoes" class="ev-list"><div class="ev-empty">Carregando...</div></div>
+            </div>
+        </div>
+
+        <!-- USUÁRIOS -->
+        <div id="panel-usuarios" class="ev-panel">
+            <!-- KPIs -->
+            <div class="ev-grid">
+                <div class="ev-stat"><div class="ev-stat-icon"><i class="fas fa-users"></i></div><h3>Total</h3><div class="ev-stat-value" id="usr-total">—</div></div>
+                <div class="ev-stat ev-stat-warning"><div class="ev-stat-icon"><i class="fas fa-clock"></i></div><h3>Pendentes</h3><div class="ev-stat-value" id="usr-pendentes">—</div></div>
+                <div class="ev-stat ev-stat-success"><div class="ev-stat-icon"><i class="fas fa-check-circle"></i></div><h3>Ativos</h3><div class="ev-stat-value" id="usr-ativos">—</div></div>
+                <div class="ev-stat"><div class="ev-stat-icon"><i class="fas fa-user-tie"></i></div><h3>Coordenadores</h3><div class="ev-stat-value" id="usr-coords">—</div></div>
+            </div>
+
+            <!-- Cadastro -->
+            <div class="ev-card">
+                <div class="ev-card-header"><h3><i class="fas fa-user-plus"></i> Cadastrar Manualmente</h3></div>
+                <div id="form-usuario-alert"></div>
+                <div class="ev-form-grid-user">
+                    <div class="ev-form-group"><label>Nome</label><input type="text" id="user-nome" class="ev-input"></div>
+                    <div class="ev-form-group"><label>E-mail</label><input type="email" id="user-email" class="ev-input"></div>
+                    <div class="ev-form-group"><label>Senha</label><input type="password" id="user-senha" class="ev-input"></div>
+                    <div class="ev-form-group"><label>Tipo</label><select id="user-tipo" class="ev-input"><option value="false">Avaliador</option><option value="true">Coordenador</option></select></div>
+                    <button type="button" class="ev-btn ev-btn-primary ev-btn-user" onclick="criarUsuarioAdmin()"><i class="fas fa-plus"></i> Criar</button>
+                </div>
+            </div>
+
+            <!-- Filtros + Lista -->
+            <div class="ev-card">
+                <div class="ev-card-header">
+                    <h3><i class="fas fa-users"></i> Todos os Usuários <span class="ev-hint" style="font-weight:400; font-size:13px;">(<span id="usr-filtrados">0</span> exibidos)</span></h3>
+                </div>
+
+                <div class="ev-filtros">
+                    <input type="text" id="filtro-usuarios-busca" placeholder="🔍 Buscar por nome ou e-mail...">
+                    <select id="filtro-usuarios-status">
+                        <option value="">Todos os status</option>
+                        <option value="Pendente">Pendente</option>
+                        <option value="Ativo">Ativo</option>
+                        <option value="Inativo">Inativo</option>
+                        <option value="Bloqueado">Bloqueado</option>
+                    </select>
+                    <select id="filtro-usuarios-tipo">
+                        <option value="">Todos os tipos</option>
+                        <option value="avaliador">Avaliador</option>
+                        <option value="coordenador">Coordenador</option>
+                    </select>
+                    <button type="button" class="ev-btn ev-btn-secondary ev-btn-sm" onclick="limparFiltrosUsuarios()" title="Limpar filtros">
+                        <i class="fas fa-eraser"></i> Limpar
+                    </button>
+                </div>
+
+                <div id="lista-todos-avaliadores" class="ev-list"><div class="ev-empty">Carregando...</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTTOM SHEET MOBILE -->
+    <div class="fab-menu" id="fabMenuContainer"><button class="fab-button" id="fabMenuBtn"><i class="fas fa-bars"></i></button></div>
+    <div class="sheet-overlay" id="sheetOverlay"></div>
+    <div class="bottom-sheet" id="bottomSheet">
+        <div class="bottom-sheet-header"><h3><i class="fas fa-layer-group"></i> Seções</h3><button class="close-sheet" id="closeSheetBtn"><i class="fas fa-times"></i></button></div>
+        <div class="menu-items">
+            <div class="menu-item" onclick="abrirTab('dashboard'); fecharSheet();"><i class="fas fa-chart-pie"></i><span>Dashboard</span></div>
+            <div class="menu-item" onclick="abrirTab('modelos'); fecharSheet();"><i class="fas fa-file-alt"></i><span>Modelos</span></div>
+            <div class="menu-item" onclick="abrirTab('eventos'); fecharSheet();"><i class="fas fa-calendar-day"></i><span>Eventos</span></div>
+            <div class="menu-item" onclick="abrirTab('usuarios'); fecharSheet();"><i class="fas fa-users-cog"></i><span>Usuários</span></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+    (function () {
+        'use strict';
+
+        const observer = new MutationObserver(() => {
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            const modaisAbertos = document.querySelectorAll('.modal.show');
+            if (backdrops.length > 0 && modaisAbertos.length === 0) {
+                backdrops.forEach(b => b.remove());
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+            }
+        });
+        observer.observe(document.body, { childList: true });
+
+        window.navegarComLoader = function (url, texto) {
+            const loader = document.getElementById('global-loader');
+            const t = document.getElementById('global-loader-text');
+            if (t && texto) t.textContent = texto;
+            if (loader) loader.classList.add('ativo');
+            setTimeout(() => window.location.href = url, 150);
+        };
+
+        window.abrirTab = function (tab) {
+            const target = document.querySelector(`.ev-tab[data-tab="${tab}"]`);
+            if (target) target.click();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        window.fecharSheet = function () {
+            document.getElementById('bottomSheet')?.classList.remove('aberto');
+            document.getElementById('sheetOverlay')?.classList.remove('aberto');
+        };
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const fab = document.getElementById('fabMenuBtn');
+            const sheet = document.getElementById('bottomSheet');
+            const overlay = document.getElementById('sheetOverlay');
+            const closeBtn = document.getElementById('closeSheetBtn');
+
+            const abrir = () => { sheet?.classList.add('aberto'); overlay?.classList.add('aberto'); };
+            const fechar = () => { sheet?.classList.remove('aberto'); overlay?.classList.remove('aberto'); };
+
+            fab?.addEventListener('click', abrir);
+            closeBtn?.addEventListener('click', fechar);
+            overlay?.addEventListener('click', fechar);
+
+            setTimeout(() => {
+                if (window.chatbot && typeof window.chatbot.sendSystemMessage !== 'function') {
+                    window.chatbot.sendSystemMessage = function () {};
+                }
+            }, 3500);
+
+            const syncHero = () => {
+                const map = { 'heroStatModelos': 'stat-modelos', 'heroStatEventos': 'stat-eventos', 'heroStatInscricoes': 'stat-inscricoes' };
+                Object.entries(map).forEach(([heroId, statId]) => {
+                    const hero = document.getElementById(heroId);
+                    const stat = document.getElementById(statId);
+                    if (hero && stat && stat.textContent.trim() !== '—') hero.textContent = stat.textContent;
+                });
+            };
+            setInterval(syncHero, 2000);
+        });
+    })();
+    </script>
+
+    <script src="/eventos/js/eventos.js"></script>
+</body>
+</html>

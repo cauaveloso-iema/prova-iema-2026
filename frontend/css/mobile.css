@@ -1,22 +1,36 @@
 /* ==================================================
-   MOBILE.CSS - CORREÇÕES E MELHORIAS
+   MOBILE.CSS — EducaPleno
+   Versão: 2.0 (com suporte completo à tela 2FA)
+   Estratégia: mobile-first overrides, sem escala artificial
    ================================================== */
 
-/* ===== CORREÇÕES GLOBAIS ===== */
+/* ============================================================
+   BLOCO 0 — RESET GLOBAL MOBILE
+   ============================================================ */
 @media screen and (max-width: 768px) {
-    
-    /* CORREÇÃO: Inputs e botões muito grandes */
-    input, button, select, textarea {
-        width: 100%;
-        min-height: 44px;
-        font-size: 16px;
-        margin: 5px 0;
-        padding: 8px 12px;
-        border-radius: 8px;
-        box-sizing: border-box;
+
+    html {
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+        -webkit-tap-highlight-color: transparent;
     }
 
-    /* CORREÇÃO: Tabelas com scroll */
+    body {
+        overflow-x: hidden;
+        padding: 0;
+    }
+
+    /* Inputs NUNCA abaixo de 16px (evita zoom iOS e garante leitura) */
+    input, textarea, select {
+        font-size: 16px;
+    }
+
+    /* Toque mínimo acessível (WCAG 2.5.5) */
+    button, .btn, a.btn {
+        min-height: 44px;
+    }
+
+    /* Tabelas com scroll horizontal */
     table {
         display: block;
         overflow-x: auto;
@@ -24,32 +38,24 @@
         width: 100%;
     }
 
-    /* CORREÇÃO: Cards e containers com padding consistente */
-    .card, .stat-card, .turma-card, .prova-card, .form-container {
-        margin-bottom: 15px;
-        border-radius: 12px;
-        box-sizing: border-box;
+    h1, h2, h3, h4, p, span {
+        word-wrap: break-word;
+        overflow-wrap: break-word;
     }
 
-    /* CORREÇÃO: Grids para 2 colunas em telas médias */
+    /* Grids padrão 2 colunas */
     .stats-grid {
         display: grid !important;
         grid-template-columns: repeat(2, 1fr) !important;
         gap: 10px !important;
     }
-
-    /* CORREÇÃO: Texto não quebrava */
-    h1, h2, h3, h4, p, span {
-        word-wrap: break-word;
-        overflow-wrap: break-word;
-    }
 }
 
-/* ===== NOVAS CORREÇÕES ===== */
-
+/* ============================================================
+   BLOCO 1 — SIDEBAR E MENU (dashboards)
+   ============================================================ */
 @media screen and (max-width: 768px) {
-    
-    /* ----- CORREÇÃO: Sidebar sobrepondo conteúdo ----- */
+
     .sidebar {
         position: fixed !important;
         top: 0 !important;
@@ -70,15 +76,11 @@
         box-shadow: 2px 0 20px rgba(0,0,0,0.3) !important;
     }
 
-    /* ----- CORREÇÃO: Overlay com blur ----- */
     .sidebar-overlay {
         display: none;
         position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.5);
+        inset: 0;
+        background: rgba(0,0,0,0.5);
         backdrop-filter: blur(3px);
         z-index: 1999;
     }
@@ -87,7 +89,6 @@
         display: block !important;
     }
 
-    /* ----- CORREÇÃO: Menu toggle visível e com fundo ----- */
     .menu-toggle {
         display: block !important;
         background: #4f46e5 !important;
@@ -107,7 +108,6 @@
         left: 20px;
     }
 
-    /* ----- CORREÇÃO: Top bar com padding correto ----- */
     .top-bar {
         position: sticky !important;
         top: 0 !important;
@@ -122,7 +122,6 @@
         box-sizing: border-box;
     }
 
-    /* ----- CORREÇÃO: Conteúdo com altura correta ----- */
     .content-wrapper {
         flex: 1 !important;
         overflow-y: auto !important;
@@ -131,7 +130,6 @@
         max-height: calc(100vh - 70px) !important;
     }
 
-    /* ----- CORREÇÃO: Header Actions (Entrar em Turma e outros) ----- */
     .header-actions {
         display: flex !important;
         gap: 8px !important;
@@ -150,7 +148,6 @@
         margin: 0 !important;
     }
 
-    /* ----- CORREÇÃO: Notificações dropdown ----- */
     .notificacoes-dropdown {
         position: fixed !important;
         top: 70px !important;
@@ -165,7 +162,6 @@
         padding: 12px !important;
     }
 
-    /* ----- CORREÇÃO: Modal ocupando tela inteira ----- */
     .modal-content {
         width: 95% !important;
         margin: 10px auto !important;
@@ -174,7 +170,6 @@
         border-radius: 16px !important;
     }
 
-    /* ----- CORREÇÃO: Paginação ----- */
     .pagination {
         display: flex !important;
         flex-wrap: wrap !important;
@@ -189,7 +184,6 @@
         padding: 0 !important;
     }
 
-    /* ----- NOVO: Tabs com scroll horizontal ----- */
     .content-tabs {
         overflow-x: auto !important;
         white-space: nowrap !important;
@@ -205,7 +199,6 @@
         font-size: 13px !important;
     }
 
-    /* ----- NOVO: Filtros em coluna ----- */
     .filters-grid {
         display: grid !important;
         grid-template-columns: 1fr !important;
@@ -216,27 +209,17 @@
         width: 100% !important;
     }
 
-    /* ----- NOVO: Utilitários ----- */
-    .hide-mobile {
-        display: none !important;
-    }
-
-    .show-mobile {
-        display: block !important;
-    }
-
-    .text-center-mobile {
-        text-align: center !important;
-    }
-
-    .w-100-mobile {
-        width: 100% !important;
-    }
+    .hide-mobile { display: none !important; }
+    .show-mobile { display: block !important; }
+    .text-center-mobile { text-align: center !important; }
+    .w-100-mobile { width: 100% !important; }
 }
 
-/* ===== BOTÃO DE SAIR - CORRIGIDO ===== */
+/* ============================================================
+   BLOCO 2 — BOTÃO SAIR (dashboards)
+   ============================================================ */
 @media screen and (max-width: 768px) {
-    
+
     .btn-logout,
     button#btnLogout,
     button.btn-logout {
@@ -291,7 +274,6 @@
         line-height: 1 !important;
     }
 
-    /* Na sidebar */
     .sidebar .btn-logout,
     .sidebar button#btnLogout,
     .sidebar-footer .btn-logout {
@@ -314,9 +296,11 @@
     }
 }
 
-/* ===== BOTÃO ENTAR EM TURMA - CORRIGIDO ===== */
+/* ============================================================
+   BLOCO 3 — BOTÃO ENTRAR EM TURMA (aluno)
+   ============================================================ */
 @media screen and (max-width: 768px) {
-    
+
     .btn-entrar-turma {
         background: white !important;
         color: #10b981 !important;
@@ -362,15 +346,15 @@
     }
 }
 
-/* ===== CORREÇÕES PARA TELAS MUITO PEQUENAS ===== */
+/* ============================================================
+   BLOCO 4 — TELAS MUITO PEQUENAS (≤ 480px) — dashboards
+   ============================================================ */
 @media screen and (max-width: 480px) {
-    
-    /* Stats grid vira 1 coluna */
+
     .stats-grid {
         grid-template-columns: 1fr !important;
     }
 
-    /* Botões de ação */
     .header-actions {
         flex-wrap: wrap !important;
         gap: 5px !important;
@@ -388,7 +372,6 @@
         font-size: 12px !important;
     }
 
-    /* Botão de sair em telas muito pequenas */
     .btn-logout span,
     button#btnLogout span,
     button.btn-logout span {
@@ -416,28 +399,24 @@
         margin: 0 !important;
     }
 
-    /* Esconder link do app em telas muito pequenas */
     .aluno-header a[href*="drive.google.com"] {
         display: none !important;
     }
 
-    /* Títulos menores */
-    .page-title {
-        font-size: 18px !important;
-    }
-
+    .page-title { font-size: 18px !important; }
     h1 { font-size: 22px !important; }
     h2 { font-size: 20px !important; }
     h3 { font-size: 18px !important; }
 }
 
-/* ===== TELAS MÉDIAS (481px - 600px) ===== */
+/* ============================================================
+   BLOCO 5 — TELAS MÉDIAS (481px – 600px)
+   ============================================================ */
 @media screen and (min-width: 481px) and (max-width: 600px) {
-    
     .aluno-header a[href*="drive.google.com"] span {
         display: none !important;
     }
-    
+
     .aluno-header a[href*="drive.google.com"] {
         min-width: 44px !important;
         width: 44px !important;
@@ -446,20 +425,18 @@
     }
 }
 
-/* ===== CORREÇÕES PARA ORIENTAÇÃO PAISAGEM ===== */
+/* ============================================================
+   BLOCO 6 — ORIENTAÇÃO PAISAGEM
+   ============================================================ */
 @media screen and (max-width: 900px) and (orientation: landscape) {
-    
-    .sidebar {
-        width: 240px !important;
-    }
+
+    .sidebar { width: 240px !important; }
 
     .stats-grid {
         grid-template-columns: repeat(4, 1fr) !important;
     }
 
-    .modal-content {
-        max-height: 80vh !important;
-    }
+    .modal-content { max-height: 80vh !important; }
 
     .menu-toggle {
         bottom: 10px !important;
@@ -473,7 +450,9 @@
     }
 }
 
-/* ===== CORREÇÕES PARA NOTCH (iOS) ===== */
+/* ============================================================
+   BLOCO 7 — SAFE AREA (notch iOS)
+   ============================================================ */
 @supports (padding: max(0px)) {
     body {
         padding-left: env(safe-area-inset-left);
@@ -503,15 +482,13 @@
     }
 }
 
-/* ==================================================
-   AJUSTES FINAIS - PROVA (VERSÃO DEFINITIVA)
-   ================================================== */
-
+/* ============================================================
+   BLOCO 8 — PÁGINA DE PROVA
+   ============================================================ */
 @media screen and (max-width: 768px) {
-    
-    /* ----- AUMENTAR O CABEÇALHO ----- */
+
     html[data-page="realizar-prova"] .prova-header {
-        padding: 12px 12px !important;
+        padding: 12px !important;
         min-height: 80px !important;
         background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%) !important;
     }
@@ -522,7 +499,6 @@
         color: white !important;
     }
 
-    /* ----- INDICADOR MONITORADO PULSANTE (VERMELHO) ----- */
     html[data-page="realizar-prova"] .prova-header::after {
         content: "● MONITORADO" !important;
         position: absolute !important;
@@ -545,7 +521,6 @@
         100% { opacity: 0.7; }
     }
 
-    /* ----- REMOVER TODOS OS ELEMENTOS DE ACESSIBILIDADE E MONITORAMENTO ----- */
     html[data-page="realizar-prova"] .monitor-panel,
     html[data-page="realizar-prova"] .acessibilidade-btn-prova,
     html[data-page="realizar-prova"] #monitorHelp,
@@ -555,13 +530,6 @@
         display: none !important;
     }
 
-    /* ----- REMOVER O BOTÃO VERMELHO DE FINALIZAR ----- */
-    html[data-page="realizar-prova"] .btn-sair-prova,
-    html[data-page="realizar-prova"] .btn-finalizar-prova:not(#btnFinalizarPagina) {
-        display: none !important;
-    }
-
-    /* ----- REMOVER O MENU RÁPIDO DE QUESTÕES (NÚMEROS 1-10) ----- */
     html[data-page="realizar-prova"] #menuQuestoesRapido,
     html[data-page="realizar-prova"] [id*="menuQuestoes"],
     html[data-page="realizar-prova"] [class*="menu-questoes"],
@@ -572,7 +540,6 @@
         display: none !important;
     }
 
-    /* ----- GARANTIR QUE O NÚMERO DO ENUNCIADO CONTINUE VISÍVEL ----- */
     html[data-page="realizar-prova"] .questao-numero {
         display: flex !important;
         width: 36px !important;
@@ -587,7 +554,6 @@
         font-weight: bold !important;
     }
 
-    /* ----- AJUSTAR O CARD DAS QUESTÕES ----- */
     html[data-page="realizar-prova"] .questao-card {
         padding: 18px 16px !important;
         margin: 12px 8px !important;
@@ -602,7 +568,6 @@
         font-weight: 500 !important;
     }
 
-    /* ----- AJUSTAR AS OPÇÕES ----- */
     html[data-page="realizar-prova"] .opcao {
         padding: 14px 16px !important;
         margin-bottom: 10px !important;
@@ -621,7 +586,6 @@
         line-height: 1.4 !important;
     }
 
-    /* ----- AJUSTAR A BARRA DE NAVEGAÇÃO ----- */
     html[data-page="realizar-prova"] .navegacao-container {
         padding: 10px 12px !important;
     }
@@ -644,7 +608,6 @@
         min-width: 80px !important;
     }
 
-    /* ----- AJUSTAR AS INFORMAÇÕES DA PROVA ----- */
     html[data-page="realizar-prova"] #infoHorario {
         margin: 12px 0 8px 0 !important;
         padding: 6px 14px !important;
@@ -663,9 +626,7 @@
     }
 }
 
-/* ===== TELAS MUITO PEQUENAS ===== */
 @media screen and (max-width: 480px) {
-    
     html[data-page="realizar-prova"] .prova-header::after {
         font-size: 0.5rem !important;
         padding: 1px 4px !important;
@@ -677,23 +638,10 @@
         font-size: 0.9rem !important;
     }
 
-    html[data-page="realizar-prova"] .questao-texto {
-        font-size: 1rem !important;
-    }
-
-    html[data-page="realizar-prova"] .opcao {
-        padding: 12px 14px !important;
-    }
-
-    html[data-page="realizar-prova"] .opcao-texto {
-        font-size: 0.95rem !important;
-    }
-
-    html[data-page="realizar-prova"] .opcao-letra {
-        width: 30px !important;
-        height: 30px !important;
-        font-size: 0.95rem !important;
-    }
+    html[data-page="realizar-prova"] .questao-texto { font-size: 1rem !important; }
+    html[data-page="realizar-prova"] .opcao { padding: 12px 14px !important; }
+    html[data-page="realizar-prova"] .opcao-texto { font-size: 0.95rem !important; }
+    html[data-page="realizar-prova"] .opcao-letra { width: 30px !important; height: 30px !important; font-size: 0.95rem !important; }
 
     html[data-page="realizar-prova"] .navegacao-container button {
         padding: 8px 12px !important;
@@ -708,178 +656,14 @@
     }
 }
 
-/* ==================================================
-   SISTEMA DE ESCALONAMENTO PROPORCIONAL - APENAS MOBILE
-   ================================================== */
-
-@media screen and (max-width: 768px) {
-    :root {
-        --base-width: 768;
-        --current-width: 768;
-        --scale-ratio: 1;
-    }
-}
-
-@media screen and (max-width: 768px) {
-    
-    :root {
-        --current-width: 768;
-        --scale-ratio: calc(var(--current-width) / 768);
-    }
-    
-    @media screen and (max-width: 700px) {
-        :root { --scale-ratio: 0.95; }
-    }
-    
-    @media screen and (max-width: 600px) {
-        :root { --scale-ratio: 0.85; }
-    }
-    
-    @media screen and (max-width: 500px) {
-        :root { --scale-ratio: 0.75; }
-    }
-    
-    @media screen and (max-width: 400px) {
-        :root { --scale-ratio: 0.65; }
-    }
-    
-    @media screen and (max-width: 360px) {
-        :root { --scale-ratio: 0.6; }
-    }
-    
-    @media screen and (max-width: 320px) {
-        :root { --scale-ratio: 0.55; }
-    }
-    
-    .container,
-    .main-content,
-    .content-area,
-    .section,
-    .card,
-    .stat-card,
-    .turma-card,
-    .prova-card,
-    .modal-content,
-    .form-container,
-    .table-container {
-        padding: calc(20px * var(--scale-ratio)) !important;
-        margin: calc(15px * var(--scale-ratio)) !important;
-        border-radius: calc(10px * var(--scale-ratio)) !important;
-    }
-    
-    h1 { font-size: calc(32px * var(--scale-ratio)) !important; }
-    h2 { font-size: calc(28px * var(--scale-ratio)) !important; }
-    h3 { font-size: calc(24px * var(--scale-ratio)) !important; }
-    h4 { font-size: calc(20px * var(--scale-ratio)) !important; }
-    p, span, div, li { font-size: calc(16px * var(--scale-ratio)) !important; }
-    small { font-size: calc(14px * var(--scale-ratio)) !important; }
-    
-    button,
-    .btn,
-    .button,
-    .btn-primary,
-    .btn-secondary,
-    .btn-logout,
-    .btn-entrar-turma,
-    input,
-    select,
-    textarea {
-        font-size: calc(16px * var(--scale-ratio)) !important;
-        padding: calc(10px * var(--scale-ratio)) calc(20px * var(--scale-ratio)) !important;
-        min-height: calc(44px * var(--scale-ratio)) !important;
-        border-radius: calc(8px * var(--scale-ratio)) !important;
-    }
-    
-    i, .fas, .far, .fab {
-        font-size: calc(18px * var(--scale-ratio)) !important;
-    }
-    
-    .page-title,
-    .header-title {
-        font-size: calc(28px * var(--scale-ratio)) !important;
-        margin-bottom: calc(15px * var(--scale-ratio)) !important;
-    }
-    
-    .stat-number {
-        font-size: calc(32px * var(--scale-ratio)) !important;
-    }
-    
-    .stat-label {
-        font-size: calc(14px * var(--scale-ratio)) !important;
-    }
-    
-    .stat-icon {
-        width: calc(50px * var(--scale-ratio)) !important;
-        height: calc(50px * var(--scale-ratio)) !important;
-        font-size: calc(24px * var(--scale-ratio)) !important;
-    }
-    
-    table th,
-    table td {
-        padding: calc(12px * var(--scale-ratio)) calc(16px * var(--scale-ratio)) !important;
-        font-size: calc(14px * var(--scale-ratio)) !important;
-    }
-    
-    .modal-content {
-        width: calc(500px * var(--scale-ratio)) !important;
-        max-width: calc(500px * var(--scale-ratio)) !important;
-    }
-    
-    .sidebar {
-        width: calc(280px * var(--scale-ratio)) !important;
-    }
-    
-    .sidebar .nav-item {
-        padding: calc(12px * var(--scale-ratio)) calc(16px * var(--scale-ratio)) !important;
-        font-size: calc(16px * var(--scale-ratio)) !important;
-    }
-    
-    .stats-grid {
-        display: grid !important;
-        grid-template-columns: repeat(auto-fit, minmax(calc(250px * var(--scale-ratio)), 1fr)) !important;
-        gap: calc(20px * var(--scale-ratio)) !important;
-    }
-    
-    .cards-grid {
-        display: grid !important;
-        grid-template-columns: repeat(auto-fit, minmax(calc(300px * var(--scale-ratio)), 1fr)) !important;
-        gap: calc(20px * var(--scale-ratio)) !important;
-    }
-    
-    .mt-1 { margin-top: calc(4px * var(--scale-ratio)) !important; }
-    .mt-2 { margin-top: calc(8px * var(--scale-ratio)) !important; }
-    .mt-3 { margin-top: calc(16px * var(--scale-ratio)) !important; }
-    .mt-4 { margin-top: calc(24px * var(--scale-ratio)) !important; }
-    .mt-5 { margin-top: calc(32px * var(--scale-ratio)) !important; }
-    
-    .mb-1 { margin-bottom: calc(4px * var(--scale-ratio)) !important; }
-    .mb-2 { margin-bottom: calc(8px * var(--scale-ratio)) !important; }
-    .mb-3 { margin-bottom: calc(16px * var(--scale-ratio)) !important; }
-    .mb-4 { margin-bottom: calc(24px * var(--scale-ratio)) !important; }
-    .mb-5 { margin-bottom: calc(32px * var(--scale-ratio)) !important; }
-    
-    .p-1 { padding: calc(4px * var(--scale-ratio)) !important; }
-    .p-2 { padding: calc(8px * var(--scale-ratio)) !important; }
-    .p-3 { padding: calc(16px * var(--scale-ratio)) !important; }
-    .p-4 { padding: calc(24px * var(--scale-ratio)) !important; }
-    .p-5 { padding: calc(32px * var(--scale-ratio)) !important; }
-}
-
-/* ==================================================
-   CORREÇÃO PARA MODO PAISAGEM NA PÁGINA DE PROVA
-   ================================================== */
-
+/* Prova em paisagem */
 @media screen and (max-width: 1024px) and (orientation: landscape) {
-    
     html[data-page="realizar-prova"] .monitor-panel,
     html[data-page="realizar-prova"] .acessibilidade-btn-prova,
     html[data-page="realizar-prova"] #monitorHelp,
     html[data-page="realizar-prova"] .btn-logout,
     html[data-page="realizar-prova"] .btn-sair-prova,
-    html[data-page="realizar-prova"] .btn-finalizar-menu {
-        display: none !important;
-    }
-
+    html[data-page="realizar-prova"] .btn-finalizar-menu,
     html[data-page="realizar-prova"] #menuQuestoesRapido,
     html[data-page="realizar-prova"] [id*="menuQuestoes"],
     html[data-page="realizar-prova"] [class*="menu-questoes"],
@@ -888,69 +672,6 @@
     html[data-page="realizar-prova"] .btn-questao-rapida,
     html[data-page="realizar-prova"] [class*="btn-questao"] {
         display: none !important;
-    }
-
-    html[data-page="realizar-prova"] .questao-numero {
-        display: flex !important;
-        width: 36px !important;
-        height: 36px !important;
-        font-size: 1rem !important;
-        background: #4f46e5 !important;
-        margin-bottom: 15px !important;
-        border-radius: 50% !important;
-        align-items: center !important;
-        justify-content: center !important;
-        color: white !important;
-        font-weight: bold !important;
-    }
-
-    html[data-page="realizar-prova"] .questao-card {
-        padding: 15px !important;
-        margin: 8px !important;
-        border-radius: 12px !important;
-    }
-
-    html[data-page="realizar-prova"] .questao-texto {
-        font-size: 1rem !important;
-        line-height: 1.4 !important;
-        margin-bottom: 15px !important;
-    }
-
-    html[data-page="realizar-prova"] .opcao {
-        padding: 10px 12px !important;
-        margin-bottom: 8px !important;
-    }
-
-    html[data-page="realizar-prova"] .opcao-letra {
-        width: 28px !important;
-        height: 28px !important;
-        font-size: 0.9rem !important;
-    }
-
-    html[data-page="realizar-prova"] .opcao-texto {
-        font-size: 0.9rem !important;
-    }
-
-    html[data-page="realizar-prova"] .navegacao-container {
-        padding: 8px 10px !important;
-    }
-
-    html[data-page="realizar-prova"] .navegacao-container button {
-        padding: 8px 14px !important;
-        font-size: 0.85rem !important;
-        min-width: 80px !important;
-    }
-
-    html[data-page="realizar-prova"] #btnFinalizarPagina {
-        padding: 8px 16px !important;
-        font-size: 0.9rem !important;
-        min-width: 90px !important;
-    }
-
-    html[data-page="realizar-prova"] .contador-questao {
-        font-size: 0.85rem !important;
-        padding: 6px 10px !important;
-        min-width: 70px !important;
     }
 
     html[data-page="realizar-prova"] .prova-header {
@@ -958,188 +679,33 @@
         min-height: 60px !important;
     }
 
-    html[data-page="realizar-prova"] .prova-header h1 {
-        font-size: 1.1rem !important;
-    }
-
-    html[data-page="realizar-prova"] .prova-header p {
-        font-size: 0.8rem !important;
-        margin: 2px 0 !important;
-    }
-
-    html[data-page="realizar-prova"] #periodoBadge {
-        margin: 2px 0 !important;
-        padding: 2px 8px !important;
-        font-size: 0.7rem !important;
-    }
-
-    html[data-page="realizar-prova"] #infoHorario {
-        margin: 5px 0 !important;
-        padding: 4px 8px !important;
-        font-size: 0.7rem !important;
-    }
-
-    html[data-page="realizar-prova"] .meta-item {
-        padding: 3px 8px !important;
-        font-size: 0.7rem !important;
-    }
-
-    html[data-page="realizar-prova"] .timer-container {
-        padding: 3px 10px !important;
-        font-size: 0.75rem !important;
-        min-width: 70px !important;
-    }
-
-    html[data-page="realizar-prova"] .questao-container-wrapper {
-        max-height: calc(100vh - 100px) !important;
-    }
-
-    html[data-page="realizar-prova"] .progresso-container {
-        padding: 5px 10px !important;
-    }
-
-    html[data-page="realizar-prova"] .progresso {
-        font-size: 0.75rem !important;
-    }
-
-    html[data-page="realizar-prova"] .prova-header::after {
-        content: "● MONITORADO" !important;
-        position: absolute !important;
-        top: 5px !important;
-        left: 5px !important;
-        font-size: 0.55rem !important;
-        background: rgba(0,0,0,0.6) !important;
-        color: #ff4444 !important;
-        padding: 2px 5px !important;
-        border-radius: 4px !important;
-        letter-spacing: 0.5px !important;
-        z-index: 100 !important;
-        animation: pulse 1.5s infinite !important;
-        font-weight: 500 !important;
-    }
+    html[data-page="realizar-prova"] .prova-header h1 { font-size: 1.1rem !important; }
+    html[data-page="realizar-prova"] .prova-header p { font-size: 0.8rem !important; margin: 2px 0 !important; }
+    html[data-page="realizar-prova"] #periodoBadge { margin: 2px 0 !important; padding: 2px 8px !important; font-size: 0.7rem !important; }
+    html[data-page="realizar-prova"] #infoHorario { margin: 5px 0 !important; padding: 4px 8px !important; font-size: 0.7rem !important; }
+    html[data-page="realizar-prova"] .meta-item { padding: 3px 8px !important; font-size: 0.7rem !important; }
+    html[data-page="realizar-prova"] .timer-container { padding: 3px 10px !important; font-size: 0.75rem !important; min-width: 70px !important; }
+    html[data-page="realizar-prova"] .questao-container-wrapper { max-height: calc(100vh - 100px) !important; }
+    html[data-page="realizar-prova"] .progresso-container { padding: 5px 10px !important; }
+    html[data-page="realizar-prova"] .progresso { font-size: 0.75rem !important; }
+    html[data-page="realizar-prova"] .questao-card { padding: 15px !important; margin: 8px !important; border-radius: 12px !important; }
+    html[data-page="realizar-prova"] .questao-texto { font-size: 1rem !important; line-height: 1.4 !important; margin-bottom: 15px !important; }
+    html[data-page="realizar-prova"] .opcao { padding: 10px 12px !important; margin-bottom: 8px !important; }
+    html[data-page="realizar-prova"] .opcao-letra { width: 28px !important; height: 28px !important; font-size: 0.9rem !important; }
+    html[data-page="realizar-prova"] .opcao-texto { font-size: 0.9rem !important; }
+    html[data-page="realizar-prova"] .navegacao-container { padding: 8px 10px !important; }
+    html[data-page="realizar-prova"] .navegacao-container button { padding: 8px 14px !important; font-size: 0.85rem !important; min-width: 80px !important; }
+    html[data-page="realizar-prova"] #btnFinalizarPagina { padding: 8px 16px !important; font-size: 0.9rem !important; min-width: 90px !important; }
+    html[data-page="realizar-prova"] .contador-questao { font-size: 0.85rem !important; padding: 6px 10px !important; min-width: 70px !important; }
 }
 
-@media screen and (max-width: 1024px) and (orientation: landscape) and (max-height: 500px) {
-    
-    html[data-page="realizar-prova"] .prova-header {
-        min-height: 50px !important;
-        padding: 5px 10px !important;
-    }
-
-    html[data-page="realizar-prova"] .prova-header h1 {
-        font-size: 1rem !important;
-    }
-
-    html[data-page="realizar-prova"] .prova-header p,
-    html[data-page="realizar-prova"] #periodoBadge,
-    html[data-page="realizar-prova"] #infoHorario {
-        display: none !important;
-    }
-
-    html[data-page="realizar-prova"] .questao-card {
-        padding: 10px !important;
-        margin: 5px !important;
-    }
-
-    html[data-page="realizar-prova"] .questao-numero {
-        width: 28px !important;
-        height: 28px !important;
-        font-size: 0.8rem !important;
-        margin-bottom: 8px !important;
-    }
-
-    html[data-page="realizar-prova"] .questao-texto {
-        font-size: 0.85rem !important;
-        margin-bottom: 8px !important;
-    }
-
-    html[data-page="realizar-prova"] .opcao {
-        padding: 6px 8px !important;
-    }
-
-    html[data-page="realizar-prova"] .opcao-letra {
-        width: 22px !important;
-        height: 22px !important;
-        font-size: 0.7rem !important;
-    }
-
-    html[data-page="realizar-prova"] .navegacao-container button {
-        padding: 5px 10px !important;
-        font-size: 0.7rem !important;
-        min-width: 60px !important;
-    }
-}
-
-@media screen and (max-width: 1024px) and (orientation: landscape) {
-    html[data-page="realizar-prova"] .monitor-panel,
-    html[data-page="realizar-prova"] .acessibilidade-btn-prova,
-    html[data-page="realizar-prova"] #monitorHelp,
-    html[data-page="realizar-prova"] #menuQuestoesRapido {
-        display: none !important;
-        visibility: hidden !important;
-        opacity: 0 !important;
-        pointer-events: none !important;
-    }
-}
-
-@media screen and (max-width: 768px) and (orientation: portrait) {
-    html[data-page="realizar-prova"] .monitor-panel,
-    html[data-page="realizar-prova"] .acessibilidade-btn-prova,
-    html[data-page="realizar-prova"] #monitorHelp,
-    html[data-page="realizar-prova"] .btn-logout,
-    html[data-page="realizar-prova"] .btn-sair-prova,
-    html[data-page="realizar-prova"] .btn-finalizar-menu,
-    html[data-page="realizar-prova"] #menuQuestoesRapido {
-        display: none !important;
-    }
-}
-
+/* ============================================================
+   BLOCO 9 — MODAIS (saída, warning, resumo)
+   ============================================================ */
 @media screen and (max-width: 1024px) {
-    html[data-page="realizar-prova"] .monitor-panel,
-    html[data-page="realizar-prova"] .acessibilidade-btn-prova,
-    html[data-page="realizar-prova"] #monitorHelp,
-    html[data-page="realizar-prova"] .btn-logout,
-    html[data-page="realizar-prova"] .btn-sair-prova,
-    html[data-page="realizar-prova"] .btn-finalizar-menu,
-    html[data-page="realizar-prova"] #menuQuestoesRapido,
-    html[data-page="realizar-prova"] [id*="menuQuestoes"],
-    html[data-page="realizar-prova"] [class*="menu-questoes"],
-    html[data-page="realizar-prova"] .questoes-grid,
-    html[data-page="realizar-prova"] [class*="questoes-grid"],
-    html[data-page="realizar-prova"] .btn-questao-rapida,
-    html[data-page="realizar-prova"] [class*="btn-questao"] {
-        display: none !important;
-    }
-}
 
-@media screen and (min-width: 1025px) {
-    html[data-page="realizar-prova"] .monitor-panel,
-    html[data-page="realizar-prova"] .acessibilidade-btn-prova,
-    html[data-page="realizar-prova"] #monitorHelp,
-    html[data-page="realizar-prova"] .btn-logout,
-    html[data-page="realizar-prova"] .btn-sair-prova,
-    html[data-page="realizar-prova"] .btn-finalizar-menu,
-    html[data-page="realizar-prova"] #menuQuestoesRapido,
-    html[data-page="realizar-prova"] [id*="menuQuestoes"],
-    html[data-page="realizar-prova"] [class*="menu-questoes"],
-    html[data-page="realizar-prova"] .questoes-grid,
-    html[data-page="realizar-prova"] [class*="questoes-grid"],
-    html[data-page="realizar-prova"] .btn-questao-rapida,
-    html[data-page="realizar-prova"] [class*="btn-questao"] {
-        display: revert !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        pointer-events: auto !important;
-    }
-}
-
-/* ==================================================
-   MODAL DE CONFIRMAÇÃO - VERSÃO MOBILE
-   ================================================== */
-
-@media screen and (max-width: 1024px) {
-    
-    .modal-saida.active {
+    .modal-saida.active,
+    .modal-warning.active {
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
@@ -1147,8 +713,9 @@
         backdrop-filter: blur(5px) !important;
         -webkit-backdrop-filter: blur(5px) !important;
     }
-    
-    .modal-saida .modal-saida-content {
+
+    .modal-saida .modal-saida-content,
+    .modal-warning .modal-content {
         width: 90% !important;
         max-width: 400px !important;
         margin: 0 auto !important;
@@ -1157,66 +724,41 @@
         box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3) !important;
         border: 2px solid rgba(255, 255, 255, 0.2) !important;
     }
-    
-    .modal-saida .modal-saida-header {
-        background: linear-gradient(135deg, #dc2626, #b91c1c) !important;
+
+    .modal-saida .modal-saida-header,
+    .modal-warning .modal-header {
         padding: 20px !important;
         text-align: center !important;
-        border-bottom: 2px solid rgba(255, 255, 255, 0.2) !important;
     }
-    
-    .modal-saida .modal-saida-header h3 {
+
+    .modal-saida .modal-saida-header { background: linear-gradient(135deg, #dc2626, #b91c1c) !important; }
+    .modal-warning .modal-header { background: linear-gradient(135deg, #f59e0b, #d97706) !important; }
+
+    .modal-saida .modal-saida-header h3,
+    .modal-warning .modal-header h3 {
         color: white !important;
         font-size: 1.4rem !important;
         margin: 0 !important;
         font-weight: 700 !important;
-        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
     }
-    
-    .modal-saida .modal-saida-header i {
-        font-size: 1.8rem !important;
-        margin-right: 10px !important;
-        color: white !important;
-    }
-    
-    .modal-saida .modal-saida-body {
+
+    .modal-saida .modal-saida-body,
+    .modal-warning .modal-body {
         background: #1f2937 !important;
         padding: 25px 20px !important;
         color: white !important;
     }
-    
-    .modal-saida .modal-saida-body p {
+
+    .modal-saida .modal-saida-body p,
+    .modal-warning #warningMessage {
         color: white !important;
         font-size: 1.1rem !important;
         margin-bottom: 20px !important;
         font-weight: 500 !important;
     }
-    
-    .modal-saida .modal-saida-body ul {
-        background: rgba(255, 255, 255, 0.1) !important;
-        padding: 15px 15px 15px 35px !important;
-        border-radius: 16px !important;
-        margin: 15px 0 !important;
-        border: 1px solid rgba(255, 255, 255, 0.2) !important;
-    }
-    
-    .modal-saida .modal-saida-body li {
-        color: #f0f0f0 !important;
-        font-size: 0.95rem !important;
-        margin-bottom: 8px !important;
-        line-height: 1.5 !important;
-    }
-    
-    .modal-saida .modal-saida-body li:last-child {
-        margin-bottom: 0 !important;
-    }
-    
-    .modal-saida .modal-saida-body li i {
-        color: #fbbf24 !important;
-        margin-right: 8px !important;
-    }
-    
-    .modal-saida .modal-saida-footer {
+
+    .modal-saida .modal-saida-footer,
+    .modal-warning .modal-footer {
         background: #111827 !important;
         padding: 20px !important;
         display: flex !important;
@@ -1224,198 +766,51 @@
         justify-content: center !important;
         border-top: 2px solid rgba(255, 255, 255, 0.1) !important;
     }
-    
-    .modal-saida .btn-saida-cancelar {
-        background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
-        color: white !important;
-        border: none !important;
+
+    .modal-saida .btn-saida-cancelar,
+    .modal-saida .btn-saida-confirmar,
+    .modal-warning .btn-return {
         padding: 14px 20px !important;
         border-radius: 40px !important;
         font-size: 1rem !important;
         font-weight: 600 !important;
-        cursor: pointer !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
         gap: 8px !important;
         flex: 1 !important;
         min-width: 120px !important;
-        box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3) !important;
         border: 2px solid rgba(255, 255, 255, 0.2) !important;
-    }
-    
-    .modal-saida .btn-saida-cancelar i {
         color: white !important;
-        font-size: 1.1rem !important;
     }
-    
-    .modal-saida .btn-saida-cancelar:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 6px 15px rgba(59, 130, 246, 0.4) !important;
-    }
-    
-    .modal-saida .btn-saida-confirmar {
-        background: linear-gradient(135deg, #ef4444, #dc2626) !important;
-        color: white !important;
-        border: none !important;
-        padding: 14px 20px !important;
-        border-radius: 40px !important;
-        font-size: 1rem !important;
-        font-weight: 600 !important;
-        cursor: pointer !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        gap: 8px !important;
-        flex: 1 !important;
-        min-width: 120px !important;
-        box-shadow: 0 4px 10px rgba(239, 68, 68, 0.3) !important;
-        border: 2px solid rgba(255, 255, 255, 0.2) !important;
-    }
-    
-    .modal-saida .btn-saida-confirmar i {
-        color: white !important;
-        font-size: 1.1rem !important;
-    }
-    
-    .modal-saida .btn-saida-confirmar:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 6px 15px rgba(239, 68, 68, 0.4) !important;
-    }
-    
+
+    .modal-saida .btn-saida-cancelar { background: linear-gradient(135deg, #3b82f6, #2563eb) !important; }
+    .modal-saida .btn-saida-confirmar { background: linear-gradient(135deg, #ef4444, #dc2626) !important; }
+    .modal-warning .btn-return { background: linear-gradient(135deg, #10b981, #059669) !important; }
+
     @media screen and (max-width: 480px) {
-        .modal-saida .modal-saida-footer {
+        .modal-saida .modal-saida-footer,
+        .modal-warning .modal-footer {
             flex-direction: column !important;
             gap: 10px !important;
         }
-        
+
         .modal-saida .btn-saida-cancelar,
-        .modal-saida .btn-saida-confirmar {
+        .modal-saida .btn-saida-confirmar,
+        .modal-warning .btn-return {
             width: 100% !important;
             padding: 16px !important;
             font-size: 1.1rem !important;
         }
-        
-        .modal-saida .modal-saida-body {
-            padding: 20px 15px !important;
-        }
-        
-        .modal-saida .modal-saida-body ul {
-            padding: 12px 12px 12px 30px !important;
-        }
-        
-        .modal-saida .modal-saida-body li {
-            font-size: 0.9rem !important;
-        }
     }
 }
 
+/* Modal Resumo Prova */
 @media screen and (max-width: 1024px) {
-    
-    .modal-warning.active {
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        background: rgba(0, 0, 0, 0.8) !important;
-        backdrop-filter: blur(5px) !important;
-    }
-    
-    .modal-warning .modal-content {
-        width: 90% !important;
-        max-width: 400px !important;
-        border-radius: 24px !important;
-        overflow: hidden !important;
-        border: 2px solid rgba(255, 255, 255, 0.2) !important;
-    }
-    
-    .modal-warning .modal-header {
-        background: linear-gradient(135deg, #f59e0b, #d97706) !important;
-        padding: 20px !important;
-        text-align: center !important;
-    }
-    
-    .modal-warning .modal-header h3 {
-        color: white !important;
-        font-size: 1.4rem !important;
-        margin: 0 !important;
-        font-weight: 700 !important;
-    }
-    
-    .modal-warning .modal-body {
-        background: #1f2937 !important;
-        padding: 25px 20px !important;
-        color: white !important;
-    }
-    
-    .modal-warning #warningMessage {
-        color: white !important;
-        font-size: 1.1rem !important;
-        margin-bottom: 20px !important;
-    }
-    
-    .modal-warning .countdown-container {
-        background: rgba(255, 255, 255, 0.1) !important;
-        padding: 15px !important;
-        border-radius: 16px !important;
-        border: 1px solid rgba(255, 255, 255, 0.2) !important;
-    }
-    
-    .modal-warning .countdown-container p {
-        color: #f0f0f0 !important;
-    }
-    
-    .modal-warning #countdown {
-        color: #fbbf24 !important;
-        font-size: 2rem !important;
-        font-weight: bold !important;
-    }
-    
-    .modal-warning .warning-details small {
-        color: #9ca3af !important;
-    }
-    
-    .modal-warning .modal-footer {
-        background: #111827 !important;
-        padding: 20px !important;
-        display: flex !important;
-        justify-content: center !important;
-    }
-    
-    .modal-warning .btn-return {
-        background: linear-gradient(135deg, #10b981, #059669) !important;
-        color: white !important;
-        border: none !important;
-        padding: 14px 30px !important;
-        border-radius: 40px !important;
-        font-size: 1rem !important;
-        font-weight: 600 !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        gap: 8px !important;
-        width: 100% !important;
-        box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3) !important;
-        border: 2px solid rgba(255, 255, 255, 0.2) !important;
-    }
-    
-    .modal-warning .btn-return i {
-        color: white !important;
-    }
-}
-
-/* ==================================================
-   MODAL DE RESUMO DA PROVA - VERSÃO VISÍVEL PARA MOBILE/TABLET
-   ================================================== */
-
-@media screen and (max-width: 1024px) {
-    
     #modalResumoProva {
         display: none;
         position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        width: 100% !important;
-        height: 100% !important;
+        inset: 0 !important;
         background: rgba(0, 0, 0, 0.8) !important;
         backdrop-filter: blur(5px) !important;
         -webkit-backdrop-filter: blur(5px) !important;
@@ -1442,14 +837,8 @@
     }
 
     @keyframes slideUpModal {
-        from {
-            opacity: 0;
-            transform: translateY(30px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
+        from { opacity: 0; transform: translateY(30px); }
+        to { opacity: 1; transform: translateY(0); }
     }
 
     #modalResumoProva .modal-header {
@@ -1466,91 +855,15 @@
         font-size: 1.3rem !important;
         margin: 0 !important;
         font-weight: 700 !important;
-        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
         display: flex !important;
         align-items: center !important;
         gap: 10px !important;
-    }
-
-    #modalResumoProva .modal-header i {
-        font-size: 1.5rem !important;
-        color: white !important;
     }
 
     #modalResumoProva .modal-body {
         padding: 20px !important;
         background: #1f2937 !important;
         color: white !important;
-    }
-
-    #modalResumoProva .estatisticas-resumo {
-        background: rgba(255, 255, 255, 0.1) !important;
-        border-radius: 16px !important;
-        padding: 15px !important;
-        margin-bottom: 20px !important;
-        border: 1px solid rgba(255, 255, 255, 0.15) !important;
-    }
-
-    #modalResumoProva .estatisticas-resumo p {
-        color: white !important;
-        font-size: 1rem !important;
-        margin: 8px 0 !important;
-        display: flex !important;
-        align-items: center !important;
-        gap: 8px !important;
-    }
-
-    #modalResumoProva .estatisticas-resumo i {
-        color: #3b82f6 !important;
-        width: 24px !important;
-        text-align: center !important;
-    }
-
-    #modalResumoProva .estatisticas-resumo strong {
-        color: #fbbf24 !important;
-        font-size: 1.2rem !important;
-        margin-left: 5px !important;
-    }
-
-    #modalResumoProva .questoes-resumo {
-        max-height: 300px !important;
-        overflow-y: auto !important;
-        margin: 15px 0 !important;
-        border-radius: 12px !important;
-        background: rgba(0, 0, 0, 0.3) !important;
-        padding: 10px !important;
-    }
-
-    #modalResumoProva .questao-item {
-        background: rgba(255, 255, 255, 0.05) !important;
-        border-radius: 10px !important;
-        padding: 12px !important;
-        margin-bottom: 8px !important;
-        border-left: 4px solid #3b82f6 !important;
-    }
-
-    #modalResumoProva .questao-item .questao-numero {
-        color: #fbbf24 !important;
-        font-weight: bold !important;
-        margin-bottom: 5px !important;
-    }
-
-    #modalResumoProva .questao-item .questao-resposta {
-        color: white !important;
-        font-size: 0.95rem !important;
-    }
-
-    #modalResumoProva .questao-item .resposta-status {
-        margin-top: 5px !important;
-        font-size: 0.9rem !important;
-    }
-
-    #modalResumoProva .questao-item .respondida {
-        color: #10b981 !important;
-    }
-
-    #modalResumoProva .questao-item .nao-respondida {
-        color: #ef4444 !important;
     }
 
     #modalResumoProva .modal-footer {
@@ -1565,77 +878,24 @@
         z-index: 10 !important;
     }
 
-    #modalResumoProva .btn-cancelar-resumo {
-        background: linear-gradient(135deg, #6b7280, #4b5563) !important;
-        color: white !important;
-        border: 2px solid rgba(255, 255, 255, 0.2) !important;
-        padding: 14px 20px !important;
-        border-radius: 40px !important;
-        font-size: 1rem !important;
-        font-weight: 600 !important;
-        cursor: pointer !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        gap: 8px !important;
-        flex: 1 !important;
-        min-width: 120px !important;
-        box-shadow: 0 4px 10px rgba(75, 85, 99, 0.3) !important;
-        transition: all 0.3s ease !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.5px !important;
-    }
-
-    #modalResumoProva .btn-cancelar-resumo i {
-        color: white !important;
-        font-size: 1.1rem !important;
-    }
-
+    #modalResumoProva .btn-cancelar-resumo,
     #modalResumoProva .btn-confirmar-resumo {
-        background: linear-gradient(135deg, #10b981, #059669) !important;
-        color: white !important;
-        border: 2px solid rgba(255, 255, 255, 0.2) !important;
         padding: 14px 20px !important;
         border-radius: 40px !important;
         font-size: 1rem !important;
         font-weight: 600 !important;
-        cursor: pointer !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
         gap: 8px !important;
         flex: 1 !important;
         min-width: 120px !important;
-        box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3) !important;
-        transition: all 0.3s ease !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.5px !important;
-    }
-
-    #modalResumoProva .btn-confirmar-resumo i {
+        border: 2px solid rgba(255, 255, 255, 0.2) !important;
         color: white !important;
-        font-size: 1.1rem !important;
     }
 
-    #modalResumoProva .modal-close {
-        background: rgba(255, 255, 255, 0.2) !important;
-        border: 2px solid rgba(255, 255, 255, 0.3) !important;
-        color: white !important;
-        width: 36px !important;
-        height: 36px !important;
-        border-radius: 50% !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        font-size: 1.2rem !important;
-        cursor: pointer !important;
-        transition: all 0.3s ease !important;
-    }
-
-    #modalResumoProva .modal-close:hover {
-        background: rgba(255, 255, 255, 0.3) !important;
-        transform: rotate(90deg) !important;
-    }
+    #modalResumoProva .btn-cancelar-resumo { background: linear-gradient(135deg, #6b7280, #4b5563) !important; }
+    #modalResumoProva .btn-confirmar-resumo { background: linear-gradient(135deg, #10b981, #059669) !important; }
 
     @media screen and (max-width: 480px) {
         #modalResumoProva .modal-footer {
@@ -1650,15 +910,13 @@
             font-size: 1.1rem !important;
         }
 
-        #modalResumoProva .modal-content {
-            width: 95% !important;
-        }
+        #modalResumoProva .modal-content { width: 95% !important; }
     }
 }
 
-/* ==================================================
-   GARANTIA PARA O BOTÃO DE SENHA (MOSTRAR/OCULTAR)
-   ================================================== */
+/* ============================================================
+   BLOCO 10 — BOTÃO OLHINHO (mostrar/ocultar senha)
+   ============================================================ */
 @media screen and (max-width: 768px) {
     .password-wrapper {
         width: 100% !important;
@@ -1672,24 +930,15 @@
         box-sizing: border-box !important;
     }
 
-    .toggle-password {
-        position: absolute !important;
-        right: 12px !important;
-        top: 50% !important;
-        transform: translateY(-50%) !important;
-        z-index: 10 !important;
-    }
-}
-@media screen and (max-width: 768px) {
     .toggle-password,
     button.toggle-password,
     .password-wrapper .toggle-password {
         width: auto !important;
         min-width: auto !important;
-        max-width: auto !important;
+        max-width: none !important;
         height: auto !important;
         min-height: auto !important;
-        max-height: auto !important;
+        max-height: none !important;
         padding: 5px 6px !important;
         margin: 0 !important;
         position: absolute !important;
@@ -1705,25 +954,13 @@
         background: transparent !important;
         border: none !important;
         z-index: 10 !important;
-    }
-
-    .password-wrapper {
-        width: 100% !important;
-        position: relative !important;
-        display: block !important;
-    }
-
-    .password-wrapper input {
-        width: 100% !important;
-        padding-right: 45px !important;
         box-sizing: border-box !important;
     }
 }
 
-/* ============================================
-   ACOMPANHAMENTO - SETOR BIBLIOTECA
-   ============================================ */
-
+/* ============================================================
+   BLOCO 11 — ACOMPANHAMENTO BIBLIOTECA
+   ============================================================ */
 .acompanhamento-card[data-setor="biblioteca"] {
     border-left: 4px solid #0ea5e9;
 }
@@ -1759,9 +996,7 @@
     border: 1px solid #bae6fd;
 }
 
-.acompanhamento-card-extra i {
-    color: #0ea5e9;
-}
+.acompanhamento-card-extra i { color: #0ea5e9; }
 
 .acompanhamento-grupo-header {
     display: flex;
@@ -1774,9 +1009,7 @@
     border-left: 4px solid #0ea5e9;
 }
 
-.acompanhamento-grupo-header:first-child {
-    margin-top: 0;
-}
+.acompanhamento-grupo-header:first-child { margin-top: 0; }
 
 @keyframes pulse-biblioteca {
     0%, 100% { transform: scale(1); }
@@ -1793,19 +1026,17 @@
         align-items: flex-start;
         gap: 4px;
     }
-    
+
     .acompanhamento-card-extra span:last-child {
         margin-left: 0 !important;
     }
 }
 
-/* ==================================================
-   🔥 CORREÇÕES ESPECÍFICAS PARA PÁGINA DE LOGIN
-   (BOTÕES ESTICADOS + CHAPÉU GRANDE)
-   ================================================== */
+/* ============================================================
+   BLOCO 12 — PÁGINA DE LOGIN
+   ============================================================ */
 @media screen and (max-width: 768px) {
 
-    /* Body da página de login — permitir scroll */
     body:has(.login-container) {
         overflow-y: auto !important;
         overflow-x: hidden !important;
@@ -1816,7 +1047,6 @@
         height: auto !important;
     }
 
-    /* Container de login */
     .login-container {
         width: 100% !important;
         max-width: 100% !important;
@@ -1829,12 +1059,8 @@
         overflow: visible !important;
     }
 
-    /* Header */
-    .login-header {
-        margin-bottom: 20px !important;
-    }
+    .login-header { margin-bottom: 20px !important; }
 
-    /* 🔥 CHAPÉUZINHO MAIOR no mobile */
     .login-header .icon-wrapper {
         width: 76px !important;
         height: 76px !important;
@@ -1844,7 +1070,6 @@
         margin-bottom: 14px !important;
     }
 
-    /* 🔥 Ícone do chapéu realmente grande (Font Awesome ignora font-size do pai) */
     .login-header .icon-wrapper i,
     .login-header .icon-wrapper .fas,
     .login-header .icon-wrapper .fa-graduation-cap {
@@ -1853,15 +1078,9 @@
         display: inline-block !important;
     }
 
-    .login-header h1 {
-        font-size: 26px !important;
-    }
+    .login-header h1 { font-size: 26px !important; }
+    .login-header p { font-size: 13px !important; }
 
-    .login-header p {
-        font-size: 13px !important;
-    }
-
-    /* Campos do formulário */
     .login-container .form-control {
         width: 100% !important;
         min-height: 46px !important;
@@ -1874,11 +1093,6 @@
         box-sizing: border-box !important;
     }
 
-    /* ============================================
-       🔥 BOTÕES - VOLTAM A FICAR ESTICADOS (LARGURA TOTAL)
-       ============================================ */
-
-    /* Botão de login - LARGURA TOTAL */
     .login-container .btn-login {
         display: flex !important;
         align-items: center !important;
@@ -1895,7 +1109,6 @@
         box-sizing: border-box !important;
     }
 
-    /* Botões sociais (Google / Microsoft) - LARGURA TOTAL */
     .login-container .btn-social {
         display: flex !important;
         align-items: center !important;
@@ -1912,7 +1125,6 @@
         box-sizing: border-box !important;
     }
 
-    /* WhatsApp - LARGURA TOTAL */
     .login-container .whatsapp-link {
         display: flex !important;
         align-items: center !important;
@@ -1929,7 +1141,6 @@
         box-sizing: border-box !important;
     }
 
-    /* Container social em coluna (esticado) */
     .login-container .social-login {
         display: flex !important;
         flex-direction: column !important;
@@ -1938,48 +1149,6 @@
         margin-bottom: 18px !important;
     }
 
-    /* 🔥 CORREÇÃO DO BOTÃO OLHINHO */
-    .login-container .toggle-password,
-    .login-container .password-wrapper .toggle-password,
-    .login-container button.toggle-password {
-        width: auto !important;
-        min-width: auto !important;
-        max-width: none !important;
-        height: auto !important;
-        min-height: auto !important;
-        max-height: none !important;
-        padding: 5px 6px !important;
-        margin: 0 !important;
-        position: absolute !important;
-        right: 12px !important;
-        left: auto !important;
-        top: 50% !important;
-        transform: translateY(-50%) !important;
-        font-size: 0.95rem !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        border-radius: 50% !important;
-        background: transparent !important;
-        border: none !important;
-        z-index: 10 !important;
-        box-sizing: border-box !important;
-    }
-
-    /* Wrapper de senha */
-    .login-container .password-wrapper {
-        width: 100% !important;
-        position: relative !important;
-        display: block !important;
-    }
-
-    .login-container .password-wrapper input {
-        width: 100% !important;
-        padding-right: 45px !important;
-        box-sizing: border-box !important;
-    }
-
-    /* Opções */
     .login-container .form-options {
         display: flex !important;
         flex-direction: row !important;
@@ -2005,43 +1174,21 @@
         padding: 0 !important;
     }
 
-    /* Divisor */
-    .login-container .divider {
-        margin: 16px 0 !important;
-        font-size: 11.5px !important;
-    }
-
-    /* Links */
-    .login-container .register-link {
-        margin-top: 16px !important;
-        font-size: 14px !important;
-        text-align: center !important;
-    }
-
-    /* Rodapé */
-    .login-container .footer {
-        margin-top: 20px !important;
-        padding-top: 14px !important;
-        font-size: 11px !important;
-    }
+    .login-container .divider { margin: 16px 0 !important; font-size: 11.5px !important; }
+    .login-container .register-link { margin-top: 16px !important; font-size: 14px !important; text-align: center !important; }
+    .login-container .footer { margin-top: 20px !important; padding-top: 14px !important; font-size: 11px !important; }
 }
 
-/* Telas muito pequenas (< 380px) */
 @media screen and (max-width: 380px) {
-    body:has(.login-container) {
-        padding: 12px !important;
-    }
+    body:has(.login-container) { padding: 12px !important; }
 
     .login-container {
         padding: 24px 18px 20px !important;
         border-radius: 16px !important;
     }
 
-    .login-header h1 {
-        font-size: 24px !important;
-    }
+    .login-header h1 { font-size: 24px !important; }
 
-    /* 🔥 Chapéuzinho grande também em telas pequenas */
     .login-header .icon-wrapper {
         width: 70px !important;
         height: 70px !important;
@@ -2050,16 +1197,12 @@
         font-size: 32px !important;
     }
 
-    /* 🔥 Ícone do chapéu grande também */
     .login-header .icon-wrapper i,
     .login-header .icon-wrapper .fas,
     .login-header .icon-wrapper .fa-graduation-cap {
         font-size: 38px !important;
-        line-height: 1 !important;
-        display: inline-block !important;
     }
 
-    /* Botões continuam ESTICADOS (largura total) */
     .login-container .btn-login,
     .login-container .btn-social,
     .login-container .whatsapp-link {
@@ -2072,4 +1215,502 @@
         align-items: flex-start !important;
         gap: 10px !important;
     }
+}
+
+/* ============================================================
+   BLOCO 13 — ⭐ TELA 2FA (validar-2fa.html) ⭐
+   ============================================================ */
+@media screen and (max-width: 768px) {
+
+    /* Body: empilha do topo, permite scroll natural */
+    body {
+        display: block;
+        padding: 0;
+        min-height: 100vh;
+        min-height: 100dvh;
+        background: linear-gradient(160deg, #0b1120 0%, #192132 100%);
+    }
+
+    /* Card ocupa a tela toda, sem radius nem sombra */
+    .card {
+        border-radius: 0 !important;
+        min-height: 100vh;
+        min-height: 100dvh;
+        box-shadow: none !important;
+        border: none !important;
+        margin: 0 !important;
+        display: flex;
+        flex-direction: column;
+        background: #fff;
+    }
+
+    /* Header compacto */
+    .header {
+        padding: 22px 18px 18px !important;
+        border-radius: 0 0 22px 22px !important;
+        flex-shrink: 0;
+    }
+
+    .header::before { animation: none; }
+
+    .header i {
+        font-size: 28px !important;
+        width: 56px !important;
+        height: 56px !important;
+        line-height: 56px !important;
+        margin-bottom: 10px !important;
+    }
+
+    .header h1 {
+        font-size: 19px !important;
+        margin-bottom: 4px !important;
+        letter-spacing: -0.3px !important;
+        line-height: 1.25 !important;
+    }
+
+    .header p {
+        font-size: 12.5px !important;
+        opacity: 0.85;
+    }
+
+    /* Conteúdo com padding enxuto e scroll natural */
+    .content {
+        padding: 16px 14px 28px !important;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Caixa de telefone */
+    .phone-info {
+        padding: 10px 12px !important;
+        margin-bottom: 14px !important;
+        border-radius: 12px !important;
+        gap: 10px !important;
+    }
+
+    .phone-info i {
+        width: 34px !important;
+        height: 34px !important;
+        font-size: 15px !important;
+        border-radius: 9px !important;
+        flex-shrink: 0;
+    }
+
+    .phone-info span {
+        font-size: 12.5px !important;
+        line-height: 1.35 !important;
+        word-break: break-word;
+    }
+
+    /* Timer compacto */
+    .timer {
+        padding: 10px 14px !important;
+        margin-bottom: 16px !important;
+        font-size: 18px !important;
+        border-radius: 30px !important;
+        letter-spacing: 0.5px !important;
+    }
+
+    .timer i { font-size: 16px !important; margin-right: 6px !important; }
+
+    /* Badge primeira ativação */
+    .first-time-badge {
+        font-size: 11.5px !important;
+        padding: 8px 16px !important;
+        margin-bottom: 14px !important;
+        gap: 7px !important;
+    }
+
+    /* Biometria */
+    .biometric-section {
+        padding: 16px 14px !important;
+        margin: 0 0 16px !important;
+        border-radius: 14px !important;
+    }
+
+    .btn-biometric {
+        padding: 13px 18px !important;
+        font-size: 14.5px !important;
+        border-radius: 11px !important;
+        max-width: 100% !important;
+    }
+
+    .btn-biometric i.fa-fingerprint,
+    .btn-biometric i.fa-face-smile { font-size: 1.15rem !important; }
+
+    .biometric-hint { font-size: 11.5px !important; margin-top: 8px !important; }
+
+    .biometric-divider {
+        margin: 14px 0 6px !important;
+        font-size: 10.5px !important;
+        gap: 8px !important;
+    }
+
+    /* Tabs */
+    .tabs {
+        gap: 6px !important;
+        padding: 5px !important;
+        margin-bottom: 20px !important;
+        border-radius: 30px !important;
+    }
+
+    .tab {
+        padding: 10px 6px !important;
+        font-size: 12.5px !important;
+        border-radius: 26px !important;
+        gap: 4px;
+        white-space: nowrap;
+    }
+
+    .tab i { margin-right: 5px !important; font-size: 12px !important; }
+
+    /* Inputs — fonte 16px evita zoom iOS, altura confortável */
+    .form-group { margin-bottom: 14px !important; }
+
+    input {
+        padding: 14px 16px !important;
+        font-size: 16px !important;
+        border-radius: 12px !important;
+        letter-spacing: 1.5px !important;
+    }
+
+    /* Botão primário */
+    .btn-primary {
+        padding: 15px !important;
+        font-size: 15px !important;
+        border-radius: 12px !important;
+        margin-bottom: 16px !important;
+        min-height: 48px;
+    }
+
+    /* Seção de backup */
+    .backup-section {
+        margin-top: 24px !important;
+        padding-top: 20px !important;
+        border-top: 1px solid #edf2f7 !important;
+    }
+
+    .backup-title {
+        font-size: 16px !important;
+        margin-bottom: 12px !important;
+        gap: 8px !important;
+    }
+
+    .backup-title i { font-size: 18px !important; }
+
+    .backup-description {
+        padding: 12px 14px !important;
+        margin-bottom: 16px !important;
+        font-size: 12.5px !important;
+        border-radius: 12px !important;
+        line-height: 1.5 !important;
+    }
+
+    /* Grid de códigos de backup */
+    .codes-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+        margin-bottom: 16px !important;
+    }
+
+    .code-item {
+        padding: 12px 6px !important;
+        font-size: 13px !important;
+        border-radius: 10px !important;
+        letter-spacing: 1.5px !important;
+        word-break: break-all;
+    }
+
+    .btn-outline {
+        padding: 13px !important;
+        font-size: 14px !important;
+        border-radius: 12px !important;
+        margin-top: 4px !important;
+    }
+
+    /* Rodapé */
+    .footer {
+        gap: 16px !important;
+        margin-top: 20px !important;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .footer button {
+        font-size: 13px !important;
+        min-height: 44px;
+        padding: 4px 8px;
+    }
+
+    /* Link do app */
+    #appDownloadLink {
+        margin-top: 16px !important;
+        padding-top: 14px !important;
+    }
+
+    #appDownloadLink a {
+        padding: 9px 16px !important;
+        font-size: 12.5px !important;
+        border-radius: 26px !important;
+    }
+
+    /* Message card */
+    .message-card {
+        padding: 20px 16px !important;
+        border-radius: 16px !important;
+        margin: 6px 0 16px !important;
+    }
+
+    .message-header { margin-bottom: 18px !important; }
+
+    .message-header i {
+        font-size: 34px !important;
+        padding: 12px !important;
+        margin-bottom: 10px !important;
+    }
+
+    .message-header h2 { font-size: 18px !important; }
+    .message-header p { font-size: 13px !important; margin-top: 6px !important; }
+
+    .stats-grid { gap: 10px !important; margin-bottom: 18px !important; }
+
+    .stat-card {
+        padding: 14px 10px !important;
+        border-radius: 14px !important;
+    }
+
+    .stat-value { font-size: 26px !important; }
+    .stat-label { font-size: 11.5px !important; }
+
+    .info-list {
+        padding: 12px !important;
+        border-radius: 14px !important;
+        margin-bottom: 16px !important;
+    }
+
+    .info-item { padding: 10px 0 !important; gap: 10px !important; }
+    .info-icon { width: 30px !important; height: 30px !important; font-size: 15px !important; border-radius: 9px !important; }
+    .info-title { font-size: 13.5px !important; }
+    .info-subtitle { font-size: 11.5px !important; }
+
+    .empty-state { padding: 24px 12px !important; }
+    .empty-state i { font-size: 40px !important; margin-bottom: 12px !important; }
+    .empty-state h3 { font-size: 17px !important; }
+    .empty-state p { font-size: 13px !important; margin-bottom: 16px !important; }
+
+    .btn-contact {
+        padding: 13px !important;
+        font-size: 13.5px !important;
+        border-radius: 12px !important;
+    }
+
+    .loading-codes {
+        padding: 24px 12px !important;
+        font-size: 13.5px !important;
+    }
+
+    /* QR code box */
+    #qrCodeDisplay {
+        width: 170px !important;
+        height: 170px !important;
+        padding: 8px !important;
+        border-radius: 12px !important;
+    }
+
+    #qrCodeDisplay > i { font-size: 46px !important; }
+
+    .secret-box {
+        padding: 10px !important;
+        font-size: 12px !important;
+        letter-spacing: 1.5px !important;
+        border-radius: 8px !important;
+        margin: 12px 0 !important;
+    }
+
+    /* Alertas */
+    .alert {
+        padding: 12px 14px !important;
+        border-radius: 12px !important;
+        font-size: 13px !important;
+        gap: 10px !important;
+        margin-bottom: 16px !important;
+    }
+
+    .warning-box {
+        padding: 12px 14px !important;
+        border-radius: 12px !important;
+        margin-bottom: 16px !important;
+        font-size: 13px !important;
+        gap: 10px !important;
+    }
+
+    /* Card pós-login "Ativar biometria" */
+    .ativar-biometria-box {
+        padding: 20px 16px !important;
+        border-radius: 14px !important;
+        margin-top: 14px !important;
+    }
+
+    .ativar-biometria-box strong { font-size: 16px !important; }
+    .ativar-biometria-box strong i { font-size: 18px !important; }
+
+    .ativar-biometria-box .btn-ativar,
+    .ativar-biometria-box .btn-pular {
+        padding: 13px 18px !important;
+        font-size: 14.5px !important;
+        border-radius: 11px !important;
+    }
+}
+
+/* ============================================================
+   BLOCO 14 — 2FA em telas MUITO pequenas (≤ 400px)
+   ============================================================ */
+@media screen and (max-width: 400px) {
+
+    .header {
+        padding: 18px 14px 16px !important;
+        border-radius: 0 0 18px 18px !important;
+    }
+
+    .header i {
+        font-size: 24px !important;
+        width: 48px !important;
+        height: 48px !important;
+        line-height: 48px !important;
+        margin-bottom: 8px !important;
+    }
+
+    .header h1 { font-size: 17px !important; }
+    .header p { font-size: 11.5px !important; }
+
+    .content { padding: 14px 12px 24px !important; }
+
+    .phone-info { padding: 9px 10px !important; margin-bottom: 12px !important; }
+    .phone-info i { width: 30px !important; height: 30px !important; font-size: 13px !important; border-radius: 8px !important; }
+    .phone-info span { font-size: 11.5px !important; }
+
+    .timer { font-size: 16px !important; padding: 9px 12px !important; margin-bottom: 14px !important; }
+    .timer i { font-size: 14px !important; }
+
+    /* Tabs: só ícones */
+    .tab {
+        padding: 11px 4px !important;
+        font-size: 0;
+    }
+
+    .tab i {
+        font-size: 15px !important;
+        margin: 0 !important;
+    }
+
+    /* Backup codes */
+    .codes-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 6px !important;
+    }
+
+    .code-item {
+        padding: 10px 4px !important;
+        font-size: 11.5px !important;
+        letter-spacing: 1px !important;
+    }
+
+    .stats-grid { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+    .stat-card { padding: 12px 8px !important; }
+    .stat-value { font-size: 22px !important; }
+    .stat-label { font-size: 10.5px !important; }
+
+    #qrCodeDisplay { width: 150px !important; height: 150px !important; }
+    #qrCodeDisplay > i { font-size: 40px !important; }
+
+    .footer { gap: 12px !important; }
+    .footer button { font-size: 12px !important; }
+
+    #appDownloadLink a { font-size: 11.5px !important; padding: 8px 14px !important; }
+}
+
+/* ============================================================
+   BLOCO 15 — 2FA em telas EXTREMAMENTE pequenas (≤ 320px)
+   ============================================================ */
+@media screen and (max-width: 320px) {
+
+    .header { padding: 16px 12px 14px !important; }
+    .header h1 { font-size: 16px !important; }
+    .header p { font-size: 11px !important; }
+    .header i { width: 44px !important; height: 44px !important; line-height: 44px !important; font-size: 22px !important; }
+
+    .content { padding: 12px 10px 20px !important; }
+
+    .timer { font-size: 15px !important; }
+    .timer i { font-size: 13px !important; }
+
+    /* Inputs mantêm 16px */
+    input { padding: 12px 12px !important; font-size: 16px !important; }
+
+    .btn-primary { padding: 13px !important; font-size: 14px !important; min-height: 46px; }
+
+    .biometric-section { padding: 12px 10px !important; }
+    .btn-biometric { padding: 12px 12px !important; font-size: 13.5px !important; }
+
+    .btn-outline { padding: 12px !important; font-size: 13px !important; }
+
+    .message-card { padding: 16px 12px !important; }
+    .message-header h2 { font-size: 16px !important; }
+    .message-header i { font-size: 30px !important; padding: 10px !important; }
+
+    .stat-card { padding: 10px 6px !important; }
+    .stat-value { font-size: 20px !important; }
+    .stat-label { font-size: 10px !important; }
+
+    .info-title { font-size: 12.5px !important; }
+    .info-subtitle { font-size: 11px !important; }
+
+    #qrCodeDisplay { width: 140px !important; height: 140px !important; }
+
+    #appDownloadLink a { font-size: 11px !important; padding: 7px 12px !important; }
+}
+
+/* ============================================================
+   BLOCO 16 — 2FA em PAISAGEM
+   ============================================================ */
+@media screen and (max-width: 900px) and (orientation: landscape) {
+
+    body { align-items: flex-start; }
+
+    .card {
+        border-radius: 0 !important;
+        min-height: auto !important;
+    }
+
+    .header {
+        padding: 14px 18px !important;
+        border-radius: 0 0 16px 16px !important;
+    }
+
+    .header i {
+        width: 40px !important;
+        height: 40px !important;
+        line-height: 40px !important;
+        font-size: 20px !important;
+        margin-bottom: 6px !important;
+    }
+
+    .header h1 { font-size: 16px !important; }
+    .header p { font-size: 11px !important; }
+
+    .content { padding: 14px 16px 20px !important; }
+
+    .timer { font-size: 16px !important; padding: 8px 12px !important; margin-bottom: 12px !important; }
+
+    .tabs { margin-bottom: 14px !important; }
+    .tab { padding: 8px 10px !important; font-size: 12px !important; }
+
+    .backup-section { margin-top: 16px !important; padding-top: 14px !important; }
+
+    .codes-grid { grid-template-columns: repeat(3, 1fr) !important; }
+
+    .code-item { padding: 10px 4px !important; font-size: 12px !important; }
+
+    #qrCodeDisplay { width: 130px !important; height: 130px !important; }
 }

@@ -1,6 +1,6 @@
 // routes/gestao-atendimento.js
 // ============================================
-// ROTAS: ATENDIMENTOS - GESTÃO GERAL
+// ROTAS: ATENDIMENTOS - GESTÃO GERAL (🆕 CORRIGIDO — FUSO BRASÍLIA)
 // Atendimento ao Aluno + Atendimento aos Pais/Responsáveis
 // + Multi-seleção de motivos/providências
 // + Dados opcionais do responsável em atendimento ao aluno
@@ -13,6 +13,45 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 const AtendimentoGestaoGeral = require('../models/AtendimentoGestaoGeral');
 const SessaoAssinatura = require('../models/SessaoAssinatura');
+
+// ============================================
+// 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
+// ============================================
+function getDataHojeBR() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());
+}
+
+function getDataNDiasBR(n) {
+  const agora = new Date();
+  const deslocada = new Date(agora.getTime() - n * 24 * 60 * 60 * 1000);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(deslocada);
+}
+
+function getInicioSemanaBR() {
+  const hojeBR = getDataHojeBR();
+  const hojeUTC = new Date(hojeBR + 'T03:00:00.000Z');
+  const diaSemana = hojeUTC.getUTCDay();
+  const inicio = new Date(hojeUTC.getTime() - diaSemana * 24 * 60 * 60 * 1000);
+  return inicio.toISOString().split('T')[0];
+}
+
+function getInicioMesBR() {
+  return getDataHojeBR().substring(0, 7) + '-01';
+}
+
+function inicioDoDiaBrasil(dataStr) {
+  return new Date(dataStr + 'T00:00:00.000-03:00');
+}
+
+function fimDoDiaBrasil(dataStr) {
+  return new Date(dataStr + 'T23:59:59.999-03:00');
+}
 
 // ============================================
 // MIDDLEWARES
@@ -55,7 +94,11 @@ router.get('/health', (req, res) => {
     success: true,
     status: 'online',
     service: 'Atendimentos - Gestão Geral',
-    versao: '1.1-multi-select',
+    versao: '1.2-fuso-br',
+    _debug: {
+      hojeBR: getDataHojeBR(),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    },
     timestamp: new Date().toISOString()
   });
 });
@@ -129,7 +172,6 @@ router.get('/aluno/:id', authenticateToken, verificarGestaoGeral, async (req, re
 
     const totalAtendimentos = await AtendimentoGestaoGeral.countDocuments({ alunoId: aluno._id });
 
-    // 🆕 Busca o último responsável de QUALQUER atendimento que tenha dados preenchidos
     const ultimoAtendResponsavel = await AtendimentoGestaoGeral.findOne({
       alunoId: aluno._id,
       responsavelNome: { $ne: '' }
@@ -169,7 +211,6 @@ router.get('/aluno/:id', authenticateToken, verificarGestaoGeral, async (req, re
 
 // ============================================
 // 📝 REGISTRAR ATENDIMENTO
-// 🆕 Aceita multi-seleção + responsável em qualquer tipo
 // ============================================
 router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
@@ -181,7 +222,6 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
       responsavelTelefone = '',
       responsavelParentesco = '',
       dataAtendimento,
-      // 🆕 multi-seleção
       motivos,
       motivo,
       descricaoMotivo,
@@ -204,7 +244,6 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
       return res.status(400).json({ success: false, error: 'Aluno é obrigatório' });
     }
 
-    // 🆕 Normaliza motivos
     let motivosFinal = Array.isArray(motivos) && motivos.length > 0
       ? motivos
       : (motivo ? [motivo] : []);
@@ -224,7 +263,6 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
       }
     }
 
-    // 🆕 Normaliza providências
     let providenciasFinal = Array.isArray(providenciasList) && providenciasList.length > 0
       ? providenciasList
       : (providencias ? [providencias] : []);
@@ -261,11 +299,10 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
 
     let dataFinal = new Date();
     if (dataAtendimento) {
-      const parsed = new Date(dataAtendimento + 'T12:00:00');
+      const parsed = new Date(dataAtendimento + 'T12:00:00.000-03:00');
       if (!isNaN(parsed.getTime())) dataFinal = parsed;
     }
 
-    // 🆕 Nome do responsável é obrigatório APENAS quando o tipo é "responsavel"
     if (tipoAtendimento === 'responsavel') {
       if (!responsavelNome || responsavelNome.trim() === '') {
         return res.status(400).json({
@@ -369,7 +406,6 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
       alunoCurso: aluno.curso || '',
       alunoFoto: aluno.fotoPerfil || '',
 
-      // 🆕 Dados do responsável SEMPRE podem ser preenchidos
       responsavelNome: (responsavelNome || '').trim(),
       responsavelCPF: (responsavelCPF || '').trim(),
       responsavelTelefone: (responsavelTelefone || '').trim(),
@@ -438,7 +474,7 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
 });
 
 // ============================================
-// 📋 LISTAR ATENDIMENTOS (COM PAGINAÇÃO + FILTROS)
+// 📋 LISTAR ATENDIMENTOS
 // ============================================
 router.get('/listar', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
@@ -463,7 +499,6 @@ router.get('/listar', authenticateToken, verificarGestaoGeral, async (req, res) 
       query.alunoTurma = turma;
     }
 
-    // 🆕 Busca no array de motivos
     if (motivo && motivo !== 'todos') {
       query.motivos = motivo;
     }
@@ -477,10 +512,11 @@ router.get('/listar', authenticateToken, verificarGestaoGeral, async (req, res) 
       ];
     }
 
+    // 🆕 Filtro de data em BRT
     if (dataInicio || dataFim) {
       query.dataAtendimento = {};
-      if (dataInicio) query.dataAtendimento.$gte = new Date(dataInicio + 'T00:00:00.000-03:00');
-      if (dataFim) query.dataAtendimento.$lte = new Date(dataFim + 'T23:59:59.999-03:00');
+      if (dataInicio) query.dataAtendimento.$gte = inicioDoDiaBrasil(dataInicio);
+      if (dataFim) query.dataAtendimento.$lte = fimDoDiaBrasil(dataFim);
     }
 
     const limitNum = parseInt(limit) || 10;
@@ -541,17 +577,22 @@ router.get('/listar', authenticateToken, verificarGestaoGeral, async (req, res) 
 });
 
 // ============================================
-// 📊 DASHBOARD
+// 🆕 DASHBOARD (CORRIGIDO — FUSO BRT)
 // ============================================
 router.get('/dashboard', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
     const { tipoAtendimento } = req.query;
 
-    const hoje = new Date();
-    const hojeStr = hoje.toISOString().split('T')[0];
-    const inicioSemana = new Date(hoje);
-    inicioSemana.setDate(hoje.getDate() - hoje.getDay());
-    const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    // 🆕 Datas em BRT
+    const hojeStr = getDataHojeBR();
+    const inicioSemanaStr = getInicioSemanaBR();
+    const inicioMesStr = getInicioMesBR();
+
+    const inicioHojeDate = inicioDoDiaBrasil(hojeStr);
+    const fimHojeDate = fimDoDiaBrasil(hojeStr);
+    const inicioSemanaDate = inicioDoDiaBrasil(inicioSemanaStr);
+    const inicioMesDate = inicioDoDiaBrasil(inicioMesStr);
+
     const ultimos30Dias = new Date();
     ultimos30Dias.setDate(ultimos30Dias.getDate() - 30);
 
@@ -562,23 +603,20 @@ router.get('/dashboard', authenticateToken, verificarGestaoGeral, async (req, re
     const [totalHoje, totalSemana, totalMes, totalGeral] = await Promise.all([
       AtendimentoGestaoGeral.countDocuments({
         ...matchTipo,
-        dataAtendimento: {
-          $gte: new Date(hojeStr),
-          $lt: new Date(new Date(hojeStr).setDate(new Date(hojeStr).getDate() + 1))
-        }
+        dataAtendimento: { $gte: inicioHojeDate, $lte: fimHojeDate }
       }),
       AtendimentoGestaoGeral.countDocuments({
         ...matchTipo,
-        dataAtendimento: { $gte: inicioSemana }
+        dataAtendimento: { $gte: inicioSemanaDate }
       }),
       AtendimentoGestaoGeral.countDocuments({
         ...matchTipo,
-        dataAtendimento: { $gte: inicioMes }
+        dataAtendimento: { $gte: inicioMesDate }
       }),
       AtendimentoGestaoGeral.countDocuments(matchTipo)
     ]);
 
-    // 🆕 Agrupa pelo array de motivos
+    // Agrupa pelo array de motivos
     const porMotivo = await AtendimentoGestaoGeral.aggregate([
       { $match: { ...matchTipo, dataAtendimento: { $gte: ultimos30Dias } } },
       {
@@ -603,23 +641,25 @@ router.get('/dashboard', authenticateToken, verificarGestaoGeral, async (req, re
       { $sort: { count: -1 } }
     ]);
 
+    // 🆕 Últimos 7 dias em BRT
     const ultimos7Dias = [];
     for (let i = 6; i >= 0; i--) {
-      const data = new Date();
-      data.setDate(data.getDate() - i);
-      const dataStr = data.toISOString().split('T')[0];
-      const inicio = new Date(dataStr);
-      const fim = new Date(dataStr);
-      fim.setDate(fim.getDate() + 1);
-
+      const dataStr = getDataNDiasBR(i);
       const count = await AtendimentoGestaoGeral.countDocuments({
         ...matchTipo,
-        dataAtendimento: { $gte: inicio, $lt: fim }
+        dataAtendimento: {
+          $gte: inicioDoDiaBrasil(dataStr),
+          $lte: fimDoDiaBrasil(dataStr)
+        }
       });
 
+      const dataObj = new Date(dataStr + 'T12:00:00.000-03:00');
       ultimos7Dias.push({
         data: dataStr,
-        dia: data.toLocaleDateString('pt-BR', { weekday: 'short' }),
+        dia: dataObj.toLocaleDateString('pt-BR', { 
+          weekday: 'short',
+          timeZone: 'America/Sao_Paulo'
+        }),
         atendimentos: count
       });
     }
@@ -648,6 +688,12 @@ router.get('/dashboard', authenticateToken, verificarGestaoGeral, async (req, re
 
     res.json({
       success: true,
+      _debug: {
+        hojeBR: hojeStr,
+        inicioSemanaBR: inicioSemanaStr,
+        inicioMesBR: inicioMesStr,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
       metricas: {
         hoje: totalHoje,
         semana: totalSemana,
@@ -689,10 +735,11 @@ router.get('/relatorio/geral', authenticateToken, verificarGestaoGeral, async (r
     if (turma && turma !== 'todas') query.alunoTurma = turma;
     if (tipoAtendimento && tipoAtendimento !== 'todos') query.tipoAtendimento = tipoAtendimento;
 
+    // 🆕 Datas em BRT
     if (dataInicio || dataFim) {
       query.dataAtendimento = {};
-      if (dataInicio) query.dataAtendimento.$gte = new Date(dataInicio + 'T00:00:00.000-03:00');
-      if (dataFim) query.dataAtendimento.$lte = new Date(dataFim + 'T23:59:59.999-03:00');
+      if (dataInicio) query.dataAtendimento.$gte = inicioDoDiaBrasil(dataInicio);
+      if (dataFim) query.dataAtendimento.$lte = fimDoDiaBrasil(dataFim);
     }
 
     const atendimentos = await AtendimentoGestaoGeral.find(query)
@@ -711,7 +758,6 @@ router.get('/relatorio/geral', authenticateToken, verificarGestaoGeral, async (r
       porTurma[a.alunoTurma].total++;
       porTurma[a.alunoTurma].alunos.add(a.alunoId.toString());
 
-      // 🆕 Conta TODOS os motivos
       const motivosArr = (a.motivos && a.motivos.length > 0) ? a.motivos : [a.motivo];
       motivosArr.forEach(m => {
         porMotivo[m] = (porMotivo[m] || 0) + 1;
@@ -719,7 +765,6 @@ router.get('/relatorio/geral', authenticateToken, verificarGestaoGeral, async (r
 
       porTipo[a.tipoAtendimento] = (porTipo[a.tipoAtendimento] || 0) + 1;
 
-      // 🆕 Conta TODAS as providências
       const providenciasArr = (a.providenciasList && a.providenciasList.length > 0)
         ? a.providenciasList
         : [a.providencias];
@@ -803,8 +848,8 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarGestaoGeral, a
     if (tipoAtendimento && tipoAtendimento !== 'todos') query.tipoAtendimento = tipoAtendimento;
     if (dataInicio || dataFim) {
       query.dataAtendimento = {};
-      if (dataInicio) query.dataAtendimento.$gte = new Date(dataInicio + 'T00:00:00.000-03:00');
-      if (dataFim) query.dataAtendimento.$lte = new Date(dataFim + 'T23:59:59.999-03:00');
+      if (dataInicio) query.dataAtendimento.$gte = inicioDoDiaBrasil(dataInicio);
+      if (dataFim) query.dataAtendimento.$lte = fimDoDiaBrasil(dataFim);
     }
 
     const atendimentos = await AtendimentoGestaoGeral.find(query)
@@ -827,7 +872,6 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarGestaoGeral, a
       }
       porAluno[key].total++;
 
-      // 🆕 Conta todos os motivos
       const motivosArr = (a.motivos && a.motivos.length > 0) ? a.motivos : [a.motivo];
       motivosArr.forEach(m => {
         porAluno[key].motivos[m] = (porAluno[key].motivos[m] || 0) + 1;
@@ -881,8 +925,8 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarGestaoGeral,
     if (tipoAtendimento && tipoAtendimento !== 'todos') query.tipoAtendimento = tipoAtendimento;
     if (dataInicio || dataFim) {
       query.dataAtendimento = {};
-      if (dataInicio) query.dataAtendimento.$gte = new Date(dataInicio + 'T00:00:00.000-03:00');
-      if (dataFim) query.dataAtendimento.$lte = new Date(dataFim + 'T23:59:59.999-03:00');
+      if (dataInicio) query.dataAtendimento.$gte = inicioDoDiaBrasil(dataInicio);
+      if (dataFim) query.dataAtendimento.$lte = fimDoDiaBrasil(dataFim);
     }
 
     const atendimentos = await AtendimentoGestaoGeral.find(query)
@@ -943,7 +987,6 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarGestaoGeral,
 
 // ============================================
 // 🔍 BUSCAR ATENDIMENTO POR ID
-// ⚠️ ESTA ROTA DEVE SER A ÚLTIMA — captura qualquer /:id
 // ============================================
 router.get('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
@@ -1043,7 +1086,6 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
       return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
     }
 
-    // 🆕 Normaliza motivos
     let motivosFinal = null;
     if (Array.isArray(motivos) && motivos.length > 0) {
       motivosFinal = [...new Set(motivos.filter(Boolean))];
@@ -1057,7 +1099,6 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
       atendimento.motivoLabel = AtendimentoGestaoGeral.getMotivosLabels(motivosFinal);
     }
 
-    // 🆕 Normaliza providências
     let providenciasFinal = null;
     if (Array.isArray(providenciasList) && providenciasList.length > 0) {
       providenciasFinal = [...new Set(providenciasList.filter(Boolean))];
@@ -1086,17 +1127,16 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
     if (observacoes !== undefined) atendimento.observacoes = observacoes;
 
     if (dataAtendimento) {
-      const parsed = new Date(dataAtendimento + 'T12:00:00');
+      // 🆕 Data em BRT meio-dia
+      const parsed = new Date(dataAtendimento + 'T12:00:00.000-03:00');
       if (!isNaN(parsed.getTime())) atendimento.dataAtendimento = parsed;
     }
 
-    // 🆕 Dados do responsável agora sempre podem ser editados
     if (responsavelNome !== undefined) atendimento.responsavelNome = (responsavelNome || '').trim();
     if (responsavelCPF !== undefined) atendimento.responsavelCPF = (responsavelCPF || '').trim();
     if (responsavelTelefone !== undefined) atendimento.responsavelTelefone = (responsavelTelefone || '').trim();
     if (responsavelParentesco !== undefined) atendimento.responsavelParentesco = (responsavelParentesco || '').trim();
 
-    // Valida obrigatoriedade do responsável apenas se tipo = responsavel
     if (atendimento.tipoAtendimento === 'responsavel') {
       if (!atendimento.responsavelNome || atendimento.responsavelNome.trim() === '') {
         return res.status(400).json({ success: false, error: 'Nome do responsável é obrigatório' });

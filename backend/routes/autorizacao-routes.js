@@ -4,13 +4,60 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 
 // ============================================
+// 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
+// ============================================
+/**
+ * Data ATUAL no fuso de Brasília (YYYY-MM-DD), independente do fuso do servidor.
+ */
+function getDataHojeBR() {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).format(new Date());
+}
+
+/**
+ * Data de N dias atrás no fuso de Brasília (YYYY-MM-DD).
+ */
+function getDataNDiasAtrasBR(n) {
+    const agora = new Date();
+    const passado = new Date(agora.getTime() - n * 24 * 60 * 60 * 1000);
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).format(passado);
+}
+
+/**
+ * Primeiro dia do MÊS ATUAL no fuso de Brasília (YYYY-MM-01).
+ */
+function getInicioMesBR() {
+    return getDataHojeBR().substring(0, 7) + '-01';
+}
+
+/**
+ * Primeiro dia da SEMANA ATUAL (domingo) no fuso de Brasília (YYYY-MM-DD).
+ */
+function getInicioSemanaBR() {
+    const hojeBR = getDataHojeBR();
+    const hojeUTC = new Date(hojeBR + 'T03:00:00.000Z');
+    const diaSemana = hojeUTC.getUTCDay(); // 0 = domingo
+    const inicio = new Date(hojeUTC.getTime() - diaSemana * 24 * 60 * 60 * 1000);
+    return inicio.toISOString().split('T')[0];
+}
+
+// ============================================
 // 🔥 LAZY LOADING
 // ============================================
 function getUser() { return require('../models/User'); }
 function getAutorizacao() { return require('../models/Autorizacao'); }
 
 // ============================================
-// 🔥 HELPERS
+// 🔥 HELPERS EXISTENTES
 // ============================================
 function inicioDoDiaBrasil(dataStr) {
     return new Date(dataStr + 'T00:00:00.000-03:00');
@@ -341,43 +388,54 @@ router.get('/alunos-por-turma', authenticateToken, verificarGestaoGeral, async (
 });
 
 // ============================================
-// 4. DASHBOARD
+// 4. DASHBOARD (🆕 CORRIGIDO — FUSO BRASÍLIA)
 // ============================================
 router.get('/dashboard', authenticateToken, verificarGestaoGeral, async (req, res) => {
     try {
         const Autorizacao = getAutorizacao();
         const { tipo = 'autorizacao' } = req.query;
-        const hoje = new Date();
-        const hojeStr = hoje.toISOString().split('T')[0];
-        const inicioSemana = new Date(hoje);
-        inicioSemana.setDate(hoje.getDate() - hoje.getDay());
-        const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-        const ultimos30Dias = new Date();
-        ultimos30Dias.setDate(ultimos30Dias.getDate() - 30);
 
+        // ============================================
+        // 🆕 CORREÇÃO PRINCIPAL: datas no fuso BRT
+        // ============================================
+        const hojeBR = getDataHojeBR();               // "2026-11-04"
+        const inicioMesBR = getInicioMesBR();         // "2026-11-01"
+        const inicioSemanaBR = getInicioSemanaBR();   // domingo da semana atual
+        const trintaDiasAtrasBR = getDataNDiasAtrasBR(30);
+
+        // Datas convertidas com offset -03:00
+        const inicioHojeDate = inicioDoDiaBrasil(hojeBR);
+        const fimHojeDate = fimDoDiaBrasil(hojeBR);
+        const inicioSemanaDate = inicioDoDiaBrasil(inicioSemanaBR);
+        const inicioMesDate = inicioDoDiaBrasil(inicioMesBR);
+        const ultimos30Dias = inicioDoDiaBrasil(trintaDiasAtrasBR);
+
+        // ============ MÉTRICA: HOJE ============
         let hojeCount;
         if (tipo === 'uniforme') {
             hojeCount = await Autorizacao.countDocuments({
                 tipo,
                 uniformePeriodoInicio: { $ne: null },
                 uniformePeriodoFim: { $ne: null },
-                uniformePeriodoInicio: { $lte: fimDoDiaBrasil(hojeStr) },
-                uniformePeriodoFim: { $gte: inicioDoDiaBrasil(hojeStr) }
+                uniformePeriodoInicio: { $lte: fimHojeDate },
+                uniformePeriodoFim: { $gte: inicioHojeDate }
             });
         } else {
             hojeCount = await Autorizacao.countDocuments({
                 tipo,
-                data: { $gte: inicioDoDiaBrasil(hojeStr), $lte: fimDoDiaBrasil(hojeStr) }
+                data: { $gte: inicioHojeDate, $lte: fimHojeDate }
             });
         }
 
+        // ============ MÉTRICAS: SEMANA / MÊS / TOTAL ============
         const [semanaCount, mesCount, total, comAssinatura] = await Promise.all([
-            Autorizacao.countDocuments({ tipo, data: { $gte: inicioSemana } }),
-            Autorizacao.countDocuments({ tipo, data: { $gte: inicioMes } }),
+            Autorizacao.countDocuments({ tipo, data: { $gte: inicioSemanaDate } }),
+            Autorizacao.countDocuments({ tipo, data: { $gte: inicioMesDate } }),
             Autorizacao.countDocuments({ tipo }),
             Autorizacao.countDocuments({ tipo, temAssinatura: true })
         ]);
 
+        // ============ POR MOTIVO ============
         const porMotivo = await Autorizacao.aggregate([
             { $match: { tipo, data: { $gte: ultimos30Dias } } },
             { $group: { _id: '$motivo', count: { $sum: 1 } } },
@@ -423,19 +481,25 @@ router.get('/dashboard', authenticateToken, verificarGestaoGeral, async (req, re
             ]);
         }
 
+        // ============ ÚLTIMOS 7 DIAS (🆕 BRT) ============
         const ultimos7Dias = [];
         for (let i = 6; i >= 0; i--) {
-            const d = new Date();
-            d.setDate(d.getDate() - i);
-            const diaStr = d.toISOString().split('T')[0];
-
+            const diaStr = getDataNDiasAtrasBR(i);  // "2026-11-04", "2026-11-03", ...
             const count = await Autorizacao.countDocuments({
                 tipo,
-                data: { $gte: inicioDoDiaBrasil(diaStr), $lte: fimDoDiaBrasil(diaStr) }
+                data: { 
+                    $gte: inicioDoDiaBrasil(diaStr), 
+                    $lte: fimDoDiaBrasil(diaStr) 
+                }
             });
 
+            const dataObj = new Date(diaStr + 'T12:00:00.000-03:00');
             ultimos7Dias.push({
-                dia: d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit' }),
+                dia: dataObj.toLocaleDateString('pt-BR', { 
+                    weekday: 'short', 
+                    day: '2-digit',
+                    timeZone: 'America/Sao_Paulo'
+                }),
                 data: diaStr,
                 atrasos: count
             });
@@ -466,6 +530,14 @@ router.get('/dashboard', authenticateToken, verificarGestaoGeral, async (req, re
         res.json({
             success: true,
             tipo,
+            _debug: {
+                hojeBR,
+                inicioHojeDate: inicioHojeDate.toISOString(),
+                fimHojeDate: fimHojeDate.toISOString(),
+                inicioSemanaDate: inicioSemanaDate.toISOString(),
+                inicioMesDate: inicioMesDate.toISOString(),
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
             metricas: { hoje: hojeCount, semana: semanaCount, mes: mesCount, total, comAssinatura },
             porMotivo: porMotivo.map(m => ({
                 motivo: m._id,
@@ -494,8 +566,9 @@ router.get('/dashboard', authenticateToken, verificarGestaoGeral, async (req, re
                 }))
             }
         });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+    } catch (error) { 
+        console.error('[GET /dashboard] Erro:', error);
+        res.status(500).json({ success: false, error: error.message }); 
     }
 });
 
@@ -1056,7 +1129,7 @@ router.get('/aluno/:id', authenticateToken, verificarGestaoGeral, async (req, re
 });
 
 // ============================================
-// 11. REGISTRAR
+// 11. REGISTRAR (🆕 bloqueia data futura + lembrete em BRT)
 // ============================================
 router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, res) => {
     try {
@@ -1082,6 +1155,16 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
         if (!alunoId) return res.status(400).json({ success: false, error: 'Aluno é obrigatório' });
         if (!motivo) return res.status(400).json({ success: false, error: 'Motivo é obrigatório' });
         if (!data) return res.status(400).json({ success: false, error: 'Data é obrigatória' });
+
+        // 🆕 Bloqueia data futura (usa BRT)
+        const hojeBR = getDataHojeBR();
+        const dataStr = data.length === 10 ? data : new Date(data).toISOString().split('T')[0];
+        if (dataStr > hojeBR) {
+            return res.status(400).json({ 
+                success: false, 
+                error: `Não é permitido registrar com data futura. Hoje é ${hojeBR.split('-').reverse().join('/')}.` 
+            });
+        }
 
         const motivosValidos = MOTIVOS_POR_TIPO[tipo] || MOTIVOS_POR_TIPO['autorizacao'];
         if (!motivosValidos.includes(motivo)) {
@@ -1312,9 +1395,6 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
             assinadaEm: assinaturaValida.length > 100 ? new Date() : null,
             assinadaPor: assinaturaValida.length > 100 ? req.userId : null,
 
-            // ============================================
-            // ✅ CORREÇÃO: quem assinou é o RESPONSÁVEL, não o gestor
-            // ============================================
             assinadaPorNome: assinaturaValida.length > 100 
                 ? (responsavelNome && String(responsavelNome).trim() 
                     ? String(responsavelNome).trim() 
@@ -1324,9 +1404,6 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
             origemTipo: origemTipo || 'manual',
             origemId: origemId || null,
 
-            // ============================================
-            // ✅ Quem registrou é SEMPRE o gestor logado
-            // ============================================
             registradoPor: req.userId,
             registradoPorNome: gestor?.nome || req.userNome || 'Gestão Geral'
         });
@@ -1334,48 +1411,47 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
         await autorizacao.save();
 
         // ============================================================
-        // 🆕 LEMBRETE DE RETROATIVIDADE (Só para Justificativas)
+        // 🆕 LEMBRETE DE RETROATIVIDADE (compara em BRT)
         // ============================================================
         if (tipo === 'justificativa' && periodoFaltaInicio) {
-            const hoje = new Date();
-            hoje.setHours(0, 0, 0, 0);
-            const dataFalta = new Date(periodoFaltaInicio);
-            dataFalta.setHours(0, 0, 0, 0);
+            // 🆕 Compara usando datas BRT, não UTC
+            const hojeBR = getDataHojeBR();
+            const dataFaltaStr = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'America/Sao_Paulo',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            }).format(new Date(periodoFaltaInicio));
 
-            console.log(`🔍 [Debug Lembrete] Data Falta: ${dataFalta.toISOString()} | Hoje: ${hoje.toISOString()}`);
+            console.log(`🔍 [Debug Lembrete] Data Falta (BRT): ${dataFaltaStr} | Hoje (BRT): ${hojeBR}`);
 
-            if (dataFalta < hoje) {
+            if (dataFaltaStr < hojeBR) {
                 try {
                     const Notificacao = require('../models/Notificacao');
                     
-                    const diffTime = Math.abs(hoje - dataFalta);
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    // Calcula diff de dias em BRT
+                    const dFalta = new Date(dataFaltaStr + 'T12:00:00.000-03:00');
+                    const dHoje = new Date(hojeBR + 'T12:00:00.000-03:00');
+                    const diffDays = Math.round((dHoje - dFalta) / (1000 * 60 * 60 * 24));
                     
                     const secretarios = await User.find({ role: 'secretaria' }).select('_id nome ativo');
                     
-                    console.log(`🔍 [Debug Lembrete] Secretários encontrados:`, secretarios);
+                    console.log(`🔍 [Debug Lembrete] Secretários encontrados:`, secretarios.length);
 
                     if (secretarios.length > 0) {
-                        // 🆕 Data ISO para usar em query string / deep link
-                        const dataFaltaISO = dataFalta.toISOString().split('T')[0]; // YYYY-MM-DD
+                        const dataFaltaISO = dataFaltaStr;
 
                         const notificacoes = secretarios.map(sec => ({
                             usuarioId: sec._id,
                             titulo: '⚠️ Justificativa Retroativa',
-                            mensagem: `Uma justificativa para o dia ${dataFalta.toLocaleDateString('pt-BR')} (há ${diffDays} dia${diffDays > 1 ? 's' : ''}) foi adicionada por ${req.userNome || 'Gestão'}. Toque para ver o registro.`,
+                            mensagem: `Uma justificativa para o dia ${dFalta.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (há ${diffDays} dia${diffDays > 1 ? 's' : ''}) foi adicionada por ${req.userNome || 'Gestão'}. Toque para ver o registro.`,
                             tipo: 'lembrete',
                             icone: '📅',
                             cor: '#f59e0b',
-
-                            // 🆕 Deep-link direto para a aba "Por Data"
                             link: `/secretaria.html?tab=por-data&dataInicio=${dataFaltaISO}&dataFim=${dataFaltaISO}&autorizacaoId=${autorizacao._id}`,
-
-                            // 🆕 Campos dedicados (indexados)
                             autorizacaoId: autorizacao._id,
                             alunoId: autorizacao.alunoId,
-                            dataFalta: dataFalta,
-
-                            // 🆕 Metadados no campo `dados` (Mixed) — usado pelo frontend
+                            dataFalta: dFalta,
                             dados: {
                                 origem: 'lembrete_retroativo',
                                 autorizacaoId: String(autorizacao._id),
@@ -1384,7 +1460,7 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
                                 alunoMatricula: autorizacao.alunoMatricula,
                                 alunoTurma: autorizacao.alunoTurma,
                                 dataFaltaISO,
-                                dataFaltaFormatada: dataFalta.toLocaleDateString('pt-BR'),
+                                dataFaltaFormatada: dFalta.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
                                 motivo: autorizacao.motivo,
                                 motivoLabel: Autorizacao.getMotivoLabel(autorizacao.motivo, 'justificativa'),
                                 registradoPorNome: req.userNome || 'Gestão',
@@ -1518,10 +1594,6 @@ router.get('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
                 origemTipo: a.origemTipo,
                 origemId: a.origemId,
 
-                // ============================================
-                // ✅ CORREÇÃO: fallback robusto
-                // registradoPorNome = SEMPRE o gestor que registrou
-                // ============================================
                 registradoPor: a.registradoPor || null,
                 registradoPorNome: a.registradoPorNome || 
                     (a.registradoPor && typeof a.registradoPor === 'object' ? a.registradoPor.nome : null) || 
@@ -1733,7 +1805,6 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
         if (responsavelTelefone !== undefined) a.responsavelTelefone = responsavelTelefone;
         if (observacoes !== undefined) a.observacoes = observacoes;
 
-        // Duplicidade na edição
         if (a.tipo === 'segunda_chamada') {
             const cpfResponsavelLimpo = (a.responsavelCPF || '').replace(/\D/g, '');
             

@@ -1,0 +1,447 @@
+/* ============================================================================
+   Minhas Inscrições — EducaPleno
+   ============================================================================ */
+
+:root {
+    --coord-primary: #0284c7;
+    --coord-primary-dark: #075985;
+    --coord-primary-light: #e0f2fe;
+    --coord-success: #10b981;
+    --coord-warning: #f59e0b;
+    --coord-danger: #ef4444;
+    --coord-info: #0ea5e9;
+    --coord-bg: #f0f4f8;
+    --coord-surface: #ffffff;
+    --coord-border: #e2e8f0;
+    --coord-text: #1e293b;
+    --coord-muted: #64748b;
+    --coord-radius: 14px;
+    --coord-radius-sm: 10px;
+    --coord-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+    --coord-shadow-lg: 0 20px 40px rgba(15, 23, 42, 0.10);
+}
+
+* { box-sizing: border-box; }
+
+body.coord-body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--coord-bg);
+    color: var(--coord-text);
+    min-height: 100vh;
+}
+
+/* --- TOPBAR --- */
+.coord-topbar {
+    background: #ffffff;
+    border-bottom: 1px solid var(--coord-border);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+.coord-topbar-inner {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 12px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+}
+.coord-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.coord-brand-icon {
+    width: 40px; height: 40px;
+    border-radius: 12px;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+}
+.coord-brand strong {
+    display: block;
+    font-size: 14px;
+    color: var(--coord-text);
+    font-weight: 800;
+}
+.coord-brand small {
+    display: block;
+    font-size: 11.5px;
+    color: var(--coord-muted);
+}
+.coord-topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.coord-user-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--coord-primary-light);
+    color: var(--coord-primary-dark);
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 700;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* --- SHELL / HERO --- */
+.coord-shell { max-width: 1280px; margin: 0 auto; padding: 24px; }
+.coord-hero {
+    color: #ffffff;
+    border-radius: 18px;
+    padding: 28px 32px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 24px;
+    align-items: center;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--coord-shadow);
+}
+.coord-hero::before {
+    content: '';
+    position: absolute;
+    top: -100px; right: -100px;
+    width: 300px; height: 300px;
+    background: radial-gradient(circle, rgba(255,255,255,0.15), transparent 70%);
+    border-radius: 50%;
+}
+.coord-hero-info h1 {
+    font-size: 24px;
+    font-weight: 800;
+    margin: 0 0 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.coord-hero-info p {
+    font-size: 14px;
+    opacity: 0.92;
+    margin: 0;
+}
+
+/* --- BOTÕES --- */
+.coord-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 11px 20px;
+    border-radius: var(--coord-radius-sm);
+    border: 1px solid transparent;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    transition: transform .08s, box-shadow .15s, background .15s;
+    font-family: inherit;
+    text-decoration: none;
+}
+.coord-btn:active { transform: translateY(1px); }
+.coord-btn-primary {
+    background: linear-gradient(135deg, #0ea5e9, #0284c7);
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.30);
+}
+.coord-btn-primary:hover { box-shadow: 0 6px 16px rgba(2, 132, 199, 0.40); }
+.coord-btn-secondary {
+    background: #f1f5f9;
+    color: #475569;
+    border-color: var(--coord-border);
+}
+.coord-btn-secondary:hover { background: #e2e8f0; }
+.coord-btn-danger {
+    background: linear-gradient(135deg, #ef4444, #b91c1c);
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.30);
+    border: none;
+}
+.coord-btn-danger:hover { box-shadow: 0 6px 16px rgba(239, 68, 68, 0.40); }
+.coord-btn-sm { padding: 7px 12px; font-size: 12.5px; }
+
+/* --- TABS --- */
+.minhas-tabs {
+    display: flex;
+    gap: 8px;
+    background: #ffffff;
+    border: 1px solid var(--coord-border);
+    padding: 6px;
+    border-radius: var(--coord-radius);
+    box-shadow: var(--coord-shadow);
+    margin-bottom: 20px;
+    overflow-x: auto;
+}
+.minhas-tab {
+    flex: 1;
+    min-width: 120px;
+    background: transparent;
+    border: none;
+    padding: 12px 16px;
+    border-radius: var(--coord-radius-sm);
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--coord-muted);
+    cursor: pointer;
+    transition: all .2s;
+    white-space: nowrap;
+}
+.minhas-tab:hover { background: #f8fafc; color: var(--coord-primary); }
+.minhas-tab.active {
+    background: var(--coord-primary-light);
+    color: var(--coord-primary-dark);
+    box-shadow: 0 0 0 1px #bae6fd inset;
+}
+.minhas-tab .badge-count {
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+/* --- CARDS DE INSCRIÇÃO --- */
+.inscricao-card {
+    background: var(--coord-surface);
+    border-radius: var(--coord-radius);
+    border: 1px solid var(--coord-border);
+    box-shadow: var(--coord-shadow);
+    padding: 20px;
+    margin-bottom: 16px;
+    transition: box-shadow 0.2s, border-color 0.2s;
+}
+.inscricao-card:hover {
+    border-color: #cbd5e1;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+.inscricao-card h4 {
+    font-size: 16px;
+    font-weight: 800;
+    margin: 0 0 6px;
+    color: var(--coord-text);
+}
+.inscricao-card .meta {
+    font-size: 13px;
+    color: var(--coord-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.inscricao-card .protocolo {
+    font-family: monospace;
+    background: #f1f5f9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 700;
+    color: #334155;
+}
+
+/* --- BADGES --- */
+.ev-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+.ev-badge-warning { background: #fffbeb; color: #92400e; }
+.ev-badge-publicado { background: #ecfdf5; color: #065f46; }
+.ev-badge-cancelado { background: #fef2f2; color: #991b1b; }
+.ev-badge-rascunho { background: #f1f5f9; color: #475569; }
+
+/* --- EMPTY STATE --- */
+.coord-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--coord-muted);
+    font-size: 14px;
+    background: #ffffff;
+    border-radius: var(--coord-radius);
+    border: 1px dashed var(--coord-border);
+}
+.coord-empty i {
+    font-size: 42px;
+    margin-bottom: 12px;
+    display: block;
+    color: #cbd5e1;
+}
+
+/* ============================================================================
+   MODAL DE DETALHES (CORRIGIDO)
+   ============================================================================ */
+
+/* Força o modal a ficar acima da topbar */
+#modalDetalhesInner {
+    z-index: 1060 !important;
+}
+.modal-backdrop {
+    z-index: 1050 !important;
+}
+
+/* Ajusta o corpo do modal para rolar apenas o conteúdo interno */
+#modalDetalhesInner .modal-dialog {
+    max-height: calc(100vh - 40px);
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+#modalDetalhesInner .modal-content {
+    border-radius: 16px; 
+    overflow: hidden; 
+    border: none; 
+    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 40px);
+}
+
+/* Cabeçalho fixo no topo */
+#modalDetalhesInner .modal-header {
+    background: linear-gradient(135deg, #0ea5e9, #0284c7); 
+    color: white; 
+    border: none; 
+    padding: 16px 24px;
+    flex-shrink: 0;
+}
+#modalDetalhesInner .modal-header h5 {
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+
+/* Corpo com scroll */
+#modalDetalhesInner .modal-body {
+    padding: 24px; 
+    background: #f8fafc;
+    overflow-y: auto;
+    flex: 1;
+}
+
+/* Rodapé fixo embaixo */
+#modalDetalhesInner .modal-footer {
+    border-top: 1px solid #e2e8f0; 
+    background: #ffffff;
+    flex-shrink: 0;
+}
+
+/* Seções internas do modal */
+.detalhes-section {
+    margin-bottom: 24px;
+}
+.detalhes-section h6 {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--coord-primary-dark);
+    margin: 0 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.detalhes-tabela {
+    width: 100%;
+    border-collapse: collapse;
+    background: #ffffff;
+    border: 1px solid var(--coord-border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.detalhes-tabela td {
+    padding: 10px 14px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--coord-border);
+    color: #334155;
+    word-break: break-word; /* Evita que textos longos quebrem o layout */
+}
+.detalhes-tabela tr:last-child td { border-bottom: none; }
+.detalhes-tabela td:first-child {
+    font-weight: 600;
+    color: var(--coord-muted);
+    width: 35%;
+    background: #f8fafc;
+}
+
+/* Assinatura e Anexos */
+.detalhes-assinatura {
+    background: #f8fafc;
+    border: 1px solid var(--coord-border);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+}
+.detalhes-assinatura img {
+    max-height: 120px;
+    max-width: 100%;
+}
+.detalhes-anexos {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    border: 1px solid var(--coord-border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.detalhes-anexos li {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--coord-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    background: #ffffff;
+}
+.detalhes-anexos li:last-child { border-bottom: none; }
+.detalhes-anexos a {
+    color: var(--coord-primary);
+    font-weight: 700;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.detalhes-anexos a:hover { text-decoration: underline; }
+
+/* --- RESPONSIVO --- */
+@media (max-width: 600px) {
+    .coord-topbar-inner { padding: 10px 14px; flex-direction: column; align-items: flex-start; }
+    .coord-topbar-actions { width: 100%; justify-content: space-between; margin-top: 8px; }
+    .coord-user-chip { max-width: 130px; }
+    .coord-shell { padding: 14px; }
+    .coord-hero { padding: 20px; }
+    .coord-hero-info h1 { font-size: 20px; }
+    .inscricao-card { padding: 16px; }
+    .minhas-tab { font-size: 13px; padding: 10px 12px; }
+    
+    /* Ajustes do modal no celular */
+    #modalDetalhesInner .modal-dialog {
+        margin: 10px;
+        max-height: calc(100vh - 20px);
+    }
+    #modalDetalhesInner .modal-content {
+        max-height: calc(100vh - 20px);
+    }
+    .detalhes-tabela td {
+        display: block;
+        width: 100%;
+    }
+    .detalhes-tabela td:first-child {
+        width: 100%;
+        border-bottom: none;
+        padding-bottom: 4px;
+    }
+    .detalhes-tabela td:last-child {
+        padding-top: 0;
+    }
+}

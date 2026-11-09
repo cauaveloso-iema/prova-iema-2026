@@ -10,6 +10,45 @@ const Atraso = require('../models/Atraso');
 const SessaoAssinatura = require('../models/SessaoAssinatura');
 
 // ============================================
+// 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
+// ============================================
+function getDataHojeBR() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());
+}
+
+function getDataNDiasBR(n) {
+  const agora = new Date();
+  const deslocada = new Date(agora.getTime() - n * 24 * 60 * 60 * 1000);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(deslocada);
+}
+
+function getInicioSemanaBR() {
+  const hojeBR = getDataHojeBR();
+  const hojeUTC = new Date(hojeBR + 'T03:00:00.000Z');
+  const diaSemana = hojeUTC.getUTCDay();
+  const inicio = new Date(hojeUTC.getTime() - diaSemana * 24 * 60 * 60 * 1000);
+  return inicio.toISOString().split('T')[0];
+}
+
+function getInicioMesBR() {
+  return getDataHojeBR().substring(0, 7) + '-01';
+}
+
+function inicioDoDiaBrasil(dataStr) {
+  return new Date(dataStr + 'T00:00:00.000-03:00');
+}
+
+function fimDoDiaBrasil(dataStr) {
+  return new Date(dataStr + 'T23:59:59.999-03:00');
+}
+
+// ============================================
 // MIDDLEWARES
 // ============================================
 const authenticateToken = (req, res, next) => {
@@ -50,7 +89,11 @@ router.get('/health', (req, res) => {
     success: true,
     status: 'online',
     service: 'Gestão Geral',
-    versao: '2.3-atraso-responsavel',
+    versao: '2.4-fuso-br',
+    _debug: {
+      hojeBR: getDataHojeBR(),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    },
     timestamp: new Date().toISOString()
   });
 });
@@ -473,7 +516,6 @@ router.get('/atraso/aluno/:id', authenticateToken, verificarGestaoGeral, async (
     if (!aluno) return res.status(404).json({ success: false, error: 'Aluno não encontrado' });
     if (aluno.role !== 'aluno') return res.status(400).json({ success: false, error: 'Usuário não é aluno' });
     
-    // Pega os últimos 5 atrasos
     const historicoRecente = await Atraso.find({ alunoId: aluno._id })
       .sort({ dataHora: -1 }).limit(5);
     
@@ -497,7 +539,6 @@ router.get('/atraso/aluno/:id', authenticateToken, verificarGestaoGeral, async (
         motivoLabel: Atraso.getMotivoLabel(a.motivo),
         descricao: a.descricao, dataHora: a.dataHora
       })),
-      // 🆕 PADRONIZAÇÃO: Envia igual às outras abas
       ultimasAutorizacoes: historicoRecente.map(a => ({
         id: a._id,
         motivoLabel: Atraso.getMotivoLabel(a.motivo),
@@ -543,9 +584,7 @@ router.get('/atraso/buscar-aluno', authenticateToken, verificarGestaoGeral, asyn
 });
 
 // ============================================
-// 📝 REGISTRAR ATRASO (com assinatura via QR Code)
-// Suporta assinatura do RESPONSÁVEL e do ALUNO
-// 🆕 Aceita dados do responsável (nome, CPF, telefone)
+// 📝 REGISTRAR ATRASO
 // ============================================
 router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
@@ -559,13 +598,11 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
       precisaAssinaturaAluno = false,
       assinaturaAlunoBase64 = '',
       sessaoAssinaturaAlunoId = null,
-      // 🆕 Dados do responsável (opcionais)
       responsavelNome = '',
       responsavelCPF = '',
       responsavelTelefone = ''
     } = req.body;
     
-    // Normaliza motivos: aceita array `motivos` ou string `motivo`
     let motivosFinal = Array.isArray(motivos) && motivos.length > 0
       ? motivos
       : (motivo ? [motivo] : []);
@@ -605,7 +642,6 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
       return res.status(400).json({ success: false, error: 'Data do atraso não pode ser superior a 1 ano no futuro' });
     }
     
-    // Assinatura do Responsável
     let assinaturaValida = '';
     let assinadaPorNome = null;
     let assinadaEm = null;
@@ -640,7 +676,6 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
       ? 'assinada'
       : (precisaAssinatura ? 'pendente' : 'nao_necessaria');
     
-    // Assinatura do Aluno
     let assinaturaAlunoValida = '';
     let assinadaPorNomeAluno = null;
     let assinadaEmAluno = null;
@@ -691,7 +726,6 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
       observacoes: observacoes || '',
       detalhes: detalhes || {},
       
-      // 🆕 Dados do responsável
       responsavelNome: (responsavelNome || '').trim(),
       responsavelCPF: (responsavelCPF || '').trim(),
       responsavelTelefone: (responsavelTelefone || '').trim(),
@@ -748,30 +782,34 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
   }
 });
 
-// Dashboard
+// ============================================
+// 🆕 DASHBOARD (CORRIGIDO — FUSO BRT)
+// ============================================
 router.get('/atraso/dashboard', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
-    const hoje = new Date();
-    const hojeStr = hoje.toISOString().split('T')[0];
-    const inicioSemana = new Date(hoje);
-    inicioSemana.setDate(hoje.getDate() - hoje.getDay());
-    const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    // 🆕 Datas em BRT
+    const hojeStr = getDataHojeBR();
+    const inicioSemanaStr = getInicioSemanaBR();
+    const inicioMesStr = getInicioMesBR();
+
+    const inicioHojeDate = inicioDoDiaBrasil(hojeStr);
+    const fimHojeDate = fimDoDiaBrasil(hojeStr);
+    const inicioSemanaDate = inicioDoDiaBrasil(inicioSemanaStr);
+    const inicioMesDate = inicioDoDiaBrasil(inicioMesStr);
+
     const ultimos30Dias = new Date();
     ultimos30Dias.setDate(ultimos30Dias.getDate() - 30);
     
     const [atrasosHoje, atrasosSemana, atrasosMes, total] = await Promise.all([
       Atraso.countDocuments({
-        dataHora: {
-          $gte: new Date(hojeStr),
-          $lt: new Date(new Date(hojeStr).setDate(new Date(hojeStr).getDate() + 1))
-        }
+        dataHora: { $gte: inicioHojeDate, $lte: fimHojeDate }
       }),
-      Atraso.countDocuments({ dataHora: { $gte: inicioSemana } }),
-      Atraso.countDocuments({ dataHora: { $gte: inicioMes } }),
+      Atraso.countDocuments({ dataHora: { $gte: inicioSemanaDate } }),
+      Atraso.countDocuments({ dataHora: { $gte: inicioMesDate } }),
       Atraso.countDocuments()
     ]);
     
-    // 🆕 Agrupa pelo array de motivos (cada motivo conta 1x)
+    // Agrupa pelo array de motivos (cada motivo conta 1x)
     const porMotivo = await Atraso.aggregate([
       { $match: { dataHora: { $gte: ultimos30Dias } } },
       { $project: {
@@ -788,18 +826,24 @@ router.get('/atraso/dashboard', authenticateToken, verificarGestaoGeral, async (
       { $sort: { count: -1 } }
     ]);
     
+    // 🆕 Últimos 7 dias em BRT
     const ultimos7Dias = [];
     for (let i = 6; i >= 0; i--) {
-      const data = new Date();
-      data.setDate(data.getDate() - i);
-      const dataStr = data.toISOString().split('T')[0];
-      const inicio = new Date(dataStr);
-      const fim = new Date(dataStr);
-      fim.setDate(fim.getDate() + 1);
-      const count = await Atraso.countDocuments({ dataHora: { $gte: inicio, $lt: fim } });
+      const dataStr = getDataNDiasBR(i);
+      const count = await Atraso.countDocuments({
+        dataHora: {
+          $gte: inicioDoDiaBrasil(dataStr),
+          $lte: fimDoDiaBrasil(dataStr)
+        }
+      });
+      
+      const dataObj = new Date(dataStr + 'T12:00:00.000-03:00');
       ultimos7Dias.push({
         data: dataStr,
-        dia: data.toLocaleDateString('pt-BR', { weekday: 'short' }),
+        dia: dataObj.toLocaleDateString('pt-BR', { 
+          weekday: 'short',
+          timeZone: 'America/Sao_Paulo'
+        }),
         atrasos: count
       });
     }
@@ -824,6 +868,12 @@ router.get('/atraso/dashboard', authenticateToken, verificarGestaoGeral, async (
     
     res.json({
       success: true,
+      _debug: {
+        hojeBR: hojeStr,
+        inicioSemanaBR: inicioSemanaStr,
+        inicioMesBR: inicioMesStr,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
       metricas: { hoje: atrasosHoje, semana: atrasosSemana, mes: atrasosMes, total },
       porMotivo: porMotivo.map(m => ({
         motivo: m._id,
@@ -837,6 +887,7 @@ router.get('/atraso/dashboard', authenticateToken, verificarGestaoGeral, async (
       }
     });
   } catch (error) {
+    console.error('[GET /atraso/dashboard] Erro:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -876,8 +927,8 @@ router.get('/atraso/listar', authenticateToken, verificarGestaoGeral, async (req
     
     if (dataInicio || dataFim) {
       query.dataHora = {};
-      if (dataInicio) query.dataHora.$gte = new Date(dataInicio + 'T00:00:00.000-03:00');
-      if (dataFim) query.dataHora.$lte = new Date(dataFim + 'T23:59:59.999-03:00');
+      if (dataInicio) query.dataHora.$gte = inicioDoDiaBrasil(dataInicio);
+      if (dataFim) query.dataHora.$lte = fimDoDiaBrasil(dataFim);
     }
     
     const limitNum = parseInt(limit) || 100;
@@ -916,7 +967,6 @@ router.get('/atraso/listar', authenticateToken, verificarGestaoGeral, async (req
           dataHora: a.dataHora,
           dataHoraFormatada: new Date(a.dataHora).toLocaleString('pt-BR'),
           registradoPor: a.registradoPorNome,
-          // 🆕 Dados do responsável
           responsavelNome: a.responsavelNome || '',
           responsavelCPF: a.responsavelCPF || '',
           responsavelTelefone: a.responsavelTelefone || '',
@@ -969,12 +1019,10 @@ router.get('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
         observacoes: atraso.observacoes,
         detalhes: atraso.detalhes,
         
-        // 🆕 Dados do responsável
         responsavelNome: atraso.responsavelNome || '',
         responsavelCPF: atraso.responsavelCPF || '',
         responsavelTelefone: atraso.responsavelTelefone || '',
         
-        // Quem registrou (gestor logado)
         registradoPor: atraso.registradoPorNome,
         
         precisaAssinatura: atraso.precisaAssinatura || false,
@@ -1006,7 +1054,6 @@ router.put('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
   try {
     const { 
       motivos, motivo, dataHora, descricao, observacoes, detalhes,
-      // 🆕 Dados do responsável
       responsavelNome, responsavelCPF, responsavelTelefone
     } = req.body;
 
@@ -1015,7 +1062,6 @@ router.put('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
       return res.status(404).json({ success: false, error: 'Atraso não encontrado' });
     }
 
-    // Normaliza motivos
     let motivosFinal = null;
     if (Array.isArray(motivos) && motivos.length > 0) {
       motivosFinal = [...new Set(motivos.filter(Boolean))];
@@ -1057,7 +1103,6 @@ router.put('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
     if (observacoes !== undefined) atraso.observacoes = observacoes;
     if (detalhes !== undefined) atraso.detalhes = { ...atraso.detalhes, ...detalhes };
 
-    // 🆕 Dados do responsável (opcionais)
     if (responsavelNome !== undefined) atraso.responsavelNome = (responsavelNome || '').trim();
     if (responsavelCPF !== undefined) atraso.responsavelCPF = (responsavelCPF || '').trim();
     if (responsavelTelefone !== undefined) atraso.responsavelTelefone = (responsavelTelefone || '').trim();
@@ -1111,14 +1156,13 @@ router.get('/atraso/relatorio/aluno/:alunoId', authenticateToken, verificarGesta
     let query = { alunoId: req.params.alunoId };
     if (dataInicio || dataFim) {
       query.dataHora = {};
-      if (dataInicio) query.dataHora.$gte = new Date(dataInicio);
-      if (dataFim) query.dataHora.$lte = new Date(dataFim + 'T23:59:59');
+      if (dataInicio) query.dataHora.$gte = inicioDoDiaBrasil(dataInicio);
+      if (dataFim) query.dataHora.$lte = fimDoDiaBrasil(dataFim);
     }
     
     const atrasos = await Atraso.find(query).select('-assinaturaBase64 -assinaturaAlunoBase64').sort({ dataHora: -1 });
     const aluno = await User.findById(req.params.alunoId).select('nome matricula turma curso');
     
-    // 🆕 Conta TODOS os motivos de cada atraso
     const porMotivo = {};
     atrasos.forEach(a => {
       const motivosArr = (a.motivos && a.motivos.length > 0) ? a.motivos : [a.motivo];
@@ -1169,8 +1213,8 @@ router.get('/atraso/relatorio/turma/:turma', authenticateToken, verificarGestaoG
     let query = { alunoTurma: req.params.turma };
     if (dataInicio || dataFim) {
       query.dataHora = {};
-      if (dataInicio) query.dataHora.$gte = new Date(dataInicio);
-      if (dataFim) query.dataHora.$lte = new Date(dataFim + 'T23:59:59');
+      if (dataInicio) query.dataHora.$gte = inicioDoDiaBrasil(dataInicio);
+      if (dataFim) query.dataHora.$lte = fimDoDiaBrasil(dataFim);
     }
     
     const atrasos = await Atraso.find(query).select('-assinaturaBase64 -assinaturaAlunoBase64').sort({ dataHora: -1 });
@@ -1188,7 +1232,6 @@ router.get('/atraso/relatorio/turma/:turma', authenticateToken, verificarGestaoG
       }
       porAluno[key].total++;
       
-      // 🆕 Conta todos os motivos
       const motivosArr = (a.motivos && a.motivos.length > 0) ? a.motivos : [a.motivo];
       motivosArr.forEach(m => {
         porAluno[key].motivos[m] = (porAluno[key].motivos[m] || 0) + 1;
@@ -1237,8 +1280,8 @@ router.get('/atraso/relatorio/geral', authenticateToken, verificarGestaoGeral, a
     if (motivo && motivo !== 'todos') query.motivos = motivo;
     if (dataInicio || dataFim) {
       query.dataHora = {};
-      if (dataInicio) query.dataHora.$gte = new Date(dataInicio);
-      if (dataFim) query.dataHora.$lte = new Date(dataFim + 'T23:59:59');
+      if (dataInicio) query.dataHora.$gte = inicioDoDiaBrasil(dataInicio);
+      if (dataFim) query.dataHora.$lte = fimDoDiaBrasil(dataFim);
     }
     
     const atrasos = await Atraso.find(query).select('-assinaturaBase64 -assinaturaAlunoBase64').sort({ dataHora: -1 });
@@ -1253,7 +1296,6 @@ router.get('/atraso/relatorio/geral', authenticateToken, verificarGestaoGeral, a
       porTurma[a.alunoTurma].total++;
       porTurma[a.alunoTurma].alunos.add(a.alunoId.toString());
       
-      // 🆕 Conta todos os motivos
       const motivosArr = (a.motivos && a.motivos.length > 0) ? a.motivos : [a.motivo];
       motivosArr.forEach(m => {
         porMotivo[m] = (porMotivo[m] || 0) + 1;

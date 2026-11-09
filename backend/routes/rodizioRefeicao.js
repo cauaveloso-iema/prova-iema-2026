@@ -4,6 +4,41 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const RodizioRefeicao = require('../models/RodizioRefeicao'); // 🔥 Usar o modelo existente
 
+// ============================================
+// 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
+// ============================================
+function getDataHojeBR() {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(new Date());
+}
+
+function getPartesDataBR(dateObj) {
+    const d = dateObj || new Date();
+    const partes = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(d).split('-');
+    return {
+        ano: parseInt(partes[0], 10),
+        mes: parseInt(partes[1], 10),
+        dia: parseInt(partes[2], 10),
+        str: partes.join('-')
+    };
+}
+
+function getDiaSemanaBR(dateObj) {
+    // 🆕 Retorna 0=Dom..6=Sáb no fuso BRT
+    const d = dateObj || new Date();
+    const diaStr = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Sao_Paulo',
+        weekday: 'short'
+    }).format(d);
+    const mapa = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    return mapa[diaStr] ?? d.getDay();
+}
+
 // Middleware de autenticação
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
@@ -24,9 +59,6 @@ const authenticateToken = (req, res, next) => {
     });
 };
 
-// ============================================
-// 🍽️ ROTA PARA ALUNO VER O RODÍZIO DA SUA TURMA
-// ============================================
 // ============================================
 // 🍽️ ROTA PARA ALUNO VER O RODÍZIO DA SUA TURMA
 // ============================================
@@ -100,13 +132,15 @@ router.get('/meu-rodizio', authenticateToken, async (req, res) => {
         console.log(`   Ativo: ${config.ativo ? 'Sim' : 'Não'}`);
         
         // ========== 7. FUNÇÃO PARA VERIFICAR SE PODE ALMOÇAR EM UMA DATA ==========
+        // 🆕 Usa helpers BRT (antes usava data.getDay()/getDate() que dependem do fuso do servidor)
         function podeAlmocarNaData(config, data) {
-            const diaSemana = data.getDay(); // 0=Domingo, 1=Segunda, ..., 6=Sábado
-            const diaMes = data.getDate();    // 1-31
+            const partes = getPartesDataBR(data);
+            const diaSemana = getDiaSemanaBR(data); // 0=Domingo, 1=Segunda, ..., 6=Sábado
+            const diaMes = partes.dia;              // 1-31 (em BRT)
             
-            // Calcular semana do mês (1-5)
-            const primeiraSemana = new Date(data.getFullYear(), data.getMonth(), 1);
-            const diaSemanaPrimeiro = primeiraSemana.getDay();
+            // Calcular semana do mês (1-5) usando data BRT
+            const primeiraSemana = new Date(partes.ano, partes.mes - 1, 1);
+            const diaSemanaPrimeiro = getDiaSemanaBR(primeiraSemana);
             const semanaMes = Math.ceil((diaMes + diaSemanaPrimeiro) / 7);
             
             let pode = false;
@@ -136,25 +170,30 @@ router.get('/meu-rodizio', authenticateToken, async (req, res) => {
         }
         
         // ========== 8. CALCULAR PRÓXIMOS 14 DIAS ==========
-        const hoje = new Date();
+        // 🆕 Usa data de hoje em BRT
+        const hojePartes = getPartesDataBR();
         const diasPermitidos = [];
         
         for (let i = 0; i <= 14; i++) {
-            const data = new Date();
-            data.setDate(hoje.getDate() + i);
-            const resultadoDia = podeAlmocarNaData(config, data);
+            // 🆕 Constrói data em BRT a partir do "hoje BR + i dias"
+            const dataBase = new Date(`${hojePartes.str}T12:00:00.000-03:00`);
+            dataBase.setDate(dataBase.getDate() + i);
+            
+            const resultadoDia = podeAlmocarNaData(config, dataBase);
+            const partesDia = getPartesDataBR(dataBase);
             
             diasPermitidos.push({
-                data: data.toISOString(),
-                dataFormatada: data.toLocaleDateString('pt-BR', { 
+                data: dataBase.toISOString(),
+                dataFormatada: dataBase.toLocaleDateString('pt-BR', { 
                     weekday: 'long', 
                     day: '2-digit', 
-                    month: '2-digit' 
+                    month: '2-digit',
+                    timeZone: 'America/Sao_Paulo'
                 }),
-                dataSimples: data.toLocaleDateString('pt-BR'),
+                dataSimples: dataBase.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
                 podeAlmocar: resultadoDia.pode,
                 motivo: resultadoDia.motivo,
-                diaSemana: data.getDay()
+                diaSemana: getDiaSemanaBR(dataBase)
             });
         }
         
@@ -177,6 +216,10 @@ router.get('/meu-rodizio', authenticateToken, async (req, res) => {
                 diasSemanaPermitidos: config.diasSemana || [],
                 diasMesPermitidos: config.diasMes || [],
                 semanasMesPermitidas: config.semanasMes || []
+            },
+            _debug: {
+                hojeBR: hojePartes.str,
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
             }
         });
         

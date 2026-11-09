@@ -6,6 +6,49 @@ const Refeicao = require('../models/Refeicao');
 const RodizioRefeicao = require('../models/RodizioRefeicao');
 
 // ============================================
+// 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
+// ============================================
+function getDataHojeBR() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());
+}
+
+function getHoraAtualBR() {
+  return parseInt(new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit', hour12: false
+  }).format(new Date()), 10);
+}
+
+function getDataISOdoHorarioBR(horario) {
+  // 🆕 Converte qualquer Date para YYYY-MM-DD em BRT
+  const d = new Date(horario);
+  if (isNaN(d.getTime())) return getDataHojeBR();
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(d);
+}
+
+function getDataNDiasBR(n) {
+  const agora = new Date();
+  const deslocada = new Date(agora.getTime() - n * 24 * 60 * 60 * 1000);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(deslocada);
+}
+
+function getDataNDiasAtrasDateBR(n) {
+  // 🆕 Retorna Date BRT
+  const agora = new Date();
+  const deslocada = new Date(agora.getTime() - n * 24 * 60 * 60 * 1000);
+  return deslocada;
+}
+
+// ============================================
 // MIDDLEWARES
 // ============================================
 const authenticateToken = (req, res, next) => {
@@ -43,7 +86,7 @@ const verificarAdmin = (req, res, next) => {
 };
 
 // ============================================
-// HELPERS DE DATA
+// HELPERS DE DATA (🆕 BRT)
 // ============================================
 function isDataValida(s) {
   return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
@@ -56,9 +99,10 @@ function isDataValida(s) {
  *   2) ?dataInicio + ?dataFim → intervalo
  *   3) ?data=YYYY-MM-DD       → dia único
  *   4) (nenhum)               → hoje
+ * 🆕 Todos os cálculos usam BRT
  */
 function montarFiltroData(query) {
-  const hoje = new Date().toISOString().split('T')[0];
+  const hoje = getDataHojeBR();
   const { data, dataInicio, dataFim, todos } = query;
 
   if (todos === 'true' || todos === '1') {
@@ -78,8 +122,8 @@ function montarFiltroData(query) {
     const ini = isDataValida(dataInicio) ? dataInicio : '1900-01-01';
     const fim = isDataValida(dataFim) ? dataFim : hoje;
 
-    const labelIni = new Date(ini + 'T00:00:00').toLocaleDateString('pt-BR');
-    const labelFim = new Date(fim + 'T00:00:00').toLocaleDateString('pt-BR');
+    const labelIni = new Date(ini + 'T12:00:00.000-03:00').toLocaleDateString('pt-BR');
+    const labelFim = new Date(fim + 'T12:00:00.000-03:00').toLocaleDateString('pt-BR');
 
     return {
       filtro: { data: { $gte: ini, $lte: fim } },
@@ -107,12 +151,11 @@ function montarFiltroData(query) {
         dataAtual: hoje,
         dataVisualizada: data,
         isHistorico: data !== hoje,
-        label: new Date(data + 'T00:00:00').toLocaleDateString('pt-BR')
+        label: new Date(data + 'T12:00:00.000-03:00').toLocaleDateString('pt-BR')
       }
     };
   }
 
-  // padrão: hoje
   return {
     filtro: { data: hoje },
     infoData: {
@@ -133,6 +176,12 @@ router.get('/health', (req, res) => {
     success: true,
     status: 'online',
     service: 'Cozinha Monitoramento',
+    versao: '2.0-fuso-br',
+    _debug: {
+      hojeBR: getDataHojeBR(),
+      horaBR: getHoraAtualBR(),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    },
     timestamp: new Date().toISOString()
   });
 });
@@ -144,9 +193,9 @@ router.get('/dashboard', authenticateToken, verificarAdmin, async (req, res) => 
   try {
     const { filtro: filtroData, infoData } = montarFiltroData(req.query);
 
-    const agora = new Date();
-    const horaAtual = agora.getHours();
-    const hoje = new Date().toISOString().split('T')[0];
+    // 🆕 Hora e data em BRT
+    const horaAtual = getHoraAtualBR();
+    const hoje = getDataHojeBR();
 
     // ========== 1. DADOS DA COZINHA ==========
 
@@ -197,7 +246,6 @@ router.get('/dashboard', authenticateToken, verificarAdmin, async (req, res) => 
       unidade: 'kg'
     };
 
-    // Refeições por turma (sobre o conjunto filtrado)
     const refeicoesPorTurma = {};
     refeicoesFiltradas.forEach(r => {
       const turma = r.alunoTurma || 'N/A';
@@ -218,7 +266,6 @@ router.get('/dashboard', authenticateToken, verificarAdmin, async (req, res) => 
       alunosQueComeram: dados.alunos.size
     }));
 
-    // Últimos registros (agora com sort estável por horário + _id)
     const ultimosRegistros = await Refeicao.find(filtroData)
       .sort({ horario: -1, _id: -1 })
       .limit(50);
@@ -235,8 +282,12 @@ router.get('/dashboard', authenticateToken, verificarAdmin, async (req, res) => 
     const turmasComRodizio = rodizios.map(r => r.turma);
     const turmasSemRodizio = todasTurmas.filter(t => !turmasComRodizio.includes(t));
 
-    const diaSemana = agora.getDay();
-    const diaMes = agora.getDate();
+    // 🆕 Dia da semana e dia do mês em BRT
+    const agoraBR = new Date();
+    const dataBRStr = getDataHojeBR();
+    const dataBRObj = new Date(dataBRStr + 'T12:00:00.000-03:00');
+    const diaSemana = dataBRObj.getUTCDay();
+    const diaMes = parseInt(dataBRStr.substring(8, 10), 10);
     const semanaMes = Math.ceil(diaMes / 7);
     const diasNomes = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
@@ -322,6 +373,11 @@ router.get('/dashboard', authenticateToken, verificarAdmin, async (req, res) => 
       timestamp: new Date().toISOString(),
       horaAtual,
       infoData,
+      _debug: {
+        hojeBR: hoje,
+        horaBR: horaAtual,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
       cozinha: {
         totalPessoas,
         totalPorTipo,
@@ -368,12 +424,14 @@ router.get('/registros-por-data', authenticateToken, verificarAdmin, async (req,
   try {
     const { data, dataInicio, dataFim, todos, turma, tipo, limite = 100 } = req.query;
 
+    const hoje = getDataHojeBR();
+
     let filtroData;
     if (todos === 'true' || todos === '1') {
       filtroData = {};
     } else if (dataInicio || dataFim) {
       const ini = isDataValida(dataInicio) ? dataInicio : '1900-01-01';
-      const fim = isDataValida(dataFim) ? dataFim : new Date().toISOString().split('T')[0];
+      const fim = isDataValida(dataFim) ? dataFim : hoje;
       filtroData = { data: { $gte: ini, $lte: fim } };
     } else if (data) {
       if (!isDataValida(data)) {
@@ -443,7 +501,8 @@ router.put('/registro/:id', authenticateToken, verificarAdmin, async (req, res) 
     if (tipoRefeicao) registro.tipoRefeicao = tipoRefeicao;
     if (horario) {
       registro.horario = new Date(horario);
-      registro.data = new Date(horario).toISOString().split('T')[0];
+      // 🆕 Recalcula a data em BRT
+      registro.data = getDataISOdoHorarioBR(horario);
     }
     if (observacao !== undefined) registro.observacao = observacao;
 
@@ -476,14 +535,24 @@ router.delete('/registro/:id', authenticateToken, verificarAdmin, async (req, re
 });
 
 // ============================================
-// 🗑️ LIMPEZA DE REGISTROS ANTIGOS
+// 🗑️ LIMPEZA DE REGISTROS ANTIGOS (🆕 data em BRT)
 // ============================================
 router.post('/limpar-registros-antigos', authenticateToken, verificarAdmin, async (req, res) => {
   try {
     const { meses = 1 } = req.body;
-    const dataLimite = new Date();
-    dataLimite.setMonth(dataLimite.getMonth() - meses);
-    const dataLimiteStr = dataLimite.toISOString().split('T')[0];
+
+    // 🆕 Calcula o limite em BRT
+    const hojeBR = getDataHojeBR();
+    const hojeDate = new Date(hojeBR + 'T12:00:00.000-03:00');
+
+    const dataLimiteDate = new Date(hojeDate);
+    dataLimiteDate.setMonth(dataLimiteDate.getMonth() - meses);
+
+    // 🆕 Converte de volta para YYYY-MM-DD em BRT
+    const dataLimiteStr = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(dataLimiteDate);
 
     const resultado = await Refeicao.deleteMany({
       data: { $lt: dataLimiteStr }
@@ -501,14 +570,18 @@ router.post('/limpar-registros-antigos', authenticateToken, verificarAdmin, asyn
 });
 
 // ============================================
-// 📊 ESTATÍSTICAS GERAIS
+// 📊 ESTATÍSTICAS GERAIS (🆕 BRT)
 // ============================================
 router.get('/estatisticas-registros', authenticateToken, verificarAdmin, async (req, res) => {
   try {
     const total = await Refeicao.countDocuments();
-    const umMesAtras = new Date();
-    umMesAtras.setMonth(umMesAtras.getMonth() - 1);
-    const umMesAtrasStr = umMesAtras.toISOString().split('T')[0];
+
+    // 🆕 Data 1 mês atrás em BRT
+    const umMesAtrasDate = getDataNDiasAtrasDateBR(30);
+    const umMesAtrasStr = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(umMesAtrasDate);
 
     const mesAtual = await Refeicao.countDocuments({ data: { $gte: umMesAtrasStr } });
     const mesAnterior = await Refeicao.countDocuments({ data: { $lt: umMesAtrasStr } });
@@ -531,7 +604,7 @@ router.get('/estatisticas-registros', authenticateToken, verificarAdmin, async (
 });
 
 // ============================================
-// 📡 EVENTOS SSE
+// 📡 EVENTOS SSE (🆕 data em BRT)
 // ============================================
 router.get('/eventos', authenticateToken, verificarAdmin, async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -553,7 +626,8 @@ router.get('/eventos', authenticateToken, verificarAdmin, async (req, res) => {
 
   const checkInterval = setInterval(async () => {
     try {
-      const hoje = new Date().toISOString().split('T')[0];
+      // 🆕 Data em BRT
+      const hoje = getDataHojeBR();
       const novoTotal = await Refeicao.countDocuments({ data: hoje });
 
       if (novoTotal !== ultimoTotal) {

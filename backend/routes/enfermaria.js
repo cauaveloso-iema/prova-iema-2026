@@ -9,6 +9,37 @@ const Notificacao = require('../models/Notificacao');
 const { descriptografar } = require('../utils/criptografia');
 
 // ============================================
+// 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
+// ============================================
+function getDataHojeBR() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());
+}
+
+function getDataNDiasBR(n) {
+  const agora = new Date();
+  const deslocada = new Date(agora.getTime() - n * 24 * 60 * 60 * 1000);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(deslocada);
+}
+
+function getInicioSemanaBR() {
+  const hojeBR = getDataHojeBR();
+  const hojeUTC = new Date(hojeBR + 'T03:00:00.000Z');
+  const diaSemana = hojeUTC.getUTCDay();
+  const inicio = new Date(hojeUTC.getTime() - diaSemana * 24 * 60 * 60 * 1000);
+  return inicio.toISOString().split('T')[0];
+}
+
+function getInicioMesBR() {
+  return getDataHojeBR().substring(0, 7) + '-01';
+}
+
+// ============================================
 // MASCARAR DADOS SENSÍVEIS
 // ============================================
 const MASCARA_TEXTO = '🔒 Conteúdo protegido (visível apenas para o profissional responsável)';
@@ -105,7 +136,6 @@ async function criarNotificacaoInterna({ usuarioId, titulo, mensagem, tipo, link
 
 // ============================================
 // PROCESSAR ALERTAS 24H
-// Envia 1 notificação por dia por atendimento
 // ============================================
 async function processarAlertas24h() {
   const atendimentos = await AtendimentoEnfermaria.buscarAtendimentosParaAlerta();
@@ -114,13 +144,12 @@ async function processarAlertas24h() {
   let processados = 0;
   let pulados = 0;
   const agora = new Date();
-  const INTERVALO_MINIMO_MS = 24 * 60 * 60 * 1000; // 24 horas entre alertas
+  const INTERVALO_MINIMO_MS = 24 * 60 * 60 * 1000;
   
   for (const atendimento of atendimentos) {
     const registradoPor = atendimento.entrada?.registradoPor;
     if (!registradoPor) continue;
     
-    // 🛡️ Só envia se passou 24h desde o último alerta
     if (atendimento.ultimoAlerta24h) {
       const diff = agora - new Date(atendimento.ultimoAlerta24h);
       if (diff < INTERVALO_MINIMO_MS) {
@@ -200,18 +229,21 @@ function fimDoDiaBrasil(dataStr) { return new Date(dataStr + 'T23:59:59.999-03:0
 
 // ============================================
 // HEALTH CHECK
-// Retorna status do serviço (online/versão/timestamp)
 // ============================================
 router.get('/health', (req, res) => {
   res.json({ 
     success: true, status: 'online', service: 'Enfermaria',
-    versao: '2.0-alertas-24h', timestamp: new Date().toISOString()
+    versao: '2.1-fuso-br', 
+    _debug: {
+      hojeBR: getDataHojeBR(),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    },
+    timestamp: new Date().toISOString()
   });
 });
 
 // ============================================
 // MIGRAÇÃO
-// Inicializa campos de alerta 24h em atendimentos existentes
 // ============================================
 router.post('/admin/migrar-alertas-24h', async (req, res) => {
   try {
@@ -228,8 +260,6 @@ router.post('/admin/migrar-alertas-24h', async (req, res) => {
 // ============================================
 // TURMAS E ALUNOS
 // ============================================
-
-// Lista todas as turmas distintas de alunos ativos
 router.get('/turmas', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
     const turmas = await User.distinct('turma', { 
@@ -239,7 +269,6 @@ router.get('/turmas', authenticateToken, verificarEnfermaria, async (req, res) =
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// Lista alunos de uma turma específica
 router.get('/alunos-por-turma', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
     const { turma } = req.query;
@@ -256,7 +285,6 @@ router.get('/alunos-por-turma', authenticateToken, verificarEnfermaria, async (r
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// Busca dados de um aluno + status de atendimento atual
 router.get('/aluno/:id', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
     const alunoId = req.params.id;
@@ -287,7 +315,6 @@ router.get('/aluno/:id', authenticateToken, verificarEnfermaria, async (req, res
 
 // ============================================
 // REGISTRAR ENTRADA
-// Registra a entrada de um aluno na enfermaria
 // ============================================
 router.post('/entrada', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
@@ -355,7 +382,6 @@ router.post('/entrada', authenticateToken, verificarEnfermaria, async (req, res)
 
 // ============================================
 // REGISTRAR SAÍDA
-// Registra a saída do aluno da enfermaria com desfecho
 // ============================================
 router.post('/saida', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
@@ -436,7 +462,6 @@ router.post('/saida', authenticateToken, verificarEnfermaria, async (req, res) =
 
 // ============================================
 // ATENDIMENTOS ATIVOS
-// Lista todos os atendimentos em andamento (com máscara para super_admin)
 // ============================================
 router.get('/atendimentos-ativos', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
@@ -472,7 +497,6 @@ router.get('/atendimentos-ativos', authenticateToken, verificarEnfermaria, async
 
 // ============================================
 // LISTAR ATENDIMENTOS
-// Lista atendimentos com filtros e paginação (com máscara para super_admin)
 // ============================================
 router.get('/listar', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
@@ -484,8 +508,8 @@ router.get('/listar', authenticateToken, verificarEnfermaria, async (req, res) =
     
     if (dataInicio || dataFim) {
       query['entrada.dataHora'] = {};
-      if (dataInicio) query['entrada.dataHora'].$gte = new Date(dataInicio);
-      if (dataFim) query['entrada.dataHora'].$lte = new Date(dataFim + 'T23:59:59');
+      if (dataInicio) query['entrada.dataHora'].$gte = inicioDoDiaBrasil(dataInicio);
+      if (dataFim) query['entrada.dataHora'].$lte = fimDoDiaBrasil(dataFim);
     }
     
     if (busca && busca.trim() !== '') {
@@ -566,7 +590,6 @@ router.get('/listar', authenticateToken, verificarEnfermaria, async (req, res) =
 
 // ============================================
 // BUSCAR ATENDIMENTO POR ID
-// Retorna um atendimento específico (com máscara para super_admin)
 // ============================================
 router.get('/atendimento/:id', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
@@ -629,7 +652,6 @@ router.get('/atendimento/:id', authenticateToken, verificarEnfermaria, async (re
 
 // ============================================
 // EDITAR ATENDIMENTO
-// Atualiza um atendimento (com verificação de permissão para super_admin)
 // ============================================
 router.put('/atendimento/:id', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
@@ -730,7 +752,6 @@ router.put('/atendimento/:id', authenticateToken, verificarEnfermaria, async (re
 
 // ============================================
 // EXCLUIR ATENDIMENTO
-// Exclui um atendimento (com verificação de permissão para super_admin)
 // ============================================
 router.delete('/atendimento/:id', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
@@ -750,26 +771,26 @@ router.delete('/atendimento/:id', authenticateToken, verificarEnfermaria, async 
 });
 
 // ============================================
-// DASHBOARD
-// Retorna métricas, gráficos e tendências dos atendimentos
+// 🆕 DASHBOARD (CORRIGIDO — FUSO BRT)
 // ============================================
 router.get('/dashboard', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
-    const hoje = new Date();
-    const hojeStr = hoje.toISOString().split('T')[0];
-    const inicioSemana = new Date(hoje);
-    inicioSemana.setDate(hoje.getDate() - hoje.getDay());
-    const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-    
+    // 🆕 Datas em BRT
+    const hojeStr = getDataHojeBR();
+    const inicioSemanaStr = getInicioSemanaBR();
+    const inicioMesStr = getInicioMesBR();
+
+    const inicioHojeDate = inicioDoDiaBrasil(hojeStr);
+    const fimHojeDate = fimDoDiaBrasil(hojeStr);
+    const inicioSemanaDate = inicioDoDiaBrasil(inicioSemanaStr);
+    const inicioMesDate = inicioDoDiaBrasil(inicioMesStr);
+
     const atendimentosHoje = await AtendimentoEnfermaria.countDocuments({
-      'entrada.dataHora': {
-        $gte: new Date(hojeStr),
-        $lt: new Date(new Date(hojeStr).setDate(new Date(hojeStr).getDate() + 1))
-      }
+      'entrada.dataHora': { $gte: inicioHojeDate, $lte: fimHojeDate }
     });
     
-    const atendimentosSemana = await AtendimentoEnfermaria.countDocuments({ 'entrada.dataHora': { $gte: inicioSemana } });
-    const atendimentosMes = await AtendimentoEnfermaria.countDocuments({ 'entrada.dataHora': { $gte: inicioMes } });
+    const atendimentosSemana = await AtendimentoEnfermaria.countDocuments({ 'entrada.dataHora': { $gte: inicioSemanaDate } });
+    const atendimentosMes = await AtendimentoEnfermaria.countDocuments({ 'entrada.dataHora': { $gte: inicioMesDate } });
     const totalAtendimentos = await AtendimentoEnfermaria.countDocuments();
     
     const ultimos30Dias = new Date();
@@ -788,22 +809,24 @@ router.get('/dashboard', authenticateToken, verificarEnfermaria, async (req, res
       { $sort: { count: -1 } }
     ]);
     
+    // 🆕 Últimos 7 dias em BRT
     const ultimos7Dias = [];
     for (let i = 6; i >= 0; i--) {
-      const data = new Date();
-      data.setDate(data.getDate() - i);
-      const dataStr = data.toISOString().split('T')[0];
-      const inicio = new Date(dataStr);
-      const fim = new Date(dataStr);
-      fim.setDate(fim.getDate() + 1);
-      
+      const dataStr = getDataNDiasBR(i);
       const count = await AtendimentoEnfermaria.countDocuments({
-        'entrada.dataHora': { $gte: inicio, $lt: fim }
+        'entrada.dataHora': {
+          $gte: inicioDoDiaBrasil(dataStr),
+          $lte: fimDoDiaBrasil(dataStr)
+        }
       });
       
+      const dataObj = new Date(dataStr + 'T12:00:00.000-03:00');
       ultimos7Dias.push({
         data: dataStr,
-        dia: data.toLocaleDateString('pt-BR', { weekday: 'short' }),
+        dia: dataObj.toLocaleDateString('pt-BR', { 
+          weekday: 'short',
+          timeZone: 'America/Sao_Paulo'
+        }),
         atendimentos: count
       });
     }
@@ -861,10 +884,16 @@ router.get('/dashboard', authenticateToken, verificarEnfermaria, async (req, res
     
     res.json({
       success: true,
+      _debug: {
+        hojeBR: hojeStr,
+        inicioSemanaBR: inicioSemanaStr,
+        inicioMesBR: inicioMesStr,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
       periodo: {
         hoje: hojeStr,
-        inicioSemana: inicioSemana.toISOString().split('T')[0],
-        inicioMes: inicioMes.toISOString().split('T')[0]
+        inicioSemana: inicioSemanaStr,
+        inicioMes: inicioMesStr
       },
       metricas: {
         hoje: atendimentosHoje, semana: atendimentosSemana,
@@ -890,13 +919,13 @@ router.get('/dashboard', authenticateToken, verificarEnfermaria, async (req, res
       }
     });
   } catch (error) {
+    console.error('[GET /dashboard] Erro:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // ============================================
 // ATENDIMENTOS COM +24H
-// Lista atendimentos em andamento há mais de 24h (com máscara para super_admin)
 // ============================================
 router.get('/atendimentos-antigos', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
@@ -940,7 +969,6 @@ router.get('/atendimentos-antigos', authenticateToken, verificarEnfermaria, asyn
       };
     });
     
-    // 🔒 APLICA A MÁSCARA PARA SUPER_ADMIN
     const listaMascarada = mascararParaAdmin(lista, req);
     
     res.json({ success: true, total: listaMascarada.length, atendimentos: listaMascarada });
@@ -949,7 +977,6 @@ router.get('/atendimentos-antigos', authenticateToken, verificarEnfermaria, asyn
 
 // ============================================
 // VERIFICAR ATENDIMENTO +24H
-// Permite encerrar ou manter aberto um atendimento com +24h
 // ============================================
 router.post('/atendimento/:id/verificar-24h', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
@@ -1018,7 +1045,9 @@ router.post('/atendimento/:id/verificar-24h', authenticateToken, verificarEnferm
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// Processa manualmente os alertas de +24h (usado para testes)
+// ============================================
+// PROCESSAR ALERTAS MANUALMENTE
+// ============================================
 router.post('/processar-alertas-24h', async (req, res) => {
   try {
     const resultado = await processarAlertas24h();
@@ -1029,8 +1058,6 @@ router.post('/processar-alertas-24h', async (req, res) => {
 // ============================================
 // RELATÓRIOS
 // ============================================
-
-// Relatório individual de um aluno (histórico completo)
 router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
     const { alunoId } = req.params;
@@ -1039,8 +1066,8 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarEnfermaria, 
     let query = { alunoId };
     if (dataInicio || dataFim) {
       query['entrada.dataHora'] = {};
-      if (dataInicio) query['entrada.dataHora'].$gte = new Date(dataInicio);
-      if (dataFim) query['entrada.dataHora'].$lte = new Date(dataFim + 'T23:59:59');
+      if (dataInicio) query['entrada.dataHora'].$gte = inicioDoDiaBrasil(dataInicio);
+      if (dataFim) query['entrada.dataHora'].$lte = fimDoDiaBrasil(dataFim);
     }
     
     const atendimentos = await AtendimentoEnfermaria.find(query).sort({ 'entrada.dataHora': -1 });
@@ -1088,7 +1115,6 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarEnfermaria, 
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// Relatório por turma (atendimentos agrupados por aluno)
 router.get('/relatorio/turma/:turma', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
     const { turma } = req.params;
@@ -1097,8 +1123,8 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarEnfermaria, as
     let query = { alunoTurma: turma };
     if (dataInicio || dataFim) {
       query['entrada.dataHora'] = {};
-      if (dataInicio) query['entrada.dataHora'].$gte = new Date(dataInicio);
-      if (dataFim) query['entrada.dataHora'].$lte = new Date(dataFim + 'T23:59:59');
+      if (dataInicio) query['entrada.dataHora'].$gte = inicioDoDiaBrasil(dataInicio);
+      if (dataFim) query['entrada.dataHora'].$lte = fimDoDiaBrasil(dataFim);
     }
     
     const atendimentos = await AtendimentoEnfermaria.find(query).sort({ 'entrada.dataHora': -1 });
@@ -1141,7 +1167,6 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarEnfermaria, as
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// Relatório geral (todos os atendimentos agrupados por turma)
 router.get('/relatorio/geral', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
     const { dataInicio, dataFim, turma } = req.query;
@@ -1149,8 +1174,8 @@ router.get('/relatorio/geral', authenticateToken, verificarEnfermaria, async (re
     let query = {};
     if (dataInicio || dataFim) {
       query['entrada.dataHora'] = {};
-      if (dataInicio) query['entrada.dataHora'].$gte = new Date(dataInicio);
-      if (dataFim) query['entrada.dataHora'].$lte = new Date(dataFim + 'T23:59:59');
+      if (dataInicio) query['entrada.dataHora'].$gte = inicioDoDiaBrasil(dataInicio);
+      if (dataFim) query['entrada.dataHora'].$lte = fimDoDiaBrasil(dataFim);
     }
     if (turma) query.alunoTurma = turma;
     
@@ -1189,7 +1214,6 @@ router.get('/relatorio/geral', authenticateToken, verificarEnfermaria, async (re
 
 // ============================================
 // SCHEDULER
-// Executa alertas de +24h a cada 5 minutos
 // ============================================
 let schedulerInterval = null;
 

@@ -9,6 +9,37 @@ const SessaoAssinatura = require('../models/SessaoAssinatura');
 const Notificacao = require('../models/Notificacao');
 
 // ============================================
+// 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
+// ============================================
+function getDataHojeBR() {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(new Date());
+}
+
+function getDataNDiasBR(n) {
+    const agora = new Date();
+    const deslocada = new Date(agora.getTime() - n * 24 * 60 * 60 * 1000);
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(deslocada);
+}
+
+function getInicioSemanaBR() {
+    const hojeBR = getDataHojeBR();
+    const hojeUTC = new Date(hojeBR + 'T03:00:00.000Z');
+    const diaSemana = hojeUTC.getUTCDay();
+    const inicio = new Date(hojeUTC.getTime() - diaSemana * 24 * 60 * 60 * 1000);
+    return inicio.toISOString().split('T')[0];
+}
+
+function getInicioMesBR() {
+    return getDataHojeBR().substring(0, 7) + '-01';
+}
+
+// ============================================
 // MASCARAR DADOS SENSÍVEIS
 // ============================================
 const MASCARA_TEXTO = '🔒 Conteúdo protegido (visível apenas para o profissional responsável)';
@@ -76,7 +107,7 @@ function adminPodeModificar(atendimento, req) {
 }
 
 // ============================================
-// 🆕 HELPERS DE MÚLTIPLOS TIPOS
+// HELPERS DE MÚLTIPLOS TIPOS
 // ============================================
 function extrairTiposTarefa(atendimento) {
   const adicionais = atendimento?.detalhes?.tiposTarefaAdicionais || [];
@@ -87,9 +118,6 @@ function labelTiposTarefa(tipos) {
   return AtendimentoPsicologia.getTiposLabels(tipos);
 }
 
-// ============================================
-// 🆕 HELPER: LÊ detalhes com getters (descriptografado)
-// ============================================
 function lerDetalhesLimpos(atendimento) {
   if (!atendimento || !atendimento.detalhes) return {};
   try {
@@ -263,7 +291,11 @@ router.get('/health', (req, res) => {
     success: true, 
     status: 'online', 
     service: 'Psicologia',
-    versao: '2.1-multi-tipos',
+    versao: '2.2-fuso-br',
+    _debug: {
+      hojeBR: getDataHojeBR(),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    },
     timestamp: new Date().toISOString()
   });
 });
@@ -391,7 +423,7 @@ router.get('/buscar-aluno', authenticateToken, verificarPsicologia, async (req, 
 });
 
 // ============================================
-// REGISTRAR (MÚLTIPLOS TIPOS)
+// REGISTRAR
 // ============================================
 router.post('/registrar', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -598,7 +630,7 @@ router.post('/finalizar', authenticateToken, verificarPsicologia, async (req, re
 });
 
 // ============================================
-// REMARCAR
+// REMARCAR (🆕 data em BRT)
 // ============================================
 router.post('/remarcar', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -617,10 +649,9 @@ router.post('/remarcar', authenticateToken, verificarPsicologia, async (req, res
       return res.status(403).json({ success: false, error: check.motivo, code: 'ADMIN_NAO_CRIADOR' });
     }
     
-    const dataObj = new Date(dataRemarcacao + 'T00:00:00');
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    if (dataObj < hoje) {
+    // 🆕 Compara com data BRT
+    const hojeBR = getDataHojeBR();
+    if (dataRemarcacao < hojeBR) {
       return res.status(400).json({ success: false, error: 'A data deve ser hoje ou futura' });
     }
     
@@ -643,6 +674,8 @@ router.post('/remarcar', authenticateToken, verificarPsicologia, async (req, res
     
     await atendimento.save();
     
+    const dataObj = new Date(dataRemarcacao + 'T12:00:00.000-03:00');
+    
     res.json({
       success: true,
       message: `Atendimento remarcado para ${dataObj.toLocaleDateString('pt-BR')} às ${horarioRemarcacao}`,
@@ -660,7 +693,7 @@ router.post('/remarcar', authenticateToken, verificarPsicologia, async (req, res
 });
 
 // ============================================
-// REMARCAÇÕES PENDENTES
+// REMARCAÇÕES PENDENTES (🆕 BRT)
 // ============================================
 router.get('/remarcacoes/pendentes', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -668,15 +701,14 @@ router.get('/remarcacoes/pendentes', authenticateToken, verificarPsicologia, asy
       'remarcacoes.status': 'pendente', status: { $ne: 'cancelado' }
     }).sort({ 'remarcacoes.dataRemarcacao': 1 });
     
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
+    // 🆕 Data hoje em BRT
+    const hojeBR = getDataHojeBR();
     const remarcacoes = [];
     
     atendimentos.forEach(atendimento => {
       const tipos = extrairTiposTarefa(atendimento);
       (atendimento.remarcacoes || []).forEach(rem => {
         if (rem.status !== 'pendente') return;
-        const dataRem = new Date(rem.dataRemarcacao + 'T00:00:00');
         remarcacoes.push({
           id: rem.id.toString(),
           atendimentoId: atendimento._id,
@@ -692,8 +724,8 @@ router.get('/remarcacoes/pendentes', authenticateToken, verificarPsicologia, asy
           motivoRemarcacao: rem.motivoRemarcacao,
           observacoesRemarcacao: rem.observacoesRemarcacao,
           status: rem.status,
-          atrasado: dataRem < hoje,
-          hoje: dataRem.getTime() === hoje.getTime(),
+          atrasado: rem.dataRemarcacao < hojeBR,
+          hoje: rem.dataRemarcacao === hojeBR,
           criadaEm: rem.criadaEm,
           criadaPorNome: rem.criadaPorNome
         });
@@ -928,21 +960,26 @@ router.post('/processar-alertas-24h', async (req, res) => {
 });
 
 // ============================================
-// DASHBOARD
+// 🆕 DASHBOARD (CORRIGIDO — FUSO BRT)
 // ============================================
 router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
-    const hoje = new Date();
-    const hojeStr = hoje.toISOString().split('T')[0];
-    const inicioSemana = new Date(hoje);
-    inicioSemana.setDate(hoje.getDate() - hoje.getDay());
-    const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    // 🆕 Datas em BRT
+    const hojeStr = getDataHojeBR();
+    const inicioSemanaStr = getInicioSemanaBR();
+    const inicioMesStr = getInicioMesBR();
+
+    const inicioHoje = inicioDoDiaBrasil(hojeStr);
+    const fimHoje = fimDoDiaBrasil(hojeStr);
+    const inicioSemana = inicioDoDiaBrasil(inicioSemanaStr);
+    const inicioMes = inicioDoDiaBrasil(inicioMesStr);
+
     const ultimos30Dias = new Date();
     ultimos30Dias.setDate(ultimos30Dias.getDate() - 30);
     
     const [atendimentosHoje, atendimentosSemana, atendimentosMes, total] = await Promise.all([
       AtendimentoPsicologia.countDocuments({
-        'entrada.dataHora': { $gte: inicioDoDiaBrasil(hojeStr), $lte: fimDoDiaBrasil(hojeStr) }
+        'entrada.dataHora': { $gte: inicioHoje, $lte: fimHoje }
       }),
       AtendimentoPsicologia.countDocuments({ 'entrada.dataHora': { $gte: inicioSemana } }),
       AtendimentoPsicologia.countDocuments({ 'entrada.dataHora': { $gte: inicioMes } }),
@@ -952,7 +989,7 @@ router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res
     const emAndamento = await AtendimentoPsicologia.countDocuments({ status: 'em_andamento' });
     const finalizadosHoje = await AtendimentoPsicologia.countDocuments({
       status: 'finalizado',
-      'saida.dataHora': { $gte: inicioDoDiaBrasil(hojeStr), $lte: fimDoDiaBrasil(hojeStr) }
+      'saida.dataHora': { $gte: inicioHoje, $lte: fimHoje }
     });
     
     const limite24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -962,7 +999,6 @@ router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res
       'entrada.dataHora': { $lte: limite24h }
     });
     
-    // 🆕 Agrupa por tipo contando TODOS os tipos (principal + adicionais)
     const porTipo = await AtendimentoPsicologia.aggregate([
       { $match: { 'entrada.dataHora': { $gte: ultimos30Dias } } },
       { $project: {
@@ -990,17 +1026,24 @@ router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res
       { $sort: { count: -1 } }
     ]);
     
+    // 🆕 Últimos 7 dias em BRT
     const ultimos7Dias = [];
     for (let i = 6; i >= 0; i--) {
-      const data = new Date();
-      data.setDate(data.getDate() - i);
-      const dataStr = data.toISOString().split('T')[0];
+      const dataStr = getDataNDiasBR(i);
       const count = await AtendimentoPsicologia.countDocuments({
-        'entrada.dataHora': { $gte: inicioDoDiaBrasil(dataStr), $lte: fimDoDiaBrasil(dataStr) }
+        'entrada.dataHora': {
+          $gte: inicioDoDiaBrasil(dataStr),
+          $lte: fimDoDiaBrasil(dataStr)
+        }
       });
+      
+      const dataObj = new Date(dataStr + 'T12:00:00.000-03:00');
       ultimos7Dias.push({
         data: dataStr,
-        dia: data.toLocaleDateString('pt-BR', { weekday: 'short' }),
+        dia: dataObj.toLocaleDateString('pt-BR', { 
+          weekday: 'short',
+          timeZone: 'America/Sao_Paulo'
+        }),
         atendimentos: count
       });
     }
@@ -1034,6 +1077,12 @@ router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res
     
     res.json({
       success: true,
+      _debug: {
+        hojeBR: hojeStr,
+        inicioSemanaBR: inicioSemanaStr,
+        inicioMesBR: inicioMesStr,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
       metricas: {
         hoje: atendimentosHoje, semana: atendimentosSemana, mes: atendimentosMes,
         total, emAndamento, finalizadosHoje, atendimentosAntigos
@@ -1058,6 +1107,7 @@ router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res
       }
     });
   } catch (error) {
+    console.error('[GET /dashboard] Erro:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1115,7 +1165,6 @@ router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, 
     
     let query = {};
     if (tipo && tipo !== 'todos') {
-      // Filtra por array (pega principal OU adicional)
       query.$or = [
         { tipoTarefa: tipo },
         { 'detalhes.tiposTarefaAdicionais': tipo }
@@ -1124,6 +1173,7 @@ router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, 
     if (status && status !== 'todos') query.status = status;
     if (turma && turma !== 'todas') query.alunoTurma = turma;
     
+    // 🆕 Filtros de data em BRT
     if (dataInicio || dataFim) {
       query['entrada.dataHora'] = {};
       if (dataInicio) query['entrada.dataHora'].$gte = inicioDoDiaBrasil(dataInicio);
@@ -1277,7 +1327,7 @@ router.get('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
 });
 
 // ============================================
-// EDITAR (MÚLTIPLOS TIPOS + DETALHES CORRIGIDOS)
+// EDITAR
 // ============================================
 router.put('/atendimento/:id', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -1295,9 +1345,6 @@ router.put('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
       detalhes, status, saida
     } = req.body;
     
-    // ============================================
-    // 1) TIPOS
-    // ============================================
     let tiposFinal = null;
     if (Array.isArray(tiposTarefa) && tiposTarefa.length > 0) {
       tiposFinal = [...new Set(tiposTarefa.filter(Boolean))];
@@ -1315,17 +1362,11 @@ router.put('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
       tiposAdicionaisFinal = tiposFinal.length > 1 ? tiposFinal.slice(1) : [];
     }
     
-    // ============================================
-    // 2) CAMPOS SIMPLES
-    // ============================================
     if (descricao) atendimento.entrada.descricao = descricao;
     if (observacoes !== undefined) atendimento.entrada.observacoes = observacoes;
     if (gravidade) atendimento.entrada.gravidade = gravidade;
     if (prioridade) atendimento.prioridade = prioridade;
     
-    // ============================================
-    // 3) DETALHES via .set() (criptografia correta)
-    // ============================================
     const detalhesParaSalvar = { ...detalhesAtuaisLimpos };
     if (detalhes && typeof detalhes === 'object') {
       Object.entries(detalhes).forEach(([k, v]) => {
@@ -1356,9 +1397,6 @@ router.put('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
     });
     atendimento.markModified('detalhes');
     
-    // ============================================
-    // 4) STATUS / SAÍDA
-    // ============================================
     if (status) atendimento.status = status;
     if (saida) {
       atendimento.saida = { 

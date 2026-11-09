@@ -12,6 +12,16 @@ function getSessaoAssinatura() { return require('../models/SessaoAssinatura'); }
 function getAtraso() { return require('../models/Atraso'); }
 
 // ============================================
+// 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
+// ============================================
+function getDataHojeBR() {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(new Date());
+}
+
+// ============================================
 // HELPERS DE DATA (BRASIL)
 // ============================================
 function inicioDoDiaBrasil(dataStr) {
@@ -20,12 +30,18 @@ function inicioDoDiaBrasil(dataStr) {
 function fimDoDiaBrasil(dataStr) {
     return new Date(dataStr + 'T23:59:59.999-03:00');
 }
+
+/**
+ * 🆕 Retorna YYYY-MM-DD no fuso de Brasília (antes usava getFullYear/getMonth/getDate que dependem do fuso do servidor)
+ */
 function getDataLocalISO(dateObj) {
     const d = dateObj || new Date();
-    return d.getFullYear() + '-' +
-        String(d.getMonth() + 1).padStart(2, '0') + '-' +
-        String(d.getDate()).padStart(2, '0');
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(d);
 }
+
 function formatarPeriodo(inicio, fim) {
     if (!inicio) return null;
     const ini = new Date(inicio);
@@ -102,7 +118,16 @@ const verificarRecepcao = (req, res, next) => {
 // 1. HEALTH CHECK
 // ============================================
 router.get('/health', (req, res) => {
-    res.json({ success: true, status: 'online', service: 'Recepção - Verificação de Autorizações' });
+    res.json({
+        success: true,
+        status: 'online',
+        service: 'Recepção - Verificação de Autorizações',
+        versao: '2.0-fuso-br',
+        _debug: {
+            hojeBR: getDataHojeBR(),
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        }
+    });
 });
 
 // ============================================
@@ -179,7 +204,6 @@ router.get('/verificar/:alunoId', authenticateToken, verificarRecepcao, async (r
         const { alunoId } = req.params;
         const {
             data,
-            // 🆕 Filtros do histórico de atrasos
             atrasoMotivo,
             atrasoBusca,
             atrasoDataInicio,
@@ -226,18 +250,16 @@ router.get('/verificar/:alunoId', authenticateToken, verificarRecepcao, async (r
         }).sort({ data: -1 });
 
         // ============================================
-        // 🆕 HISTÓRICO DE ATRASOS COM FILTROS
+        // HISTÓRICO DE ATRASOS COM FILTROS
         // ============================================
         let atrasos = [];
         let totalAtrasosSemFiltro = 0;
         try {
             const Atraso = getAtraso();
 
-            // Query base (sem filtros) para contar total
             const queryBase = { alunoId: alunoId, ativo: { $ne: false } };
             totalAtrasosSemFiltro = await Atraso.countDocuments(queryBase);
 
-            // Aplica filtros
             const query = { ...queryBase };
 
             if (atrasoMotivo && atrasoMotivo !== 'todos') {
@@ -253,7 +275,6 @@ router.get('/verificar/:alunoId', authenticateToken, verificarRecepcao, async (r
                     { descricao: regex },
                     { observacoes: regex }
                 ];
-                // Combina com $or existente (motivo) usando $and
                 if (query.$or) {
                     query.$and = [
                         { $or: query.$or },
@@ -343,7 +364,7 @@ router.get('/verificar/:alunoId', authenticateToken, verificarRecepcao, async (r
             };
         });
 
-        // Contagem por motivo (para os chips de filtro)
+        // Contagem por motivo
         let contagemPorMotivo = {};
         try {
             const Atraso = getAtraso();
@@ -366,7 +387,7 @@ router.get('/verificar/:alunoId', authenticateToken, verificarRecepcao, async (r
                 turma: aluno.turma, curso: aluno.curso, fotoPerfil: aluno.fotoPerfil || null
             },
             dataConsulta: dataBusca,
-            dataConsultaFormatada: new Date(dataBusca + 'T12:00:00').toLocaleDateString('pt-BR'),
+            dataConsultaFormatada: new Date(dataBusca + 'T12:00:00.000-03:00').toLocaleDateString('pt-BR'),
             temAutorizacao: formatadas.length > 0,
             totalAutorizacoes: formatadas.length,
             agrupado: {
@@ -655,8 +676,8 @@ router.get('/autorizacoes-do-dia', authenticateToken, verificarRecepcao, async (
         const {
             data,
             turma,
-            tipo,        // 🆕 'todos' | 'autorizacao' | 'uniforme'
-            busca,       // 🆕 nome ou matrícula
+            tipo,
+            busca,
             page = 1,
             limit = 10
         } = req.query;
@@ -669,7 +690,6 @@ router.get('/autorizacoes-do-dia', authenticateToken, verificarRecepcao, async (
         const limitNum = Math.min(100, Math.max(5, parseInt(limit) || 10));
         const skip = (pageNum - 1) * limitNum;
 
-        // Filtro de tipo
         let tipos = ['autorizacao', 'uniforme'];
         if (tipo && tipo !== 'todos') {
             tipos = [tipo];
@@ -687,7 +707,6 @@ router.get('/autorizacoes-do-dia', authenticateToken, verificarRecepcao, async (
 
         if (turma && turma !== 'todas') query.alunoTurma = turma;
 
-        // 🆕 Busca por nome ou matrícula
         if (busca && busca.trim()) {
             const regex = new RegExp(escapeRegex(busca.trim()), 'i');
             const buscaOr = [
@@ -719,7 +738,7 @@ router.get('/autorizacoes-do-dia', authenticateToken, verificarRecepcao, async (
         res.json({
             success: true,
             data: dataBusca,
-            dataFormatada: new Date(dataBusca + 'T12:00:00').toLocaleDateString('pt-BR'),
+            dataFormatada: new Date(dataBusca + 'T12:00:00.000-03:00').toLocaleDateString('pt-BR'),
             total,
             page: pageNum,
             limit: limitNum,
@@ -790,7 +809,7 @@ router.get('/estatisticas-dia', authenticateToken, verificarRecepcao, async (req
         res.json({
             success: true,
             data: dataBusca,
-            dataFormatada: new Date(dataBusca + 'T12:00:00').toLocaleDateString('pt-BR'),
+            dataFormatada: new Date(dataBusca + 'T12:00:00.000-03:00').toLocaleDateString('pt-BR'),
             estatisticas: { total, comAssinatura, semAssinatura: total - comAssinatura },
             porTurma: porTurma.map(t => ({ turma: t._id || 'Sem turma', count: t.count })),
             porTipo: porTipo.map(t => ({ tipo: t._id, count: t.count })),

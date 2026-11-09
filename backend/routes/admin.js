@@ -11,8 +11,7 @@
 //   - 🔥 POST /turmas/:id/alunos sincroniza aluno.turma (string)
 //   - 🔥 DELETE /turmas/:id/alunos/:alunoId limpa aluno.turma (string)
 //   - 🔥 GET /turmas retorna totalAlunos calculado pelo array
-//
-// Autor: Equipe de Desenvolvimento
+//   - 🆕 Fuso horário BRT em /dashboard e /historico-conexoes
 // ============================================================================
 
 const express = require('express');
@@ -33,6 +32,28 @@ try {
   logger = require('../utils/logger');
 } catch (err) {
   logger = console;
+}
+
+// ============================================================================
+// 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
+// ============================================================================
+function getDataHojeBR() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());
+}
+
+function inicioDoDiaBrasil(dataStr) {
+  if (!dataStr) return null;
+  const base = dataStr.includes('T') ? dataStr.split('T')[0] : dataStr;
+  return new Date(base + 'T00:00:00.000-03:00');
+}
+
+function fimDoDiaBrasil(dataStr) {
+  if (!dataStr) return null;
+  const base = dataStr.includes('T') ? dataStr.split('T')[0] : dataStr;
+  return new Date(base + 'T23:59:59.999-03:00');
 }
 
 // ============================================================================
@@ -273,26 +294,11 @@ function extrairInfoDoNome(nomeArquivo) {
   return info;
 }
 
-/**
- * 🔥 SINCRONIZA O ARRAY turma.alunos E O CAMPO aluno.turma
- * 
- * @param {ObjectId} alunoId - ID do aluno
- * @param {string} turmaAntiga - Nome da turma antiga (ou vazio)
- * @param {string} turmaNova - Nome da turma nova (ou vazio)
- * 
- * Esta função:
- *  1. Remove o aluno do array da turma antiga
- *  2. Adiciona o aluno no array da turma nova
- *  3. Atualiza o campo string aluno.turma
- * 
- * Use sempre que precisar mover o aluno entre turmas.
- */
 async function sincronizarTurmaDoAluno(alunoId, turmaAntiga, turmaNova) {
   const turmaAntigaLimpa = (turmaAntiga || '').toString().trim();
   const turmaNovaLimpa = (turmaNova || '').toString().trim();
 
   try {
-    // 1. Remover do array da turma antiga
     if (turmaAntigaLimpa && turmaAntigaLimpa !== turmaNovaLimpa) {
       const result = await Turma.updateOne(
         { nome: turmaAntigaLimpa },
@@ -301,7 +307,6 @@ async function sincronizarTurmaDoAluno(alunoId, turmaAntiga, turmaNova) {
       logger.info(`🔓 [SyncTurma] Aluno ${alunoId} removido do array de "${turmaAntigaLimpa}" (modificados: ${result.modifiedCount})`);
     }
 
-    // 2. Adicionar ao array da turma nova
     if (turmaNovaLimpa && turmaNovaLimpa !== turmaAntigaLimpa) {
       const result = await Turma.updateOne(
         { nome: turmaNovaLimpa },
@@ -314,7 +319,6 @@ async function sincronizarTurmaDoAluno(alunoId, turmaAntiga, turmaNova) {
       }
     }
 
-    // 3. Atualizar o campo string do aluno
     await User.findByIdAndUpdate(alunoId, { turma: turmaNovaLimpa || '' });
     logger.info(`📝 [SyncTurma] Campo aluno.turma atualizado para "${turmaNovaLimpa}"`);
 
@@ -332,6 +336,11 @@ router.get('/health', (req, res) => {
     success: true,
     status: 'online',
     service: 'Admin',
+    versao: '2.0-fuso-br',
+    _debug: {
+      hojeBR: getDataHojeBR(),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    },
     models: {
       User: !!User,
       Prova: !!Prova,
@@ -349,9 +358,8 @@ router.get('/health', (req, res) => {
 });
 
 // ============================================================================
-// DASHBOARD
+// 🆕 DASHBOARD (CORRIGIDO — FUSO BRT)
 // ============================================================================
-
 router.get('/dashboard', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
     const userCounts = await User.aggregate([{ $group: { _id: '$role', count: { $sum: 1 } } }]);
@@ -502,33 +510,51 @@ router.get('/dashboard', authenticateTokenLocal, isSuperAdmin, async (req, res) 
       data: r.createdAt || r.dataRealizacao
     }));
 
-    const hojeInicio = new Date();
-    hojeInicio.setHours(0, 0, 0, 0);
+    // 🆕 Cálculo de conexões HOJE em BRT
+    const hojeStr = getDataHojeBR();
+    const hojeInicio = inicioDoDiaBrasil(hojeStr);
+    const hojeFim = fimDoDiaBrasil(hojeStr);
 
     const usuariosParaConexoes = await User.find({})
       .select('lastLogin')
       .lean();
 
     stats.totalConexoesHoje = usuariosParaConexoes.filter(u =>
-      u.lastLogin && new Date(u.lastLogin) >= hojeInicio
+      u.lastLogin && 
+      new Date(u.lastLogin) >= hojeInicio && 
+      new Date(u.lastLogin) <= hojeFim
     ).length;
 
+    // 🆕 Média dos últimos 7 dias em BRT
     let totalUltimos7 = 0;
     for (let i = 0; i < 7; i++) {
-      const d = new Date(hojeInicio);
-      d.setDate(d.getDate() - i);
-      const dProx = new Date(d);
-      dProx.setDate(dProx.getDate() + 1);
+      const d = new Date(hojeInicio.getTime() - i * 24 * 60 * 60 * 1000);
+      const dataStr = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric', month: '2-digit', day: '2-digit'
+      }).format(d);
+      
+      const dInicio = inicioDoDiaBrasil(dataStr);
+      const dFim = fimDoDiaBrasil(dataStr);
 
       totalUltimos7 += usuariosParaConexoes.filter(u =>
         u.lastLogin &&
-        new Date(u.lastLogin) >= d &&
-        new Date(u.lastLogin) < dProx
+        new Date(u.lastLogin) >= dInicio &&
+        new Date(u.lastLogin) <= dFim
       ).length;
     }
     stats.mediaConexoesDiarias = Math.round(totalUltimos7 / 7);
 
-    res.json({ success: true, data: stats });
+    res.json({
+      success: true,
+      _debug: {
+        hojeBR: hojeStr,
+        hojeInicio: hojeInicio.toISOString(),
+        hojeFim: hojeFim.toISOString(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      data: stats
+    });
 
   } catch (error) {
     logger.error('❌ Erro no dashboard admin:', error);
@@ -537,9 +563,8 @@ router.get('/dashboard', authenticateTokenLocal, isSuperAdmin, async (req, res) 
 });
 
 // ============================================================================
-// HISTÓRICO DE CONEXÕES
+// 🆕 HISTÓRICO DE CONEXÕES (CORRIGIDO — FUSO BRT)
 // ============================================================================
-
 router.get('/historico-conexoes', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
     const {
@@ -702,35 +727,35 @@ router.get('/historico-conexoes', authenticateTokenLocal, isSuperAdmin, async (r
       filtradas = filtradas.filter(c => c.dispositivo === dispositivo);
     }
 
+    // 🆕 Filtros de data em BRT
     if (dataInicio) {
-      const inicio = new Date(dataInicio);
-      inicio.setHours(0, 0, 0, 0);
+      const inicio = inicioDoDiaBrasil(dataInicio);
       filtradas = filtradas.filter(c => new Date(c.dataHora) >= inicio);
     }
 
     if (dataFim) {
-      const fim = new Date(dataFim);
-      fim.setHours(23, 59, 59, 999);
+      const fim = fimDoDiaBrasil(dataFim);
       filtradas = filtradas.filter(c => new Date(c.dataHora) <= fim);
     }
 
+    // 🆕 Período em BRT
     if (periodo && periodo !== 'todos') {
-      const hoje = new Date();
-      hoje.setHours(0, 0, 0, 0);
+      const hojeStr = getDataHojeBR();
+      const hoje = inicioDoDiaBrasil(hojeStr);
 
       if (periodo === 'hoje') {
-        filtradas = filtradas.filter(c => new Date(c.dataHora) >= hoje);
+        const hojeFim = fimDoDiaBrasil(hojeStr);
+        filtradas = filtradas.filter(c => 
+          new Date(c.dataHora) >= hoje && new Date(c.dataHora) <= hojeFim
+        );
       } else if (periodo === 'semana') {
-        const d = new Date(hoje);
-        d.setDate(d.getDate() - 7);
+        const d = new Date(hoje.getTime() - 7 * 24 * 60 * 60 * 1000);
         filtradas = filtradas.filter(c => new Date(c.dataHora) >= d);
       } else if (periodo === 'mes') {
-        const d = new Date(hoje);
-        d.setMonth(d.getMonth() - 1);
+        const d = new Date(hoje.getTime() - 30 * 24 * 60 * 60 * 1000);
         filtradas = filtradas.filter(c => new Date(c.dataHora) >= d);
       } else if (periodo === 'ano') {
-        const d = new Date(hoje);
-        d.setFullYear(d.getFullYear() - 1);
+        const d = new Date(hoje.getTime() - 365 * 24 * 60 * 60 * 1000);
         filtradas = filtradas.filter(c => new Date(c.dataHora) >= d);
       }
     }
@@ -741,12 +766,17 @@ router.get('/historico-conexoes', authenticateTokenLocal, isSuperAdmin, async (r
     const inicioP = (pageNum - 1) * limitNum;
     const paginadas = filtradas.slice(inicioP, inicioP + limitNum);
 
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
+    // 🆕 Contagem de conexões HOJE em BRT
+    const hojeStr = getDataHojeBR();
+    const hojeInicio = inicioDoDiaBrasil(hojeStr);
+    const hojeFim = fimDoDiaBrasil(hojeStr);
 
     const estatisticas = {
       totalConexoes: conexoes.length,
-      conexoesHoje: conexoes.filter(c => new Date(c.dataHora) >= hoje).length,
+      conexoesHoje: conexoes.filter(c => {
+        const d = new Date(c.dataHora);
+        return d >= hojeInicio && d <= hojeFim;
+      }).length,
       totalLogins: conexoes.filter(c => c.tipo === 'login').length,
       totalLogouts: conexoes.filter(c => c.tipo === 'logout').length,
       sessoesAtivas: conexoes.filter(c => c.tipo === 'sessao_ativa').length,
@@ -767,7 +797,11 @@ router.get('/historico-conexoes', authenticateTokenLocal, isSuperAdmin, async (r
       page: pageNum,
       limit: limitNum,
       pages: Math.ceil(total / limitNum),
-      estatisticas
+      estatisticas,
+      _debug: {
+        hojeBR: hojeStr,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      }
     });
 
   } catch (error) {
@@ -777,9 +811,8 @@ router.get('/historico-conexoes', authenticateTokenLocal, isSuperAdmin, async (r
 });
 
 // ============================================================================
-// USUÁRIOS ONLINE
+// USUÁRIOS ONLINE (já estava OK)
 // ============================================================================
-
 router.get('/usuarios-online', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
     const trintaMinutosAtras = new Date(Date.now() - 30 * 60 * 1000);

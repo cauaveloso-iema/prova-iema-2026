@@ -13,6 +13,37 @@ const MASCARA_TEXTO = '🔒 Conteúdo protegido (visível apenas para o profissi
 const ROLES_MASCARADOS = ['super_admin'];
 
 // ============================================
+// 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
+// ============================================
+function getDataHojeBR() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());
+}
+
+function getDataNDiasBR(n) {
+  const agora = new Date();
+  const deslocada = new Date(agora.getTime() - n * 24 * 60 * 60 * 1000);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(deslocada);
+}
+
+function getInicioSemanaBR() {
+  const hojeBR = getDataHojeBR();
+  const hojeUTC = new Date(hojeBR + 'T03:00:00.000Z');
+  const diaSemana = hojeUTC.getUTCDay();
+  const inicio = new Date(hojeUTC.getTime() - diaSemana * 24 * 60 * 60 * 1000);
+  return inicio.toISOString().split('T')[0];
+}
+
+function getInicioMesBR() {
+  return getDataHojeBR().substring(0, 7) + '-01';
+}
+
+// ============================================
 // MÁSCARA — CORRIGIDA
 // ============================================
 function mascararParaAdmin(dados, req) {
@@ -282,7 +313,16 @@ PerfilParticipante.seedInicial().catch(err =>
 // HEALTH CHECK
 // ============================================
 router.get('/health', (req, res) => {
-  res.json({ success: true, status: 'online', service: 'Supervisão', versao: '4.2-multi-tipos' });
+  res.json({
+    success: true,
+    status: 'online',
+    service: 'Supervisão',
+    versao: '4.3-fuso-br',
+    _debug: {
+      hojeBR: getDataHojeBR(),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    }
+  });
 });
 
 // ============================================
@@ -886,7 +926,7 @@ router.post('/finalizar', authenticateToken, verificarSupervisao, async (req, re
 });
 
 // ============================================
-// REMARCAR
+// REMARCAR (🆕 validação de data em BRT)
 // ============================================
 router.post('/remarcar', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -903,10 +943,9 @@ router.post('/remarcar', authenticateToken, verificarSupervisao, async (req, res
       return res.status(403).json({ success: false, error: check.motivo, code: 'ADMIN_NAO_CRIADOR' });
     }
     
-    const dataObj = new Date(dataRemarcacao + 'T00:00:00');
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    if (dataObj < hoje) {
+    // 🆕 Compara com hoje em BRT
+    const hojeBR = getDataHojeBR();
+    if (dataRemarcacao < hojeBR) {
       return res.status(400).json({ success: false, error: 'A data deve ser hoje ou futura' });
     }
     
@@ -927,6 +966,8 @@ router.post('/remarcar', authenticateToken, verificarSupervisao, async (req, res
     atendimento.updatedAt = new Date();
     await atendimento.save();
     
+    const dataObj = new Date(dataRemarcacao + 'T12:00:00.000-03:00');
+    
     res.json({
       success: true,
       message: `Atendimento remarcado para ${dataObj.toLocaleDateString('pt-BR')}`,
@@ -941,7 +982,7 @@ router.post('/remarcar', authenticateToken, verificarSupervisao, async (req, res
 });
 
 // ============================================
-// REMARCAÇÕES PENDENTES
+// 🆕 REMARCAÇÕES PENDENTES (CORRIGIDO — BRT)
 // ============================================
 router.get('/remarcacoes/pendentes', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -949,15 +990,14 @@ router.get('/remarcacoes/pendentes', authenticateToken, verificarSupervisao, asy
       'remarcacoes.status': 'pendente', status: { $ne: 'cancelado' }
     }).sort({ 'remarcacoes.dataRemarcacao': 1 });
     
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
+    // 🆕 Data hoje em BRT
+    const hojeBR = getDataHojeBR();
     const remarcacoes = [];
     
     atendimentos.forEach(atendimento => {
       const tipos = extrairTiposTarefa(atendimento);
       (atendimento.remarcacoes || []).forEach(rem => {
         if (rem.status !== 'pendente') return;
-        const dataRem = new Date(rem.dataRemarcacao + 'T00:00:00');
         remarcacoes.push({
           id: rem.id.toString(), atendimentoId: atendimento._id,
           alunoId: atendimento.alunoId, alunoNome: atendimento.alunoNome,
@@ -969,8 +1009,8 @@ router.get('/remarcacoes/pendentes', authenticateToken, verificarSupervisao, asy
           motivoRemarcacao: rem.motivoRemarcacao,
           observacoesRemarcacao: rem.observacoesRemarcacao,
           status: rem.status,
-          atrasado: dataRem < hoje,
-          hoje: dataRem.getTime() === hoje.getTime(),
+          atrasado: rem.dataRemarcacao < hojeBR,
+          hoje: rem.dataRemarcacao === hojeBR,
           criadaEm: rem.criadaEm, criadaPorNome: rem.criadaPorNome
         });
       });
@@ -1187,21 +1227,26 @@ router.post('/processar-alertas-24h', async (req, res) => {
 });
 
 // ============================================
-// DASHBOARD
+// 🆕 DASHBOARD (CORRIGIDO — FUSO BRT)
 // ============================================
 router.get('/dashboard', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
-    const hoje = new Date();
-    const hojeStr = hoje.toISOString().split('T')[0];
-    const inicioSemana = new Date(hoje);
-    inicioSemana.setDate(hoje.getDate() - hoje.getDay());
-    const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    // 🆕 Datas em BRT
+    const hojeStr = getDataHojeBR();
+    const inicioSemanaStr = getInicioSemanaBR();
+    const inicioMesStr = getInicioMesBR();
+
+    const inicioHoje = inicioDoDiaBrasil(hojeStr);
+    const fimHoje = fimDoDiaBrasil(hojeStr);
+    const inicioSemana = inicioDoDiaBrasil(inicioSemanaStr);
+    const inicioMes = inicioDoDiaBrasil(inicioMesStr);
+
     const ultimos30Dias = new Date();
     ultimos30Dias.setDate(ultimos30Dias.getDate() - 30);
     
     const [atendimentosHoje, atendimentosSemana, atendimentosMes, total] = await Promise.all([
       AtendimentoSupervisao.countDocuments({
-        'entrada.dataHora': { $gte: inicioDoDiaBrasil(hojeStr), $lte: fimDoDiaBrasil(hojeStr) }
+        'entrada.dataHora': { $gte: inicioHoje, $lte: fimHoje }
       }),
       AtendimentoSupervisao.countDocuments({ 'entrada.dataHora': { $gte: inicioSemana } }),
       AtendimentoSupervisao.countDocuments({ 'entrada.dataHora': { $gte: inicioMes } }),
@@ -1211,7 +1256,7 @@ router.get('/dashboard', authenticateToken, verificarSupervisao, async (req, res
     const emAndamento = await AtendimentoSupervisao.countDocuments({ status: 'em_andamento' });
     const finalizadosHoje = await AtendimentoSupervisao.countDocuments({
       status: 'finalizado',
-      'saida.dataHora': { $gte: inicioDoDiaBrasil(hojeStr), $lte: fimDoDiaBrasil(hojeStr) }
+      'saida.dataHora': { $gte: inicioHoje, $lte: fimHoje }
     });
     
     const limite24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -1238,17 +1283,23 @@ router.get('/dashboard', authenticateToken, verificarSupervisao, async (req, res
       { $sort: { count: -1 } }
     ]);
     
+    // 🆕 Últimos 7 dias em BRT
     const ultimos7Dias = [];
     for (let i = 6; i >= 0; i--) {
-      const data = new Date();
-      data.setDate(data.getDate() - i);
-      const dataStr = data.toISOString().split('T')[0];
+      const dataStr = getDataNDiasBR(i);
       const count = await AtendimentoSupervisao.countDocuments({
-        'entrada.dataHora': { $gte: inicioDoDiaBrasil(dataStr), $lte: fimDoDiaBrasil(dataStr) }
+        'entrada.dataHora': {
+          $gte: inicioDoDiaBrasil(dataStr),
+          $lte: fimDoDiaBrasil(dataStr)
+        }
       });
+      const dataObj = new Date(dataStr + 'T12:00:00.000-03:00');
       ultimos7Dias.push({
         data: dataStr,
-        dia: data.toLocaleDateString('pt-BR', { weekday: 'short' }),
+        dia: dataObj.toLocaleDateString('pt-BR', { 
+          weekday: 'short',
+          timeZone: 'America/Sao_Paulo'
+        }),
         atendimentos: count
       });
     }
@@ -1282,6 +1333,12 @@ router.get('/dashboard', authenticateToken, verificarSupervisao, async (req, res
     
     res.json({
       success: true,
+      _debug: {
+        hojeBR: hojeStr,
+        inicioSemanaBR: inicioSemanaStr,
+        inicioMesBR: inicioMesStr,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
       metricas: { hoje: atendimentosHoje, semana: atendimentosSemana, mes: atendimentosMes, total, emAndamento, finalizadosHoje, atendimentosAntigos },
       porTipo: porTipo.map(t => ({
         tipo: t._id, label: AtendimentoSupervisao.getTipoTarefaLabel(t._id), count: t.count
@@ -1347,7 +1404,7 @@ router.get('/atendimentos-ativos', authenticateToken, verificarSupervisao, async
 });
 
 // ============================================
-// LISTAR ATENDIMENTOS (COM FILTROS E PAGINAÇÃO)
+// LISTAR ATENDIMENTOS
 // ============================================
 router.get('/atendimentos', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -1440,7 +1497,7 @@ router.get('/atendimentos', authenticateToken, verificarSupervisao, async (req, 
 });
 
 // ============================================
-// BUSCAR ATENDIMENTO POR ID (TODOS OS CAMPOS)
+// BUSCAR ATENDIMENTO POR ID
 // ============================================
 router.get('/atendimento/:id', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -1516,7 +1573,7 @@ router.get('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
 });
 
 // ============================================
-// EDITAR (MÚLTIPLOS TIPOS E TODOS OS CAMPOS)
+// EDITAR
 // ============================================
 router.put('/atendimento/:id', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -1533,9 +1590,6 @@ router.put('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
       detalhes, status, saida, participantes
     } = req.body;
     
-    // ============================================================
-    // 1) TIPOS
-    // ============================================================
     let tiposFinal = null;
     if (Array.isArray(tiposTarefa) && tiposTarefa.length > 0) {
       tiposFinal = [...new Set(tiposTarefa.filter(Boolean))];
@@ -1543,10 +1597,7 @@ router.put('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
       tiposFinal = [tipoTarefa];
     }
     
-    // Lê detalhes atuais com getters (descriptografado)
     const detalhesAtuaisLimpos = lerDetalhesLimpos(atendimento);
-    
-    // Preserva tipos adicionais (campo interno não criptografado)
     const tiposAdicionaisAtuais = atendimento.detalhes?.tiposTarefaAdicionais 
       ? [...atendimento.detalhes.tiposTarefaAdicionais]
       : [];
@@ -1557,17 +1608,11 @@ router.put('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
       tiposAdicionaisFinal = tiposFinal.length > 1 ? tiposFinal.slice(1) : [];
     }
     
-    // ============================================================
-    // 2) CAMPOS SIMPLES
-    // ============================================================
     if (descricao !== undefined) atendimento.entrada.descricao = descricao;
     if (observacoes !== undefined) atendimento.entrada.observacoes = observacoes;
     if (gravidade) atendimento.entrada.gravidade = gravidade;
     if (prioridade) atendimento.prioridade = prioridade;
     
-    // ============================================================
-    // 3) DETALHES (merge com os que vieram do front)
-    // ============================================================
     const detalhesParaSalvar = { ...detalhesAtuaisLimpos };
     
     if (detalhes && typeof detalhes === 'object') {
@@ -1578,11 +1623,8 @@ router.put('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
       });
     }
     
-    // Recoloca os tipos adicionais (campo interno)
     detalhesParaSalvar.tiposTarefaAdicionais = tiposAdicionaisFinal;
     
-    // 🎯 CORREÇÃO CRÍTICA: aplicar campo a campo via .set()
-    // Atribuição direta em subdocumento NÃO dispara setters (criptografar).
     if (!atendimento.detalhes) {
       atendimento.detalhes = {};
     }
@@ -1610,14 +1652,8 @@ router.put('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
     
     atendimento.markModified('detalhes');
     
-    // ============================================================
-    // 4) STATUS
-    // ============================================================
     if (status) atendimento.status = status;
     
-    // ============================================================
-    // 5) PARTICIPANTES
-    // ============================================================
     if (Array.isArray(participantes)) {
       const participantesProcessados = participantes
         .filter(p => p && p.usuarioId && p.usuarioNome)
@@ -1651,9 +1687,6 @@ router.put('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
       atendimento.entrada.participantes = participantesProcessados;
     }
     
-    // ============================================================
-    // 6) SAÍDA
-    // ============================================================
     if (saida) {
       atendimento.saida = { 
         ...atendimento.saida, ...saida,

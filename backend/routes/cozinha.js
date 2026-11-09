@@ -1,5 +1,5 @@
 // ============================================================================
-// COZINHA - EducaPleno
+// COZINHA - EducaPleno (🆕 CORRIGIDO — FUSO BRASÍLIA)
 // ============================================================================
 // Rotas:
 //   - GET    /api/cozinha/health
@@ -28,6 +28,49 @@ try { Refeicao = require('../models/Refeicao'); }
 catch (err) { console.warn('[cozinha] Model Refeicao não disponível:', err.message); }
 
 // ============================================
+// 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
+// ============================================
+function getDataHojeBR() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());
+}
+
+function getHoraAtualBR() {
+  return parseInt(new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit', hour12: false
+  }).format(new Date()), 10);
+}
+
+function getDataNDiasBR(n) {
+  const agora = new Date();
+  const deslocada = new Date(agora.getTime() - n * 24 * 60 * 60 * 1000);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(deslocada);
+}
+
+function getInicioSemanaBR() {
+  const hojeBR = getDataHojeBR();
+  const hojeUTC = new Date(hojeBR + 'T03:00:00.000Z');
+  const diaSemana = hojeUTC.getUTCDay();
+  const inicio = new Date(hojeUTC.getTime() - diaSemana * 24 * 60 * 60 * 1000);
+  return inicio.toISOString().split('T')[0];
+}
+
+function getFimSemanaBR() {
+  const hojeBR = getDataHojeBR();
+  const hojeUTC = new Date(hojeBR + 'T03:00:00.000Z');
+  const diaSemana = hojeUTC.getUTCDay();
+  const diasParaDomingo = 6 - diaSemana;
+  const fim = new Date(hojeUTC.getTime() + diasParaDomingo * 24 * 60 * 60 * 1000);
+  return fim.toISOString().split('T')[0];
+}
+
+// ============================================
 // MIDDLEWARES
 // ============================================
 const authenticateToken = (req, res, next) => {
@@ -53,7 +96,7 @@ const verificarCozinha = (req, res, next) => {
 };
 
 // ============================================
-// HELPERS DE PERÍODO
+// HELPERS DE PERÍODO (🆕 BRT)
 // ============================================
 function isDataValida(s) {
   return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
@@ -61,18 +104,10 @@ function isDataValida(s) {
 
 /**
  * Constrói o filtro de data para o Mongo + metadados amigáveis.
- * Aceita (em ordem de prioridade):
- *  1) ?todos=true|1                  → sem filtro
- *  2) ?dataInicio + ?dataFim         → intervalo
- *  3) ?data=YYYY-MM-DD               → dia único
- *  4) ?periodo=hoje|ontem|semana|mes|ano|todos
- *  5) (nenhum)                       → hoje
+ * 🆕 CORRIGIDO: usa BRT em tudo
  */
 function montarFiltroData(query) {
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
-  const iso = (d) => d.toISOString().split('T')[0];
-  const hojeStr = iso(hoje);
+  const hojeStr = getDataHojeBR();
 
   const { data, dataInicio, dataFim, todos, periodo } = query;
 
@@ -96,7 +131,7 @@ function montarFiltroData(query) {
         dataInicio: ini,
         dataFim: fim,
         isHistorico: true,
-        label: `${new Date(ini + 'T00:00:00').toLocaleDateString('pt-BR')} a ${new Date(fim + 'T00:00:00').toLocaleDateString('pt-BR')}`
+        label: `${new Date(ini + 'T12:00:00.000-03:00').toLocaleDateString('pt-BR')} a ${new Date(fim + 'T12:00:00.000-03:00').toLocaleDateString('pt-BR')}`
       }
     };
   }
@@ -115,12 +150,12 @@ function montarFiltroData(query) {
         dataAtual: hojeStr,
         dataVisualizada: data,
         isHistorico: data !== hojeStr,
-        label: new Date(data + 'T00:00:00').toLocaleDateString('pt-BR')
+        label: new Date(data + 'T12:00:00.000-03:00').toLocaleDateString('pt-BR')
       }
     };
   }
 
-  // 4) PERÍODO NOMEADO
+  // 4) PERÍODO NOMEADO (🆕 BRT)
   if (periodo) {
     const p = periodo;
     if (p === 'hoje') {
@@ -130,19 +165,18 @@ function montarFiltroData(query) {
       };
     }
     if (p === 'ontem') {
-      const d = new Date(hoje); d.setDate(d.getDate() - 1);
-      const ds = iso(d);
+      const ds = getDataNDiasBR(1);
       return {
         filtro: { data: ds },
-        infoData: { tipo: 'dia', dataAtual: hojeStr, dataVisualizada: ds, isHistorico: true, label: new Date(ds + 'T00:00:00').toLocaleDateString('pt-BR') }
+        infoData: { tipo: 'dia', dataAtual: hojeStr, dataVisualizada: ds, isHistorico: true, label: new Date(ds + 'T12:00:00.000-03:00').toLocaleDateString('pt-BR') }
       };
     }
     if (p === 'semana' || p === 'mes' || p === 'ano') {
-      const d = new Date(hoje);
-      if (p === 'semana') d.setDate(d.getDate() - 7);
-      else if (p === 'mes') d.setMonth(d.getMonth() - 1);
-      else d.setFullYear(d.getFullYear() - 1);
-      const ini = iso(d);
+      let diasAtras;
+      if (p === 'semana') diasAtras = 7;
+      else if (p === 'mes') diasAtras = 30;
+      else diasAtras = 365;
+      const ini = getDataNDiasBR(diasAtras);
       return {
         filtro: { data: { $gte: ini, $lte: hojeStr } },
         infoData: {
@@ -151,7 +185,7 @@ function montarFiltroData(query) {
           dataInicio: ini,
           dataFim: hojeStr,
           isHistorico: true,
-          label: `${new Date(ini + 'T00:00:00').toLocaleDateString('pt-BR')} a ${new Date(hojeStr + 'T00:00:00').toLocaleDateString('pt-BR')}`
+          label: `${new Date(ini + 'T12:00:00.000-03:00').toLocaleDateString('pt-BR')} a ${new Date(hojeStr + 'T12:00:00.000-03:00').toLocaleDateString('pt-BR')}`
         }
       };
     }
@@ -172,7 +206,13 @@ router.get('/health', (req, res) => {
     success: true,
     status: 'online',
     service: 'Cozinha - Análise Inteligente',
+    versao: '2.0-fuso-br',
     models: { Refeicao: !!Refeicao, User: !!User },
+    _debug: {
+      hojeBR: getDataHojeBR(),
+      horaBR: getHoraAtualBR(),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    },
     timestamp: new Date().toISOString()
   });
 });
@@ -204,14 +244,15 @@ router.get('/turmas-cursos', authenticateToken, verificarCozinha, async (req, re
 });
 
 // ============================================
-// DASHBOARD (aceita data / intervalo / todos / periodo)
+// 🆕 DASHBOARD (CORRIGIDO — BRT)
 // ============================================
 router.get('/dashboard', authenticateToken, verificarCozinha, async (req, res) => {
   try {
     const { filtro: filtroData, infoData } = montarFiltroData(req.query);
 
-    const hoje = new Date().toISOString().split('T')[0];
-    const horaAtual = new Date().getHours();
+    // 🆕 Data e hora em BRT
+    const hoje = getDataHojeBR();
+    const horaAtual = getHoraAtualBR();
 
     let refeicaoAtual = null;
     if (horaAtual >= 8 && horaAtual <= 10) refeicaoAtual = 'manha';
@@ -234,7 +275,6 @@ router.get('/dashboard', authenticateToken, verificarCozinha, async (req, res) =
     perfis.total = perfis.sempre + perfis.as_vezes + perfis.nunca + perfis.nao_informado;
     perfis.que_comem = perfis.sempre + perfis.as_vezes;
 
-    // Registros do PERÍODO selecionado
     const refeicoesPeriodo = await Refeicao.find(filtroData);
     const registrosReais = {
       manha: refeicoesPeriodo.filter(r => r.tipoRefeicao === 'manha').length,
@@ -266,7 +306,6 @@ router.get('/dashboard', authenticateToken, verificarCozinha, async (req, res) =
     const taxaAdesao = usuariosQueDisseram.length > 0
       ? (aderentes / usuariosQueDisseram.length) * 100 : 0;
 
-    // Análise por turma do PERÍODO
     const turmas = await User.distinct('turma', {
       role: 'aluno', ativo: true, turma: { $nin: [null, ''] }
     });
@@ -300,12 +339,10 @@ router.get('/dashboard', authenticateToken, verificarCozinha, async (req, res) =
     }
     analisePorTurma.sort((a, b) => a.taxaAdesao - b.taxaAdesao);
 
-    // Média histórica (sempre baseada em "hoje - 7*i", independente do período)
-    const dataAtual = new Date(hoje);
+    // 🆕 Média histórica (BRT)
     const datasHist = [];
     for (let i = 1; i <= 4; i++) {
-      const d = new Date(dataAtual); d.setDate(dataAtual.getDate() - (7 * i));
-      datasHist.push(d.toISOString().split('T')[0]);
+      datasHist.push(getDataNDiasBR(7 * i));
     }
     const histManha = await Refeicao.countDocuments({ data: { $in: datasHist }, tipoRefeicao: 'manha' });
     const histAlmoco = await Refeicao.countDocuments({ data: { $in: datasHist }, tipoRefeicao: 'almoco' });
@@ -412,7 +449,8 @@ router.get('/dashboard', authenticateToken, verificarCozinha, async (req, res) =
         }
         return { mensagem: `📊 Previsto: ${p.pessoas} pessoas`, acao: `Prepare ${p.kg}kg` };
       })(),
-      horariosRefeicoes: { manha: '8h - 10h', almoco: '11h - 13h', tarde: '14h - 16h' }
+      horariosRefeicoes: { manha: '8h - 10h', almoco: '11h - 13h', tarde: '14h - 16h' },
+      _debug: { hojeBR: hoje, horaBR: horaAtual, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }
     });
 
   } catch (error) {
@@ -427,8 +465,6 @@ router.get('/dashboard', authenticateToken, verificarCozinha, async (req, res) =
 router.get('/analise-turmas', authenticateToken, verificarCozinha, async (req, res) => {
   try {
     const { turma: filtroTurma, curso: filtroCurso, refeicao: filtroRefeicao } = req.query;
-
-    // Aceita ?periodo= ou ?data= ou ?dataInicio/?dataFim ou ?todos=
     const { filtro: filtroData, infoData } = montarFiltroData(req.query);
 
     const filtroAluno = { role: 'aluno', ativo: true };
@@ -525,7 +561,7 @@ router.get('/analise-turmas', authenticateToken, verificarCozinha, async (req, r
 });
 
 // ============================================
-// FALTANTES (aceita data única, intervalo e todos)
+// FALTANTES
 // ============================================
 router.get('/faltantes', authenticateToken, verificarCozinha, async (req, res) => {
   try {
@@ -571,26 +607,23 @@ router.get('/faltantes', authenticateToken, verificarCozinha, async (req, res) =
 });
 
 // ============================================
-// ANÁLISE SEMANAL
+// 🆕 ANÁLISE SEMANAL (CORRIGIDO — BRT)
 // ============================================
 router.get('/analise-semanal', authenticateToken, verificarCozinha, async (req, res) => {
   try {
-    const hoje = new Date();
-    const inicioSemana = new Date(hoje);
-    inicioSemana.setDate(hoje.getDate() - hoje.getDay());
-    const fimSemana = new Date(inicioSemana);
-    fimSemana.setDate(inicioSemana.getDate() + 6);
-
-    const dataInicio = inicioSemana.toISOString().split('T')[0];
-    const dataFim = fimSemana.toISOString().split('T')[0];
+    // 🆕 Calcula início e fim da semana em BRT
+    const dataInicio = getInicioSemanaBR();
+    const dataFim = getFimSemanaBR();
 
     const registros = await Refeicao.find({
       data: { $gte: dataInicio, $lte: dataFim }
     }).sort({ data: 1 });
 
+    // 🆕 Monta os 7 dias da semana em BRT
     const analiseDiaria = {};
+    const inicioDate = new Date(dataInicio + 'T12:00:00.000-03:00');
     for (let i = 0; i < 7; i++) {
-      const d = new Date(inicioSemana); d.setDate(inicioSemana.getDate() + i);
+      const d = new Date(inicioDate.getTime() + i * 24 * 60 * 60 * 1000);
       const ds = d.toISOString().split('T')[0];
       analiseDiaria[ds] = { manha: 0, almoco: 0, tarde: 0, total: 0 };
     }
@@ -617,8 +650,11 @@ router.get('/analise-semanal', authenticateToken, verificarCozinha, async (req, 
     res.json({
       success: true,
       semana: { inicio: dataInicio, fim: dataFim },
-      analiseDiaria, totais, diaPico,
-      mediaDiaria: totais.total / 7
+      analiseDiaria,
+      totais,
+      diaPico,
+      mediaDiaria: totais.total / 7,
+      _debug: { hojeBR: getDataHojeBR(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }
     });
 
   } catch (error) {

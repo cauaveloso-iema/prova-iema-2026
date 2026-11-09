@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>Portal do Coordenador — EducaPleno</title>
+
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0284c7">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="EducaPleno">
+
+    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="stylesheet" href="/eventos/css/coordenador.css?v=4">
+</head>
+<body class="coord-body">
+
+<!-- ============================================================
+     TELA DE AUTENTICAÇÃO (LOGIN / CADASTRO)
+     ============================================================ -->
+<div id="tela-auth" class="auth-wrapper">
+    <div class="auth-shell">
+        <div class="auth-hero">
+            <div class="auth-hero-inner">
+                <div class="auth-hero-badge"><i class="fas fa-user-tie"></i> Portal do Coordenador</div>
+                <h1>Gerencie seus <strong>eventos</strong> com clareza</h1>
+                <p>Vincule avaliadores, configure a distribuição de notas e acompanhe relatórios em tempo real.</p>
+                <ul class="auth-hero-list">
+                    <li><i class="fas fa-check-circle"></i> Sorteio automático de avaliadores</li>
+                    <li><i class="fas fa-check-circle"></i> Atribuição manual por inscrição</li>
+                    <li><i class="fas fa-check-circle"></i> Relatórios com exportação CSV</li>
+                </ul>
+            </div>
+            <div class="auth-hero-glow"></div>
+        </div>
+
+        <div class="auth-card">
+            <ul class="auth-tabs" id="authTabs">
+                <li><button class="auth-tab active" data-tab="login"><i class="fas fa-sign-in-alt"></i> Login</button></li>
+                <li><button class="auth-tab" data-tab="cadastro"><i class="fas fa-user-plus"></i> Cadastro</button></li>
+            </ul>
+
+            <!-- LOGIN -->
+            <div id="tab-login" class="auth-panel active">
+                <div id="login-alert"></div>
+                <form id="form-login">
+                    <div class="coord-form-group">
+                        <label>E-mail</label>
+                        <div class="coord-input-icon">
+                            <i class="fas fa-envelope"></i>
+                            <input type="email" id="login-email" placeholder="seu@email.com" required autocomplete="email">
+                        </div>
+                    </div>
+                    <div class="coord-form-group">
+                        <label>Senha</label>
+                        <div class="coord-input-icon">
+                            <i class="fas fa-lock"></i>
+                            <input type="password" id="login-senha" placeholder="••••••" required autocomplete="current-password">
+                        </div>
+                    </div>
+                    <button type="submit" class="coord-btn coord-btn-primary coord-btn-block" id="btn-login">
+                        <i class="fas fa-sign-in-alt"></i> Acessar Painel
+                    </button>
+                </form>
+                <p class="auth-hint">
+                    <i class="fas fa-shield-alt"></i>
+                    Esqueceu a senha? Solicite ao administrador o reset seguro.
+                </p>
+            </div>
+
+            <!-- CADASTRO -->
+            <div id="tab-cadastro" class="auth-panel">
+                <div id="cad-alert"></div>
+                <form id="form-cadastro-coord">
+                    <div class="coord-form-group">
+                        <label>Nome completo</label>
+                        <input type="text" id="cad-nome" placeholder="Seu nome" required autocomplete="name">
+                    </div>
+                    <div class="coord-form-group">
+                        <label>E-mail</label>
+                        <input type="email" id="cad-email" placeholder="seu@email.com" required autocomplete="email">
+                    </div>
+                    <div class="coord-form-group">
+                        <label>Senha <small>(mín. 6)</small></label>
+                        <input type="password" id="cad-senha" placeholder="••••••" required minlength="6" autocomplete="new-password">
+                    </div>
+                    <button type="submit" class="coord-btn coord-btn-success coord-btn-block" id="btn-cad">
+                        <i class="fas fa-paper-plane"></i> Solicitar Cadastro
+                    </button>
+                </form>
+                <p class="auth-hint" style="margin-top:14px;">
+                    <i class="fas fa-info-circle"></i>
+                    Após o cadastro, o administrador precisa aprovar sua conta.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     TELA DE PRIMEIRO ACESSO / TROCA OBRIGATÓRIA DE SENHA
+     (Aparece apenas se a API de login retornar senha temporária)
+     ============================================================ -->
+<div id="tela-trocar-senha" class="auth-wrapper" style="display:none;">
+    <div class="auth-shell single">
+        <div class="auth-card">
+            <div class="senha-hero">
+                <div class="senha-hero-icon"><i class="fas fa-key"></i></div>
+                <h2>Defina sua nova senha</h2>
+                <p>Você entrou com uma senha temporária. Por segurança, defina uma nova senha antes de continuar.</p>
+            </div>
+            <div id="senha-alert"></div>
+            <div class="coord-form-group">
+                <label>Nova senha</label>
+                <input type="password" id="nova-senha" placeholder="Mínimo 6 caracteres" minlength="6" autocomplete="new-password">
+            </div>
+            <div class="coord-form-group">
+                <label>Confirmar nova senha</label>
+                <input type="password" id="confirma-senha" placeholder="Repita a senha" autocomplete="new-password">
+            </div>
+            <div class="senha-forca" id="senha-forca">
+                <div class="barra"><div id="senha-forca-barra"></div></div>
+                <span id="senha-forca-texto">Digite uma senha</span>
+            </div>
+            <button class="coord-btn coord-btn-primary coord-btn-block" id="btn-trocar-senha" onclick="trocarSenhaPrimeiroAcesso()">
+                <i class="fas fa-check"></i> Salvar e continuar
+            </button>
+            <button class="coord-btn coord-btn-secondary coord-btn-block" style="margin-top:10px;" onclick="logout()">
+                <i class="fas fa-sign-out-alt"></i> Sair
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     PAINEL DO COORDENADOR
+     ============================================================ -->
+<div id="tela-painel" style="display: none;">
+    <header class="coord-topbar">
+        <div class="coord-topbar-inner">
+            <div class="coord-brand">
+                <div class="coord-brand-icon"><i class="fas fa-user-tie"></i></div>
+                <div>
+                    <strong>Portal do Coordenador</strong>
+                    <small>EducaPleno Eventos</small>
+                </div>
+            </div>
+            <div class="coord-topbar-actions">
+                <span class="coord-user-chip" id="chip-usuario" title="Usuário logado">
+                    <i class="fas fa-user-circle"></i> <span id="chip-nome">—</span>
+                </span>
+                <!-- BOTÃO SAIR BEM VISÍVEL -->
+                <button class="coord-btn coord-btn-danger" onclick="logout()" title="Sair do sistema">
+                    <i class="fas fa-sign-out-alt"></i> Sair
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="coord-shell">
+        <section class="coord-hero">
+            <div class="coord-hero-info">
+                <h1><i class="fas fa-calendar-check"></i> Meus Eventos</h1>
+                <p>Selecione um evento à esquerda para gerenciar avaliadores, sorteios e relatórios.</p>
+            </div>
+            <div class="coord-hero-stats">
+                <div class="coord-hero-stat">
+                    <div class="num" id="hero-eventos">—</div>
+                    <div class="lbl">Eventos</div>
+                </div>
+                <div class="coord-hero-stat">
+                    <div class="num" id="hero-avaliadores">—</div>
+                    <div class="lbl">Avaliadores</div>
+                </div>
+                <div class="coord-hero-stat">
+                    <div class="num" id="hero-inscricoes">—</div>
+                    <div class="lbl">Inscrições</div>
+                </div>
+            </div>
+        </section>
+
+        <div class="coord-grid">
+            <!-- Lista de eventos -->
+            <aside class="coord-sidebar">
+                <div class="coord-card">
+                    <div class="coord-card-header">
+                        <h3><i class="fas fa-list"></i> Eventos vinculados</h3>
+                        <button class="coord-btn coord-btn-ghost coord-btn-sm" onclick="carregarEventos()" title="Recarregar">
+                            <i class="fas fa-sync"></i>
+                        </button>
+                    </div>
+                    <div id="lista-eventos" class="coord-events-list">
+                        <div class="coord-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Painel do evento -->
+            <section class="coord-main">
+                <div id="painel-vazio" class="coord-card coord-empty-hero">
+                    <i class="fas fa-hand-pointer"></i>
+                    <h3>Selecione um evento</h3>
+                    <p>Escolha um dos eventos à esquerda para começar.</p>
+                </div>
+
+                <div id="painel-evento" style="display:none;">
+                    <div class="coord-card coord-event-header">
+                        <div class="coord-event-header-top">
+                            <div>
+                                <span class="coord-chip coord-chip-primary" id="ev-status"></span>
+                                <h2 id="ev-titulo">—</h2>
+                                <p id="ev-descricao" class="coord-muted">—</p>
+                            </div>
+                            <div class="coord-event-meta">
+                                <div><i class="fas fa-calendar"></i> <span id="ev-periodo">—</span></div>
+                                <div><i class="fas fa-map-marker-alt"></i> <span id="ev-local">—</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="coord-card">
+                        <div class="coord-card-header">
+                            <h3><i class="fas fa-users"></i> Avaliadores do Evento</h3>
+                        </div>
+                        <div class="coord-add-row">
+                            <input type="email" id="email-avaliador" class="coord-input" placeholder="E-mail do avaliador cadastrado">
+                            <button class="coord-btn coord-btn-primary" onclick="vincularAvaliador()">
+                                <i class="fas fa-plus"></i> Adicionar
+                            </button>
+                        </div>
+                        <p class="coord-muted coord-small">
+                            <i class="fas fa-info-circle"></i>
+                            O avaliador precisa ter feito o cadastro no Portal do Avaliador.
+                        </p>
+                        <ul class="coord-user-list" id="lista-avaliadores"></ul>
+                    </div>
+
+                    <div class="coord-card">
+                        <div class="coord-card-header">
+                            <h3><i class="fas fa-cog"></i> Configuração da Avaliação</h3>
+                        </div>
+                        <div id="config-avaliacao-area">
+                            <div class="coord-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div>
+                        </div>
+                    </div>
+
+                    <div class="coord-card">
+                        <div class="coord-card-header">
+                            <h3><i class="fas fa-tasks"></i> Atribuição Manual de Avaliadores</h3>
+                        </div>
+                        <div id="atribuicao-manual-area">
+                            <div class="coord-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div>
+                        </div>
+                    </div>
+
+                    <div class="coord-card">
+                        <div class="coord-card-header">
+                            <h3><i class="fas fa-chart-bar"></i> Relatório</h3>
+                            <button class="coord-btn coord-btn-outline coord-btn-sm" onclick="atualizarRelatorio()">
+                                <i class="fas fa-sync"></i> Atualizar
+                            </button>
+                        </div>
+                        <div id="relatorio-area">
+                            <div class="coord-empty">Clique em atualizar para carregar as estatísticas.</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/eventos/js/coordenador.js?v=4"></script>
+</body>
+</html>
