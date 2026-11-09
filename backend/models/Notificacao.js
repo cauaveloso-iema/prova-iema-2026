@@ -19,7 +19,9 @@ const NotificacaoSchema = new mongoose.Schema({
             'prova_corrigida', 
             'sistema', 
             'cancelamento',
-            'lembrete' // 🆕 Adicionado para permitir os Lembretes de Retroatividade
+            'lembrete',
+            'aniversario',        // 🆕 ADICIONADO
+            'aniversario_equipe'  // 🆕 ADICIONADO
         ],
         required: true
     },
@@ -80,9 +82,7 @@ const NotificacaoSchema = new mongoose.Schema({
         default: 3
     },
 
-    // 🆕 ============================================
-    // 🆕 METADADOS PARA DEEP LINKING (Lembretes de Retroatividade)
-    // 🆕 ============================================
+    // METADADOS PARA DEEP LINKING (Lembretes de Retroatividade)
     autorizacaoId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Autorizacao',
@@ -104,7 +104,6 @@ const NotificacaoSchema = new mongoose.Schema({
 // Índices para consultas rápidas
 NotificacaoSchema.index({ usuarioId: 1, createdAt: -1 });
 NotificacaoSchema.index({ usuarioId: 1, lida: 1 });
-// 🆕 Índice para buscar lembretes de retroatividade rapidamente
 NotificacaoSchema.index({ usuarioId: 1, tipo: 1, lida: 1 });
 
 const Notificacao = mongoose.model('Notificacao', NotificacaoSchema);

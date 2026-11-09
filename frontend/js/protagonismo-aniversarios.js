@@ -61,6 +61,41 @@ function irParaAniversarios(event) {
 window.irParaAniversarios = irParaAniversarios;
 
 // ============================================
+// 🔥 IR PARA O PERFIL DO ANIVERSARIANTE
+// ============================================
+async function irParaPerfilAniversariante(id, mes) {
+    // 1. Garante que o mês está aberto na lista
+    const bodyMes = document.getElementById(`mesBody${mes}`);
+    if (bodyMes && bodyMes.style.display === 'none') {
+        toggleMesAniv(mes);
+    }
+
+    // 2. Aguarda um instante para o DOM atualizar e rola a tela
+    setTimeout(() => {
+        const card = document.getElementById(`collapse_${id}`);
+        
+        if (card) {
+            // Rola a tela suavemente até o card
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            // Abre o card (acordeão) se estiver fechado
+            if (!card.classList.contains('show')) {
+                const collapse = new bootstrap.Collapse(card, { toggle: false });
+                collapse.show();
+            }
+        } else {
+            // Se não encontrou (ex: por causa de um filtro ativo), limpa os filtros e tenta de novo
+            document.getElementById('buscaAniversario').value = '';
+            document.getElementById('filtroMesAniversario').value = '';
+            carregarAniversarios().then(() => {
+                setTimeout(() => irParaPerfilAniversariante(id, mes), 500);
+            });
+        }
+    }, 300);
+}
+window.irParaPerfilAniversariante = irParaPerfilAniversariante;
+
+// ============================================
 // CARREGAR LISTA POR MÊS
 // ============================================
 async function carregarAniversarios() {
@@ -250,7 +285,6 @@ async function verDetalhesAniversario(id) {
             try {
                 const dataObj = new Date(pessoa.dataNascimento);
                 if (!isNaN(dataObj.getTime())) {
-                    // Adiciona o fuso para não voltar um dia no Brasil
                     dataFormatada = new Date(dataObj.getTime() + dataObj.getTimezoneOffset() * 60000).toLocaleDateString('pt-BR');
                 }
             } catch (e) {}
@@ -302,7 +336,7 @@ async function verDetalhesAniversario(id) {
 window.verDetalhesAniversario = verDetalhesAniversario;
 
 // ============================================
-// PRÓXIMOS ANIVERSÁRIOS
+// PRÓXIMOS ANIVERSÁRIOS (CLICÁVEL)
 // ============================================
 async function carregarProximosAniversarios() {
     const container = document.getElementById('listaProximosAniversarios');
@@ -324,9 +358,10 @@ async function carregarProximosAniversarios() {
                     const label = dias === 0 ? 'HOJE' : dias === 1 ? 'AMANHÃ' : `${dias}`;
                     const sublabel = dias === 0 ? '' : dias === 1 ? '' : 'dias';
 
+                    // Card clicável (onclick + cursor)
                     return `
                         <div class="col-md-3 col-6">
-                            <div class="proximo-aniversario-card">
+                            <div class="proximo-aniversario-card" onclick="irParaPerfilAniversariante('${p.id}', ${p.mes})" style="cursor: pointer;">
                                 <div class="dias">${label}</div>
                                 <div class="dias-label">${sublabel}</div>
                                 <div class="nome">${escapeHTML(p.nome)}</div>
