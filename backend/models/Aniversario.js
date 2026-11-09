@@ -9,15 +9,17 @@ const AniversarioSchema = new mongoose.Schema({
   },
   nome: { type: String, required: true, trim: true },
   dataNascimento: { type: Date, required: true },
-  mes: { type: Number, required: true, min: 1, max: 12 },
-  dia: { type: Number, required: true, min: 1, max: 31 },
+  
+  // 🔥 Removido o required daqui (o middleware abaixo preenche)
+  mes: { type: Number, min: 1, max: 12 },
+  dia: { type: Number, min: 1, max: 31 },
 
   email: { type: String, default: '' },
   telefone: { type: String, default: '' },
   turma: { type: String, default: '' },
   curso: { type: String, default: '' },
   fotoPerfil: { type: String, default: '' },
-  role: { type: String, default: 'aluno' }, // aluno, professor, admin, etc
+  role: { type: String, default: 'aluno' },
 
   origem: {
     type: String,
@@ -40,7 +42,8 @@ const AniversarioSchema = new mongoose.Schema({
 AniversarioSchema.index({ mes: 1, dia: 1 });
 AniversarioSchema.index({ usuarioId: 1 }, { unique: true, sparse: true });
 
-AniversarioSchema.pre('save', function (next) {
+// 🔥 TROCADO PARA 'validate' para rodar ANTES de checar os obrigatórios
+AniversarioSchema.pre('validate', function (next) {
   if (this.dataNascimento) {
     const d = new Date(this.dataNascimento);
     this.mes = d.getUTCMonth() + 1;
@@ -52,14 +55,10 @@ AniversarioSchema.pre('save', function (next) {
 
 /**
  * Sincroniza aniversários de TODOS os usuários ativos
- * (aluno, professor, admin, super_admin, setor_pedagogico,
- *  coordenacao_patio, cozinha, protagonismo, etc)
- * que tenham dataNascimento preenchida.
  */
 AniversarioSchema.statics.sincronizarDoBanco = async function () {
   const User = mongoose.model('User');
 
-  // 🔥 Busca TODOS os roles (não só aluno) com data de nascimento
   const usuarios = await User.find({
     ativo: true,
     dataNascimento: { $ne: null, $exists: true }
@@ -89,7 +88,6 @@ AniversarioSchema.statics.sincronizarDoBanco = async function () {
     };
 
     if (existente) {
-      // Só sobrescreve se ainda for automático (não estraga cadastro manual)
       if (existente.origem === 'auto') {
         Object.assign(existente, dados);
         await existente.save();
@@ -105,12 +103,7 @@ AniversarioSchema.statics.sincronizarDoBanco = async function () {
 
   console.log(`✅ [Sincronização] Criados: ${criados} | Atualizados: ${atualizados} | Ignorados (manuais): ${ignorados}`);
 
-  return {
-    criados,
-    atualizados,
-    ignorados,
-    total: usuarios.length
-  };
+  return { criados, atualizados, ignorados, total: usuarios.length };
 };
 
 module.exports = mongoose.model('Aniversario', AniversarioSchema);
