@@ -12,6 +12,10 @@
     --warning: #f59e0b;
     --danger: #ef4444;
     --info: #3b82f6;
+    
+    /* Cores específicas dos Aniversários */
+    --pink: #ec4899;
+    --dark-pink: #be185d;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -692,7 +696,7 @@ body {
 }
 
 /* ============================================
-   RESPONSIVO
+   RESPONSIVO GERAL
    ============================================ */
 @media (max-width: 1024px) {
     .stats-grid { grid-template-columns: repeat(2, 1fr); }
@@ -811,9 +815,6 @@ body {
     gap: 8px;
 }
 
-/* ============================================
-   📑 SEÇÃO DE LEMBRETES (remarcações)
-   ============================================ */
 .notificacoes-secao {
     border-bottom: 1px solid #f3f4f6;
 }
@@ -845,9 +846,6 @@ body {
     font-size: 10px;
 }
 
-/* ============================================
-   📬 ITENS DE NOTIFICAÇÃO
-   ============================================ */
 .notificacao-item {
     padding: 15px 20px;
     border-bottom: 1px solid #f3f4f6;
@@ -910,9 +908,6 @@ body {
     color: #9ca3af;
 }
 
-/* ============================================
-   ⏰ ITENS DE LEMBRETE (remarcações)
-   ============================================ */
 .lembrete-item {
     padding: 12px 20px;
     border-bottom: 1px solid #f3f4f6;
@@ -1014,9 +1009,6 @@ body {
     border-radius: 6px;
 }
 
-/* ============================================
-   📭 ESTADO VAZIO
-   ============================================ */
 .notificacoes-vazio {
     text-align: center;
     padding: 40px 20px;
@@ -1035,9 +1027,6 @@ body {
     font-size: 14px;
 }
 
-/* ============================================
-   📎 RODAPÉ
-   ============================================ */
 .notificacao-footer {
     padding: 12px 20px;
     border-top: 1px solid #e5e7eb;
@@ -1062,129 +1051,8 @@ body {
 }
 
 /* ============================================
-   📱 RESPONSIVO
-   ============================================ */
-@media (max-width: 768px) {
-    .notificacoes-dropdown {
-        width: calc(100vw - 30px);
-        right: -50px;
-    }
-    .notificacoes-btn {
-        width: 42px;
-        height: 42px;
-        font-size: 1rem;
-    }
-}
-
-/* ============================================================================
-   🔧 FIX: DROPDOWN DE NOTIFICAÇÕES NO MOBILE
-   ============================================================================ */
-
-@media (max-width: 768px) {
-    /* Container pai não deve mais ser relative no mobile
-       (para o dropdown poder escapar) */
-    .notificacoes-container {
-        position: static !important;
-    }
-    
-    /* Dropdown fixo na viewport */
-    .notificacoes-dropdown {
-        position: fixed !important;
-        top: 70px !important;           /* Logo abaixo do header */
-        left: 10px !important;          /* Margem esquerda */
-        right: 10px !important;         /* Margem direita */
-        width: auto !important;
-        max-width: none !important;
-        max-height: calc(100vh - 90px) !important;
-        margin-top: 0 !important;
-        border-radius: 16px !important;
-        box-shadow: 0 20px 50px rgba(0,0,0,0.3) !important;
-        z-index: 10000 !important;
-    }
-    
-    .notificacoes-dropdown.show {
-        animation: dropdown-slide-down 0.25s ease-out !important;
-    }
-    
-    @keyframes dropdown-slide-down {
-        from { 
-            opacity: 0; 
-            transform: translateY(-15px); 
-        }
-        to { 
-            opacity: 1; 
-            transform: translateY(0); 
-        }
-    }
-    
-    /* Header do dropdown */
-    .notificacoes-header {
-        padding: 12px 16px !important;
-        border-radius: 16px 16px 0 0 !important;
-    }
-    
-    .notificacoes-header h3 {
-        font-size: 15px !important;
-    }
-    
-    /* Lista interna */
-    #notificacoesLista {
-        max-height: calc(100vh - 200px) !important;
-    }
-    
-    /* Item de notificação */
-    .notificacao-item {
-        padding: 12px 14px !important;
-    }
-    
-    .notificacao-icone {
-        width: 38px !important;
-        height: 38px !important;
-        font-size: 15px !important;
-    }
-    
-    /* Footer */
-    .notificacao-footer {
-        padding: 12px 16px !important;
-        border-radius: 0 0 16px 16px !important;
-    }
-}
-
-/* Para telas MUITO pequenas */
-@media (max-width: 400px) {
-    .notificacoes-dropdown {
-        top: 65px !important;
-        left: 8px !important;
-        right: 8px !important;
-        max-height: calc(100vh - 80px) !important;
-    }
-    
-    .notificacoes-header h3 {
-        font-size: 14px !important;
-    }
-    
-    .notificacao-titulo {
-        font-size: 13px !important;
-    }
-    
-    .notificacao-mensagem {
-        font-size: 12px !important;
-    }
-}
-
-/* ============================================
    NOVO HEADER: RELÓGIO E MENU DO USUÁRIO
    ============================================ */
-.header-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-    flex-wrap: wrap;
-    gap: 15px;
-}
-
-/* Relógio (Lado Esquerdo) */
 .relogio-card {
     background: white;
     padding: 10px 20px;
@@ -1213,7 +1081,6 @@ body {
     font-weight: 600;
 }
 
-/* Menu do Usuário (Lado Direito) */
 .user-menu-container {
     position: relative;
 }
@@ -1262,33 +1129,45 @@ body {
     object-fit: cover;
 }
 
-/* 🔥 ANEL DE NOTIFICAÇÃO NA FOTO */
 .user-notification-badge {
-    position: absolute;
-    top: -2px;
-    right: -2px;
-    width: 14px;
-    height: 14px;
-    background: #ef4444;
-    border: 2px solid white;
-    border-radius: 50%;
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
-    animation: pulse-ring 2s infinite;
     display: none;
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    background: #ef4444;
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 10px;
+    border: 2px solid white;
+    align-items: center;
+    justify-content: center;
+    animation: pulse-badge 2s infinite;
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);
+    line-height: 1;
 }
 
-@keyframes pulse-ring {
+@keyframes pulse-badge {
     0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-    70% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+    70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
     100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
 
-.user-trigger.tem-notificacao .user-avatar {
+.user-trigger.tem-notificacao {
     border-color: #ef4444;
-    box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15), 0 4px 15px rgba(0, 0, 0, 0.05);
+    animation: pulse-ring 2s infinite;
 }
 
-/* Dropdown Menu */
+@keyframes pulse-ring {
+    0% { box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15), 0 4px 15px rgba(0, 0, 0, 0.05); }
+    50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0.05), 0 4px 15px rgba(0, 0, 0, 0.05); }
+    100% { box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15), 0 4px 15px rgba(0, 0, 0, 0.05); }
+}
+
 .user-dropdown-menu {
     position: absolute;
     top: calc(100% + 10px);
@@ -1353,12 +1232,12 @@ body {
     flex: 1;
 }
 
-/* Cores dos ícones */
 .bg-purple { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
 .bg-blue { background: linear-gradient(135deg, #0ea5e9, #0284c7); }
 .bg-green { background: linear-gradient(135deg, #10b981, #059669); }
 .bg-gray { background: linear-gradient(135deg, #64748b, #475569); }
 .bg-red { background: linear-gradient(135deg, #ef4444, #dc2626); }
+.bg-orange { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; }
 
 .dropdown-divider {
     height: 1px;
@@ -1366,120 +1245,264 @@ body {
     margin: 6px 0;
 }
 
-.badge-count {
-    background: #ef4444;
-    color: white;
-    font-size: 11px;
-    font-weight: bold;
-    padding: 2px 8px;
-    border-radius: 10px;
-    margin-left: auto;
-}
-
-/* Ajuste Mobile */
-@media (max-width: 768px) {
-    .header-top {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    .relogio-card {
-        justify-content: center;
-        border-radius: 12px;
-    }
-    .user-trigger {
-        border-radius: 50px;
-        justify-content: center;
-    }
-    .user-details {
-        display: none !important;
-    }
-    .user-dropdown-menu {
-        right: -10px;
-        width: 220px;
-    }
-}
-
-/* ✅ Badge numérico no avatar (padrão Enfermaria) */
-.user-notification-badge {
-    display: none;
-    position: absolute;
-    top: -4px;
-    right: -4px;
-    min-width: 20px;
-    height: 20px;
-    padding: 0 6px;
-    background: #ef4444;
-    color: white;
-    font-size: 11px;
-    font-weight: 700;
-    border-radius: 10px;
-    border: 2px solid white;
+/* ============================================
+   ✨ ANIVERSÁRIOS (🔥 CORRIGIDO)
+   ============================================ */
+.aniversario-card {
+    background: white;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 8px;
+    display: flex;
     align-items: center;
+    gap: 12px;
+    border-left: 4px solid #ec4899;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    transition: transform 0.2s;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.aniversario-card:hover {
+    transform: translateX(4px);
+}
+
+.aniversario-avatar {
+    width: 45px; 
+    height: 45px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #ec4899, #be185d);
+    color: white;
+    display: flex; 
+    align-items: center; 
     justify-content: center;
-    animation: pulse-badge 2s infinite;
-    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);
+    font-weight: bold;
+    flex-shrink: 0;
+    overflow: hidden;
+    font-size: 1.2rem;
+}
+
+.aniversario-avatar img { 
+    width: 100%; 
+    height: 100%; 
+    object-fit: cover; 
+}
+
+.aniversario-info { 
+    flex: 1; 
+    min-width: 0; /* 🔥 Impede que o texto quebre a tela */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.aniversario-nome { 
+    font-weight: 600; 
+    color: #1f2937; 
+    font-size: 14px;
+    white-space: nowrap; /* Mantém na mesma linha */
+    overflow: hidden;
+    text-overflow: ellipsis; /* Adiciona ... */
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.aniversario-detalhes { 
+    font-size: 12px; 
+    color: #6b7280;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 2px;
+}
+
+.aniversario-dia {
+    background: #fce7f3;
+    color: #be185d;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 13px;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.mes-header {
+    background: linear-gradient(135deg, #ec4899, #be185d);
+    color: white;
+    padding: 10px 16px;
+    border-radius: 10px 10px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.mes-body {
+    background: #fdf2f8;
+    padding: 12px;
+    border-radius: 0 0 10px 10px;
+    margin-bottom: 12px;
+}
+
+.proximo-aniversario-card {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+    box-shadow: 0 2px 12px rgba(236,72,153,0.15);
+    border-top: 4px solid #ec4899;
+}
+
+.proximo-aniversario-card .dias {
+    font-size: 32px;
+    font-weight: 800;
+    color: #ec4899;
     line-height: 1;
 }
 
-@keyframes pulse-badge {
-    0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-    70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+.proximo-aniversario-card .dias-label {
+    font-size: 11px;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
 }
 
-.user-trigger.tem-notificacao {
-    border-color: #ef4444;
-    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15), 0 4px 15px rgba(0, 0, 0, 0.05);
-    animation: pulse-ring 2s infinite;
+.proximo-aniversario-card .nome {
+    font-weight: 700;
+    color: #1f2937;
+    font-size: 15px;
+    margin-top: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-@keyframes pulse-ring {
-    0% { box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15), 0 4px 15px rgba(0, 0, 0, 0.05); }
-    50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0.05), 0 4px 15px rgba(0, 0, 0, 0.05); }
-    100% { box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15), 0 4px 15px rgba(0, 0, 0, 0.05); }
+.proximo-aniversario-card .data {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 4px;
 }
 
-/* ===================== COR LARANJA (CARDÁPIO) ===================== */
-.icon-box.bg-orange {
-    background: linear-gradient(135deg, #f59e0b, #d97706);
+.badge-hoje {
+    background: #10b981;
     color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.badge-manual {
+    background: #f59e0b;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+    margin-left: 5px;
+}
+
+.badge-auto {
+    background: #3b82f6;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+    margin-left: 5px;
 }
 
 /* ============================================
-   🔧 FIX MOBILE: Menu do usuário e header
+   📱 FIX MOBILE
    ============================================ */
-
 @media (max-width: 768px) {
-    /* Header em coluna: relógio + avatar alinhados */
+    .notificacoes-container {
+        position: static !important;
+    }
+    
+    .notificacoes-dropdown {
+        position: fixed !important;
+        top: 70px !important;
+        left: 10px !important;
+        right: 10px !important;
+        width: auto !important;
+        max-width: none !important;
+        max-height: calc(100vh - 90px) !important;
+        margin-top: 0 !important;
+        border-radius: 16px !important;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.3) !important;
+        z-index: 10000 !important;
+    }
+    
+    .notificacoes-dropdown.show {
+        animation: dropdown-slide-down 0.25s ease-out !important;
+    }
+    
+    @keyframes dropdown-slide-down {
+        from { opacity: 0; transform: translateY(-15px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .notificacoes-header {
+        padding: 12px 16px !important;
+        border-radius: 16px 16px 0 0 !important;
+    }
+    
+    .notificacoes-header h3 { font-size: 15px !important; }
+    #notificacoesLista { max-height: calc(100vh - 200px) !important; }
+    .notificacao-item { padding: 12px 14px !important; }
+    .notificacao-icone { width: 38px !important; height: 38px !important; font-size: 15px !important; }
+    .notificacao-footer { padding: 12px 16px !important; border-radius: 0 0 16px 16px !important; }
+
     .header-top {
-        flex-direction: column !important;
-        align-items: stretch !important;
-        gap: 12px !important;
-        padding: 12px !important;
-    }
-    
-    /* Relógio ocupa largura total, mas mantém alinhamento interno */
-    .relogio-card {
-        width: 100% !important;
-        justify-content: center !important;
-        border-radius: 12px !important;
-        padding: 10px 16px !important;
-    }
-    
-    /* Avatar + notificações: linha única centralizada */
-    .header-top > .d-flex.align-items-center.gap-3 {
-        width: 100% !important;
-        justify-content: center !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
         flex-wrap: nowrap !important;
+        padding: 10px !important;
+        gap: 15px !important;
     }
     
-    /* Trigger do usuário mais compacto */
+    .relogio-card {
+        padding: 8px 16px !important;
+        border-radius: 50px !important;
+        flex: 1 !important;
+        justify-content: center !important;
+    }
+    .relogio-tempo { font-size: 1.1rem !important; }
+    .relogio-data { display: none !important; }
+    
     .user-trigger {
-        padding: 6px 16px 6px 6px !important;
-        max-width: 100% !important;
+        padding: 3px !important;
+        border-radius: 50% !important;
+        background: white !important;
+    }
+    .user-avatar {
+        width: 42px !important;
+        height: 42px !important;
+        margin-right: 0 !important;
+    }
+    .user-details, 
+    .user-trigger .fa-chevron-down {
+        display: none !important;
+    }
+
+    #headerNomeUsuarioContainer,
+    #headerTurnoContainer {
+        display: none !important;
+    }
+
+    .card-header {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        padding: 15px 20px !important;
+        gap: 5px !important;
     }
     
-    /* Dropdown: fixo na viewport, sempre abaixo do header */
     .user-dropdown-menu {
         position: fixed !important;
         top: 200px !important;
@@ -1494,8 +1517,18 @@ body {
     }
 }
 
-/* Telas muito pequenas */
 @media (max-width: 400px) {
+    .notificacoes-dropdown {
+        top: 65px !important;
+        left: 8px !important;
+        right: 8px !important;
+        max-height: calc(100vh - 80px) !important;
+    }
+    
+    .notificacoes-header h3 { font-size: 14px !important; }
+    .notificacao-titulo { font-size: 13px !important; }
+    .notificacao-mensagem { font-size: 12px !important; }
+    
     .user-dropdown-menu {
         top: 180px !important;
         left: 8px !important;
@@ -1503,20 +1536,6 @@ body {
     }
 }
 
-/* ============================================
-   🔧 FIX: Garantir que dropdown não corte em desktop
-   ============================================ */
-.user-menu-container {
-    position: relative;
-}
-
-.user-dropdown-menu {
-    pointer-events: auto;
-}
-
-/* ============================================
-   🔧 FIX: Overlay de fundo escuro quando dropdown aberto (mobile)
-   ============================================ */
 @media (max-width: 768px) {
     body.menu-aberto::before {
         content: '';
@@ -1536,59 +1555,9 @@ body {
     }
 }
 
-/* ============================================
-   📱 CORREÇÃO DEFINITIVA DO HEADER NO MOBILE
-   ============================================ */
-@media (max-width: 768px) {
-    /* 1. RELÓGIO E AVATAR LADO A LADO */
-    .header-top {
-        flex-direction: row !important;
-        align-items: center !important;
-        justify-content: space-between !important;
-        flex-wrap: nowrap !important;
-        padding: 10px !important;
-        gap: 15px !important;
-    }
-    
-    /* Relógio compacto */
-    .relogio-card {
-        padding: 8px 16px !important;
-        border-radius: 50px !important;
-        flex: 1 !important;
-        justify-content: center !important;
-    }
-    .relogio-tempo { font-size: 1.1rem !important; }
-    .relogio-data { display: none !important; } /* Esconde a data */
-    
-    /* Avatar só a bolinha */
-    .user-trigger {
-        padding: 3px !important;
-        border-radius: 50% !important;
-        background: white !important;
-    }
-    .user-avatar {
-        width: 42px !important;
-        height: 42px !important;
-        margin-right: 0 !important;
-    }
-    .user-details, 
-    .user-trigger .fa-chevron-down {
-        display: none !important;
-    }
-
-    /* 2. CONSERTA O CARD DO TÍTULO (Supervisão - CAUA) */
-    
-    /* Remove o "Bem-vindo(a)" e o crachá de "Turno" do meio do título */
-    #headerNomeUsuarioContainer,
-    #headerTurnoContainer {
-        display: none !important;
-    }
-
-    /* Ajusta o cabeçalho do card para não amassar o texto */
-    .card-header {
-        flex-direction: column !important;
-        align-items: flex-start !important;
-        padding: 15px 20px !important;
-        gap: 5px !important;
-    }
+.user-menu-container {
+    position: relative;
+}
+.user-dropdown-menu {
+    pointer-events: auto;
 }

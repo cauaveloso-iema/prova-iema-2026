@@ -4591,9 +4591,10 @@ async function carregarListaModulo(modulo, pagina = null) {
         const thStyle = 'padding: 10px 6px; text-align: left; border-bottom: 2px solid #dee2e6; font-weight: 600; color: #495057; white-space: nowrap; background: #f8f9fa; font-size: 12px;';
         const tdStyle = 'padding: 10px 6px; vertical-align: middle; border-bottom: 1px solid #dee2e6; white-space: nowrap; font-size: 12px;';
 
+        // 🔥 CORREÇÃO DE ROLAGEM AQUI (table-responsive + overflow-x: auto)
         container.innerHTML = `
-            <div style="overflow-x: hidden; width: 100%;">
-                <table class="table table-hover" style="width: 100%; border-collapse: collapse; margin-bottom: 0; table-layout: auto;">
+            <div class="table-responsive" style="overflow-x: auto; width: 100%; -webkit-overflow-scrolling: touch;">
+                <table class="table table-hover" style="width: 100%; min-width: 900px; border-collapse: collapse; margin-bottom: 0; table-layout: auto;">
                     <thead>
                         <tr>
                             <th style="${thStyle}">Data Registro</th>
