@@ -26,6 +26,7 @@ class VisitasAdmin {
         
         // Estado do formulário (múltipla seleção)
         this.formData = {
+            turmasSelecionadas: [],       // 🆕 múltiplas turmas
             alunosSelecionados: [],
             professoresSelecionados: [],
             localizacao: null
@@ -465,6 +466,16 @@ class VisitasAdmin {
             ? `<span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 20px; font-size: 10px; margin-left: 6px;">+${termo.totalProfessores - 1}</span>`
             : '';
         
+        // 🆕 Badge de múltiplas turmas
+        const badgeTurmas = (termo.totalTurmas && termo.totalTurmas > 1)
+            ? `<span style="background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 20px; font-size: 10px; margin-left: 6px;"><i class="fas fa-school"></i> ${termo.totalTurmas} turmas</span>`
+            : '';
+        
+        // 🆕 Turmas exibidas
+        const turmasTexto = (termo.turmas && termo.turmas.length > 0)
+            ? termo.turmas.slice(0, 2).join(', ') + (termo.turmas.length > 2 ? ` +${termo.turmas.length - 2}` : '')
+            : (termo.alunoTurma || 'N/A');
+        
         return `
             <div class="termo-linha" onclick="visitasAdmin.verDetalhes('${termo._id}')" style="cursor: pointer;">
                 <div class="termo-linha-status" data-status="${status}"></div>
@@ -479,7 +490,8 @@ class VisitasAdmin {
                     <strong>${this.escapeHtml(termo.alunoNome || 'Aluno')}</strong>
                     ${badgeAlunos}
                     <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">
-                        <i class="fas fa-school"></i> ${this.escapeHtml(termo.alunoTurma || 'N/A')}
+                        <i class="fas fa-school"></i> ${this.escapeHtml(turmasTexto)}
+                        ${badgeTurmas}
                         ${termo.alunoCurso ? ` • <i class="fas fa-book"></i> ${this.escapeHtml(termo.alunoCurso)}` : ''}
                     </div>
                 </div>
@@ -589,6 +601,16 @@ class VisitasAdmin {
             ? `<span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 30px; font-size: 10px; margin-left: 6px;">+${termo.totalProfessores - 1} prof.</span>`
             : '';
         
+        // 🆕 Badge de múltiplas turmas
+        const badgeTurmas = (termo.totalTurmas && termo.totalTurmas > 1)
+            ? `<span style="background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 30px; font-size: 10px; margin-left: 6px;"><i class="fas fa-school"></i> ${termo.totalTurmas} turmas</span>`
+            : '';
+        
+        // 🆕 Turmas exibidas
+        const turmasTexto = (termo.turmas && termo.turmas.length > 0)
+            ? termo.turmas.slice(0, 2).join(', ') + (termo.turmas.length > 2 ? ` +${termo.turmas.length - 2}` : '')
+            : (termo.alunoTurma || 'N/A');
+        
         const progresso = termo.totalResponsaveis > 0
             ? `<div style="font-size: 11px; color: #6b7280; margin-top: 8px;">
                 <i class="fas fa-check-circle" style="color: #10b981;"></i>
@@ -608,7 +630,7 @@ class VisitasAdmin {
                 <div class="termo-card-body">
                     <div class="termo-info-row">
                         <i class="fas fa-school"></i>
-                        <span><strong>Turma:</strong> ${this.escapeHtml(termo.alunoTurma || 'N/A')}</span>
+                        <span><strong>Turma(s):</strong> ${this.escapeHtml(turmasTexto)} ${badgeTurmas}</span>
                     </div>
                     <div class="termo-info-row">
                         <i class="fas fa-book"></i>
@@ -748,7 +770,13 @@ class VisitasAdmin {
     }
 
     renderizarFormularioTermo(termo = null) {
+        // 🆕 Carrega turmas do termo (multi-turma com fallback)
         if (termo) {
+            const turmasDoTermo = (termo.turmas && termo.turmas.length > 0)
+                ? [...termo.turmas]
+                : (termo.turmaPrincipal ? [termo.turmaPrincipal] : []);
+            
+            this.formData.turmasSelecionadas = turmasDoTermo;
             this.formData.alunosSelecionados = (termo.alunos || []).map(a => 
                 (a.alunoId?._id || a.alunoId || '').toString()
             );
@@ -757,6 +785,7 @@ class VisitasAdmin {
             );
             this.formData.localizacao = termo.localizacao || null;
         } else {
+            this.formData.turmasSelecionadas = [];
             this.formData.alunosSelecionados = [];
             this.formData.professoresSelecionados = [];
             this.formData.localizacao = null;
@@ -778,30 +807,61 @@ class VisitasAdmin {
 
                 <form id="formTermoVisita">
 
-                    <!-- SEÇÃO 1: ALUNOS -->
+                    <!-- SEÇÃO 1: TURMAS E ALUNOS -->
                     <div class="visita-form-section">
                         <div class="visita-form-section-title">
                             <i class="fas fa-user-graduate"></i>
-                            <span>Alunos Participantes</span>
+                            <span>Turmas e Alunos Participantes</span>
                             <span id="contadorAlunos" style="margin-left: auto; font-size: 12px; background: #e0e7ff; color: #3730a3; padding: 3px 10px; border-radius: 20px;">
-                                ${this.formData.alunosSelecionados.length} selecionado(s)
+                                ${this.formData.alunosSelecionados.length} aluno(s)
                             </span>
                         </div>
 
+                        <!-- 🆕 SELEÇÃO MÚLTIPLA DE TURMAS -->
+                        <div class="visita-form-row">
+                            <div class="visita-form-group full-width">
+                                <label>
+                                    <i class="fas fa-school"></i> Turmas Participantes <span class="required">*</span>
+                                    <span id="contadorTurmas" style="margin-left: 8px; font-size: 11px; background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 20px; font-weight: 600;">
+                                        ${this.formData.turmasSelecionadas.length} selecionada(s)
+                                    </span>
+                                </label>
+                                
+                                <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center;">
+                                    <select id="formTurmaSelect" class="form-input" style="flex: 1; min-width: 200px;">
+                                        <option value="">Selecione uma turma para adicionar...</option>
+                                        ${this.turmas
+                                            .filter(t => {
+                                                const nome = typeof t === 'string' ? t : t.nome;
+                                                return !this.formData.turmasSelecionadas.includes(nome);
+                                            })
+                                            .map(t => {
+                                                const nome = typeof t === 'string' ? t : t.nome;
+                                                return `<option value="${nome}">${nome}</option>`;
+                                            }).join('')}
+                                    </select>
+                                    <button type="button" class="btn-filter" onclick="visitasAdmin.adicionarTurma()" style="white-space: nowrap;">
+                                        <i class="fas fa-plus"></i> Adicionar Turma
+                                    </button>
+                                    <button type="button" class="btn-filter btn-clear" onclick="visitasAdmin.limparTurmas()" style="white-space: nowrap;" title="Limpar todas">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+
+                                <div id="listaTurmasChips">
+                                    ${this.renderizarChipsTurmas()}
+                                </div>
+                                
+                                <small style="color: #6b7280; font-size: 12px; margin-top: 6px; display: block;">
+                                    <i class="fas fa-info-circle"></i> Adicione todas as turmas que participarão da visita. Os alunos de todas elas aparecerão abaixo para seleção.
+                                </small>
+                            </div>
+                        </div>
+
+                        <!-- FILTRO POR CURSO -->
                         <div class="visita-form-row">
                             <div class="visita-form-group">
-                                <label><i class="fas fa-school"></i> Turma <span class="required">*</span></label>
-                                <select id="formTurma" class="form-input" onchange="visitasAdmin.buscarAlunos()">
-                                    <option value="">Selecione a turma</option>
-                                    ${this.turmas.map(t => {
-                                        const nomeTurma = typeof t === 'string' ? t : t.nome;
-                                        const selected = termo?.turmaPrincipal === nomeTurma ? 'selected' : '';
-                                        return `<option value="${nomeTurma}" ${selected}>${nomeTurma}</option>`;
-                                    }).join('')}
-                                </select>
-                            </div>
-                            <div class="visita-form-group">
-                                <label><i class="fas fa-book"></i> Curso</label>
+                                <label><i class="fas fa-book"></i> Filtrar por Curso (opcional)</label>
                                 <select id="formCurso" class="form-input" onchange="visitasAdmin.buscarAlunos()">
                                     <option value="">Todos os cursos</option>
                                     ${this.cursos.map(c => {
@@ -810,10 +870,7 @@ class VisitasAdmin {
                                     }).join('')}
                                 </select>
                             </div>
-                        </div>
-
-                        <div class="visita-form-row">
-                            <div class="visita-form-group full-width">
+                            <div class="visita-form-group">
                                 <label><i class="fas fa-search"></i> Buscar Aluno</label>
                                 <input type="text" id="formBuscaAluno" class="form-input" 
                                     placeholder="Digite para filtrar os alunos..." 
@@ -833,11 +890,12 @@ class VisitasAdmin {
                             </span>
                         </div>
 
-                        <div id="listaAlunosSelecao" style="max-height: 300px; overflow-y: auto; border: 2px solid #e5e7eb; border-radius: 12px; background: white;">
+                        <div id="listaAlunosSelecao" style="max-height: 400px; overflow-y: auto; border: 2px solid #e5e7eb; border-radius: 12px; background: white;">
                             ${this.renderizarListaAlunosSelecao(termo)}
                         </div>
 
                         <input type="hidden" id="formAlunosIDs" value='${JSON.stringify(this.formData.alunosSelecionados)}'>
+                        <input type="hidden" id="formTurmasArray" value='${JSON.stringify(this.formData.turmasSelecionadas)}'>
                     </div>
 
                     <!-- SEÇÃO 2: ATIVIDADE E PERÍODO -->
@@ -856,7 +914,7 @@ class VisitasAdmin {
                             </div>
                         </div>
 
-                        <!-- 🆕 CAMPO DE DESCRIÇÃO DA ATIVIDADE -->
+                        <!-- CAMPO DE DESCRIÇÃO DA ATIVIDADE -->
                         <div class="visita-form-row">
                             <div class="visita-form-group full-width">
                                 <label><i class="fas fa-align-left"></i> Descrição da Atividade</label>
@@ -1009,59 +1067,195 @@ class VisitasAdmin {
         `;
     }
 
-    renderizarListaAlunosSelecao(termo = null) {
-        if (!this.alunos || this.alunos.length === 0) {
+    // ============================================
+    // 🆕 CHIPS DE TURMAS
+    // ============================================
+    renderizarChipsTurmas() {
+        if (this.formData.turmasSelecionadas.length === 0) {
             return `
-                <div style="padding: 30px; text-align: center; color: #9ca3af;">
-                    <i class="fas fa-search" style="font-size: 32px; margin-bottom: 10px; display: block;"></i>
-                    <p style="margin: 0;">Selecione uma turma para carregar os alunos</p>
+                <div style="padding: 15px; text-align: center; color: #9ca3af; font-size: 13px; background: #f9fafb; border: 2px dashed #e5e7eb; border-radius: 10px;">
+                    <i class="fas fa-school" style="margin-right: 6px;"></i>
+                    Nenhuma turma selecionada. Adicione ao menos uma para carregar os alunos.
                 </div>
             `;
         }
         
-        return this.alunos.map(aluno => {
-            const selecionado = this.formData.alunosSelecionados.includes(aluno.id.toString());
-            const iniciais = (aluno.nome || 'A').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+        return `
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                ${this.formData.turmasSelecionadas.map(turma => `
+                    <div style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border-radius: 30px; font-size: 13px; font-weight: 500;">
+                        <i class="fas fa-school"></i>
+                        <span>${this.escapeHtml(turma)}</span>
+                        <button type="button" 
+                                onclick="visitasAdmin.removerTurma('${this.escapeHtml(turma)}')"
+                                style="background: rgba(255,255,255,0.25); border: none; color: white; width: 20px; height: 20px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 10px;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    adicionarTurma() {
+        const select = document.getElementById('formTurmaSelect');
+        if (!select) return;
+        
+        const turma = select.value;
+        if (!turma) {
+            this.showToast('⚠️ Selecione uma turma', 'warning');
+            return;
+        }
+        
+        if (this.formData.turmasSelecionadas.includes(turma)) {
+            this.showToast('⚠️ Esta turma já foi adicionada', 'warning');
+            return;
+        }
+        
+        this.formData.turmasSelecionadas.push(turma);
+        select.value = '';
+        this.atualizarChipsTurmas();
+        
+        // Recarrega alunos de todas as turmas
+        this.buscarAlunos();
+        
+        this.showToast(`✅ Turma "${turma}" adicionada`, 'success');
+    }
+
+    removerTurma(turma) {
+        const idx = this.formData.turmasSelecionadas.indexOf(turma);
+        if (idx >= 0) {
+            this.formData.turmasSelecionadas.splice(idx, 1);
+            this.atualizarChipsTurmas();
             
+            // Remove alunos que pertencem apenas a essa turma
+            this.buscarAlunos();
+        }
+    }
+
+    limparTurmas() {
+        this.formData.turmasSelecionadas = [];
+        this.formData.alunosSelecionados = [];
+        this.alunos = [];
+        this.atualizarChipsTurmas();
+        this.atualizarListaAlunosSelecao();
+    }
+
+    atualizarChipsTurmas() {
+        const container = document.getElementById('listaTurmasChips');
+        if (container) {
+            container.innerHTML = this.renderizarChipsTurmas();
+        }
+        
+        const contador = document.getElementById('contadorTurmas');
+        if (contador) {
+            contador.textContent = `${this.formData.turmasSelecionadas.length} selecionada(s)`;
+        }
+        
+        const hidden = document.getElementById('formTurmasArray');
+        if (hidden) {
+            hidden.value = JSON.stringify(this.formData.turmasSelecionadas);
+        }
+        
+        // Atualiza select removendo turmas já adicionadas
+        const select = document.getElementById('formTurmaSelect');
+        if (select) {
+            select.innerHTML = `
+                <option value="">Selecione uma turma para adicionar...</option>
+                ${this.turmas
+                    .filter(t => {
+                        const nome = typeof t === 'string' ? t : t.nome;
+                        return !this.formData.turmasSelecionadas.includes(nome);
+                    })
+                    .map(t => {
+                        const nome = typeof t === 'string' ? t : t.nome;
+                        return `<option value="${nome}">${nome}</option>`;
+                    }).join('')}
+            `;
+        }
+    }
+
+    renderizarListaAlunosSelecao(termo = null) {
+        if (this.formData.turmasSelecionadas.length === 0) {
             return `
-                <div class="aluno-selecao-item ${selecionado ? 'selecionado' : ''}" 
-                    data-aluno-id="${aluno.id}"
-                    onclick="visitasAdmin.toggleAluno('${aluno.id}')"
-                    style="
-                        display: flex;
-                        align-items: center;
-                        gap: 12px;
-                        padding: 12px 16px;
-                        border-bottom: 1px solid #f3f4f6;
-                        cursor: pointer;
-                        transition: all 0.2s;
-                        ${selecionado ? 'background: #eef2ff; border-left: 4px solid #4f46e5;' : ''}
-                    "
-                    onmouseover="this.style.background='${selecionado ? '#e0e7ff' : '#f9fafb'}'"
-                    onmouseout="this.style.background='${selecionado ? '#eef2ff' : 'white'}'">
-                    
-                    <input type="checkbox" ${selecionado ? 'checked' : ''} 
-                        onclick="event.stopPropagation(); visitasAdmin.toggleAluno('${aluno.id}')"
-                        style="width: 20px; height: 20px; cursor: pointer; accent-color: #4f46e5; flex-shrink: 0;">
-                    
-                    <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #4f46e5, #7c3aed); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 14px; flex-shrink: 0;">
-                        ${iniciais}
-                    </div>
-                    
-                    <div style="flex: 1; min-width: 0;">
-                        <div style="font-weight: 600; color: #1f2937; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                            ${this.escapeHtml(aluno.nome)}
-                        </div>
-                        <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">
-                            <i class="fas fa-id-card"></i> ${aluno.matricula || 'Sem matrícula'}
-                            ${aluno.curso ? ` • <i class="fas fa-book"></i> ${aluno.curso}` : ''}
-                        </div>
-                    </div>
-                    
-                    ${selecionado ? '<i class="fas fa-check-circle" style="color: #10b981; font-size: 20px; flex-shrink: 0;"></i>' : ''}
+                <div style="padding: 30px; text-align: center; color: #9ca3af;">
+                    <i class="fas fa-school" style="font-size: 32px; margin-bottom: 10px; display: block;"></i>
+                    <p style="margin: 0;">Adicione ao menos uma turma acima para carregar os alunos</p>
                 </div>
             `;
-        }).join('');
+        }
+        
+        if (!this.alunos || this.alunos.length === 0) {
+            return `
+                <div style="padding: 30px; text-align: center; color: #9ca3af;">
+                    <i class="fas fa-search" style="font-size: 32px; margin-bottom: 10px; display: block;"></i>
+                    <p style="margin: 0;">Nenhum aluno encontrado nas turmas selecionadas</p>
+                </div>
+            `;
+        }
+        
+        // Agrupa por turma
+        const porTurma = {};
+        this.alunos.forEach(aluno => {
+            const turma = aluno.turma || 'Sem turma';
+            if (!porTurma[turma]) porTurma[turma] = [];
+            porTurma[turma].push(aluno);
+        });
+        
+        return Object.keys(porTurma).sort().map(turma => `
+            <div style="border-bottom: 2px solid #e5e7eb;">
+                <div style="padding: 10px 16px; background: #f0f9ff; color: #1e40af; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 1;">
+                    <i class="fas fa-school"></i>
+                    ${this.escapeHtml(turma)}
+                    <span style="margin-left: auto; background: #3b82f6; color: white; padding: 2px 8px; border-radius: 20px; font-size: 10px;">
+                        ${porTurma[turma].length} aluno(s)
+                    </span>
+                </div>
+                ${porTurma[turma].map(aluno => {
+                    const selecionado = this.formData.alunosSelecionados.includes(aluno.id.toString());
+                    const iniciais = (aluno.nome || 'A').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+                    
+                    return `
+                        <div class="aluno-selecao-item ${selecionado ? 'selecionado' : ''}" 
+                            data-aluno-id="${aluno.id}"
+                            onclick="visitasAdmin.toggleAluno('${aluno.id}')"
+                            style="
+                                display: flex;
+                                align-items: center;
+                                gap: 12px;
+                                padding: 12px 16px;
+                                border-bottom: 1px solid #f3f4f6;
+                                cursor: pointer;
+                                transition: all 0.2s;
+                                ${selecionado ? 'background: #eef2ff; border-left: 4px solid #4f46e5;' : ''}
+                            "
+                            onmouseover="this.style.background='${selecionado ? '#e0e7ff' : '#f9fafb'}'"
+                            onmouseout="this.style.background='${selecionado ? '#eef2ff' : 'white'}'">
+                            
+                            <input type="checkbox" ${selecionado ? 'checked' : ''} 
+                                onclick="event.stopPropagation(); visitasAdmin.toggleAluno('${aluno.id}')"
+                                style="width: 20px; height: 20px; cursor: pointer; accent-color: #4f46e5; flex-shrink: 0;">
+                            
+                            <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #4f46e5, #7c3aed); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 14px; flex-shrink: 0;">
+                                ${iniciais}
+                            </div>
+                            
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="font-weight: 600; color: #1f2937; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                    ${this.escapeHtml(aluno.nome)}
+                                </div>
+                                <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">
+                                    <i class="fas fa-id-card"></i> ${aluno.matricula || 'Sem matrícula'}
+                                    ${aluno.curso ? ` • <i class="fas fa-book"></i> ${aluno.curso}` : ''}
+                                </div>
+                            </div>
+                            
+                            ${selecionado ? '<i class="fas fa-check-circle" style="color: #10b981; font-size: 20px; flex-shrink: 0;"></i>' : ''}
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `).join('');
     }
 
     toggleAluno(alunoId) {
@@ -1096,7 +1290,7 @@ class VisitasAdmin {
         
         const contador = document.getElementById('contadorAlunos');
         if (contador) {
-            contador.textContent = `${this.formData.alunosSelecionados.length} selecionado(s)`;
+            contador.textContent = `${this.formData.alunosSelecionados.length} aluno(s)`;
         }
         
         const hidden = document.getElementById('formAlunosIDs');
@@ -1219,7 +1413,8 @@ class VisitasAdmin {
         
         setTimeout(() => this.inicializarAssinaturaGestor(), 200);
         
-        if (termo?.turmaPrincipal) {
+        // Se editando ou já tem turmas selecionadas, carrega alunos
+        if (this.formData.turmasSelecionadas.length > 0) {
             setTimeout(() => this.buscarAlunos(), 300);
         }
     }
@@ -1271,11 +1466,11 @@ class VisitasAdmin {
     }
 
     async buscarAlunos() {
-        const turma = document.getElementById('formTurma')?.value;
         const curso = document.getElementById('formCurso')?.value;
         const busca = document.getElementById('formBuscaAluno')?.value?.toLowerCase() || '';
         
-        if (!turma && !curso) {
+        // 🆕 Usa TODAS as turmas selecionadas
+        if (this.formData.turmasSelecionadas.length === 0) {
             this.alunos = [];
             this.atualizarListaAlunosSelecao();
             return;
@@ -1283,7 +1478,7 @@ class VisitasAdmin {
         
         try {
             const params = new URLSearchParams();
-            if (turma) params.append('turma', turma);
+            params.append('turmas', this.formData.turmasSelecionadas.join(','));
             if (curso) params.append('curso', curso);
             
             const response = await this.apiRequest(`/api/setor-pedagogico/visitas/alunos-por-turma?${params}`);
@@ -1298,55 +1493,17 @@ class VisitasAdmin {
                 }
                 
                 this.alunos = alunos;
+                
+                // Limpa seleção de alunos que não estão mais presentes
+                const idsValidos = new Set(alunos.map(a => a.id.toString()));
+                this.formData.alunosSelecionados = this.formData.alunosSelecionados
+                    .filter(id => idsValidos.has(id));
+                
                 this.atualizarListaAlunosSelecao();
             }
         } catch (error) {
             console.error('❌ Erro ao buscar alunos:', error);
         }
-    }
-
-    selecionarAluno(alunoId) {
-        const buscarAluno = async () => {
-            try {
-                const turma = document.getElementById('formTurma')?.value;
-                const curso = document.getElementById('formCurso')?.value;
-                
-                const params = new URLSearchParams();
-                if (turma) params.append('turma', turma);
-                if (curso) params.append('curso', curso);
-                
-                const response = await this.apiRequest(`/api/setor-pedagogico/visitas/alunos-por-turma?${params}`);
-                const aluno = response.alunos.find(a => a.id === alunoId);
-                
-                if (aluno) {
-                    this.formData.alunoId = aluno.id;
-                    this.formData.alunoNome = aluno.nome;
-                    this.formData.alunoMatricula = aluno.matricula;
-                    this.formData.alunoTurma = aluno.turma;
-                    this.formData.alunoCurso = aluno.curso;
-                    
-                    document.getElementById('formAlunoId').value = aluno.id;
-                    document.getElementById('formBuscaAluno').value = aluno.nome;
-                    document.getElementById('listaAlunosSugestoes').innerHTML = '';
-                    
-                    const infoDiv = document.getElementById('alunoSelecionadoInfo');
-                    infoDiv.style.display = 'block';
-                    infoDiv.innerHTML = `
-                        <div class="localizacao-selecionada">
-                            <i class="fas fa-check-circle"></i>
-                            <div>
-                                <strong>${this.escapeHtml(aluno.nome)}</strong><br>
-                                <small>Matrícula: ${aluno.matricula || 'N/A'} • Turma: ${aluno.turma || 'N/A'}</small>
-                            </div>
-                        </div>
-                    `;
-                }
-            } catch (error) {
-                console.error('❌ Erro:', error);
-            }
-        };
-        
-        buscarAluno();
     }
 
     inicializarAssinaturaGestor() {
@@ -1451,7 +1608,7 @@ class VisitasAdmin {
             const professoresIDs = this.formData.professoresSelecionados;
             
             const atividade = document.getElementById('formAtividade')?.value;
-            const descricaoAtividade = document.getElementById('formDescricaoAtividade')?.value || ''; // 🆕
+            const descricaoAtividade = document.getElementById('formDescricaoAtividade')?.value || '';
             const periodo = document.getElementById('formPeriodo')?.value;
             const horario = document.getElementById('formHorario')?.value;
             const local = document.getElementById('formLocal')?.value;
@@ -1460,6 +1617,9 @@ class VisitasAdmin {
             const localizacaoJSON = document.getElementById('formLocalizacaoJSON')?.value;
             
             // ============ VALIDAÇÕES ============
+            if (this.formData.turmasSelecionadas.length === 0) {
+                return this.showToast('❌ Adicione ao menos 1 turma', 'error');
+            }
             if (alunosIDs.length === 0) {
                 return this.showToast('❌ Selecione pelo menos 1 aluno', 'error');
             }
@@ -1481,13 +1641,14 @@ class VisitasAdmin {
                 alunos: alunosIDs,
                 professores: professoresIDs,
                 atividade,
-                descricaoAtividade,   // 🆕
+                descricaoAtividade,
                 periodo,
                 horario,
                 local,
                 localizacao,
                 dataVisita,
                 cidade: cidade || 'São Luís'
+                // 🆕 turmas são calculadas no backend a partir dos alunos
             };
             
             const url = termoId 
@@ -1519,6 +1680,7 @@ class VisitasAdmin {
                 this.closeModal();
                 
                 this.formData = {
+                    turmasSelecionadas: [],
                     alunosSelecionados: [],
                     professoresSelecionados: [],
                     localizacao: null
@@ -1547,6 +1709,11 @@ class VisitasAdmin {
             const dataVisita = t.dataVisita 
                 ? new Date(t.dataVisita).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
                 : 'N/A';
+            
+            // 🆕 Turmas do termo
+            const turmasDoTermo = (t.turmas && t.turmas.length > 0)
+                ? t.turmas
+                : (t.turmaPrincipal ? [t.turmaPrincipal] : []);
             
             document.getElementById('modalTitle').innerHTML = `<i class="fas fa-eye"></i> ${t.codigo}`;
             
@@ -1577,6 +1744,23 @@ class VisitasAdmin {
                             </p>
                         </div>
                     ` : ''}
+                    
+                    <div style="background: #f0f9ff; border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid #bae6fd;">
+                        <h4 style="margin: 0 0 12px; font-size: 15px; color: #1e40af; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-school"></i>
+                            Turmas Participantes
+                            <span style="background: #3b82f6; color: white; padding: 2px 10px; border-radius: 20px; font-size: 11px; margin-left: auto;">
+                                ${turmasDoTermo.length}
+                            </span>
+                        </h4>
+                        <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                            ${turmasDoTermo.map(turma => `
+                                <span style="background: white; color: #1e40af; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; border: 1px solid #93c5fd;">
+                                    <i class="fas fa-school"></i> ${this.escapeHtml(turma)}
+                                </span>
+                            `).join('')}
+                        </div>
+                    </div>
                     
                     <div style="background: #f8fafc; border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid #e2e8f0;">
                         <h4 style="margin: 0 0 12px; font-size: 15px; color: #1e293b; display: flex; align-items: center; gap: 8px;">
@@ -1917,132 +2101,6 @@ class VisitasAdmin {
             console.error('❌ Erro no fallback:', error);
             this.showToast('❌ Erro ao gerar termos: ' + error.message, 'error');
         }
-    }
-
-    gerarHTMLImpressao(t) {
-        const dataVisita = new Date(t.dataVisita).toLocaleDateString('pt-BR', {
-            day: '2-digit', month: 'long', year: 'numeric'
-        });
-        
-        return `
-            <!DOCTYPE html>
-            <html lang="pt-BR">
-            <head>
-                <meta charset="UTF-8">
-                <title>Termo de Visita - ${t.codigo}</title>
-                <style>
-                    @page { size: A4 portrait; margin: 15mm; }
-                    * { box-sizing: border-box; margin: 0; padding: 0; }
-                    body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.6; padding: 15mm; }
-                    
-                    .header { text-align: center; border-bottom: 3px double #000; padding-bottom: 15px; margin-bottom: 30px; }
-                    .header h1 { font-size: 14pt; text-transform: uppercase; margin-bottom: 5px; }
-                    .header h2 { font-size: 12pt; font-weight: normal; }
-                    .header img { max-height: 60px; margin-bottom: 10px; }
-                    
-                    .titulo { text-align: center; font-size: 16pt; font-weight: bold; text-transform: uppercase; margin: 30px 0; padding: 15px; background: #f0f0f0; border: 2px solid #000; }
-                    
-                    .conteudo { text-align: justify; font-size: 12pt; line-height: 2; margin: 30px 0; }
-                    .conteudo strong { text-decoration: underline; }
-                    
-                    .destaque { background: #f9f9f9; padding: 3px 8px; border-bottom: 1px solid #333; font-weight: bold; }
-                    
-                    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0; padding: 15px; background: #f8f8f8; border: 1px solid #ccc; }
-                    .info-item { font-size: 11pt; }
-                    .info-item strong { display: block; font-size: 9pt; color: #666; text-transform: uppercase; margin-bottom: 3px; }
-                    
-                    .cidade-data { text-align: right; margin: 40px 0 30px; font-size: 12pt; }
-                    
-                    .assinaturas { display: flex; justify-content: space-between; gap: 40px; margin-top: 60px; }
-                    .assinatura { flex: 1; text-align: center; }
-                    .assinatura-linha { border-top: 1px solid #000; padding-top: 8px; font-size: 11pt; margin-top: 60px; }
-                    .assinatura-img { max-height: 60px; max-width: 200px; }
-                    
-                    .rodape { position: fixed; bottom: 10mm; left: 15mm; right: 15mm; text-align: center; font-size: 8pt; color: #666; border-top: 1px solid #ccc; padding-top: 5px; }
-                    
-                    @media print { .no-print { display: none; } }
-                </style>
-            </head>
-            <body>
-                <div class="header">
-                    <img src="/uploads/logo-iema.png" alt="IEMA" onerror="this.style.display='none'">
-                    <h1>IEMA Pleno: São Luís - Centro</h1>
-                    <h2>Sistema de Autorização de Visitas Técnicas</h2>
-                </div>
-                
-                <div class="titulo">Termo de Autorização de Visita Técnica</div>
-                
-                <div style="text-align: center; margin-bottom: 20px; font-size: 10pt; color: #666;">
-                    Código: <strong>${t.codigo}</strong>
-                </div>
-                
-                <div class="conteudo">
-                    <p>Eu, <span class="destaque">${t.responsavel?.nome || '_______________________________________'}</span>, 
-                    portador(a) do RG nº <span class="destaque">${t.responsavel?.rg || '_________________'}</span> e 
-                    CPF nº <span class="destaque">${t.responsavel?.cpf || '___.___.___-__'}</span>, 
-                    responsável legal pelo(a) aluno(a) <span class="destaque">${t.alunoNome}</span>, 
-                    matriculado(a) no curso <span class="destaque">${t.alunoCurso || 'N/A'}</span> 
-                    na turma <span class="destaque">${t.alunoTurma || 'N/A'}</span>,</p>
-                    
-                    <p style="margin-top: 20px;">
-                        <strong>AUTORIZO</strong> a participação do(a) referido(a) aluno(a) na atividade 
-                        <span class="destaque">${t.atividade}</span>, 
-                        a ser realizada no dia <span class="destaque">${dataVisita}</span>, 
-                        no período <span class="destaque">${t.periodo}</span>, 
-                        no horário <span class="destaque">${t.horario}</span>, 
-                        no local <span class="destaque">${t.local}</span>,
-                        sob coordenação do(a) professor(a) <span class="destaque">${t.professorNome}</span>.
-                    </p>
-                    
-                    ${t.descricaoAtividade ? `
-                        <div style="background: #f8fafc; border-left: 3px solid #3b82f6; padding: 10px 15px; margin: 20px 0; font-size: 11pt; line-height: 1.6;">
-                            <strong>📋 Descrição da Atividade:</strong>
-                            <p style="margin: 6px 0 0 0; text-indent: 0;">${t.descricaoAtividade}</p>
-                        </div>
-                    ` : ''}
-                    
-                    ${t.localizacao?.enderecoCompleto ? `
-                        <p style="margin-top: 15px; font-size: 10pt; color: #555;">
-                            <strong>Endereço:</strong> ${t.localizacao.enderecoCompleto}
-                        </p>
-                    ` : ''}
-                    
-                    <p style="margin-top: 20px;">
-                        Declaro estar ciente das normas e responsabilidades referentes a esta atividade, 
-                        bem como das medidas de segurança adotadas pela instituição.
-                    </p>
-                </div>
-                
-                <div class="cidade-data">
-                    ${t.cidade || 'São Luís'} - MA, ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
-                </div>
-                
-                <div class="assinaturas">
-                    <div class="assinatura">
-                        ${t.responsavel?.assinaturaBase64 ? `<img src="${t.responsavel.assinaturaBase64}" class="assinatura-img">` : ''}
-                        <div class="assinatura-linha">
-                            <strong>${t.responsavel?.nome || 'Responsável Legal'}</strong><br>
-                            <small>Responsável pelo Aluno</small>
-                        </div>
-                    </div>
-                    <div class="assinatura">
-                        ${t.assinaturaGestor?.base64 
-                            ? `<img src="${t.assinaturaGestor.base64}" class="assinatura-img">` 
-                            : `<img src="/icons/assinatura_gpeda.ico" class="assinatura-img" alt="Assinatura Gestor">`
-                        }
-                        <div class="assinatura-linha">
-                            <strong>${t.assinaturaGestor?.nome || 'Gestor Pedagógico'}</strong><br>
-                            <small>Gestor Pedagógico</small>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="rodape">
-                    Documento gerado em ${new Date().toLocaleString('pt-BR')} - EducaPleno
-                </div>
-            </body>
-            </html>
-        `;
     }
 
     // ============================================
@@ -2428,4 +2486,4 @@ class VisitasAdmin {
 const visitasAdmin = new VisitasAdmin();
 window.visitasAdmin = visitasAdmin;
 
-console.log('✅ visitas-admin.js carregado');
+console.log('✅ visitas-admin.js carregado (v2.1 - multi-turma)');

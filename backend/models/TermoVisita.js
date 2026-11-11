@@ -25,8 +25,21 @@ const TermoVisitaSchema = new mongoose.Schema({
   }],
   
   totalAlunos: { type: Number, default: 1 },
+  
+  // 🆕 MÚLTIPLAS TURMAS
+  // Mantém turmaPrincipal para retrocompatibilidade
   turmaPrincipal: String,
+  turmas: {
+    type: [String],
+    default: [],
+    index: true
+  },
+  
   cursoPrincipal: String,
+  cursos: {
+    type: [String],
+    default: []
+  },
   
   // ============ ATIVIDADE ============
   atividade: {
@@ -198,6 +211,7 @@ TermoVisitaSchema.index({ status: 1, createdAt: -1 });
 TermoVisitaSchema.index({ codigo: 1 });
 TermoVisitaSchema.index({ 'responsaveis.cpfHash': 1 });
 TermoVisitaSchema.index({ expiraEm: 1, anonimizado: 1 });
+TermoVisitaSchema.index({ turmas: 1 }); // 🆕 índice multi-turma
 
 // ============================================
 // MÉTODOS ESTÁTICOS
@@ -246,6 +260,17 @@ TermoVisitaSchema.methods.atualizarStatusGeral = function() {
   }
   
   this.statusData = new Date();
+};
+
+// 🆕 Recalcula turmas/cursos a partir dos alunos
+TermoVisitaSchema.methods.recalcularTurmasCursos = function() {
+  const turmas = [...new Set((this.alunos || []).map(a => a.turma).filter(Boolean))];
+  const cursos = [...new Set((this.alunos || []).map(a => a.curso).filter(Boolean))];
+  
+  this.turmas = turmas;
+  this.cursos = cursos;
+  this.turmaPrincipal = turmas[0] || '';
+  this.cursoPrincipal = cursos[0] || '';
 };
 
 TermoVisitaSchema.methods.anonimizar = function() {

@@ -35,6 +35,20 @@ function meioDiaBR(dataStr) {
 }
 
 // ============================================
+// 🆕 HELPER — normaliza arrays de turmas/cursos
+// ============================================
+function extrairTurmasCursos(alunosData) {
+  const turmas = [...new Set((alunosData || []).map(a => a.turma).filter(Boolean))];
+  const cursos = [...new Set((alunosData || []).map(a => a.curso).filter(Boolean))];
+  return {
+    turmas,
+    cursos,
+    turmaPrincipal: turmas[0] || '',
+    cursoPrincipal: cursos[0] || ''
+  };
+}
+
+// ============================================
 // MIDDLEWARES
 // ============================================
 const authenticateToken = (req, res, next) => {
@@ -101,7 +115,7 @@ router.get('/health', (req, res) => {
     success: true,
     status: 'online',
     service: 'Autorizacao de Visitas',
-    versao: '2.0-fuso-br',
+    versao: '2.1-multi-turma',
     _debug: {
       hojeBR: getDataHojeBR(),
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -163,17 +177,25 @@ router.get('/cursos', authenticateToken, verificarPermissaoVisitas, async (req, 
   }
 });
 
-// Buscar alunos por turma/curso
+// Buscar alunos por turma/curso (aceita múltiplas turmas via vírgula)
 router.get('/alunos-por-turma', authenticateToken, verificarPermissaoVisitas, async (req, res) => {
   try {
-    const { turma, curso } = req.query;
+    const { turma, turmas, curso } = req.query;
     
-    console.log('🔍 Buscando alunos - Filtros:', { turma, curso });
+    console.log('🔍 Buscando alunos - Filtros:', { turma, turmas, curso });
     
     let query = { role: 'aluno', ativo: true };
     
-    if (turma && turma.trim() !== '') {
-      query.turma = turma;
+    // 🆕 Suporte a múltiplas turmas (separadas por vírgula)
+    const listaTurmas = (turmas || turma || '')
+      .split(',')
+      .map(t => t.trim())
+      .filter(Boolean);
+    
+    if (listaTurmas.length === 1) {
+      query.turma = listaTurmas[0];
+    } else if (listaTurmas.length > 1) {
+      query.turma = { $in: listaTurmas };
     }
     
     if (curso && curso.trim() !== '') {
@@ -182,7 +204,7 @@ router.get('/alunos-por-turma', authenticateToken, verificarPermissaoVisitas, as
     
     const alunos = await User.find(query)
       .select('nome matricula turma curso fotoPerfil email')
-      .sort({ nome: 1 })
+      .sort({ turma: 1, nome: 1 })
       .lean();
     
     console.log(`✅ ${alunos.length} alunos encontrados`);
@@ -190,6 +212,7 @@ router.get('/alunos-por-turma', authenticateToken, verificarPermissaoVisitas, as
     res.json({
       success: true,
       total: alunos.length,
+      turmasFiltradas: listaTurmas,
       alunos: alunos.map(a => ({
         id: a._id,
         nome: a.nome,
@@ -290,18 +313,33 @@ router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, 
       query.status = status;
     }
     
+    // 🆕 Filtro por turma considera tanto turmaPrincipal quanto turmas[]
     if (turma && turma !== 'todas') {
-      query.turmaPrincipal = turma;
+      query.$or = [
+        { turmaPrincipal: turma },
+        { turmas: turma }
+      ];
     }
     
     if (search) {
-      query.$or = [
+      const searchOr = [
         { 'alunos.nome': { $regex: search, $options: 'i' } },
         { 'alunos.matricula': { $regex: search, $options: 'i' } },
         { codigo: { $regex: search, $options: 'i' } },
         { 'professores.nome': { $regex: search, $options: 'i' } },
         { atividade: { $regex: search, $options: 'i' } }
       ];
+      
+      // Combina com filtro de turma se existir
+      if (query.$or) {
+        query.$and = [
+          { $or: query.$or },
+          { $or: searchOr }
+        ];
+        delete query.$or;
+      } else {
+        query.$or = searchOr;
+      }
     }
     
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -327,6 +365,11 @@ router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, 
         ? `${primeiroProf?.nome || 'Professor'} + ${t.professores.length - 1}`
         : (primeiroProf?.nome || 'Professor');
       
+      // 🆕 Turmas (com fallback para turmaPrincipal)
+      const turmasDoTermo = (t.turmas && t.turmas.length > 0)
+        ? t.turmas
+        : (t.turmaPrincipal ? [t.turmaPrincipal] : []);
+      
       return {
         _id: t._id,
         id: t._id,
@@ -335,7 +378,11 @@ router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, 
         descricaoAtividade: t.descricaoAtividade || '',
         
         alunoNome: nomeAluno,
-        alunoTurma: primeiroAluno?.turma || t.turmaPrincipal || 'N/A',
+        alunoTurma: turmasDoTermo.length > 1 
+          ? turmasDoTermo.join(', ') 
+          : (turmasDoTermo[0] || 'N/A'),
+        turmas: turmasDoTermo,
+        totalTurmas: turmasDoTermo.length,
         alunoCurso: primeiroAluno?.curso || t.cursoPrincipal || 'N/A',
         alunoMatricula: primeiroAluno?.matricula || '',
         
@@ -408,6 +455,11 @@ router.get('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (r
     const primeiroAluno = termo.alunos?.[0];
     const primeiroProf = termo.professores?.[0];
     
+    // 🆕 Turmas (com fallback)
+    const turmasDoTermo = (termo.turmas && termo.turmas.length > 0)
+      ? termo.turmas
+      : (termo.turmaPrincipal ? [termo.turmaPrincipal] : []);
+    
     const normalizado = {
       _id: termo._id,
       id: termo._id,
@@ -418,7 +470,11 @@ router.get('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (r
       alunoNome: termo.alunos?.length > 1 
         ? `${primeiroAluno?.nome || 'Aluno'} + ${termo.alunos.length - 1}`
         : (primeiroAluno?.nome || 'Aluno'),
-      alunoTurma: primeiroAluno?.turma || termo.turmaPrincipal || 'N/A',
+      alunoTurma: turmasDoTermo.length > 1 
+        ? turmasDoTermo.join(', ') 
+        : (turmasDoTermo[0] || 'N/A'),
+      turmas: turmasDoTermo,
+      totalTurmas: turmasDoTermo.length,
       alunoCurso: primeiroAluno?.curso || termo.cursoPrincipal || 'N/A',
       alunoMatricula: primeiroAluno?.matricula || '',
       
@@ -527,6 +583,9 @@ router.post('/termos', authenticateToken, verificarPermissaoVisitas, async (req,
       return res.status(404).json({ success: false, error: 'Nenhum professor válido encontrado' });
     }
     
+    // 🆕 Extrair múltiplas turmas/cursos automaticamente dos alunos
+    const { turmas, cursos, turmaPrincipal, cursoPrincipal } = extrairTurmasCursos(alunosData);
+    
     // Gerar código único
     const codigo = await TermoVisita.gerarCodigo();
     
@@ -551,8 +610,11 @@ router.post('/termos', authenticateToken, verificarPermissaoVisitas, async (req,
       })),
       totalAlunos: alunosData.length,
       
-      turmaPrincipal: alunosData[0].turma || '',
-      cursoPrincipal: alunosData[0].curso || '',
+      // 🆕 Multi-turma
+      turmas,
+      cursos,
+      turmaPrincipal,
+      cursoPrincipal,
       
       atividade: atividade.trim(),
       descricaoAtividade: (descricaoAtividade || '').trim(),   // 🆕
@@ -582,7 +644,7 @@ router.post('/termos', authenticateToken, verificarPermissaoVisitas, async (req,
     
     await termo.save();
     
-    console.log(`✅ Termo criado: ${codigo}`);
+    console.log(`✅ Termo criado: ${codigo} | Turmas: ${turmas.join(', ')}`);
     
     // Criar notificação
     try {
@@ -590,7 +652,7 @@ router.post('/termos', authenticateToken, verificarPermissaoVisitas, async (req,
         usuarioId: req.userId,
         tipo: 'solicitacao',
         titulo: '📋 Termo Criado',
-        mensagem: `Termo "${codigo}" criado para ${alunosData.length} aluno(s). Aguardando autorização dos responsáveis.`,
+        mensagem: `Termo "${codigo}" criado para ${alunosData.length} aluno(s) de ${turmas.length} turma(s). Aguardando autorização dos responsáveis.`,
         termoId: termo._id
       });
       await notificacao.save();
@@ -600,7 +662,7 @@ router.post('/termos', authenticateToken, verificarPermissaoVisitas, async (req,
     
     res.status(201).json({
       success: true,
-      message: `Termo criado com ${alunosData.length} aluno(s) e ${professoresData.length} professor(es)!`,
+      message: `Termo criado com ${alunosData.length} aluno(s), ${turmas.length} turma(s) e ${professoresData.length} professor(es)!`,
       termo
     });
     
@@ -642,8 +704,13 @@ router.put('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (r
         fotoPerfil: a.fotoPerfil || null
       }));
       termo.totalAlunos = alunosData.length;
-      termo.turmaPrincipal = alunosData[0]?.turma || '';
-      termo.cursoPrincipal = alunosData[0]?.curso || '';
+      
+      // 🆕 Recalcular múltiplas turmas/cursos
+      const { turmas, cursos, turmaPrincipal, cursoPrincipal } = extrairTurmasCursos(alunosData);
+      termo.turmas = turmas;
+      termo.cursos = cursos;
+      termo.turmaPrincipal = turmaPrincipal;
+      termo.cursoPrincipal = cursoPrincipal;
       
       // Manter responsáveis existentes, adicionar novos
       const responsaveisExistentes = new Map(
@@ -688,7 +755,7 @@ router.put('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (r
     
     await termo.save();
     
-    console.log(`✏️ Termo ${termo.codigo} atualizado`);
+    console.log(`✏️ Termo ${termo.codigo} atualizado | Turmas: ${(termo.turmas || []).join(', ')}`);
     
     res.json({
       success: true,
@@ -780,9 +847,26 @@ router.get('/estatisticas', authenticateToken, verificarPermissaoVisitas, async 
       TermoVisita.countDocuments({ status: 'recusado' })
     ]);
     
+    // 🆕 Estatísticas por turma (unwinding turmas[])
     const porTurma = await TermoVisita.aggregate([
       { $match: { ativo: true } },
-      { $group: { _id: '$turmaPrincipal', total: { $sum: 1 } } },
+      { 
+        $project: {
+          turmasEfetivas: {
+            $cond: [
+              { $gt: [{ $size: { $ifNull: ['$turmas', []] } }, 0] },
+              '$turmas',
+              { $cond: [
+                { $ne: ['$turmaPrincipal', null] },
+                ['$turmaPrincipal'],
+                []
+              ]}
+            ]
+          }
+        }
+      },
+      { $unwind: '$turmasEfetivas' },
+      { $group: { _id: '$turmasEfetivas', total: { $sum: 1 } } },
       { $sort: { total: -1 } },
       { $limit: 10 }
     ]);
