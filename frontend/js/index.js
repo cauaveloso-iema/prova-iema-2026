@@ -364,22 +364,24 @@ window.addEventListener('beforeunload', function() {
 });
 
 // ============================================
-// BOTÃO SCROLL TO BOTTOM
+// BOTÃO SCROLL TO BOTTOM (APARECE SÓ AO ROLAR)
 // ============================================
 function scrollToBottom() {
     const btn = document.getElementById('btnScrollToBottom');
     
-    btn.style.transform = 'scale(0.9)';
-    btn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
-    
-    setTimeout(() => {
-        btn.style.transform = 'scale(1.1)';
-    }, 200);
-    
-    setTimeout(() => {
-        btn.style.transform = 'scale(1)';
-        btn.style.background = 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)';
-    }, 400);
+    if (btn) {
+        btn.style.transform = 'scale(0.9)';
+        btn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+        
+        setTimeout(() => {
+            btn.style.transform = 'scale(1.1)';
+        }, 200);
+        
+        setTimeout(() => {
+            btn.style.transform = 'scale(1)';
+            btn.style.background = 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)';
+        }, 400);
+    }
     
     window.scrollTo({
         top: document.body.scrollHeight,
@@ -387,19 +389,36 @@ function scrollToBottom() {
     });
 }
 
-window.addEventListener('scroll', function() {
+// ✅ Lógica que mostra/esconde a seta baseada no scroll
+document.addEventListener('DOMContentLoaded', function() {
     const btn = document.getElementById('btnScrollToBottom');
     if (!btn) return;
-    
-    if ((window.innerHeight + window.scrollY) >= document.body.scrollHeight - 100) {
-        btn.style.opacity = '0';
-        btn.style.pointerEvents = 'none';
-        btn.style.transform = 'translateY(20px)';
-    } else {
-        btn.style.opacity = '1';
-        btn.style.pointerEvents = 'auto';
-        btn.style.transform = 'translateY(0)';
-    }
+
+    // Esconde o botão ao carregar a página
+    btn.style.opacity = '0';
+    btn.style.pointerEvents = 'none';
+    btn.style.transition = 'all 0.3s ease';
+    btn.style.transform = 'translateY(20px)';
+
+    window.addEventListener('scroll', function() {
+        const scrollY = window.scrollY || document.documentElement.scrollTop;
+        const scrollHeight = document.documentElement.scrollHeight;
+        const clientHeight = document.documentElement.clientHeight;
+        
+        // Mostra apenas se rolar mais de 200px para baixo
+        // E esconde se estiver no final da página (opcional, mas melhora a UX)
+        const estaNoFinal = (scrollY + clientHeight) >= (scrollHeight - 100);
+        
+        if (scrollY > 200 && !estaNoFinal) {
+            btn.style.opacity = '1';
+            btn.style.pointerEvents = 'auto';
+            btn.style.transform = 'translateY(0)';
+        } else {
+            btn.style.opacity = '0';
+            btn.style.pointerEvents = 'none';
+            btn.style.transform = 'translateY(20px)';
+        }
+    }, { passive: true });
 });
 
 // ============================================

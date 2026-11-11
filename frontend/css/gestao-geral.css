@@ -2101,3 +2101,376 @@ td div[style*="font-size: 12px"] small {
     background: linear-gradient(135deg, #f59e0b, #d97706);
     color: white;
 }
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* 🆕 GRID DOS BOTÕES DE ACOMPANHAMENTO (VISITAS + TUTORIA)       */
+/* ═══════════════════════════════════════════════════════════════ */
+.acompanhamento-botoes-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+@media (max-width: 768px) {
+    .acompanhamento-botoes-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.acompanhamento-botao-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.btn-acompanhamento-visitas,
+.btn-acompanhamento-tutoria {
+    width: 100%;
+    padding: 16px 24px;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all 0.2s ease;
+    border: none;
+    color: white;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn-acompanhamento-visitas {
+    background: linear-gradient(135deg, #1e3c72, #2a5298);
+}
+
+.btn-acompanhamento-visitas:hover {
+    background: linear-gradient(135deg, #2a5298, #3b6bb8);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(30, 60, 114, 0.35);
+    color: white;
+}
+
+.btn-acompanhamento-tutoria {
+    background: linear-gradient(135deg, #f97316, #ea580c);
+}
+
+.btn-acompanhamento-tutoria:hover {
+    background: linear-gradient(135deg, #ea580c, #c2410c);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(249, 115, 22, 0.35);
+    color: white;
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* 🆕 MODAL DE TUTORIA                                            */
+/* ═══════════════════════════════════════════════════════════════ */
+.modal-header-tutoria {
+    background: linear-gradient(135deg, #f97316, #ea580c);
+    color: white;
+    border: none;
+    padding: 20px 25px;
+}
+
+.modal-header-tutoria .modal-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    margin: 0;
+}
+
+.modal-body-tutoria {
+    padding: 25px;
+    background: #f8fafc;
+}
+
+.modal-footer-tutoria {
+    border-top: 1px solid #e2e8f0;
+    padding: 15px 25px;
+    background: white;
+    justify-content: space-between;
+}
+
+/* Filtros */
+.modal-filtros-tutoria {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 24px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.modal-filtros-tutoria .modal-filtros-titulo {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.modal-filtros-tutoria .modal-filtros-titulo i {
+    color: #f97316;
+}
+
+.modal-filtros-tutoria .form-label-visitas {
+    font-size: 12px;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.modal-filtros-tutoria .form-label-visitas i {
+    color: #f97316;
+    font-size: 11px;
+}
+
+/* Stats Cards */
+.stats-tutoria {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.stat-card-tutoria {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    border-left: 4px solid #f97316;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-card-tutoria:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(249, 115, 22, 0.15);
+}
+
+.stat-card-tutoria .stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.stat-card-tutoria .stat-icon.icon-total {
+    background: #fff7ed;
+    color: #f97316;
+}
+
+.stat-card-tutoria .stat-icon.icon-turmas {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.stat-card-tutoria .stat-icon.icon-areas {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.stat-card-tutoria .stat-icon.icon-cursos {
+    background: #fce7f3;
+    color: #9d174d;
+}
+
+.stat-card-tutoria .stat-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-card-tutoria .stat-number {
+    font-size: 24px;
+    font-weight: 800;
+    color: #1e293b;
+    line-height: 1;
+}
+
+.stat-card-tutoria .stat-label {
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 600;
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+/* Cards de Tutor por Turma */
+.tutoria-turma-grupo {
+    background: white;
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 16px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.tutoria-turma-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #f1f5f9;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.tutoria-turma-header h5 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: #1e3c72;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tutoria-turma-header h5 i {
+    color: #f97316;
+}
+
+.tutoria-turma-badge {
+    background: #fff7ed;
+    color: #ea580c;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    border: 1px solid #fed7aa;
+}
+
+.tutoria-turma-badge.completa {
+    background: #dcfce7;
+    color: #166534;
+    border-color: #86efac;
+}
+
+.tutoria-turma-badge.incompleta {
+    background: #fef3c7;
+    color: #92400e;
+    border-color: #fcd34d;
+}
+
+.tutores-turma-lista {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+}
+
+.tutor-card-tutoria {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 16px;
+    border-left: 3px solid #f97316;
+    transition: all 0.2s ease;
+}
+
+.tutor-card-tutoria:hover {
+    background: #fff7ed;
+    transform: translateX(3px);
+}
+
+.tutor-card-tutoria .tutor-nome {
+    font-size: 15px;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tutor-card-tutoria .tutor-nome i {
+    color: #f97316;
+    font-size: 13px;
+}
+
+.tutor-card-tutoria .tutor-detalhe {
+    font-size: 13px;
+    color: #475569;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+}
+
+.tutor-card-tutoria .tutor-detalhe i {
+    color: #94a3b8;
+    font-size: 11px;
+    margin-top: 3px;
+    flex-shrink: 0;
+}
+
+.tutor-card-tutoria .tutor-detalhe strong {
+    color: #64748b;
+    font-weight: 600;
+    margin-right: 4px;
+}
+
+.tutor-card-tutoria .tutor-observacoes {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed #cbd5e1;
+    font-size: 12px;
+    color: #64748b;
+    font-style: italic;
+}
+
+/* Estado vazio */
+.tutoria-vazio {
+    text-align: center;
+    padding: 60px 20px;
+    background: white;
+    border-radius: 14px;
+    border: 2px dashed #e2e8f0;
+}
+
+.tutoria-vazio i {
+    font-size: 56px;
+    color: #fed7aa;
+    margin-bottom: 16px;
+    display: block;
+}
+
+.tutoria-vazio p {
+    color: #64748b;
+    font-size: 15px;
+    margin: 0;
+}
+
+/* Loading */
+.tutoria-loading {
+    text-align: center;
+    padding: 60px 20px;
+    background: white;
+    border-radius: 14px;
+}
+
+.tutoria-loading .spinner-tutoria {
+    width: 48px;
+    height: 48px;
+    border: 4px solid #fed7aa;
+    border-top-color: #f97316;
+    border-radius: 50%;
+    animation: spin-tutoria 0.8s linear infinite;
+    margin: 0 auto 16px;
+}
+
+@keyframes spin-tutoria {
+    to { transform: rotate(360deg); }
+}

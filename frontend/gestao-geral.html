@@ -2945,14 +2945,29 @@
                     <!-- ═══════════════════════════════════════════════════ -->
                     <div class="tab-pane fade" id="tab-acompanhamento" role="tabpanel">
                         
-                        <div class="acompanhamento-visitas-cta">
-                            <button class="btn btn-primary btn-acompanhamento-visitas"
-                                    onclick="abrirAcompanhamentoVisitas()">
-                                <i class="fas fa-map-marked-alt"></i> Acompanhamento de Visitas
-                            </button>
-                            <p class="acompanhamento-visitas-hint">
-                                <i class="fas fa-info-circle"></i> Monitore o status das autorizações de visitas técnicas
-                            </p>
+                        <!-- 🆕 GRID DE BOTÕES: VISITAS + TUTORIA -->
+                        <div class="acompanhamento-botoes-grid">
+                            <!-- Botão Visitas -->
+                            <div class="acompanhamento-botao-wrapper">
+                                <button class="btn btn-primary btn-acompanhamento-visitas"
+                                        onclick="abrirAcompanhamentoVisitas()">
+                                    <i class="fas fa-map-marked-alt"></i> Acompanhamento de Visitas
+                                </button>
+                                <p class="acompanhamento-visitas-hint">
+                                    <i class="fas fa-info-circle"></i> Monitore o status das autorizações de visitas técnicas
+                                </p>
+                            </div>
+
+                            <!-- 🆕 Botão Tutoria -->
+                            <div class="acompanhamento-botao-wrapper">
+                                <button class="btn btn-acompanhamento-tutoria"
+                                        onclick="abrirAcompanhamentoTutoria()">
+                                    <i class="fas fa-chalkboard-teacher"></i> Acompanhamento de Tutoria
+                                </button>
+                                <p class="acompanhamento-visitas-hint">
+                                    <i class="fas fa-info-circle"></i> Visualize os tutores e turmas do Protagonismo Estudantil
+                                </p>
+                            </div>
                         </div>
 
                         <div class="row g-3 mb-4" id="resumoDiaCards">
@@ -3288,7 +3303,8 @@
             const scripts = [
                 'js/gestao-geral-rodizio.js',
                 'js/acompanhamento-compartilhado.js',
-                'js/acompanhamento-visitas.js'
+                'js/acompanhamento-visitas.js',
+                'js/acompanhamento-tutoria.js'  // 🆕 NOVO MÓDULO DE TUTORIA
             ];
             
             scripts.forEach(src => {

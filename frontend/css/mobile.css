@@ -1,6 +1,6 @@
 /* ==================================================
    MOBILE.CSS — EducaPleno
-   Versão: 2.0 (com suporte completo à tela 2FA)
+   Versão: 2.1 (com correção do fundo preto em mobile)
    Estratégia: mobile-first overrides, sem escala artificial
    ================================================== */
 
@@ -1219,20 +1219,21 @@
 
 /* ============================================================
    BLOCO 13 — ⭐ TELA 2FA (validar-2fa.html) ⭐
+   ✅ CORRIGIDO: aplica fundo preto APENAS na tela 2FA via :has()
    ============================================================ */
 @media screen and (max-width: 768px) {
 
-    /* Body: empilha do topo, permite scroll natural */
-    body {
+    /* 🆕 SÓ APLICA NA TELA 2FA (que tem a estrutura .container > .card > .header) */
+    body:has(> .container > .card > .header) {
         display: block;
         padding: 0;
         min-height: 100vh;
         min-height: 100dvh;
-        background: linear-gradient(160deg, #0b1120 0%, #192132 100%);
+        background: linear-gradient(160deg, #0b1120 0%, #192132 100%) !important;
     }
 
-    /* Card ocupa a tela toda, sem radius nem sombra */
-    .card {
+    /* Card 2FA */
+    body:has(> .container > .card > .header) .card {
         border-radius: 0 !important;
         min-height: 100vh;
         min-height: 100dvh;
@@ -1241,19 +1242,19 @@
         margin: 0 !important;
         display: flex;
         flex-direction: column;
-        background: #fff;
+        background: #fff !important;
     }
 
     /* Header compacto */
-    .header {
+    body:has(> .container > .card > .header) .header {
         padding: 22px 18px 18px !important;
         border-radius: 0 0 22px 22px !important;
         flex-shrink: 0;
     }
 
-    .header::before { animation: none; }
+    body:has(> .container > .card > .header) .header::before { animation: none; }
 
-    .header i {
+    body:has(> .container > .card > .header) .header i {
         font-size: 28px !important;
         width: 56px !important;
         height: 56px !important;
@@ -1261,35 +1262,34 @@
         margin-bottom: 10px !important;
     }
 
-    .header h1 {
+    body:has(> .container > .card > .header) .header h1 {
         font-size: 19px !important;
         margin-bottom: 4px !important;
         letter-spacing: -0.3px !important;
         line-height: 1.25 !important;
     }
 
-    .header p {
+    body:has(> .container > .card > .header) .header p {
         font-size: 12.5px !important;
         opacity: 0.85;
     }
 
-    /* Conteúdo com padding enxuto e scroll natural */
-    .content {
+    /* Conteúdo */
+    body:has(> .container > .card > .header) .content {
         padding: 16px 14px 28px !important;
         flex: 1;
         display: flex;
         flex-direction: column;
     }
 
-    /* Caixa de telefone */
-    .phone-info {
+    body:has(> .container > .card > .header) .phone-info {
         padding: 10px 12px !important;
         margin-bottom: 14px !important;
         border-radius: 12px !important;
         gap: 10px !important;
     }
 
-    .phone-info i {
+    body:has(> .container > .card > .header) .phone-info i {
         width: 34px !important;
         height: 34px !important;
         font-size: 15px !important;
@@ -1297,14 +1297,13 @@
         flex-shrink: 0;
     }
 
-    .phone-info span {
+    body:has(> .container > .card > .header) .phone-info span {
         font-size: 12.5px !important;
         line-height: 1.35 !important;
         word-break: break-word;
     }
 
-    /* Timer compacto */
-    .timer {
+    body:has(> .container > .card > .header) .timer {
         padding: 10px 14px !important;
         margin-bottom: 16px !important;
         font-size: 18px !important;
@@ -1312,50 +1311,55 @@
         letter-spacing: 0.5px !important;
     }
 
-    .timer i { font-size: 16px !important; margin-right: 6px !important; }
+    body:has(> .container > .card > .header) .timer i {
+        font-size: 16px !important;
+        margin-right: 6px !important;
+    }
 
-    /* Badge primeira ativação */
-    .first-time-badge {
+    body:has(> .container > .card > .header) .first-time-badge {
         font-size: 11.5px !important;
         padding: 8px 16px !important;
         margin-bottom: 14px !important;
         gap: 7px !important;
     }
 
-    /* Biometria */
-    .biometric-section {
+    body:has(> .container > .card > .header) .biometric-section {
         padding: 16px 14px !important;
         margin: 0 0 16px !important;
         border-radius: 14px !important;
     }
 
-    .btn-biometric {
+    body:has(> .container > .card > .header) .btn-biometric {
         padding: 13px 18px !important;
         font-size: 14.5px !important;
         border-radius: 11px !important;
         max-width: 100% !important;
     }
 
-    .btn-biometric i.fa-fingerprint,
-    .btn-biometric i.fa-face-smile { font-size: 1.15rem !important; }
+    body:has(> .container > .card > .header) .btn-biometric i.fa-fingerprint,
+    body:has(> .container > .card > .header) .btn-biometric i.fa-face-smile {
+        font-size: 1.15rem !important;
+    }
 
-    .biometric-hint { font-size: 11.5px !important; margin-top: 8px !important; }
+    body:has(> .container > .card > .header) .biometric-hint {
+        font-size: 11.5px !important;
+        margin-top: 8px !important;
+    }
 
-    .biometric-divider {
+    body:has(> .container > .card > .header) .biometric-divider {
         margin: 14px 0 6px !important;
         font-size: 10.5px !important;
         gap: 8px !important;
     }
 
-    /* Tabs */
-    .tabs {
+    body:has(> .container > .card > .header) .tabs {
         gap: 6px !important;
         padding: 5px !important;
         margin-bottom: 20px !important;
         border-radius: 30px !important;
     }
 
-    .tab {
+    body:has(> .container > .card > .header) .tab {
         padding: 10px 6px !important;
         font-size: 12.5px !important;
         border-radius: 26px !important;
@@ -1363,20 +1367,23 @@
         white-space: nowrap;
     }
 
-    .tab i { margin-right: 5px !important; font-size: 12px !important; }
+    body:has(> .container > .card > .header) .tab i {
+        margin-right: 5px !important;
+        font-size: 12px !important;
+    }
 
-    /* Inputs — fonte 16px evita zoom iOS, altura confortável */
-    .form-group { margin-bottom: 14px !important; }
+    body:has(> .container > .card > .header) .form-group {
+        margin-bottom: 14px !important;
+    }
 
-    input {
+    body:has(> .container > .card > .header) input {
         padding: 14px 16px !important;
         font-size: 16px !important;
         border-radius: 12px !important;
         letter-spacing: 1.5px !important;
     }
 
-    /* Botão primário */
-    .btn-primary {
+    body:has(> .container > .card > .header) .btn-primary {
         padding: 15px !important;
         font-size: 15px !important;
         border-radius: 12px !important;
@@ -1384,22 +1391,23 @@
         min-height: 48px;
     }
 
-    /* Seção de backup */
-    .backup-section {
+    body:has(> .container > .card > .header) .backup-section {
         margin-top: 24px !important;
         padding-top: 20px !important;
         border-top: 1px solid #edf2f7 !important;
     }
 
-    .backup-title {
+    body:has(> .container > .card > .header) .backup-title {
         font-size: 16px !important;
         margin-bottom: 12px !important;
         gap: 8px !important;
     }
 
-    .backup-title i { font-size: 18px !important; }
+    body:has(> .container > .card > .header) .backup-title i {
+        font-size: 18px !important;
+    }
 
-    .backup-description {
+    body:has(> .container > .card > .header) .backup-description {
         padding: 12px 14px !important;
         margin-bottom: 16px !important;
         font-size: 12.5px !important;
@@ -1407,14 +1415,13 @@
         line-height: 1.5 !important;
     }
 
-    /* Grid de códigos de backup */
-    .codes-grid {
+    body:has(> .container > .card > .header) .codes-grid {
         grid-template-columns: repeat(2, 1fr) !important;
         gap: 8px !important;
         margin-bottom: 16px !important;
     }
 
-    .code-item {
+    body:has(> .container > .card > .header) .code-item {
         padding: 12px 6px !important;
         font-size: 13px !important;
         border-radius: 10px !important;
@@ -1422,105 +1429,147 @@
         word-break: break-all;
     }
 
-    .btn-outline {
+    body:has(> .container > .card > .header) .btn-outline {
         padding: 13px !important;
         font-size: 14px !important;
         border-radius: 12px !important;
         margin-top: 4px !important;
     }
 
-    /* Rodapé */
-    .footer {
+    body:has(> .container > .card > .header) .footer {
         gap: 16px !important;
         margin-top: 20px !important;
         flex-wrap: wrap;
         justify-content: center;
     }
 
-    .footer button {
+    body:has(> .container > .card > .header) .footer button {
         font-size: 13px !important;
         min-height: 44px;
         padding: 4px 8px;
     }
 
-    /* Link do app */
-    #appDownloadLink {
+    body:has(> .container > .card > .header) #appDownloadLink {
         margin-top: 16px !important;
         padding-top: 14px !important;
     }
 
-    #appDownloadLink a {
+    body:has(> .container > .card > .header) #appDownloadLink a {
         padding: 9px 16px !important;
         font-size: 12.5px !important;
         border-radius: 26px !important;
     }
 
-    /* Message card */
-    .message-card {
+    body:has(> .container > .card > .header) .message-card {
         padding: 20px 16px !important;
         border-radius: 16px !important;
         margin: 6px 0 16px !important;
     }
 
-    .message-header { margin-bottom: 18px !important; }
+    body:has(> .container > .card > .header) .message-header {
+        margin-bottom: 18px !important;
+    }
 
-    .message-header i {
+    body:has(> .container > .card > .header) .message-header i {
         font-size: 34px !important;
         padding: 12px !important;
         margin-bottom: 10px !important;
     }
 
-    .message-header h2 { font-size: 18px !important; }
-    .message-header p { font-size: 13px !important; margin-top: 6px !important; }
+    body:has(> .container > .card > .header) .message-header h2 {
+        font-size: 18px !important;
+    }
 
-    .stats-grid { gap: 10px !important; margin-bottom: 18px !important; }
+    body:has(> .container > .card > .header) .message-header p {
+        font-size: 13px !important;
+        margin-top: 6px !important;
+    }
 
-    .stat-card {
+    body:has(> .container > .card > .header) .stats-grid {
+        gap: 10px !important;
+        margin-bottom: 18px !important;
+    }
+
+    body:has(> .container > .card > .header) .stat-card {
         padding: 14px 10px !important;
         border-radius: 14px !important;
     }
 
-    .stat-value { font-size: 26px !important; }
-    .stat-label { font-size: 11.5px !important; }
+    body:has(> .container > .card > .header) .stat-value {
+        font-size: 26px !important;
+    }
 
-    .info-list {
+    body:has(> .container > .card > .header) .stat-label {
+        font-size: 11.5px !important;
+    }
+
+    body:has(> .container > .card > .header) .info-list {
         padding: 12px !important;
         border-radius: 14px !important;
         margin-bottom: 16px !important;
     }
 
-    .info-item { padding: 10px 0 !important; gap: 10px !important; }
-    .info-icon { width: 30px !important; height: 30px !important; font-size: 15px !important; border-radius: 9px !important; }
-    .info-title { font-size: 13.5px !important; }
-    .info-subtitle { font-size: 11.5px !important; }
+    body:has(> .container > .card > .header) .info-item {
+        padding: 10px 0 !important;
+        gap: 10px !important;
+    }
 
-    .empty-state { padding: 24px 12px !important; }
-    .empty-state i { font-size: 40px !important; margin-bottom: 12px !important; }
-    .empty-state h3 { font-size: 17px !important; }
-    .empty-state p { font-size: 13px !important; margin-bottom: 16px !important; }
+    body:has(> .container > .card > .header) .info-icon {
+        width: 30px !important;
+        height: 30px !important;
+        font-size: 15px !important;
+        border-radius: 9px !important;
+    }
 
-    .btn-contact {
+    body:has(> .container > .card > .header) .info-title {
+        font-size: 13.5px !important;
+    }
+
+    body:has(> .container > .card > .header) .info-subtitle {
+        font-size: 11.5px !important;
+    }
+
+    body:has(> .container > .card > .header) .empty-state {
+        padding: 24px 12px !important;
+    }
+
+    body:has(> .container > .card > .header) .empty-state i {
+        font-size: 40px !important;
+        margin-bottom: 12px !important;
+    }
+
+    body:has(> .container > .card > .header) .empty-state h3 {
+        font-size: 17px !important;
+    }
+
+    body:has(> .container > .card > .header) .empty-state p {
+        font-size: 13px !important;
+        margin-bottom: 16px !important;
+    }
+
+    body:has(> .container > .card > .header) .btn-contact {
         padding: 13px !important;
         font-size: 13.5px !important;
         border-radius: 12px !important;
     }
 
-    .loading-codes {
+    body:has(> .container > .card > .header) .loading-codes {
         padding: 24px 12px !important;
         font-size: 13.5px !important;
     }
 
-    /* QR code box */
-    #qrCodeDisplay {
+    body:has(> .container > .card > .header) #qrCodeDisplay {
         width: 170px !important;
         height: 170px !important;
         padding: 8px !important;
         border-radius: 12px !important;
     }
 
-    #qrCodeDisplay > i { font-size: 46px !important; }
+    body:has(> .container > .card > .header) #qrCodeDisplay > i {
+        font-size: 46px !important;
+    }
 
-    .secret-box {
+    body:has(> .container > .card > .header) .secret-box {
         padding: 10px !important;
         font-size: 12px !important;
         letter-spacing: 1.5px !important;
@@ -1528,8 +1577,7 @@
         margin: 12px 0 !important;
     }
 
-    /* Alertas */
-    .alert {
+    body:has(> .container > .card > .header) .alert {
         padding: 12px 14px !important;
         border-radius: 12px !important;
         font-size: 13px !important;
@@ -1537,7 +1585,7 @@
         margin-bottom: 16px !important;
     }
 
-    .warning-box {
+    body:has(> .container > .card > .header) .warning-box {
         padding: 12px 14px !important;
         border-radius: 12px !important;
         margin-bottom: 16px !important;
@@ -1545,18 +1593,22 @@
         gap: 10px !important;
     }
 
-    /* Card pós-login "Ativar biometria" */
-    .ativar-biometria-box {
+    body:has(> .container > .card > .header) .ativar-biometria-box {
         padding: 20px 16px !important;
         border-radius: 14px !important;
         margin-top: 14px !important;
     }
 
-    .ativar-biometria-box strong { font-size: 16px !important; }
-    .ativar-biometria-box strong i { font-size: 18px !important; }
+    body:has(> .container > .card > .header) .ativar-biometria-box strong {
+        font-size: 16px !important;
+    }
 
-    .ativar-biometria-box .btn-ativar,
-    .ativar-biometria-box .btn-pular {
+    body:has(> .container > .card > .header) .ativar-biometria-box strong i {
+        font-size: 18px !important;
+    }
+
+    body:has(> .container > .card > .header) .ativar-biometria-box .btn-ativar,
+    body:has(> .container > .card > .header) .ativar-biometria-box .btn-pular {
         padding: 13px 18px !important;
         font-size: 14.5px !important;
         border-radius: 11px !important;
@@ -1568,12 +1620,12 @@
    ============================================================ */
 @media screen and (max-width: 400px) {
 
-    .header {
+    body:has(> .container > .card > .header) .header {
         padding: 18px 14px 16px !important;
         border-radius: 0 0 18px 18px !important;
     }
 
-    .header i {
+    body:has(> .container > .card > .header) .header i {
         font-size: 24px !important;
         width: 48px !important;
         height: 48px !important;
@@ -1581,53 +1633,51 @@
         margin-bottom: 8px !important;
     }
 
-    .header h1 { font-size: 17px !important; }
-    .header p { font-size: 11.5px !important; }
+    body:has(> .container > .card > .header) .header h1 { font-size: 17px !important; }
+    body:has(> .container > .card > .header) .header p { font-size: 11.5px !important; }
 
-    .content { padding: 14px 12px 24px !important; }
+    body:has(> .container > .card > .header) .content { padding: 14px 12px 24px !important; }
 
-    .phone-info { padding: 9px 10px !important; margin-bottom: 12px !important; }
-    .phone-info i { width: 30px !important; height: 30px !important; font-size: 13px !important; border-radius: 8px !important; }
-    .phone-info span { font-size: 11.5px !important; }
+    body:has(> .container > .card > .header) .phone-info { padding: 9px 10px !important; margin-bottom: 12px !important; }
+    body:has(> .container > .card > .header) .phone-info i { width: 30px !important; height: 30px !important; font-size: 13px !important; border-radius: 8px !important; }
+    body:has(> .container > .card > .header) .phone-info span { font-size: 11.5px !important; }
 
-    .timer { font-size: 16px !important; padding: 9px 12px !important; margin-bottom: 14px !important; }
-    .timer i { font-size: 14px !important; }
+    body:has(> .container > .card > .header) .timer { font-size: 16px !important; padding: 9px 12px !important; margin-bottom: 14px !important; }
+    body:has(> .container > .card > .header) .timer i { font-size: 14px !important; }
 
-    /* Tabs: só ícones */
-    .tab {
+    body:has(> .container > .card > .header) .tab {
         padding: 11px 4px !important;
         font-size: 0;
     }
 
-    .tab i {
+    body:has(> .container > .card > .header) .tab i {
         font-size: 15px !important;
         margin: 0 !important;
     }
 
-    /* Backup codes */
-    .codes-grid {
+    body:has(> .container > .card > .header) .codes-grid {
         grid-template-columns: repeat(2, 1fr) !important;
         gap: 6px !important;
     }
 
-    .code-item {
+    body:has(> .container > .card > .header) .code-item {
         padding: 10px 4px !important;
         font-size: 11.5px !important;
         letter-spacing: 1px !important;
     }
 
-    .stats-grid { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
-    .stat-card { padding: 12px 8px !important; }
-    .stat-value { font-size: 22px !important; }
-    .stat-label { font-size: 10.5px !important; }
+    body:has(> .container > .card > .header) .stats-grid { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+    body:has(> .container > .card > .header) .stat-card { padding: 12px 8px !important; }
+    body:has(> .container > .card > .header) .stat-value { font-size: 22px !important; }
+    body:has(> .container > .card > .header) .stat-label { font-size: 10.5px !important; }
 
-    #qrCodeDisplay { width: 150px !important; height: 150px !important; }
-    #qrCodeDisplay > i { font-size: 40px !important; }
+    body:has(> .container > .card > .header) #qrCodeDisplay { width: 150px !important; height: 150px !important; }
+    body:has(> .container > .card > .header) #qrCodeDisplay > i { font-size: 40px !important; }
 
-    .footer { gap: 12px !important; }
-    .footer button { font-size: 12px !important; }
+    body:has(> .container > .card > .header) .footer { gap: 12px !important; }
+    body:has(> .container > .card > .header) .footer button { font-size: 12px !important; }
 
-    #appDownloadLink a { font-size: 11.5px !important; padding: 8px 14px !important; }
+    body:has(> .container > .card > .header) #appDownloadLink a { font-size: 11.5px !important; padding: 8px 14px !important; }
 }
 
 /* ============================================================
@@ -1635,40 +1685,39 @@
    ============================================================ */
 @media screen and (max-width: 320px) {
 
-    .header { padding: 16px 12px 14px !important; }
-    .header h1 { font-size: 16px !important; }
-    .header p { font-size: 11px !important; }
-    .header i { width: 44px !important; height: 44px !important; line-height: 44px !important; font-size: 22px !important; }
+    body:has(> .container > .card > .header) .header { padding: 16px 12px 14px !important; }
+    body:has(> .container > .card > .header) .header h1 { font-size: 16px !important; }
+    body:has(> .container > .card > .header) .header p { font-size: 11px !important; }
+    body:has(> .container > .card > .header) .header i { width: 44px !important; height: 44px !important; line-height: 44px !important; font-size: 22px !important; }
 
-    .content { padding: 12px 10px 20px !important; }
+    body:has(> .container > .card > .header) .content { padding: 12px 10px 20px !important; }
 
-    .timer { font-size: 15px !important; }
-    .timer i { font-size: 13px !important; }
+    body:has(> .container > .card > .header) .timer { font-size: 15px !important; }
+    body:has(> .container > .card > .header) .timer i { font-size: 13px !important; }
 
-    /* Inputs mantêm 16px */
-    input { padding: 12px 12px !important; font-size: 16px !important; }
+    body:has(> .container > .card > .header) input { padding: 12px 12px !important; font-size: 16px !important; }
 
-    .btn-primary { padding: 13px !important; font-size: 14px !important; min-height: 46px; }
+    body:has(> .container > .card > .header) .btn-primary { padding: 13px !important; font-size: 14px !important; min-height: 46px; }
 
-    .biometric-section { padding: 12px 10px !important; }
-    .btn-biometric { padding: 12px 12px !important; font-size: 13.5px !important; }
+    body:has(> .container > .card > .header) .biometric-section { padding: 12px 10px !important; }
+    body:has(> .container > .card > .header) .btn-biometric { padding: 12px 12px !important; font-size: 13.5px !important; }
 
-    .btn-outline { padding: 12px !important; font-size: 13px !important; }
+    body:has(> .container > .card > .header) .btn-outline { padding: 12px !important; font-size: 13px !important; }
 
-    .message-card { padding: 16px 12px !important; }
-    .message-header h2 { font-size: 16px !important; }
-    .message-header i { font-size: 30px !important; padding: 10px !important; }
+    body:has(> .container > .card > .header) .message-card { padding: 16px 12px !important; }
+    body:has(> .container > .card > .header) .message-header h2 { font-size: 16px !important; }
+    body:has(> .container > .card > .header) .message-header i { font-size: 30px !important; padding: 10px !important; }
 
-    .stat-card { padding: 10px 6px !important; }
-    .stat-value { font-size: 20px !important; }
-    .stat-label { font-size: 10px !important; }
+    body:has(> .container > .card > .header) .stat-card { padding: 10px 6px !important; }
+    body:has(> .container > .card > .header) .stat-value { font-size: 20px !important; }
+    body:has(> .container > .card > .header) .stat-label { font-size: 10px !important; }
 
-    .info-title { font-size: 12.5px !important; }
-    .info-subtitle { font-size: 11px !important; }
+    body:has(> .container > .card > .header) .info-title { font-size: 12.5px !important; }
+    body:has(> .container > .card > .header) .info-subtitle { font-size: 11px !important; }
 
-    #qrCodeDisplay { width: 140px !important; height: 140px !important; }
+    body:has(> .container > .card > .header) #qrCodeDisplay { width: 140px !important; height: 140px !important; }
 
-    #appDownloadLink a { font-size: 11px !important; padding: 7px 12px !important; }
+    body:has(> .container > .card > .header) #appDownloadLink a { font-size: 11px !important; padding: 7px 12px !important; }
 }
 
 /* ============================================================
@@ -1676,19 +1725,19 @@
    ============================================================ */
 @media screen and (max-width: 900px) and (orientation: landscape) {
 
-    body { align-items: flex-start; }
+    body:has(> .container > .card > .header) { align-items: flex-start; }
 
-    .card {
+    body:has(> .container > .card > .header) .card {
         border-radius: 0 !important;
         min-height: auto !important;
     }
 
-    .header {
+    body:has(> .container > .card > .header) .header {
         padding: 14px 18px !important;
         border-radius: 0 0 16px 16px !important;
     }
 
-    .header i {
+    body:has(> .container > .card > .header) .header i {
         width: 40px !important;
         height: 40px !important;
         line-height: 40px !important;
@@ -1696,48 +1745,73 @@
         margin-bottom: 6px !important;
     }
 
-    .header h1 { font-size: 16px !important; }
-    .header p { font-size: 11px !important; }
+    body:has(> .container > .card > .header) .header h1 { font-size: 16px !important; }
+    body:has(> .container > .card > .header) .header p { font-size: 11px !important; }
 
-    .content { padding: 14px 16px 20px !important; }
+    body:has(> .container > .card > .header) .content { padding: 14px 16px 20px !important; }
 
-    .timer { font-size: 16px !important; padding: 8px 12px !important; margin-bottom: 12px !important; }
+    body:has(> .container > .card > .header) .timer { font-size: 16px !important; padding: 8px 12px !important; margin-bottom: 12px !important; }
 
-    .tabs { margin-bottom: 14px !important; }
-    .tab { padding: 8px 10px !important; font-size: 12px !important; }
+    body:has(> .container > .card > .header) .tabs { margin-bottom: 14px !important; }
+    body:has(> .container > .card > .header) .tab { padding: 8px 10px !important; font-size: 12px !important; }
 
-    .backup-section { margin-top: 16px !important; padding-top: 14px !important; }
+    body:has(> .container > .card > .header) .backup-section { margin-top: 16px !important; padding-top: 14px !important; }
 
-    .codes-grid { grid-template-columns: repeat(3, 1fr) !important; }
+    body:has(> .container > .card > .header) .codes-grid { grid-template-columns: repeat(3, 1fr) !important; }
 
-    .code-item { padding: 10px 4px !important; font-size: 12px !important; }
+    body:has(> .container > .card > .header) .code-item { padding: 10px 4px !important; font-size: 12px !important; }
 
-    #qrCodeDisplay { width: 130px !important; height: 130px !important; }
+    body:has(> .container > .card > .header) #qrCodeDisplay { width: 130px !important; height: 130px !important; }
 }
 
-/* Ajuste da Sidebar para não cortar e permitir rolagem */
-.professor-mobile-sidebar {
-    display: flex !important;
-    flex-direction: column !important;
-    height: 100vh !important; /* Ocupa a tela toda */
-    max-height: 100vh !important;
-    overflow: hidden !important; /* Impede o scroll geral da barra */
-}
+/* ============================================================
+   BLOCO 17 — SIDEBAR MOBILE DO PROFESSOR (menu lateral)
+   ============================================================ */
+@media screen and (max-width: 768px) {
 
-/* Faz a lista de itens rolar se ficar muito grande */
-.professor-mobile-menu-items {
-    flex: 1 !important; /* Ocupa todo o espaço restante */
-    overflow-y: auto !important; /* Ativa a rolagem apenas na lista */
-    padding-bottom: 20px !important;
-}
+    .professor-mobile-sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 280px !important;
+        max-width: 85vw !important;
+        height: 100vh;
+        display: flex !important;
+        flex-direction: column !important;
+        background: linear-gradient(180deg, #1e1e2f 0%, #2d2d44 100%) !important;
+        transform: translateX(-100%);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 10003;
+        overflow: hidden !important;
+        box-shadow: 2px 0 20px rgba(0, 0, 0, 0.3);
+        box-sizing: border-box;
 
-/* Garante que o botão Sair fique fixo lá embaixo, sem subir */
-.professor-mobile-sidebar-footer {
-    position: relative !important; /* Remove o absolute/fixed que causava o problema */
-    margin-top: auto !important; /* Empurra para o final */
-    background: #1e293b !important; /* Cor de fundo igual ao menu */
-    padding: 15px 16px !important;
-    border-top: 1px solid #334155 !important;
-    z-index: 10 !important;
-    flex-shrink: 0 !important; /* Não deixa o botão ser esmagado */
+        /* 🆕 CRÍTICO: escondido quando não está ativo */
+        visibility: hidden;
+        pointer-events: none;
+    }
+
+    .professor-mobile-sidebar.active {
+        transform: translateX(0);
+        visibility: visible;
+        pointer-events: auto;
+    }
+
+    /* Itens internos roláveis */
+    .professor-mobile-menu-items {
+        flex: 1 !important;
+        overflow-y: auto !important;
+        padding-bottom: 20px !important;
+    }
+
+    /* Footer fixo no fundo */
+    .professor-mobile-sidebar-footer {
+        position: relative !important;
+        margin-top: auto !important;
+        background: #1e293b !important;
+        padding: 15px 16px !important;
+        border-top: 1px solid #334155 !important;
+        z-index: 10 !important;
+        flex-shrink: 0 !important;
+    }
 }

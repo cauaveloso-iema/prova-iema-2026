@@ -182,8 +182,6 @@ router.get('/alunos-por-turma', authenticateToken, verificarPermissaoVisitas, as
   try {
     const { turma, turmas, curso } = req.query;
     
-    console.log('🔍 Buscando alunos - Filtros:', { turma, turmas, curso });
-    
     let query = { role: 'aluno', ativo: true };
     
     // 🆕 Suporte a múltiplas turmas (separadas por vírgula)
