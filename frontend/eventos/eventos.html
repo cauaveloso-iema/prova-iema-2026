@@ -44,169 +44,6 @@
     <script src="/js/push-client.js" defer></script>
     <script src="/js/dialog-helper.js" defer></script>
     <script src="/js/core-security.js" defer></script>
-
-    <style>
-        .modal-backdrop { background-color: rgba(15, 23, 42, 0.7) !important; backdrop-filter: blur(2px); z-index: 1040 !important; }
-        .modal-backdrop.show { opacity: 1 !important; }
-        .modal-content { background-color: #ffffff !important; border: none !important; border-radius: 16px !important; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25) !important; z-index: 1055 !important; }
-        .modal-header { background: linear-gradient(135deg, #065f46, #059669) !important; color: #ffffff !important; border-bottom: none !important; border-radius: 16px 16px 0 0 !important; padding: 18px 24px !important; }
-        .modal-header .modal-title { color: #ffffff !important; font-weight: 700 !important; font-size: 16px !important; }
-        .modal-header .btn-close { filter: invert(1) !important; opacity: 0.8 !important; }
-        .modal-body { background-color: #ffffff !important; padding: 24px !important; }
-        .modal-footer { background-color: #f8fafc !important; border-top: 1px solid #e2e8f0 !important; }
-        #btnLogout { display: none !important; }
-
-        /* ===== NOVOS ESTILOS: Gestão de Usuários ===== */
-        .ev-user-card {
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            border-radius: 14px;
-            padding: 18px;
-            margin-bottom: 14px;
-            transition: box-shadow .2s, border-color .2s;
-        }
-        .ev-user-card:hover {
-            border-color: #cbd5e1;
-            box-shadow: 0 4px 16px rgba(15, 23, 42, .06);
-        }
-        .ev-user-card-header {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            margin-bottom: 14px;
-            flex-wrap: wrap;
-        }
-        .ev-user-avatar {
-            width: 46px;
-            height: 46px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #065f46, #059669);
-            color: #fff;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 15px;
-            flex-shrink: 0;
-            letter-spacing: .5px;
-        }
-        .ev-user-card-header h4 {
-            margin: 0;
-            font-size: 15px;
-            font-weight: 700;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            align-items: center;
-        }
-        .ev-user-card-actions {
-            display: flex;
-            gap: 6px;
-            flex-wrap: wrap;
-            margin-left: auto;
-        }
-        .ev-user-card-body {
-            border-top: 1px dashed #e2e8f0;
-            padding-top: 14px;
-        }
-        .ev-user-card-label {
-            font-size: 12px;
-            font-weight: 600;
-            color: #475569;
-            margin-bottom: 8px;
-        }
-        .ev-user-card-tags {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            margin-bottom: 12px;
-        }
-        .ev-user-ev-tag {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            background: #ecfdf5;
-            color: #065f46;
-            border: 1px solid #a7f3d0;
-            border-radius: 20px;
-            padding: 4px 10px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-        .ev-user-ev-tag button {
-            background: none;
-            border: none;
-            color: #065f46;
-            cursor: pointer;
-            padding: 0;
-            opacity: .6;
-        }
-        .ev-user-ev-tag button:hover { opacity: 1; }
-        .ev-user-link-row {
-            display: flex;
-            gap: 8px;
-            margin-top: 10px;
-        }
-        .ev-user-link-row select {
-            flex: 1;
-            padding: 8px 10px;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            font-size: 13px;
-        }
-
-        /* Filtros */
-        .ev-filtros {
-            display: grid;
-            grid-template-columns: 2fr 1fr 1fr auto;
-            gap: 10px;
-            margin-bottom: 16px;
-        }
-        .ev-filtros input,
-        .ev-filtros select {
-            padding: 10px 12px;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            font-size: 13px;
-            background: #fff;
-        }
-        .ev-filtros input:focus,
-        .ev-filtros select:focus {
-            outline: none;
-            border-color: #059669;
-            box-shadow: 0 0 0 3px rgba(5, 150, 105, .12);
-        }
-        @media (max-width: 768px) {
-            .ev-filtros { grid-template-columns: 1fr; }
-            .ev-user-card-actions { margin-left: 0; width: 100%; }
-            .ev-user-link-row { flex-direction: column; }
-        }
-
-        /* Modal: senha revelada */
-        .ev-senha-revelada {
-            background: #f1f5f9;
-            border: 1px dashed #94a3b8;
-            border-radius: 10px;
-            padding: 16px;
-            margin: 14px 0;
-            font-size: 22px;
-            letter-spacing: 2px;
-            font-weight: 700;
-            color: #0f172a;
-            user-select: all;
-            cursor: copy;
-        }
-        .ev-senha-revelada code {
-            font-family: 'Courier New', monospace;
-            background: none;
-            color: inherit;
-        }
-
-        /* Badge perigo */
-        .ev-tag-danger { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
-        .ev-btn-warning { background: #f59e0b; color: #fff; border: none; }
-        .ev-btn-warning:hover { background: #d97706; }
-    </style>
 </head>
 
 <body class="ev-body">
@@ -287,27 +124,113 @@
             <div class="ev-card">
                 <div class="ev-card-header"><h3><i class="fas fa-file-upload"></i> Passo 1 — Anexos e Extração Automática</h3></div>
                 <p class="ev-card-sub">Envie os documentos do evento (edital, formulário, termo LGPD, etc).</p>
+                
                 <div class="ev-form-group"><label for="modelo-nome">Nome do Modelo *</label><input type="text" id="modelo-nome" placeholder="Ex: Processo Seletivo 2026"></div>
                 <div class="ev-form-group"><label for="modelo-descricao">Descrição</label><textarea id="modelo-descricao" placeholder="Breve descrição..."></textarea></div>
-                <div class="ev-form-row"><label class="ev-check"><input type="checkbox" id="modelo-requer-avaliacao"> ⭐ Este modelo requer avaliação</label></div>
-                <div class="ev-form-row"><label class="ev-check"><input type="checkbox" id="modelo-permite-multiplas"> 🔁 Permitir múltiplas inscrições</label></div>
+                
+                <div class="ev-form-row">
+                    <label class="ev-check"><input type="checkbox" id="modelo-requer-avaliacao"> ⭐ Este modelo requer avaliação</label>
+                </div>
+
+                <!-- BLOCO DE COTAS -->
+                <div id="config-cotas-container" style="margin-top: 16px; padding: 20px; background: #f0f9ff; border: 2px solid #bae6fd; border-radius: 12px; margin-bottom: 20px;">
+                    <h6 style="margin: 0 0 15px; color: #0369a1; font-size: 15px; font-weight: 800;">
+                        <i class="fas fa-users"></i> Inscrições e Cotas
+                    </h6>
+                    <label class="ev-check" style="background: #ffffff; border: 1px solid #e2e8f0; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 12px 14px; border-radius: 8px;">
+                        <input type="checkbox" id="modelo-permite-multiplas" style="width: 20px; height: 20px; accent-color: #0ea5e9; cursor: pointer;">
+                        <span style="font-weight: 600; color: #1e293b;">🔁 Permitir múltiplas inscrições</span>
+                    </label>
+
+                    <div style="border-top: 1px dashed #cbd5e1; padding-top: 15px;">
+                        <label class="ev-check" style="background: #ffffff; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 12px 14px; border-radius: 8px;">
+                            <input type="checkbox" id="modelo-usar-cotas" style="width: 20px; height: 20px; accent-color: #0ea5e9; cursor: pointer;">
+                            <span style="font-weight: 600; color: #1e293b;">✅ Usar sistema de cotas neste modelo</span>
+                        </label>
+                        <div id="config-cotas-campos" style="display: none; margin-top: 15px; padding: 15px; background: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0;">
+                            <div class="ev-form-group" style="margin-bottom: 12px;">
+                                <label for="modelo-publico-laudo" style="font-size: 13px; font-weight: 600; color: #334155; display: block; margin-bottom: 6px;">Para quem o laudo será direcionado?</label>
+                                <select id="modelo-publico-laudo" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px;">
+                                    <option value="professor">👨‍🏫 Professor / Participante</option>
+                                    <option value="aluno">🎓 Cada Aluno</option>
+                                    <option value="ambos">👥 Ambos</option>
+                                </select>
+                            </div>
+                            <div class="ev-form-group" style="margin-bottom: 12px;">
+                                <label for="modelo-label-laudo" style="font-size: 13px; font-weight: 600; color: #334155; display: block; margin-bottom: 6px;">Nome do campo de laudo</label>
+                                <input type="text" id="modelo-label-laudo" value="Laudo Médico" placeholder="Ex: Laudo Médico" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px;">
+                            </div>
+                            <label class="ev-check" style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: #334155; cursor: pointer; padding: 8px 0;">
+                                <input type="checkbox" id="modelo-laudo-obrigatorio" checked style="width: 18px; height: 18px; accent-color: #0ea5e9;">
+                                📎 Laudo obrigatório (para quem optar por cota)
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- UPLOAD DE ARQUIVOS INICIAIS -->
                 <div class="ev-form-group">
-                    <label for="modelo-anexos">Anexos (PDF, DOC, DOCX, TXT, ODT)</label>
+                    <label for="modelo-anexos">Anexos Base (PDF, DOC, DOCX, TXT, ODT)</label>
                     <input type="file" id="modelo-anexos" multiple accept=".pdf,.doc,.docx,.txt,.odt">
-                    <div id="anexos-tipos-container" style="margin-top: 12px;"></div>
+                    <div id="anexos-tipos-container"></div>
                 </div>
                 <div class="ev-actions">
                     <button type="button" class="ev-btn ev-btn-primary" id="btn-extrair-ia"><i class="fas fa-robot"></i> Extrair Campos Automaticamente</button>
                     <span id="ia-status" class="ev-hint"></span>
                 </div>
             </div>
+
+            <!-- NOVO PASSO 2: CATEGORIAS -->
             <div class="ev-card">
-                <div class="ev-card-header"><h3><i class="fas fa-list-check"></i> Passo 2 — Revisar Campos</h3></div>
-                <div id="anexos-container"></div>
-                <p id="anexos-vazio" class="ev-empty ev-empty-inline"><i class="fas fa-inbox"></i> Nenhum anexo ainda.</p>
-                <div id="form-modelo-alert"></div>
-                <div class="ev-actions" style="margin-top: 16px;"><button type="button" class="ev-btn ev-btn-primary" id="btn-salvar-modelo"><i class="fas fa-save"></i> Salvar Modelo</button></div>
+                <div class="ev-card-header"><h3><i class="fas fa-tags"></i> Passo 2 — Categorias / Modalidades (Opcional)</h3></div>
+                <p class="ev-card-sub">Crie categorias para que os participantes escolham (ex: Nível 1, Nível 2, Robótica, Programação).</p>
+                
+                <!-- Bloco de Configuração e Checkbox (O JS vai mostrar/esconder o bloco) -->
+                <div class="ev-form-group" style="margin-bottom: 16px;">
+                    <label class="ev-check" style="background: #f8fafc; border: 1px solid var(--ev-border); display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 12px; border-radius: 8px;">
+                        <input type="checkbox" id="modelo-usar-categorias" style="width: 20px; height: 20px; accent-color: var(--ev-primary);">
+                        <span style="font-weight: 600; color: #1e293b;">Habilitar Categorias/Modalidades</span>
+                    </label>
+                </div>
+
+                <!-- Esse bloco tem o ID que o JS manipula -->
+                <div id="config-categorias-campos" style="display: none; background: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid var(--ev-border); margin-bottom: 16px;">
+                    <div class="ev-form-group" style="margin-bottom: 12px;">
+                        <label for="modelo-label-categorias" style="font-size: 13px; font-weight: 600; color: #334155; display: block; margin-bottom: 6px;">Nome do Campo (Ex: Modalidade, Categoria, Nível)</label>
+                        <input type="text" id="modelo-label-categorias" value="Categoria / Modalidade" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px;">
+                    </div>
+                    
+                    <label class="ev-check" style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: #334155; cursor: pointer; margin-bottom: 16px;">
+                        <input type="checkbox" id="modelo-categoria-obrigatoria" checked style="width: 18px; height: 18px; accent-color: var(--ev-primary);">
+                        Escolha obrigatória
+                    </label>
+
+                    <div id="lista-categorias-container"></div>
+                    <button type="button" class="ev-btn ev-btn-secondary ev-btn-sm" id="btn-add-categoria" style="margin-top: 10px;">
+                        <i class="fas fa-plus"></i> Adicionar Opção
+                    </button>
+                </div>
             </div>
+
+            <!-- PASSO 3: ANEXOS EXTRAS -->
+            <div class="ev-card">
+                <div class="ev-card-header"><h3><i class="fas fa-paperclip"></i> Passo 3 — Anexos Solicitados (Opcional)</h3></div>
+                <p class="ev-card-sub">Crie campos para que os participantes enviem documentos (ex: RG, CPF, Logo). Esses campos aparecerão como upload na inscrição.</p>
+                <div id="anexos-extras-container"></div>
+                <button type="button" class="ev-btn ev-btn-secondary ev-btn-sm" id="btn-add-anexo-extra" style="margin-top: 10px;">
+                    <i class="fas fa-plus"></i> Adicionar Campo de Anexo
+                </button>
+            </div>
+
+            <!-- PASSO 4: REVISAR CAMPOS -->
+            <div class="ev-card">
+                <div class="ev-card-header"><h3><i class="fas fa-list-check"></i> Passo 4 — Revisar Campos Extraídos</h3></div>
+                <div id="anexos-container"></div>
+                <p id="anexos-vazio" class="ev-empty ev-empty-inline"><i class="fas fa-inbox"></i> Nenhum anexo extraído ainda.</p>
+                <div id="form-modelo-alert"></div>
+                <div class="ev-actions" style="margin-top: 16px;"><button type="button" class="ev-btn ev-btn-primary" id="btn-salvar-modelo"><i class="fas fa-save"></i> Salvar Modelo Completo</button></div>
+            </div>
+
             <div class="ev-card">
                 <div class="ev-card-header"><h3><i class="fas fa-list"></i> Modelos Cadastrados</h3></div>
                 <div id="lista-modelos" class="ev-list"><div class="ev-empty">Carregando...</div></div>
@@ -373,7 +296,6 @@
 
         <!-- USUÁRIOS -->
         <div id="panel-usuarios" class="ev-panel">
-            <!-- KPIs -->
             <div class="ev-grid">
                 <div class="ev-stat"><div class="ev-stat-icon"><i class="fas fa-users"></i></div><h3>Total</h3><div class="ev-stat-value" id="usr-total">—</div></div>
                 <div class="ev-stat ev-stat-warning"><div class="ev-stat-icon"><i class="fas fa-clock"></i></div><h3>Pendentes</h3><div class="ev-stat-value" id="usr-pendentes">—</div></div>
@@ -381,7 +303,6 @@
                 <div class="ev-stat"><div class="ev-stat-icon"><i class="fas fa-user-tie"></i></div><h3>Coordenadores</h3><div class="ev-stat-value" id="usr-coords">—</div></div>
             </div>
 
-            <!-- Cadastro -->
             <div class="ev-card">
                 <div class="ev-card-header"><h3><i class="fas fa-user-plus"></i> Cadastrar Manualmente</h3></div>
                 <div id="form-usuario-alert"></div>
@@ -394,10 +315,9 @@
                 </div>
             </div>
 
-            <!-- Filtros + Lista -->
             <div class="ev-card">
                 <div class="ev-card-header">
-                    <h3><i class="fas fa-users"></i> Todos os Usuários <span class="ev-hint" style="font-weight:400; font-size:13px;">(<span id="usr-filtrados">0</span> exibidos)</span></h3>
+                    <h3><i class="fas fa-users"></i> Todos os Usuários <span class="ev-hint ev-hint-inline">(<span id="usr-filtrados">0</span> exibidos)</span></h3>
                 </div>
 
                 <div class="ev-filtros">

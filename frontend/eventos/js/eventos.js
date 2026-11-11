@@ -1,12 +1,9 @@
 /* ============================================================================
    PAINEL ADMIN — EducaPleno Eventos
    frontend/eventos/js/eventos.js
-   Versão aprimorada — UX, toasts, validação inline, delegação de eventos
+   v6.7 — Correção: ReferenceError aplicarTemplate + guards + sync hero
    ============================================================================ */
 
-/* ============================================================================
-   CONFIG / HELPERS BASE
-   ============================================================================ */
 const EV_API = {
     modelos: '/api/eventos/modelos',
     extrairIA: '/api/eventos/modelos/extrair-campos',
@@ -155,9 +152,6 @@ function confirmar({ titulo = 'Confirmar', mensagem = 'Deseja continuar?', texto
     });
 }
 
-/* ============================================================================
-   TIPOS DE ANEXO
-   ============================================================================ */
 const TIPOS_ANEXO_ICON = {
     edital: 'fa-file-alt',
     formulario: 'fa-file-signature',
@@ -192,6 +186,8 @@ function labelDoAnexo(anexo) {
    ESTADO GLOBAL
    ============================================================================ */
 let anexosState = [];
+let anexosExtrasState = [];
+let categoriasState = [];
 let modelosCache = [];
 let inscEventoId = null;
 let editandoModeloId = null;
@@ -285,18 +281,20 @@ async function carregarDashboard() {
         set('stat-encerrados', r.encerrados);
         set('stat-inscricoes', r.totalInscricoes);
 
+        // Sincroniza stats do hero
+        set('heroStatModelos', r.totalModelos);
+        set('heroStatEventos', r.totalEventos);
+        set('heroStatInscricoes', r.totalInscricoes);
+
         const container = document.getElementById('ultimos-eventos');
+        if (!container) return;
         if (!data.ultimosEventos || data.ultimosEventos.length === 0) {
-            container.innerHTML = `
-                <div class="ev-empty">
-                    <i class="fas fa-calendar-xmark"></i>
-                    Nenhum evento ainda.
-                </div>`;
+            container.innerHTML = `<div class="ev-empty"><i class="fas fa-calendar-xmark"></i> Nenhum evento ainda.</div>`;
             return;
         }
         container.innerHTML = data.ultimosEventos.map(ev => `
             <div class="ev-list-item">
-                <div style="flex:1;">
+                <div class="ev-flex-1">
                     <h4>${escapeHtml(ev.titulo)}</h4>
                     <p>
                         <i class="fas fa-file-alt"></i>
@@ -316,211 +314,312 @@ async function carregarDashboard() {
 }
 
 /* ============================================================================
-   TEMPLATES
+   PRÉ-SELEÇÃO DE TIPOS (upload)
    ============================================================================ */
-function aplicarTemplate(tipo) {
-    const templates = {
-        inscricao: [
-            { label: 'Nome Completo', tipo: 'text', obrigatorio: true },
-            { label: 'Data de Nascimento', tipo: 'date', obrigatorio: true },
-            { label: 'CPF', tipo: 'cpf', obrigatorio: true },
-            { label: 'E-mail', tipo: 'email', obrigatorio: true },
-            { label: 'Telefone', tipo: 'tel', obrigatorio: false }
-        ],
-        processo: [
-            { label: 'Nome Completo', tipo: 'text', obrigatorio: true },
-            { label: 'Data de Nascimento', tipo: 'date', obrigatorio: true },
-            { label: 'CPF', tipo: 'cpf', obrigatorio: true },
-            { label: 'RG', tipo: 'rg', obrigatorio: false },
-            { label: 'E-mail', tipo: 'email', obrigatorio: true },
-            { label: 'Telefone', tipo: 'tel', obrigatorio: true },
-            { label: 'Escola de Origem', tipo: 'text', obrigatorio: true },
-            { label: 'Curso Desejado', tipo: 'text', obrigatorio: true },
-            { label: 'Turno', tipo: 'select', obrigatorio: true, opcoes: ['Manhã', 'Tarde', 'Noite'] }
-        ],
-        feira: [
-            { label: 'Nome Completo', tipo: 'text', obrigatorio: true },
-            { label: 'E-mail', tipo: 'email', obrigatorio: true },
-            { label: 'Telefone', tipo: 'tel', obrigatorio: false },
-            { label: 'Título do Projeto', tipo: 'text', obrigatorio: true },
-            { label: 'Área do Conhecimento', tipo: 'select', obrigatorio: true, opcoes: ['Ciências', 'Matemática', 'Linguagens', 'Humanas', 'Tecnologia'] },
-            { label: 'Resumo do Projeto', tipo: 'textarea', obrigatorio: true }
-        ]
-    };
-    const campos = (templates[tipo] || []).map(c => ({
-        label: c.label,
-        tipo: c.tipo,
-        obrigatorio: !!c.obrigatorio,
-        opcoes: c.opcoes || [],
-        placeholder: '',
-        ajuda: '',
-        origemIA: false
-    }));
+const elModeloAnexos = document.getElementById('modelo-anexos');
+if (elModeloAnexos) {
+    elModeloAnexos.addEventListener('change', () => {
+        const files = elModeloAnexos.files;
+        const container = document.getElementById('anexos-tipos-container');
+        if (!container) return;
+        container.innerHTML = '';
+        if (files.length === 0) return;
 
-    anexosState.push({
-        tipo: 'formulario',
-        labelCustom: '',
-        nomeOriginal: 'Template — ' + tipo,
-        arquivo: null,
-        mimetype: null,
-        tamanho: 0,
-        campos,
-        repetivel: false,
-        labelGrupoRepetivel: '',
-        camposRepetiveis: [],
-        quantidadePadrao: 1,
-        maxRepeticoes: 10,
-        exigeAssinatura: false,
-        exibeModalLeitura: true,
-        tipoDadosTermo: 'auto',
-        solicitaAnexo: false,
-        labelSolicitacaoAnexo: '',
-        anexoSolicitacaoObrigatorio: false,
-        isAvaliativo: false,
-        numAvaliadores: 1,
-        modoDistribuicao: 'aleatorio',
-        calcularMedia: true,
-        tipoMedia: 'aritmetica',
-        exigeAssinaturaAvaliador: false,
-        criteriosAvaliacao: [],
-        informacoesDocumento: '',
-        legendasNotas: []
+        Array.from(files).forEach((f) => {
+            const div = document.createElement('div');
+            div.className = 'ev-campo-row';
+            div.innerHTML = `
+                <div class="ev-anexo-pre-info">
+                    <i class="fas fa-paperclip"></i>
+                    <span>${escapeHtml(f.name)}</span>
+                    <small>(${(f.size/1024).toFixed(0)} KB)</small>
+                </div>
+                <select class="anexo-tipo-pre-select">
+                    <option value="edital">Edital</option>
+                    <option value="formulario" selected>Formulário</option>
+                    <option value="termo_lgpd">Termo LGPD</option>
+                    <option value="termo_imagem">Termo de Imagem</option>
+                    <option value="ficha_avaliacao">Ficha de Avaliação</option>
+                    <option value="outro">Outro</option>
+                </select>
+            `;
+            container.appendChild(div);
+        });
     });
-
-    renderAnexosState();
-    toast(`Template aplicado — ${campos.length} campo(s).`, 'success');
 }
 
 /* ============================================================================
-   PRÉ-SELEÇÃO DE TIPOS (upload)
+   SISTEMA DE COTAS
    ============================================================================ */
-document.getElementById('modelo-anexos').addEventListener('change', () => {
-    const files = document.getElementById('modelo-anexos').files;
-    const container = document.getElementById('anexos-tipos-container');
-    container.innerHTML = '';
+function configurarSistemaCotas() {
+    const chkUsarCotas = document.getElementById('modelo-usar-cotas');
+    const blocoCampos = document.getElementById('config-cotas-campos');
 
-    if (files.length === 0) return;
+    if (chkUsarCotas && blocoCampos) {
+        chkUsarCotas.onchange = null;
+        chkUsarCotas.onchange = function () {
+            blocoCampos.style.display = this.checked ? 'block' : 'none';
+        };
+        blocoCampos.style.display = chkUsarCotas.checked ? 'block' : 'none';
+    }
+}
 
-    Array.from(files).forEach((f) => {
-        const div = document.createElement('div');
-        div.className = 'ev-campo-row';
-        div.innerHTML = `
-            <div style="flex: 1; font-size: 13px; display:flex; align-items:center; gap:6px;">
-                <i class="fas fa-paperclip" style="color: var(--ev-primary);"></i>
-                <span>${escapeHtml(f.name)}</span>
-                <small style="color: var(--ev-muted);">(${(f.size/1024).toFixed(0)} KB)</small>
-            </div>
-            <select class="anexo-tipo-pre-select">
-                <option value="edital">Edital</option>
-                <option value="formulario" selected>Formulário</option>
-                <option value="termo_lgpd">Termo LGPD</option>
-                <option value="termo_imagem">Termo de Imagem</option>
-                <option value="ficha_avaliacao">Ficha de Avaliação</option>
-                <option value="outro">Outro</option>
-            </select>
-        `;
-        container.appendChild(div);
+/* ============================================================================
+   SISTEMA DE CATEGORIAS
+   ============================================================================ */
+function renderCategoriasState() {
+    const container = document.getElementById('lista-categorias-container');
+    if (!container) return;
+
+    if (categoriasState.length === 0) {
+        container.innerHTML = '<p class="ev-hint" style="padding: 10px;">Nenhuma opção adicionada.</p>';
+        return;
+    }
+
+    container.innerHTML = categoriasState.map((cat, idx) => `
+        <div class="ev-campo-row" style="grid-template-columns: 1fr auto; margin-bottom: 8px; background: #fff; padding: 10px; border: 1px solid var(--ev-border); border-radius: 8px; display: flex; gap: 10px; align-items: center;">
+            <input type="text" class="ev-input categoria-label" data-idx="${idx}" value="${escapeHtml(cat.label)}" placeholder="Ex: Nível 1" style="flex: 1; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px;">
+            <button type="button" class="ev-btn ev-btn-danger ev-btn-sm btn-remover-categoria" data-idx="${idx}" title="Remover" style="padding: 8px 12px;">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    `).join('');
+
+    container.querySelectorAll('.categoria-label').forEach(inp => {
+        inp.addEventListener('input', (e) => {
+            categoriasState[Number(e.target.dataset.idx)].label = e.target.value;
+        });
     });
-});
+    container.querySelectorAll('.btn-remover-categoria').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const idx = Number(e.currentTarget.dataset.idx);
+            categoriasState.splice(idx, 1);
+            renderCategoriasState();
+        });
+    });
+}
+
+const btnAddCategoria = document.getElementById('btn-add-categoria');
+if (btnAddCategoria) {
+    btnAddCategoria.addEventListener('click', () => {
+        categoriasState.push({ label: '' });
+        renderCategoriasState();
+    });
+}
+
+function configurarCategorias() {
+    const chkUsar = document.getElementById('modelo-usar-categorias');
+    const bloco = document.getElementById('config-categorias-campos');
+
+    if (chkUsar && bloco) {
+        chkUsar.onchange = null;
+        chkUsar.onchange = function () {
+            bloco.style.display = this.checked ? 'block' : 'none';
+        };
+        bloco.style.display = chkUsar.checked ? 'block' : 'none';
+    }
+}
 
 /* ============================================================================
    EXTRAÇÃO POR IA
    ============================================================================ */
-document.getElementById('btn-extrair-ia').addEventListener('click', async () => {
-    const btn = document.getElementById('btn-extrair-ia');
-    const status = document.getElementById('ia-status');
-    const input = document.getElementById('modelo-anexos');
+const btnExtrairIA = document.getElementById('btn-extrair-ia');
+if (btnExtrairIA) {
+    btnExtrairIA.addEventListener('click', async () => {
+        const btn = btnExtrairIA;
+        const status = document.getElementById('ia-status');
+        const input = document.getElementById('modelo-anexos');
+        const selectPre = document.querySelector('.anexo-tipo-pre-select');
 
-    if (!input.files || input.files.length === 0) {
-        return mostrarAlerta('form-modelo-alert', 'Envie pelo menos um arquivo antes de extrair.', 'error');
-    }
-
-    const conteudoOriginal = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Analisando...';
-    status.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Analisando arquivo(s)...';
-
-    try {
-        const fd = new FormData();
-        Array.from(input.files).forEach((f) => fd.append('anexos', f));
-
-        const data = await api(EV_API.extrairIA, { method: 'POST', body: fd });
-
-        let arquivos = data.arquivos;
-        if (!arquivos && Array.isArray(data.camposSugeridos)) {
-            arquivos = [{
-                tipoAnexo: 'formulario',
-                nomeOriginal: (input.files[0] && input.files[0].name) || 'Arquivo',
-                arquivo: null,
-                campos: data.camposSugeridos,
-                fonte: data.fonte
-            }];
-        }
-        if (!arquivos || arquivos.length === 0) {
-            status.innerHTML = '<i class="fas fa-circle-exclamation" style="color: var(--ev-warning);"></i> Nenhum campo detectado.';
-            toast('Nenhum campo detectado nos arquivos.', 'warning');
-            return;
+        if (!input || !input.files || input.files.length === 0) {
+            return mostrarAlerta('form-modelo-alert', 'Envie pelo menos um arquivo antes de continuar.', 'error');
         }
 
-        arquivos.forEach(a => {
-            anexosState.push({
-                tipo: a.tipoAnexo || 'outro',
-                labelCustom: '',
-                nomeOriginal: a.nomeOriginal || 'Arquivo',
-                arquivo: a.arquivo || null,
-                mimetype: a.mimetype || null,
-                tamanho: a.tamanho || 0,
-                campos: a.campos || [],
-                repetivel: !!a.repetivel,
-                labelGrupoRepetivel: a.labelGrupoRepetivel || '',
-                camposRepetiveis: a.camposRepetiveis || [],
-                quantidadePadrao: a.quantidadePadrao || 3,
-                maxRepeticoes: a.maxRepeticoes || 10,
-                exigeAssinatura: !!a.exigeAssinatura,
-                exibeModalLeitura: true,
-                tipoDadosTermo: 'auto',
-                solicitaAnexo: !!a.solicitaAnexo,
-                labelSolicitacaoAnexo: a.labelSolicitacaoAnexo || '',
-                anexoSolicitacaoObrigatorio: !!a.anexoSolicitacaoObrigatorio,
-                isAvaliativo: !!a.isAvaliativo,
-                numAvaliadores: a.numAvaliadores || 1,
-                modoDistribuicao: a.modoDistribuicao || 'aleatorio',
-                calcularMedia: a.calcularMedia !== false,
-                tipoMedia: a.tipoMedia || 'aritmetica',
-                exigeAssinaturaAvaliador: !!a.exigeAssinaturaAvaliador,
-                criteriosAvaliacao: a.criteriosAvaliacao || [],
-                informacoesDocumento: a.informacoesDocumento || '',
-                legendasNotas: a.legendasNotas || []
+        const tipoSelecionado = selectPre ? selectPre.value : 'formulario';
+        const isEdital = tipoSelecionado === 'edital';
+
+        if (isEdital) {
+            btn.innerHTML = '<i class="fas fa-check"></i> OK (Anexar Edital)';
+        } else {
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Analisando...';
+        }
+
+        btn.disabled = true;
+        if (status) status.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Processando...';
+
+        try {
+            const fd = new FormData();
+            Array.from(input.files).forEach((f) => fd.append('anexos', f));
+
+            if (isEdital) fd.append('forcar_edital', 'true');
+
+            const data = await api(EV_API.extrairIA, { method: 'POST', body: fd });
+
+            let arquivos = data.arquivos;
+            if (!arquivos && Array.isArray(data.camposSugeridos)) {
+                arquivos = [{
+                    tipoAnexo: isEdital ? 'edital' : 'formulario',
+                    nomeOriginal: (input.files[0] && input.files[0].name) || 'Arquivo',
+                    arquivo: null,
+                    campos: isEdital ? [] : data.camposSugeridos,
+                    fonte: isEdital ? 'edital' : data.fonte
+                }];
+            }
+
+            if (!arquivos || arquivos.length === 0) {
+                if (status) status.innerHTML = '<i class="fas fa-circle-exclamation ev-ic-warning"></i> Nenhum campo detectado.';
+                toast('Nenhum campo detectado.', 'warning');
+                return;
+            }
+
+            arquivos.forEach(a => {
+                if (a.tipoAnexo === 'edital') {
+                    a.campos = [];
+                    a.isAvaliativo = false;
+                    a.repetivel = false;
+                }
+
+                anexosState.push({
+                    tipo: a.tipoAnexo || 'outro',
+                    labelCustom: '',
+                    nomeOriginal: a.nomeOriginal || 'Arquivo',
+                    arquivo: a.arquivo || null,
+                    mimetype: a.mimetype || null,
+                    tamanho: a.tamanho || 0,
+                    campos: a.campos || [],
+                    repetivel: !!a.repetivel,
+                    labelGrupoRepetivel: a.labelGrupoRepetivel || '',
+                    camposRepetiveis: a.camposRepetiveis || [],
+                    quantidadePadrao: a.quantidadePadrao || 3,
+                    maxRepeticoes: a.maxRepeticoes || 10,
+                    exigeAssinatura: !!a.exigeAssinatura,
+                    exibeModalLeitura: true,
+                    tipoDadosTermo: 'auto',
+                    solicitaAnexo: !!a.solicitaAnexo,
+                    labelSolicitacaoAnexo: a.labelSolicitacaoAnexo || '',
+                    anexoSolicitacaoObrigatorio: !!a.anexoSolicitacaoObrigatorio,
+                    isAvaliativo: !!a.isAvaliativo,
+                    numAvaliadores: a.numAvaliadores || 1,
+                    modoDistribuicao: a.modoDistribuicao || 'aleatorio',
+                    calcularMedia: a.calcularMedia !== false,
+                    tipoMedia: a.tipoMedia || 'aritmetica',
+                    exigeAssinaturaAvaliador: !!a.exigeAssinaturaAvaliador,
+                    criteriosAvaliacao: a.criteriosAvaliacao || [],
+                    informacoesDocumento: a.informacoesDocumento || '',
+                    legendasNotas: a.legendasNotas || []
+                });
             });
-        });
 
-        status.innerHTML = `<i class="fas fa-circle-check" style="color: var(--ev-success);"></i> ${data.mensagem || 'Extraído'} — ${arquivos.length} anexo(s).`;
-        toast(`${arquivos.length} anexo(s) processado(s) pela IA.`, 'success');
-        input.value = '';
-        document.getElementById('anexos-tipos-container').innerHTML = '';
-        renderAnexosState();
-    } catch (err) {
-        status.innerHTML = `<i class="fas fa-circle-xmark" style="color: var(--ev-danger);"></i> ${escapeHtml(err.message)}`;
-        mostrarAlerta('form-modelo-alert', `❌ ${err.message}`, 'error');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = conteudoOriginal;
-    }
-});
+            if (isEdital) {
+                if (status) status.innerHTML = '<i class="fas fa-check ev-ic-success"></i> Edital anexado com sucesso.';
+                toast('Edital anexado!', 'success');
+            } else {
+                if (status) status.innerHTML = `<i class="fas fa-circle-check ev-ic-success"></i> ${data.mensagem || 'Extraído'} — ${arquivos.length} anexo(s).`;
+                toast(`${arquivos.length} anexo(s) processado(s).`, 'success');
+            }
+
+            input.value = '';
+            const tiposContainer = document.getElementById('anexos-tipos-container');
+            if (tiposContainer) tiposContainer.innerHTML = '';
+            renderAnexosState();
+
+            setTimeout(() => {
+                const anexosContainer = document.getElementById('anexos-container');
+                const passo2 = document.querySelector('#panel-modelos .ev-card:nth-child(2)');
+                if (anexosContainer && anexosContainer.children.length > 0) {
+                    (passo2 || anexosContainer).scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 400);
+        } catch (err) {
+            if (status) status.innerHTML = `<i class="fas fa-circle-xmark ev-ic-danger"></i> ${escapeHtml(err.message)}`;
+            mostrarAlerta('form-modelo-alert', `❌ ${err.message}`, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-robot"></i> Extrair Campos Automaticamente';
+        }
+    });
+}
+
+const anexosTiposContainer = document.getElementById('anexos-tipos-container');
+if (anexosTiposContainer) {
+    anexosTiposContainer.addEventListener('change', (e) => {
+        if (e.target.classList.contains('anexo-tipo-pre-select')) {
+            const btn = document.getElementById('btn-extrair-ia');
+            if (!btn) return;
+            if (e.target.value === 'edital') {
+                btn.innerHTML = '<i class="fas fa-check"></i> OK (Anexar Edital)';
+            } else {
+                btn.innerHTML = '<i class="fas fa-robot"></i> Extrair Campos Automaticamente';
+            }
+        }
+    });
+}
 
 /* ============================================================================
-   RENDERIZAR ANEXOS
+   ANEXOS EXTRAS
+   ============================================================================ */
+function renderAnexosExtrasState() {
+    const container = document.getElementById('anexos-extras-container');
+    if (!container) return;
+
+    if (anexosExtrasState.length === 0) {
+        container.innerHTML = '<p class="ev-hint" style="padding: 10px;">Nenhum anexo solicitado ainda.</p>';
+        return;
+    }
+
+    container.innerHTML = anexosExtrasState.map((item, idx) => `
+        <div class="ev-campo-row" style="grid-template-columns: 2fr 1fr auto; margin-bottom: 10px; background: #fff; padding: 12px; border: 1px solid var(--ev-border); border-radius: 8px; align-items: center; display: flex; gap: 10px;">
+            <input type="text" class="ev-input anexo-extra-label" data-idx="${idx}" value="${escapeHtml(item.label)}" placeholder="Ex: Cópia do RG e CPF" style="flex: 2; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; width: 100%;">
+            <label class="ev-check-inline" style="cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 13px; flex: 1;">
+                <input type="checkbox" class="anexo-extra-obrig" data-idx="${idx}" ${item.obrigatorio ? 'checked' : ''}> Obrigatório
+            </label>
+            <button type="button" class="ev-btn ev-btn-danger ev-btn-sm btn-remover-anexo-extra" data-idx="${idx}" title="Remover">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    `).join('');
+
+    container.querySelectorAll('.anexo-extra-label').forEach(inp => {
+        inp.addEventListener('input', (e) => {
+            anexosExtrasState[Number(e.target.dataset.idx)].label = e.target.value;
+        });
+    });
+    container.querySelectorAll('.anexo-extra-obrig').forEach(cb => {
+        cb.addEventListener('change', (e) => {
+            anexosExtrasState[Number(e.target.dataset.idx)].obrigatorio = e.target.checked;
+        });
+    });
+    container.querySelectorAll('.btn-remover-anexo-extra').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const idx = Number(e.currentTarget.dataset.idx);
+            anexosExtrasState.splice(idx, 1);
+            renderAnexosExtrasState();
+        });
+    });
+}
+
+const btnAddAnexoExtra = document.getElementById('btn-add-anexo-extra');
+if (btnAddAnexoExtra) {
+    btnAddAnexoExtra.addEventListener('click', () => {
+        anexosExtrasState.push({ label: '', obrigatorio: false });
+        renderAnexosExtrasState();
+    });
+}
+
+/* ============================================================================
+   RENDERIZAR ANEXOS PADRÃO
    ============================================================================ */
 function renderAnexosState() {
     const container = document.getElementById('anexos-container');
     const vazio = document.getElementById('anexos-vazio');
+    if (!container) return;
 
     if (anexosState.length === 0) {
         container.innerHTML = '';
-        vazio.style.display = 'block';
+        if (vazio) vazio.style.display = 'block';
         return;
     }
-    vazio.style.display = 'none';
+    if (vazio) vazio.style.display = 'none';
 
     container.innerHTML = anexosState.map((anexo, idx) => renderAnexoCard(anexo, idx)).join('');
     bindEventosAnexos(container);
@@ -530,6 +629,7 @@ function renderAnexoCard(anexo, idx) {
     const icon = TIPOS_ANEXO_ICON[anexo.tipo] || 'fa-paperclip';
     const cor = TIPOS_ANEXO_COR[anexo.tipo] || '#6b7280';
     const label = labelDoAnexo(anexo);
+    const ehEdital = anexo.tipo === 'edital';
 
     const fileInfo = anexo.arquivo
         ? `<a href="${escapeHtml(anexo.arquivo)}" target="_blank" class="ev-anexo-file-link">
@@ -559,8 +659,35 @@ function renderAnexoCard(anexo, idx) {
         </div>
     ` : '';
 
+    if (ehEdital) {
+        return `
+            <div class="ev-anexo-card" style="border-left-color: ${cor};">
+                <div class="ev-anexo-header">
+                    <div class="ev-anexo-title">
+                        <div class="ev-anexo-icon" style="background: ${cor}20; color: ${cor};">
+                            <i class="fas ${icon}"></i>
+                        </div>
+                        <div class="ev-anexo-title-text">
+                            <strong>${escapeHtml(label)}</strong>
+                            ${tipoSelect}
+                        </div>
+                    </div>
+                    <div class="ev-anexo-actions">
+                        <button type="button" class="ev-btn ev-btn-danger ev-btn-sm" data-remover-anexo="${idx}" title="Remover anexo">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="ev-anexo-file">${fileInfo}</div>
+                <p class="ev-hint ev-hint-edital">
+                    <i class="fas fa-info-circle"></i> Editais são apenas anexados — não extraem campos.
+                </p>
+            </div>
+        `;
+    }
+
     const camposHtml = (anexo.campos || []).map((c, ci) => `
-        <div class="ev-campo-row" data-anexo-idx="${idx}" data-campo-idx="${ci}" style="grid-template-columns:1.2fr 1fr 0.6fr auto;">
+        <div class="ev-campo-row ev-campo-row-campos" data-anexo-idx="${idx}" data-campo-idx="${ci}">
             <input type="text" class="campo-label" value="${escapeHtml(c.label)}" placeholder="Nome do campo">
             <select class="campo-tipo">
                 ${['text|Texto', 'date|Data', 'number|Número', 'email|E-mail', 'tel|Telefone',
@@ -581,7 +708,7 @@ function renderAnexoCard(anexo, idx) {
 
     const repetivel = !!anexo.repetivel;
     const camposRepetiveisHtml = (anexo.camposRepetiveis || []).map((c, ci) => `
-        <div class="ev-campo-row campo-repetivel-row" data-anexo-idx="${idx}" data-campo-rep-idx="${ci}" style="grid-template-columns:1.2fr 1fr 0.6fr auto;">
+        <div class="ev-campo-row campo-repetivel-row" data-anexo-idx="${idx}" data-campo-rep-idx="${ci}">
             <input type="text" class="campo-repetivel-label" value="${escapeHtml(c.label)}" placeholder="Nome do campo">
             <select class="campo-repetivel-tipo">
                 ${['text|Texto', 'date|Data', 'number|Número', 'email|E-mail', 'tel|Telefone',
@@ -647,8 +774,8 @@ function renderAnexoCard(anexo, idx) {
                     <input type="checkbox" class="anexo-exibe-modal-leitura" data-anexo-idx="${idx}" ${exibeModalLeitura ? 'checked' : ''}>
                     <span>📖 Ler o documento antes de assinar</span>
                 </label>
-                <div style="margin-top: 12px;">
-                    <label style="font-size: 12px; font-weight: 600;">De quem é este termo?</label>
+                <div class="ev-mt-12">
+                    <label class="ev-label-sm">De quem é este termo?</label>
                     <select class="anexo-tipo-dados" data-anexo-idx="${idx}">
                         <option value="auto" ${anexo.tipoDadosTermo === 'auto' ? 'selected' : ''}>🤖 Detectar automaticamente</option>
                         <option value="professor" ${anexo.tipoDadosTermo === 'professor' ? 'selected' : ''}>👨‍🏫 Forçar PROFESSOR</option>
@@ -668,11 +795,11 @@ function renderAnexoCard(anexo, idx) {
                 <span>📎 Solicitar anexo do participante</span>
             </label>
             <div class="bloco-solicitacao-anexo-conteudo" style="display: ${solicitaAnexo ? 'block' : 'none'};">
-                <label style="font-size: 12px; font-weight: 600;">Qual anexo deve ser enviado?</label>
+                <label class="ev-label-sm">Qual anexo deve ser enviado?</label>
                 <input type="text" class="anexo-label-solicitacao" data-anexo-idx="${idx}"
                        value="${escapeHtml(anexo.labelSolicitacaoAnexo || '')}"
                        placeholder="Ex: Termo de Autorização">
-                <label class="ev-switch ev-switch-sm" style="margin-top: 10px;">
+                <label class="ev-switch ev-switch-sm ev-mt-12">
                     <input type="checkbox" class="anexo-solicitacao-obrigatoria" data-anexo-idx="${idx}" ${anexoObrigatorio ? 'checked' : ''}>
                     <span>⚠️ Anexo obrigatório</span>
                 </label>
@@ -709,7 +836,7 @@ function renderAnexoCard(anexo, idx) {
                     </div>
                 </div>
 
-                <label class="ev-switch ev-switch-sm" style="margin-top: 10px;">
+                <label class="ev-switch ev-switch-sm ev-mt-12">
                     <input type="checkbox" class="anexo-calcular-media" data-anexo-idx="${idx}" ${calcularMedia ? 'checked' : ''}>
                     <span>📊 Calcular média final automaticamente</span>
                 </label>
@@ -721,7 +848,7 @@ function renderAnexoCard(anexo, idx) {
                     </select>
                 </div>
 
-                <label class="ev-switch ev-switch-sm" style="margin-top: 10px;">
+                <label class="ev-switch ev-switch-sm ev-mt-12">
                     <input type="checkbox" class="anexo-exige-assinatura-avaliador" data-anexo-idx="${idx}" ${exigeAssinaturaAvaliador ? 'checked' : ''}>
                     <span>✍️ Exigir assinatura do avaliador</span>
                 </label>
@@ -807,6 +934,16 @@ function bindEventosAnexos(container) {
             const idx = Number(sel.dataset.anexoIdx);
             anexosState[idx].tipo = sel.value;
             if (sel.value !== 'outro') anexosState[idx].labelCustom = '';
+            if (sel.value === 'edital') {
+                anexosState[idx].campos = [];
+                anexosState[idx].camposRepetiveis = [];
+                anexosState[idx].repetivel = false;
+                anexosState[idx].exigeAssinatura = false;
+                anexosState[idx].isAvaliativo = false;
+                anexosState[idx].criteriosAvaliacao = [];
+                anexosState[idx].legendasNotas = [];
+                anexosState[idx].informacoesDocumento = '';
+            }
             renderAnexosState();
         });
     });
@@ -1057,128 +1194,170 @@ function bindEventosAnexos(container) {
 /* ============================================================================
    SALVAR MODELO
    ============================================================================ */
-document.getElementById('btn-salvar-modelo').addEventListener('click', async () => {
-    const btn = document.getElementById('btn-salvar-modelo');
-    const conteudoOriginal = btn.innerHTML;
+const btnSalvarModelo = document.getElementById('btn-salvar-modelo');
+if (btnSalvarModelo) {
+    btnSalvarModelo.addEventListener('click', async () => {
+        const btn = btnSalvarModelo;
+        const conteudoOriginal = btn.innerHTML;
 
-    try {
-        const nome = document.getElementById('modelo-nome').value.trim();
-        const descricao = document.getElementById('modelo-descricao').value.trim();
-        const requerAvaliacao = document.getElementById('modelo-requer-avaliacao')?.checked || false;
-        const permiteMultiplasInscricoes = document.getElementById('modelo-permite-multiplas')?.checked || false;
+        try {
+            const nome = document.getElementById('modelo-nome').value.trim();
+            const descricao = document.getElementById('modelo-descricao').value.trim();
+            const requerAvaliacao = document.getElementById('modelo-requer-avaliacao')?.checked || false;
+            const permiteMultiplasInscricoes = document.getElementById('modelo-permite-multiplas')?.checked || false;
 
-        if (!nome) {
-            document.getElementById('modelo-nome').focus();
-            throw new Error('Nome do modelo é obrigatório');
+            const usarSistemaCotas = !!document.getElementById('modelo-usar-cotas')?.checked;
+            const publicoLaudoCotas = document.getElementById('modelo-publico-laudo')?.value || 'professor';
+            const labelLaudoCotas = (document.getElementById('modelo-label-laudo')?.value || 'Laudo Médico').trim();
+            const laudoCotasObrigatorio = document.getElementById('modelo-laudo-obrigatorio')?.checked !== false;
+
+            const usarCategorias = !!document.getElementById('modelo-usar-categorias')?.checked;
+            const labelCategorias = (document.getElementById('modelo-label-categorias')?.value || 'Categoria / Modalidade').trim();
+            const categoriaObrigatoria = document.getElementById('modelo-categoria-obrigatoria')?.checked !== false;
+
+            if (!nome) {
+                document.getElementById('modelo-nome').focus();
+                throw new Error('Nome do modelo é obrigatório');
+            }
+            if (anexosState.length === 0) throw new Error('Adicione pelo menos um anexo base');
+            if (usarCategorias && categoriasState.filter(c => c.label.trim()).length === 0) {
+                throw new Error('Adicione pelo menos uma categoria ou desmarque a opção.');
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Salvando...';
+
+            const anexosExtrasLimpos = anexosExtrasState.filter(a => a.label && a.label.trim()).map(a => ({
+                label: a.label.trim(),
+                obrigatorio: !!a.obrigatorio
+            }));
+
+            const categoriasLimpas = categoriasState.filter(c => c.label && c.label.trim()).map(c => ({
+                label: c.label.trim()
+            }));
+
+            const anexosLimpos = anexosState.map(a => {
+                const ehEdital = a.tipo === 'edital';
+                return {
+                    tipo: a.tipo,
+                    labelCustom: (a.labelCustom || '').trim(),
+                    nomeOriginal: a.nomeOriginal,
+                    arquivo: a.arquivo,
+                    mimetype: a.mimetype,
+                    tamanho: a.tamanho,
+                    campos: ehEdital ? [] : (a.campos || [])
+                        .filter(c => c.label && c.label.trim())
+                        .map(c => ({
+                            label: c.label.trim(),
+                            tipo: c.tipo,
+                            obrigatorio: !!c.obrigatorio,
+                            opcoes: c.opcoes || [],
+                            placeholder: c.placeholder || '',
+                            ajuda: c.ajuda || '',
+                            origemIA: !!c.origemIA
+                        })),
+                    repetivel: ehEdital ? false : !!a.repetivel,
+                    labelGrupoRepetivel: ehEdital ? '' : (a.labelGrupoRepetivel || '').trim(),
+                    camposRepetiveis: ehEdital ? [] : (a.camposRepetiveis || [])
+                        .filter(c => c.label && c.label.trim())
+                        .map(c => ({
+                            label: c.label.trim(),
+                            tipo: c.tipo,
+                            obrigatorio: !!c.obrigatorio,
+                            opcoes: c.opcoes || [],
+                            placeholder: c.placeholder || '',
+                            ajuda: c.ajuda || '',
+                            origemIA: !!c.origemIA
+                        })),
+                    quantidadePadrao: ehEdital ? 1 : (parseInt(a.quantidadePadrao) || 1),
+                    maxRepeticoes: ehEdital ? 10 : (parseInt(a.maxRepeticoes) || 10),
+                    exigeAssinatura: ehEdital ? false : !!a.exigeAssinatura,
+                    exibeModalLeitura: ehEdital ? false : (a.exibeModalLeitura !== false),
+                    tipoDadosTermo: ehEdital ? 'auto' : (a.tipoDadosTermo || 'auto'),
+                    solicitaAnexo: ehEdital ? false : !!a.solicitaAnexo,
+                    labelSolicitacaoAnexo: ehEdital ? '' : (a.labelSolicitacaoAnexo || '').trim(),
+                    anexoSolicitacaoObrigatorio: ehEdital ? false : !!a.anexoSolicitacaoObrigatorio,
+                    isAvaliativo: ehEdital ? false : !!a.isAvaliativo,
+                    numAvaliadores: ehEdital ? 1 : (parseInt(a.numAvaliadores) || 1),
+                    modoDistribuicao: ehEdital ? 'aleatorio' : (a.modoDistribuicao || 'aleatorio'),
+                    calcularMedia: ehEdital ? false : (a.calcularMedia !== false),
+                    tipoMedia: ehEdital ? 'aritmetica' : (a.tipoMedia || 'aritmetica'),
+                    exigeAssinaturaAvaliador: ehEdital ? false : !!a.exigeAssinaturaAvaliador,
+                    criteriosAvaliacao: ehEdital ? [] : (a.criteriosAvaliacao || [])
+                        .filter(c => c.label && c.label.trim())
+                        .map(c => ({
+                            label: c.label.trim(),
+                            descricao: (c.descricao || '').trim(),
+                            notaMaxima: parseFloat(c.notaMaxima) || 5,
+                            obrigatorio: c.obrigatorio !== false,
+                            origemIA: !!c.origemIA
+                        })),
+                    informacoesDocumento: ehEdital ? '' : (a.informacoesDocumento || ''),
+                    legendasNotas: ehEdital ? [] : (a.legendasNotas || [])
+                };
+            });
+
+            const fd = new FormData();
+            fd.append('nomeModelo', nome);
+            fd.append('descricao', descricao);
+            fd.append('anexos', JSON.stringify(anexosLimpos));
+            fd.append('anexosExtras', JSON.stringify(anexosExtrasLimpos));
+            fd.append('requerAvaliacao', requerAvaliacao);
+            fd.append('permiteMultiplasInscricoes', permiteMultiplasInscricoes);
+            fd.append('usarSistemaCotas', usarSistemaCotas);
+            fd.append('publicoLaudoCotas', publicoLaudoCotas);
+            fd.append('labelLaudoCotas', labelLaudoCotas);
+            fd.append('laudoCotasObrigatorio', laudoCotasObrigatorio);
+            fd.append('usarCategorias', usarCategorias);
+            fd.append('labelCategorias', labelCategorias);
+            fd.append('categorias', JSON.stringify(categoriasLimpas));
+            fd.append('categoriaObrigatoria', categoriaObrigatoria);
+
+            if (editandoModeloId) {
+                await api(`${EV_API.modelos}/${editandoModeloId}`, { method: 'PUT', body: fd });
+                toast('Modelo atualizado com sucesso!', 'success');
+            } else {
+                await api(EV_API.modelos, { method: 'POST', body: fd });
+                toast('Modelo criado com sucesso!', 'success');
+            }
+
+            editandoModeloId = null;
+            document.getElementById('modelo-nome').value = '';
+            document.getElementById('modelo-descricao').value = '';
+            document.getElementById('modelo-anexos').value = '';
+            document.getElementById('modelo-requer-avaliacao').checked = false;
+            document.getElementById('modelo-permite-multiplas').checked = false;
+            document.getElementById('modelo-usar-cotas').checked = false;
+            document.getElementById('modelo-usar-categorias').checked = false;
+            document.getElementById('config-cotas-campos').style.display = 'none';
+            document.getElementById('config-categorias-campos').style.display = 'none';
+
+            document.getElementById('anexos-tipos-container').innerHTML = '';
+            document.getElementById('ia-status').textContent = '';
+
+            const header = document.querySelector('#panel-modelos .ev-card h3');
+            if (header) header.innerHTML = '<i class="fas fa-file-upload"></i> Passo 1 — Anexos e Extração Automática';
+
+            anexosState = [];
+            anexosExtrasState = [];
+            categoriasState = [];
+            renderAnexosState();
+            renderAnexosExtrasState();
+            renderCategoriasState();
+            carregarModelos();
+            carregarDashboard();
+        } catch (err) {
+            mostrarAlerta('form-modelo-alert', `❌ ${err.message}`, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = conteudoOriginal;
         }
-        if (anexosState.length === 0) throw new Error('Adicione pelo menos um anexo');
+    });
+}
 
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Salvando...';
-
-        const anexosLimpos = anexosState.map(a => ({
-            tipo: a.tipo,
-            labelCustom: (a.labelCustom || '').trim(),
-            nomeOriginal: a.nomeOriginal,
-            arquivo: a.arquivo,
-            mimetype: a.mimetype,
-            tamanho: a.tamanho,
-            campos: (a.campos || [])
-                .filter(c => c.label && c.label.trim())
-                .map(c => ({
-                    label: c.label.trim(),
-                    tipo: c.tipo,
-                    obrigatorio: !!c.obrigatorio,
-                    opcoes: c.opcoes || [],
-                    placeholder: c.placeholder || '',
-                    ajuda: c.ajuda || '',
-                    origemIA: !!c.origemIA
-                })),
-            repetivel: !!a.repetivel,
-            labelGrupoRepetivel: (a.labelGrupoRepetivel || '').trim(),
-            camposRepetiveis: (a.camposRepetiveis || [])
-                .filter(c => c.label && c.label.trim())
-                .map(c => ({
-                    label: c.label.trim(),
-                    tipo: c.tipo,
-                    obrigatorio: !!c.obrigatorio,
-                    opcoes: c.opcoes || [],
-                    placeholder: c.placeholder || '',
-                    ajuda: c.ajuda || '',
-                    origemIA: !!c.origemIA
-                })),
-            quantidadePadrao: parseInt(a.quantidadePadrao) || 1,
-            maxRepeticoes: parseInt(a.maxRepeticoes) || 10,
-            exigeAssinatura: !!a.exigeAssinatura,
-            exibeModalLeitura: a.exibeModalLeitura !== false,
-            tipoDadosTermo: a.tipoDadosTermo || 'auto',
-            solicitaAnexo: !!a.solicitaAnexo,
-            labelSolicitacaoAnexo: (a.labelSolicitacaoAnexo || '').trim(),
-            anexoSolicitacaoObrigatorio: !!a.anexoSolicitacaoObrigatorio,
-            isAvaliativo: !!a.isAvaliativo,
-            numAvaliadores: parseInt(a.numAvaliadores) || 1,
-            modoDistribuicao: a.modoDistribuicao || 'aleatorio',
-            calcularMedia: a.calcularMedia !== false,
-            tipoMedia: a.tipoMedia || 'aritmetica',
-            exigeAssinaturaAvaliador: !!a.exigeAssinaturaAvaliador,
-            criteriosAvaliacao: (a.criteriosAvaliacao || [])
-                .filter(c => c.label && c.label.trim())
-                .map(c => ({
-                    label: c.label.trim(),
-                    descricao: (c.descricao || '').trim(),
-                    notaMaxima: parseFloat(c.notaMaxima) || 5,
-                    obrigatorio: c.obrigatorio !== false,
-                    origemIA: !!c.origemIA
-                })),
-            informacoesDocumento: a.informacoesDocumento || '',
-            legendasNotas: a.legendasNotas || []
-        }));
-
-        const fd = new FormData();
-        fd.append('nomeModelo', nome);
-        fd.append('descricao', descricao);
-        fd.append('anexos', JSON.stringify(anexosLimpos));
-        fd.append('requerAvaliacao', requerAvaliacao);
-        fd.append('permiteMultiplasInscricoes', permiteMultiplasInscricoes);
-
-        if (editandoModeloId) {
-            await api(`${EV_API.modelos}/${editandoModeloId}`, { method: 'PUT', body: fd });
-            toast('Modelo atualizado com sucesso!', 'success');
-        } else {
-            await api(EV_API.modelos, { method: 'POST', body: fd });
-            toast('Modelo criado com sucesso!', 'success');
-        }
-
-        editandoModeloId = null;
-        document.getElementById('modelo-nome').value = '';
-        document.getElementById('modelo-descricao').value = '';
-        document.getElementById('modelo-anexos').value = '';
-        document.getElementById('modelo-requer-avaliacao').checked = false;
-        const chkMultiplas = document.getElementById('modelo-permite-multiplas');
-        if (chkMultiplas) chkMultiplas.checked = false;
-        document.getElementById('anexos-tipos-container').innerHTML = '';
-        document.getElementById('ia-status').textContent = '';
-
-        const header = document.querySelector('#panel-modelos .ev-card h3');
-        if (header) header.innerHTML = '<i class="fas fa-file-upload"></i> Passo 1 — Anexos e Extração Automática';
-
-        anexosState = [];
-        renderAnexosState();
-        carregarModelos();
-        carregarDashboard();
-    } catch (err) {
-        mostrarAlerta('form-modelo-alert', `❌ ${err.message}`, 'error');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = conteudoOriginal;
-    }
-});
-
-/* ============================================================================
-   LISTAR MODELOS
-   ============================================================================ */
 async function carregarModelos() {
     const c = document.getElementById('lista-modelos');
+    if (!c) return;
     c.innerHTML = '<div class="ev-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div>';
     try {
         const data = await api(EV_API.modelos);
@@ -1191,6 +1370,8 @@ async function carregarModelos() {
         c.innerHTML = modelos.map(m => {
             const anexosResumo = (m.anexos || []).map(a => {
                 const lab = labelDoAnexo(a);
+                const ehEdital = a.tipo === 'edital';
+                if (ehEdital) return `${lab} (apenas anexo)`;
                 const n = (a.campos || []).length;
                 const rep = a.repetivel ? ` • 🔁 ${a.camposRepetiveis?.length || 0}` : '';
                 const ass = a.exigeAssinatura ? ' • ✍️' : '';
@@ -1206,16 +1387,18 @@ async function carregarModelos() {
 
             const tags = [
                 m.requerAvaliacao ? '<span class="ev-tag ev-tag-primary">⭐ Requer avaliação</span>' : '',
-                m.permiteMultiplasInscricoes ? '<span class="ev-tag ev-tag-success">🔁 Múltiplas inscrições</span>' : ''
+                m.permiteMultiplasInscricoes ? '<span class="ev-tag ev-tag-success">🔁 Múltiplas inscrições</span>' : '',
+                m.usarSistemaCotas ? '<span class="ev-tag ev-tag-info">👥 Sistema de cotas</span>' : '',
+                m.usarCategorias ? '<span class="ev-tag ev-tag-info">🏷️ Categorias</span>' : ''
             ].filter(Boolean).join('');
 
             return `
                 <div class="ev-list-item">
-                    <div style="flex:1; min-width: 200px;">
+                    <div class="ev-flex-1-min">
                         <h4>${escapeHtml(m.nomeModelo)}</h4>
                         <p>${escapeHtml(m.descricao || 'Sem descrição')}</p>
-                        <p style="font-size:12px; margin-top:6px;">${escapeHtml(anexosResumo || 'sem anexos')}</p>
-                        ${tags ? `<div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">${tags}</div>` : ''}
+                        <p class="ev-anexos-resumo">${escapeHtml(anexosResumo || 'sem anexos')}</p>
+                        ${tags ? `<div class="ev-anexo-tags">${tags}</div>` : ''}
                     </div>
                     <div class="ev-actions">
                         <button class="ev-btn ev-btn-secondary ev-btn-sm" onclick="verModelo('${m._id}')" title="Ver detalhes">
@@ -1249,51 +1432,94 @@ async function verModelo(id) {
 
             ${m.requerAvaliacao ? '<p class="ev-alert ev-alert-info"><i class="fas fa-star"></i> Este modelo requer avaliação.</p>' : ''}
             ${m.permiteMultiplasInscricoes ? '<p class="ev-alert ev-alert-success"><i class="fas fa-rotate"></i> Este modelo permite múltiplas inscrições.</p>' : ''}
+            ${m.usarSistemaCotas ? `
+                <p class="ev-alert ev-alert-info">
+                    <i class="fas fa-users"></i> Sistema de cotas ativo — laudo direcionado para:
+                    <strong>${m.publicoLaudoCotas === 'professor' ? 'Professor/Participante' : m.publicoLaudoCotas === 'aluno' ? 'Cada aluno' : 'Ambos'}</strong>
+                    ${m.laudoCotasObrigatorio ? ' (obrigatório)' : ' (opcional)'}
+                </p>
+            ` : ''}
+            ${m.usarCategorias ? `
+                <p class="ev-alert ev-alert-info">
+                    <i class="fas fa-tags"></i> Categorias ativas — campo: <strong>${escapeHtml(m.labelCategorias || 'Categoria / Modalidade')}</strong>
+                    ${m.categoriaObrigatoria ? ' (obrigatório)' : ' (opcional)'}
+                </p>
+            ` : ''}
 
             <hr>
 
             <h6><i class="fas fa-paperclip"></i> Anexos (${(m.anexos || []).length})</h6>
-            ${(m.anexos || []).map(a => `
+            ${(m.anexos || []).map(a => {
+                const ehEdital = a.tipo === 'edital';
+                return `
                 <div class="ev-anexo-view">
                     <div class="ev-anexo-view-header">
                         <strong>${escapeHtml(labelDoAnexo(a))}</strong>
                         <span class="ev-hint">${escapeHtml(a.nomeOriginal || '')}</span>
                     </div>
-                    <div class="ev-anexo-view-tags">
-                        ${a.exigeAssinatura ? '<span class="ev-tag ev-tag-warning">✍️ Assinatura</span>' : ''}
-                        ${a.solicitaAnexo ? `<span class="ev-tag ev-tag-primary">📎 ${escapeHtml(a.labelSolicitacaoAnexo || 'Anexo')}${a.anexoSolicitacaoObrigatorio ? ' (obrigatório)' : ''}</span>` : ''}
-                        ${a.isAvaliativo ? `
-                            <span class="ev-tag ev-tag-info">
-                                ⭐ ${a.numAvaliadores || 1} avaliador(es)
-                                · ${a.modoDistribuicao === 'manual' ? '✋ manual' : '🎲 aleatório'}
-                                ${a.calcularMedia !== false ? ' · 📊 média' : ''}
-                            </span>
+                    ${ehEdital ? `
+                        <p class="ev-hint ev-hint-edital">
+                            <i class="fas fa-info-circle"></i> Edital — apenas anexado, sem campos.
+                        </p>
+                    ` : `
+                        <div class="ev-anexo-view-tags">
+                            ${a.exigeAssinatura ? '<span class="ev-tag ev-tag-warning">✍️ Assinatura</span>' : ''}
+                            ${a.solicitaAnexo ? `<span class="ev-tag ev-tag-primary">📎 ${escapeHtml(a.labelSolicitacaoAnexo || 'Anexo')}${a.anexoSolicitacaoObrigatorio ? ' (obrigatório)' : ''}</span>` : ''}
+                            ${a.isAvaliativo ? `
+                                <span class="ev-tag ev-tag-info">
+                                    ⭐ ${a.numAvaliadores || 1} avaliador(es)
+                                    · ${a.modoDistribuicao === 'manual' ? '✋ manual' : '🎲 aleatório'}
+                                    ${a.calcularMedia !== false ? ' · 📊 média' : ''}
+                                </span>
+                            ` : ''}
+                        </div>
+                        ${(a.campos || []).length ? `
+                            <div class="ev-anexo-view-campos">
+                                <strong>Campos (${a.campos.length}):</strong>
+                                ${a.campos.map(c => `<span class="ev-chip">${escapeHtml(c.label)}${c.obrigatorio ? ' *' : ''}</span>`).join('')}
+                            </div>
                         ` : ''}
-                    </div>
-                    ${(a.campos || []).length ? `
-                        <div class="ev-anexo-view-campos">
-                            <strong>Campos (${a.campos.length}):</strong>
-                            ${a.campos.map(c => `<span class="ev-chip">${escapeHtml(c.label)}${c.obrigatorio ? ' *' : ''}</span>`).join('')}
-                        </div>
-                    ` : ''}
-                    ${(a.camposRepetiveis || []).length ? `
-                        <div class="ev-anexo-view-campos">
-                            <strong>Repetíveis (${escapeHtml(a.labelGrupoRepetivel || '')}):</strong>
-                            ${a.camposRepetiveis.map(c => `<span class="ev-chip ev-chip-rep">${escapeHtml(c.label)}</span>`).join('')}
-                        </div>
-                    ` : ''}
-                    ${(a.criteriosAvaliacao || []).length ? `
-                        <div class="ev-anexo-view-criterios">
-                            <strong>🎯 Critérios (${a.criteriosAvaliacao.length}):</strong>
-                            <ul>
-                                ${a.criteriosAvaliacao.map(c => `
-                                    <li><strong>${escapeHtml(c.label)}</strong> (máx. ${c.notaMaxima || 5})${c.descricao ? ' — ' + escapeHtml(c.descricao) : ''}</li>
-                                `).join('')}
-                            </ul>
-                        </div>
-                    ` : ''}
+                        ${(a.camposRepetiveis || []).length ? `
+                            <div class="ev-anexo-view-campos">
+                                <strong>Repetíveis (${escapeHtml(a.labelGrupoRepetivel || '')}):</strong>
+                                ${a.camposRepetiveis.map(c => `<span class="ev-chip ev-chip-rep">${escapeHtml(c.label)}</span>`).join('')}
+                            </div>
+                        ` : ''}
+                        ${(a.criteriosAvaliacao || []).length ? `
+                            <div class="ev-anexo-view-criterios">
+                                <strong>🎯 Critérios (${a.criteriosAvaliacao.length}):</strong>
+                                <ul>
+                                    ${a.criteriosAvaliacao.map(c => `
+                                        <li><strong>${escapeHtml(c.label)}</strong> (máx. ${c.notaMaxima || 5})${c.descricao ? ' — ' + escapeHtml(c.descricao) : ''}</li>
+                                    `).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                    `}
                 </div>
-            `).join('')}
+                `;
+            }).join('')}
+
+            ${(m.anexosExtras || []).length ? `
+                <hr>
+                <h6><i class="fas fa-paperclip"></i> Anexos Solicitados (${m.anexosExtras.length})</h6>
+                <ul class="ev-anexos-list">
+                    ${m.anexosExtras.map(a => `
+                        <li>
+                            <strong>${escapeHtml(a.label)}</strong>
+                            ${a.obrigatorio ? ' <span class="ev-tag ev-tag-warning">Obrigatório</span>' : ' <span class="ev-tag">Opcional</span>'}
+                        </li>
+                    `).join('')}
+                </ul>
+            ` : ''}
+
+            ${(m.categorias || []).length > 0 ? `
+                <hr>
+                <h6><i class="fas fa-tags"></i> Categorias (${m.categorias.length})</h6>
+                <ul class="ev-anexos-list">
+                    ${m.categorias.map(c => `<li><strong>${escapeHtml(c.label)}</strong></li>`).join('')}
+                </ul>
+            ` : ''}
         `;
 
         abrirModalCustom({
@@ -1317,6 +1543,44 @@ async function editarModelo(id) {
         document.getElementById('modelo-requer-avaliacao').checked = !!m.requerAvaliacao;
         const chkMultiplas = document.getElementById('modelo-permite-multiplas');
         if (chkMultiplas) chkMultiplas.checked = !!m.permiteMultiplasInscricoes;
+
+        const chkUsarCotas = document.getElementById('modelo-usar-cotas');
+        if (chkUsarCotas) {
+            chkUsarCotas.checked = !!m.usarSistemaCotas;
+            chkUsarCotas.dispatchEvent(new Event('change'));
+        }
+
+        if (m.usarSistemaCotas) {
+            setTimeout(() => {
+                const sel = document.getElementById('modelo-publico-laudo');
+                const label = document.getElementById('modelo-label-laudo');
+                const obrig = document.getElementById('modelo-laudo-obrigatorio');
+                if (sel) sel.value = m.publicoLaudoCotas || 'professor';
+                if (label) label.value = m.labelLaudoCotas || 'Laudo Médico';
+                if (obrig) obrig.checked = m.laudoCotasObrigatorio !== false;
+            }, 50);
+        }
+
+        const chkUsarCategorias = document.getElementById('modelo-usar-categorias');
+        if (chkUsarCategorias) {
+            chkUsarCategorias.checked = !!m.usarCategorias;
+            chkUsarCategorias.dispatchEvent(new Event('change'));
+        }
+
+        if (m.usarCategorias) {
+            setTimeout(() => {
+                const labelCat = document.getElementById('modelo-label-categorias');
+                const obrigCat = document.getElementById('modelo-categoria-obrigatoria');
+                if (labelCat) labelCat.value = m.labelCategorias || 'Categoria / Modalidade';
+                if (obrigCat) obrigCat.checked = m.categoriaObrigatoria !== false;
+
+                categoriasState = (m.categorias || []).map(c => ({ label: c.label }));
+                renderCategoriasState();
+            }, 50);
+        } else {
+            categoriasState = [];
+            renderCategoriasState();
+        }
 
         const header = document.querySelector('#panel-modelos .ev-card h3');
         if (header) header.innerHTML = '<i class="fas fa-edit"></i> Editando Modelo';
@@ -1356,7 +1620,14 @@ async function editarModelo(id) {
             informacoesDocumento: a.informacoesDocumento || '',
             legendasNotas: a.legendasNotas || []
         }));
+
+        anexosExtrasState = (m.anexosExtras || []).map(a => ({
+            label: a.label || '',
+            obrigatorio: !!a.obrigatorio
+        }));
+
         renderAnexosState();
+        renderAnexosExtrasState();
 
         editandoModeloId = id;
         document.getElementById('panel-modelos').scrollIntoView({ behavior: 'smooth' });
@@ -1388,6 +1659,7 @@ async function removerModelo(id) {
    ============================================================================ */
 async function carregarModelosParaSelect() {
     const select = document.getElementById('evento-modelo');
+    if (!select) return;
     try {
         const data = await api(EV_API.modelos);
         modelosCache = data.modelos || [];
@@ -1395,7 +1667,7 @@ async function carregarModelosParaSelect() {
         modelosCache.forEach(m => {
             const o = document.createElement('option');
             o.value = m._id;
-            const flags = (m.requerAvaliacao ? ' ⭐' : '') + (m.permiteMultiplasInscricoes ? ' 🔁' : '');
+            const flags = (m.requerAvaliacao ? ' ⭐' : '') + (m.permiteMultiplasInscricoes ? ' 🔁' : '') + (m.usarSistemaCotas ? ' 👥' : '') + (m.usarCategorias ? ' 🏷️' : '');
             o.textContent = m.nomeModelo + flags;
             select.appendChild(o);
         });
@@ -1452,6 +1724,7 @@ function renderCoordenadoresTags() {
 
 function adicionarCoordenador() {
     const select = document.getElementById('evento-coordenadores-select');
+    if (!select) return;
     const email = select.value;
     if (!email) return toast('Selecione um coordenador na lista.', 'warning');
     if (coordenadoresState.includes(email)) return toast('Este coordenador já foi adicionado.', 'warning');
@@ -1465,65 +1738,69 @@ function removerCoordenador(email) {
     renderCoordenadoresTags();
 }
 
-document.getElementById('form-evento').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const btn = document.getElementById('btn-salvar-evento');
-    const conteudoOriginal = btn.innerHTML;
+const formEvento = document.getElementById('form-evento');
+if (formEvento) {
+    formEvento.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('btn-salvar-evento');
+        const conteudoOriginal = btn.innerHTML;
 
-    try {
-        const payload = {
-            titulo: document.getElementById('evento-titulo').value.trim(),
-            modeloId: document.getElementById('evento-modelo').value,
-            descricaoPublica: document.getElementById('evento-descricao').value.trim(),
-            local: document.getElementById('evento-local').value.trim(),
-            publicoAlvo: document.getElementById('evento-publico').value.trim(),
-            vagas: document.getElementById('evento-vagas').value || null,
-            dataInicioInscricao: document.getElementById('evento-data-inicio-inscricao').value,
-            dataFimInscricao: document.getElementById('evento-data-fim-inscricao').value,
-            dataInicioEvento: document.getElementById('evento-data-inicio').value || null,
-            dataFimEvento: document.getElementById('evento-data-fim').value || null,
-            status: document.getElementById('evento-status').value,
-            coordenadoresEmails: coordenadoresState
-        };
+        try {
+            const payload = {
+                titulo: document.getElementById('evento-titulo').value.trim(),
+                modeloId: document.getElementById('evento-modelo').value,
+                descricaoPublica: document.getElementById('evento-descricao').value.trim(),
+                local: document.getElementById('evento-local').value.trim(),
+                publicoAlvo: document.getElementById('evento-publico').value.trim(),
+                vagas: document.getElementById('evento-vagas').value || null,
+                dataInicioInscricao: document.getElementById('evento-data-inicio-inscricao').value,
+                dataFimInscricao: document.getElementById('evento-data-fim-inscricao').value,
+                dataInicioEvento: document.getElementById('evento-data-inicio').value || null,
+                dataFimEvento: document.getElementById('evento-data-fim').value || null,
+                status: document.getElementById('evento-status').value,
+                coordenadoresEmails: coordenadoresState
+            };
 
-        if (!payload.titulo) throw new Error('Título é obrigatório');
-        if (!payload.modeloId) throw new Error('Selecione um modelo');
-        if (!payload.dataInicioInscricao || !payload.dataFimInscricao) throw new Error('Datas obrigatórias');
+            if (!payload.titulo) throw new Error('Título é obrigatório');
+            if (!payload.modeloId) throw new Error('Selecione um modelo');
+            if (!payload.dataInicioInscricao || !payload.dataFimInscricao) throw new Error('Datas obrigatórias');
 
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Salvando...';
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Salvando...';
 
-        if (editandoEventoId) {
-            await api(`${EV_API.eventos}/${editandoEventoId}`, { method: 'PUT', body: JSON.stringify(payload) });
-            toast('Evento atualizado!', 'success');
-        } else {
-            await api(EV_API.eventos, { method: 'POST', body: JSON.stringify(payload) });
-            toast('Evento criado!', 'success');
+            if (editandoEventoId) {
+                await api(`${EV_API.eventos}/${editandoEventoId}`, { method: 'PUT', body: JSON.stringify(payload) });
+                toast('Evento atualizado!', 'success');
+            } else {
+                await api(EV_API.eventos, { method: 'POST', body: JSON.stringify(payload) });
+                toast('Evento criado!', 'success');
+            }
+
+            editandoEventoId = null;
+            document.getElementById('form-evento').reset();
+            coordenadoresState = [];
+            renderCoordenadoresTags();
+
+            const header = document.querySelector('#panel-eventos .ev-card h3');
+            if (header) header.innerHTML = '<i class="fas fa-plus-circle"></i> Novo Evento';
+            btn.innerHTML = '<i class="fas fa-save"></i> Criar Evento';
+
+            carregarEventos();
+            carregarDashboard();
+        } catch (err) {
+            mostrarAlerta('form-evento-alert', `❌ ${err.message}`, 'error');
+        } finally {
+            btn.disabled = false;
+            if (btn.innerHTML.includes('fa-spinner') || btn.innerHTML.includes('fa-circle-notch')) {
+                btn.innerHTML = conteudoOriginal;
+            }
         }
-
-        editandoEventoId = null;
-        document.getElementById('form-evento').reset();
-        coordenadoresState = [];
-        renderCoordenadoresTags();
-
-        const header = document.querySelector('#panel-eventos .ev-card h3');
-        if (header) header.innerHTML = '<i class="fas fa-plus-circle"></i> Novo Evento';
-        btn.innerHTML = '<i class="fas fa-save"></i> Criar Evento';
-
-        carregarEventos();
-        carregarDashboard();
-    } catch (err) {
-        mostrarAlerta('form-evento-alert', `❌ ${err.message}`, 'error');
-    } finally {
-        btn.disabled = false;
-        if (btn.innerHTML.includes('fa-spinner') || btn.innerHTML.includes('fa-circle-notch')) {
-            btn.innerHTML = conteudoOriginal;
-        }
-    }
-});
+    });
+}
 
 async function carregarEventos() {
     const c = document.getElementById('lista-eventos');
+    if (!c) return;
     c.innerHTML = '<div class="ev-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div>';
     try {
         const data = await api(EV_API.eventos);
@@ -1535,10 +1812,10 @@ async function carregarEventos() {
 
         c.innerHTML = eventos.map(ev => `
             <div class="ev-list-item">
-                <div style="flex:1; min-width: 200px;">
+                <div class="ev-flex-1-min">
                     <h4>
                         ${escapeHtml(ev.titulo)}
-                        ${ev.permiteMultiplasInscricoes ? '<span class="ev-tag ev-tag-success" style="margin-left:6px;">🔁</span>' : ''}
+                        ${ev.permiteMultiplasInscricoes ? '<span class="ev-tag ev-tag-success ev-ml-6">🔁</span>' : ''}
                     </h4>
                     <p>
                         <i class="fas fa-file-alt"></i> ${escapeHtml(ev.modeloId?.nomeModelo || '—')}
@@ -1547,7 +1824,7 @@ async function carregarEventos() {
                         <span class="ev-sep">•</span>
                         <i class="fas fa-users"></i> ${ev.totalParticipantes || 0}${ev.vagas ? '/' + ev.vagas : ''}
                     </p>
-                    <p style="font-size:12px;">
+                    <p class="ev-dates">
                         <i class="fas fa-calendar"></i>
                         ${new Date(ev.dataInicioInscricao).toLocaleString('pt-BR')}
                         →
@@ -1592,11 +1869,11 @@ async function verEvento(id) {
                     <div class="ev-config-av">
                         <h6><i class="fas fa-gear"></i> Configuração de Avaliação do Evento</h6>
                         <div class="ev-grid-2">
-                            <div class="ev-form-group" style="margin-bottom:0;">
+                            <div class="ev-form-group ev-mb-0">
                                 <label>Avaliadores por inscrição</label>
                                 <input type="number" min="1" max="20" id="adm-cfg-num" value="${c.numAvaliadores || 1}">
                             </div>
-                            <div class="ev-form-group" style="margin-bottom:0;">
+                            <div class="ev-form-group ev-mb-0">
                                 <label>Modo de distribuição</label>
                                 <select id="adm-cfg-modo">
                                     <option value="aleatorio" ${c.modoDistribuicao === 'aleatorio' ? 'selected' : ''}>🎲 Aleatório</option>
@@ -1604,28 +1881,28 @@ async function verEvento(id) {
                                 </select>
                             </div>
                         </div>
-                        <div class="ev-grid-2" style="margin-top:12px;">
-                            <div class="ev-form-group" style="margin-bottom:0;">
+                        <div class="ev-grid-2 ev-mt-12">
+                            <div class="ev-form-group ev-mb-0">
                                 <label>Tipo de média</label>
                                 <select id="adm-cfg-tipo-media">
                                     <option value="aritmetica" ${c.tipoMedia === 'aritmetica' ? 'selected' : ''}>Aritmética</option>
                                     <option value="ponderada" ${c.tipoMedia === 'ponderada' ? 'selected' : ''}>Ponderada</option>
                                 </select>
                             </div>
-                            <div class="ev-form-group" style="margin-bottom:0;">
-                                <label style="display:block; margin-bottom:6px;">&nbsp;</label>
-                                <label class="ev-switch ev-switch-sm" style="margin:0;">
+                            <div class="ev-form-group ev-mb-0">
+                                <label class="ev-label-hidden">&nbsp;</label>
+                                <label class="ev-switch ev-switch-sm ev-m-0">
                                     <input type="checkbox" id="adm-cfg-media" ${c.calcularMedia ? 'checked' : ''}>
                                     <span>📊 Calcular média</span>
                                 </label>
                             </div>
                         </div>
-                        <label class="ev-switch ev-switch-sm" style="margin-top:12px;">
+                        <label class="ev-switch ev-switch-sm ev-mt-12">
                             <input type="checkbox" id="adm-cfg-assinatura" ${c.exigeAssinaturaAvaliador ? 'checked' : ''}>
                             <span>✍️ Exige assinatura do avaliador</span>
                         </label>
-                        ${c.sorteioExecutadoEm ? `<p class="ev-hint" style="margin-top:8px;"><i class="fas fa-dice"></i> Sorteio executado em ${new Date(c.sorteioExecutadoEm).toLocaleString('pt-BR')}</p>` : ''}
-                        <div class="ev-actions" style="margin-top:14px;">
+                        ${c.sorteioExecutadoEm ? `<p class="ev-hint ev-mt-8"><i class="fas fa-dice"></i> Sorteio executado em ${new Date(c.sorteioExecutadoEm).toLocaleString('pt-BR')}</p>` : ''}
+                        <div class="ev-actions ev-mt-14">
                             <button class="ev-btn ev-btn-primary ev-btn-sm" onclick="salvarConfigAdmin('${ev._id}')">
                                 <i class="fas fa-save"></i> Salvar Config
                             </button>
@@ -1660,7 +1937,7 @@ async function verEvento(id) {
         const html = `
             <div class="ev-modal-sec">
                 <h5><i class="fas fa-calendar-day"></i> ${escapeHtml(ev.titulo)}</h5>
-                <p class="ev-hint">${escapeHtml(ev.descricaoPublica || '')}</p>
+                <p class="ev-hint ev-justify">${escapeHtml(ev.descricaoPublica || '')}</p>
             </div>
 
             <table class="ev-detail-table">
@@ -1678,7 +1955,7 @@ async function verEvento(id) {
 
             ${configAvHtml}
 
-            <div class="ev-modal-sec" style="margin-top:20px;">
+            <div class="ev-modal-sec ev-mt-20">
                 <h6><i class="fas fa-user-tie"></i> Coordenadores do Evento</h6>
                 ${coordenadoresHtml}
             </div>
@@ -1824,34 +2101,45 @@ async function removerEvento(id) {
    ============================================================================ */
 async function verInscricoes(eventoId, titulo, slug) {
     inscEventoId = eventoId;
-    document.getElementById('insc-evento-titulo').textContent = titulo;
+    const elTitulo = document.getElementById('insc-evento-titulo');
+    if (elTitulo) elTitulo.textContent = titulo;
 
     const link = `${location.origin}/eventos/inscricao.html?slug=${encodeURIComponent(slug)}`;
     const a = document.getElementById('link-publico');
-    a.href = link;
-    a.textContent = link;
+    if (a) {
+        a.href = link;
+        a.textContent = link;
+    }
 
-    document.getElementById('btn-copiar-link').onclick = () => {
-        navigator.clipboard.writeText(link)
-            .then(() => toast('Link copiado!', 'success'))
-            .catch(() => toast('Não foi possível copiar.', 'error'));
-    };
+    const btnCopiar = document.getElementById('btn-copiar-link');
+    if (btnCopiar) {
+        btnCopiar.onclick = () => {
+            navigator.clipboard.writeText(link)
+                .then(() => toast('Link copiado!', 'success'))
+                .catch(() => toast('Não foi possível copiar.', 'error'));
+        };
+    }
 
     document.querySelectorAll('.ev-panel').forEach(p => p.classList.remove('active'));
-    document.getElementById('panel-inscricoes').classList.add('active');
+    const painel = document.getElementById('panel-inscricoes');
+    if (painel) painel.classList.add('active');
     carregarInscricoes();
 }
 
-document.getElementById('btn-voltar-eventos')?.addEventListener('click', () => {
-    document.getElementById('panel-inscricoes').classList.remove('active');
-    document.getElementById('panel-eventos').classList.add('active');
-    document.querySelectorAll('.ev-tab').forEach(t => t.classList.remove('active'));
-    const t = document.querySelector('.ev-tab[data-tab="eventos"]');
-    if (t) t.classList.add('active');
-});
+const btnVoltarEventos = document.getElementById('btn-voltar-eventos');
+if (btnVoltarEventos) {
+    btnVoltarEventos.addEventListener('click', () => {
+        document.getElementById('panel-inscricoes')?.classList.remove('active');
+        document.getElementById('panel-eventos')?.classList.add('active');
+        document.querySelectorAll('.ev-tab').forEach(t => t.classList.remove('active'));
+        const t = document.querySelector('.ev-tab[data-tab="eventos"]');
+        if (t) t.classList.add('active');
+    });
+}
 
 async function carregarInscricoes() {
     const c = document.getElementById('lista-inscricoes');
+    if (!c) return;
     c.innerHTML = '<div class="ev-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div>';
     try {
         const data = await api(`${EV_API.inscricoes}?eventoId=${inscEventoId}`);
@@ -1869,12 +2157,12 @@ async function carregarInscricoes() {
                 .join(' • ');
 
             return `
-                <div class="ev-list-item" style="align-items: flex-start;">
-                    <div style="flex:1; min-width: 200px;">
+                <div class="ev-list-item ev-list-item-top">
+                    <div class="ev-flex-1-min">
                         <h4>${escapeHtml(i.participante?.nomeCompleto || '—')}</h4>
                         <p>Protocolo: <code>${escapeHtml(i.protocolo)}</code></p>
-                        <p style="font-size:12px; line-height: 1.5; margin-top:4px;">${linhas || '<em>sem dados</em>'}</p>
-                        <p style="font-size:11px; margin-top:6px;" class="ev-hint">${new Date(i.createdAt).toLocaleString('pt-BR')}</p>
+                        <p class="ev-inscricao-dados">${linhas || '<em>sem dados</em>'}</p>
+                        <p class="ev-inscricao-data">${new Date(i.createdAt).toLocaleString('pt-BR')}</p>
                     </div>
                     <span class="ev-badge ev-badge-${(i.status || '').toLowerCase()}">${escapeHtml(i.status)}</span>
                     <div class="ev-actions">
@@ -1907,7 +2195,7 @@ async function verInscricaoDetalhe(id) {
             .join('') || '<tr><td colspan="2" class="ev-hint">Sem dados</td></tr>';
 
         const assinaturaHtml = i.assinaturaBase64
-            ? `<div class="ev-modal-sec" style="margin-top:16px;">
+            ? `<div class="ev-modal-sec ev-mt-16">
                    <strong><i class="fas fa-signature"></i> Assinatura</strong>
                    <div class="ev-signature-box">
                        <img src="${i.assinaturaBase64}" alt="Assinatura">
@@ -1917,7 +2205,7 @@ async function verInscricaoDetalhe(id) {
 
         const anexosArr = Object.entries(i.anexosParticipante || {});
         const anexosHtml = anexosArr.length
-            ? `<div class="ev-modal-sec" style="margin-top:16px;">
+            ? `<div class="ev-modal-sec ev-mt-16">
                    <strong><i class="fas fa-paperclip"></i> Anexos enviados pelo participante:</strong>
                    <ul class="ev-anexos-list">
                        ${anexosArr.map(([chave, url]) => `
@@ -1937,7 +2225,7 @@ async function verInscricaoDetalhe(id) {
                 <h5>${escapeHtml(i.participante?.nomeCompleto || '—')}</h5>
                 <p>
                     Protocolo: <code>${escapeHtml(i.protocolo)}</code>
-                    <span class="ev-badge ev-badge-${(i.status || '').toLowerCase()}" style="margin-left:8px;">${escapeHtml(i.status)}</span>
+                    <span class="ev-badge ev-badge-${(i.status || '').toLowerCase()} ev-ml-8">${escapeHtml(i.status)}</span>
                 </p>
             </div>
             <hr>
@@ -1946,7 +2234,7 @@ async function verInscricaoDetalhe(id) {
             ${assinaturaHtml}
             ${anexosHtml}
             ${i.observacoesAdmin ? `
-                <div class="ev-modal-sec" style="margin-top:16px;">
+                <div class="ev-modal-sec ev-mt-16">
                     <strong>Observações:</strong>
                     <p>${escapeHtml(i.observacoesAdmin)}</p>
                 </div>
@@ -1993,7 +2281,7 @@ async function editarInscricao(id) {
                 </select>
             </div>
 
-            <h6 style="margin-top: 18px;"><i class="fas fa-clipboard-list"></i> Dados preenchidos</h6>
+            <h6 class="ev-mt-18"><i class="fas fa-clipboard-list"></i> Dados preenchidos</h6>
             ${camposEdicao}
 
             <div class="ev-form-group">
@@ -2055,7 +2343,7 @@ async function removerInscricao(id) {
 }
 
 /* ============================================================================
-   GESTÃO DE USUÁRIOS — v2 (ver, editar, excluir, resetar senha, filtros)
+   GESTÃO DE USUÁRIOS
    ============================================================================ */
 const usuariosState = {
     lista: [],
@@ -2091,7 +2379,6 @@ async function criarUsuarioAdmin() {
     }
 }
 
-// ---- Filtros / busca dinâmica ----
 const debounceUsuarios = debounce(() => {
     usuariosState.filtro.busca = document.getElementById('filtro-usuarios-busca')?.value || '';
     carregarTodosUsuarios();
@@ -2114,10 +2401,8 @@ function limparFiltrosUsuarios() {
     carregarTodosUsuarios();
 }
 
-// Cache de eventos para montar os selects sem refetch por usuário
 let _eventosCacheUsr = null;
 
-// SÍNCRONA — usa cache. Erro de `await` corrigido.
 function montarOpcoesEventosDisponiveis(eventosVinculados) {
     if (!_eventosCacheUsr) return '';
     const ids = new Set((eventosVinculados || []).map(e => String(e._id || e)));
@@ -2133,7 +2418,6 @@ async function carregarTodosUsuarios() {
     container.innerHTML = '<div class="ev-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div>';
 
     try {
-        // Carrega eventos primeiro (cache) para os selects
         try {
             const evData = await api(EV_API.eventos);
             _eventosCacheUsr = evData.eventos || [];
@@ -2165,7 +2449,7 @@ async function carregarTodosUsuarios() {
                 <div class="ev-empty">
                     <i class="fas fa-user-slash"></i>
                     Nenhum usuário encontrado com os filtros atuais.
-                    <button class="ev-btn ev-btn-secondary ev-btn-sm" style="margin-top:10px;" onclick="limparFiltrosUsuarios()">
+                    <button class="ev-btn ev-btn-secondary ev-btn-sm ev-mt-10" onclick="limparFiltrosUsuarios()">
                         <i class="fas fa-eraser"></i> Limpar filtros
                     </button>
                 </div>`;
@@ -2195,7 +2479,7 @@ async function carregarTodosUsuarios() {
                 <div class="ev-user-card" data-uid="${u._id}">
                     <div class="ev-user-card-header">
                         <div class="ev-user-avatar">${escapeHtml(iniciais)}</div>
-                        <div style="flex:1; min-width:0;">
+                        <div class="ev-user-card-info">
                             <h4>
                                 ${escapeHtml(u.nomeCompleto)}
                                 ${u.isCoordenador
@@ -2251,7 +2535,6 @@ async function carregarTodosUsuarios() {
     }
 }
 
-// ---- VER ----
 async function verUsuarioAdmin(id) {
     try {
         const data = await api(`${EV_API.eventos}/admin/usuarios/${id}`);
@@ -2260,31 +2543,29 @@ async function verUsuarioAdmin(id) {
         const eventos = u.eventos || [];
 
         const html = `
-            <div class="ev-modal-sec" style="display:flex; align-items:center; gap:14px;">
-                <div class="ev-user-avatar" style="width:56px;height:56px;font-size:20px;">
-                    ${escapeHtml((u.nomeCompleto || '?').split(' ').map(n => n[0]).slice(0,2).join('').toUpperCase())}
-                </div>
+            <div class="ev-user-modal-header">
+                <div class="ev-user-avatar">${escapeHtml((u.nomeCompleto || '?').split(' ').map(n => n[0]).slice(0,2).join('').toUpperCase())}</div>
                 <div>
-                    <h5 style="margin:0;">${escapeHtml(u.nomeCompleto)}</h5>
-                    <p class="ev-hint" style="margin:2px 0 0;">
+                    <h5 class="ev-user-modal-nome">${escapeHtml(u.nomeCompleto)}</h5>
+                    <p class="ev-hint ev-user-modal-email">
                         <i class="fas fa-envelope"></i> ${escapeHtml(u.email)}
                     </p>
                 </div>
             </div>
 
-            <div class="ev-grid-2" style="margin-top:16px;">
+            <div class="ev-grid-2 ev-mt-16">
                 <div class="ev-stat"><h3>Avaliações</h3><div class="ev-stat-value">${st.totalAvaliacoes || 0}</div></div>
                 <div class="ev-stat"><h3>Pendentes</h3><div class="ev-stat-value">${st.totalAtribuicoesPendentes || 0}</div></div>
             </div>
 
-            <table class="ev-detail-table" style="margin-top:18px;">
+            <table class="ev-detail-table ev-mt-18">
                 <tr><td>Tipo</td><td>${u.isCoordenador ? '👨‍🏫 Coordenador' : '🧑‍💻 Avaliador'}</td></tr>
                 <tr><td>Status</td><td><span class="ev-tag">${escapeHtml(u.status)}</span></td></tr>
                 <tr><td>Criado em</td><td>${u.createdAt ? new Date(u.createdAt).toLocaleString('pt-BR') : '—'}</td></tr>
                 ${u.ultimoLogin ? `<tr><td>Último login</td><td>${new Date(u.ultimoLogin).toLocaleString('pt-BR')}</td></tr>` : ''}
             </table>
 
-            <h6 style="margin-top:20px;"><i class="fas fa-calendar-check"></i> Eventos vinculados (${eventos.length})</h6>
+            <h6 class="ev-mt-20"><i class="fas fa-calendar-check"></i> Eventos vinculados (${eventos.length})</h6>
             ${eventos.length === 0
                 ? '<p class="ev-hint">Nenhum evento vinculado.</p>'
                 : `<ul class="ev-anexos-list">
@@ -2310,7 +2591,6 @@ async function verUsuarioAdmin(id) {
     }
 }
 
-// ---- EDITAR ----
 async function editarUsuarioAdmin(id) {
     try {
         const data = await api(`${EV_API.eventos}/admin/usuarios/${id}`);
@@ -2384,7 +2664,6 @@ async function editarUsuarioAdmin(id) {
     }
 }
 
-// ---- RESETAR SENHA ----
 async function resetarSenhaAdmin(id) {
     const ok = await confirmar({
         titulo: 'Resetar senha',
@@ -2401,8 +2680,8 @@ async function resetarSenhaAdmin(id) {
 
         const senha = data.novaSenha;
         const html = `
-            <div class="ev-modal-sec" style="text-align:center;">
-                <i class="fas fa-key" style="font-size:42px; color: var(--ev-success); margin-bottom:12px;"></i>
+            <div class="ev-modal-sec ev-text-center">
+                <i class="fas fa-key ev-senha-icone"></i>
                 <h5>Nova senha gerada</h5>
                 <p class="ev-hint">Repasse ao usuário por um canal seguro. Ele deverá trocá-la no próximo acesso.</p>
                 <div class="ev-senha-revelada" id="senha-box">
@@ -2433,7 +2712,6 @@ async function resetarSenhaAdmin(id) {
     }
 }
 
-// ---- EXCLUIR ----
 async function removerUsuarioAdmin(id) {
     const ok = await confirmar({
         titulo: 'Excluir usuário',
@@ -2452,7 +2730,6 @@ async function removerUsuarioAdmin(id) {
     }
 }
 
-// ---- APROVAR ----
 async function aprovarUsuarioAdmin(id) {
     try {
         await api(`${EV_API.avaliadores}/${id}/aprovar`, { method: 'PUT' });
@@ -2464,7 +2741,6 @@ async function aprovarUsuarioAdmin(id) {
     }
 }
 
-// ---- VINCULAR / DESVINCULAR (mantidos) ----
 async function vincularAvaliadorAdmin(avaliadorId, email) {
     const select = document.getElementById(`select-ev-${avaliadorId}`);
     if (!select) return;
@@ -2503,20 +2779,47 @@ async function desvincularAvaliadorAdmin(avaliadorId, eventoId) {
     }
 }
 
-// ---- Exposição global (para onclick inline no HTML) ----
-window.criarUsuarioAdmin = criarUsuarioAdmin;
-window.carregarTodosUsuarios = carregarTodosUsuarios;
-window.verUsuarioAdmin = verUsuarioAdmin;
-window.editarUsuarioAdmin = editarUsuarioAdmin;
-window.resetarSenhaAdmin = resetarSenhaAdmin;
-window.removerUsuarioAdmin = removerUsuarioAdmin;
-window.aprovarUsuarioAdmin = aprovarUsuarioAdmin;
-window.limparFiltrosUsuarios = limparFiltrosUsuarios;
-window.aplicarFiltrosUsuarios = aplicarFiltrosUsuarios;
-window.vincularAvaliadorAdmin = vincularAvaliadorAdmin;
-window.desvincularAvaliadorAdmin = desvincularAvaliadorAdmin;
-window.adicionarCoordenador = adicionarCoordenador;
-window.removerCoordenador = removerCoordenador;
+/* ============================================================================
+   EXPOSIÇÃO GLOBAL (para onclick inline no HTML)
+   ============================================================================ */
+(function exporGlobais() {
+    const mapa = {
+        criarUsuarioAdmin,
+        carregarTodosUsuarios,
+        verUsuarioAdmin,
+        editarUsuarioAdmin,
+        resetarSenhaAdmin,
+        removerUsuarioAdmin,
+        aprovarUsuarioAdmin,
+        limparFiltrosUsuarios,
+        aplicarFiltrosUsuarios,
+        vincularAvaliadorAdmin,
+        desvincularAvaliadorAdmin,
+        adicionarCoordenador,
+        removerCoordenador,
+        verModelo,
+        editarModelo,
+        removerModelo,
+        verEvento,
+        editarEvento,
+        removerEvento,
+        verInscricoes,
+        verInscricaoDetalhe,
+        editarInscricao,
+        removerInscricao,
+        salvarConfigAdmin,
+        sortearAdmin,
+        limparSorteioAdmin
+    };
+
+    Object.entries(mapa).forEach(([nome, fn]) => {
+        if (typeof fn === 'function') {
+            window[nome] = fn;
+        } else {
+            console.warn(`[eventos.js] Função "${nome}" não encontrada ou não é função — não foi exposta globalmente.`);
+        }
+    });
+})();
 
 /* ============================================================================
    INIT
@@ -2527,8 +2830,11 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
     renderCoordenadoresTags();
+    configurarSistemaCotas();
+    configurarCategorias();
+    renderAnexosExtrasState();
+    renderCategoriasState();
 
-    // Bind de filtros da aba usuários
     const buscaUsr = document.getElementById('filtro-usuarios-busca');
     if (buscaUsr) buscaUsr.addEventListener('input', debounceUsuarios);
 

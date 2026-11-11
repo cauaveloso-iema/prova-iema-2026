@@ -74,39 +74,39 @@ const AnexoSchema = new mongoose.Schema({
     isAvaliativo: { type: Boolean, default: false },
     numAvaliadores: { type: Number, default: 1, min: 1 },
 
-    // 🔥 NOVO: Como as avaliações são distribuídas
-    //  'aleatorio' = o sistema sorteia automaticamente os avaliadores
-    //                (o avaliador vinculado vê a inscrição na lista de pendentes)
-    //  'manual'    = o coordenador/admin precisa atribuir cada avaliação
     modoDistribuicao: {
         type: String,
         enum: ['aleatorio', 'manual'],
         default: 'aleatorio'
     },
 
-    // 🔥 NOVO: Se deve calcular a média final automaticamente
     calcularMedia: { type: Boolean, default: true },
 
-    // 🔥 NOVO: Tipo de média
-    //  'aritmetica' = soma das notas / quantidade
-    //  'ponderada'  = (reservado para o futuro)
     tipoMedia: {
         type: String,
         enum: ['aritmetica', 'ponderada'],
         default: 'aritmetica'
     },
 
-    // 🔥 NOVO: Exige assinatura do avaliador ao emitir parecer
     exigeAssinaturaAvaliador: { type: Boolean, default: false },
 
-    // 🔥 Critérios de avaliação
     criteriosAvaliacao: { type: [CriterioAvaliacaoSchema], default: [] },
 
-    // 🔥 Informações do documento
     informacoesDocumento: { type: String, default: '' },
 
-    // 🔥 Legenda de notas
     legendasNotas: { type: [LegendaNotaSchema], default: [] }
+}, { _id: true });
+
+// 🔥 NOVO: Schema para Anexos Extras (Passo 1.5)
+const AnexoExtraSchema = new mongoose.Schema({
+    label: { type: String, required: true, trim: true },
+    obrigatorio: { type: Boolean, default: false },
+    ajuda: { type: String, default: '' }
+}, { _id: true });
+
+// 🔥 NOVO: Schema para Categorias/Modalidades
+const CategoriaSchema = new mongoose.Schema({
+    label: { type: String, required: true, trim: true }
 }, { _id: true });
 
 const ModeloEventoSchema = new mongoose.Schema({
@@ -114,14 +114,30 @@ const ModeloEventoSchema = new mongoose.Schema({
     descricao: { type: String, default: '' },
     anexos: { type: [AnexoSchema], default: [] },
     camposDinamicos: { type: [CampoSchema], default: [] },
+    
+    // 🔥 Documentos extras que o participante deve anexar
+    anexosExtras: { type: [AnexoExtraSchema], default: [] },
+
+    // 🔥 NOVO: Categorias/Modalidades
+    usarCategorias: { type: Boolean, default: false },
+    labelCategorias: { type: String, default: 'Categoria / Modalidade' },
+    categorias: { type: [CategoriaSchema], default: [] },
+    categoriaObrigatoria: { type: Boolean, default: true },
+
     ativo: { type: Boolean, default: true },
     criadoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 
-    // Configuração geral de avaliação
     requerAvaliacao: { type: Boolean, default: false },
+    permiteMultiplasInscricoes: { type: Boolean, default: false },
 
-    // Define se o participante pode se inscrever mais de uma vez
-    permiteMultiplasInscricoes: { type: Boolean, default: false }
+    usarSistemaCotas: { type: Boolean, default: false },
+    publicoLaudoCotas: {
+        type: String,
+        enum: ['professor', 'aluno', 'ambos'],
+        default: 'professor'
+    },
+    labelLaudoCotas: { type: String, default: 'Laudo Médico' },
+    laudoCotasObrigatorio: { type: Boolean, default: true }
 }, { timestamps: true, strictPopulate: false });
 
 ModeloEventoSchema.pre('save', function (next) {

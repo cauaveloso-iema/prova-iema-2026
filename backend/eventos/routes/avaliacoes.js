@@ -49,11 +49,6 @@ async function podeGerenciar(avaliadorId, evento) {
     return (evento.coordenadores || []).some(id => String(id) === String(avaliadorId));
 }
 
-/**
- * Recalcula a média de uma inscrição.
- * 🔥 CORRIGIDO: apenas atualiza notaFinalCalculada. NÃO cria registro de consolidação.
- * Isso elimina o erro E11000 e o 500 de vez.
- */
 async function recalcularMediaInscricao(inscricaoId) {
     const avaliacoes = await Avaliacao.find({
         inscricaoId,
@@ -277,7 +272,6 @@ router.post('/', authenticateAvaliador, async (req, res) => {
             }
         }
 
-        // 🔥 Atômico: cria se não existir, atualiza se já existir
         const av = await Avaliacao.findOneAndUpdate(
             { eventoId, inscricaoId, avaliadorId: req.avaliadorId },
             {
@@ -644,11 +638,17 @@ router.get('/pendentes-coordenador/:eventoId', authenticateAvaliador, async (req
             const avs = porInscricao[String(i._id)] || [];
             const concluidas = avs.filter(a => a.status === 'Concluída');
             const pendentesAtribuidas = avs.filter(a => a.status === 'Pendente');
+            
+            // 🔥 Captura a categoria que o aluno escolheu no ato da inscrição
+            const dados = i.dadosPreenchidos || {};
+            const categoria = dados['__categoria'] || null;
+
             return {
                 inscricaoId: i._id,
                 protocolo: i.protocolo,
                 participante: i.participanteId?.nomeCompleto || '—',
                 participanteEmail: i.participanteId?.email || '',
+                categoria: categoria, // Adicionado aqui
                 totalAvaliacoes: avs.length,
                 concluidas: concluidas.length,
                 pendentesAtribuidas: pendentesAtribuidas.length,

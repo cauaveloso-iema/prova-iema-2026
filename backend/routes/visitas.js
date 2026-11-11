@@ -332,6 +332,7 @@ router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, 
         id: t._id,
         codigo: t.codigo,
         atividade: t.atividade,
+        descricaoAtividade: t.descricaoAtividade || '',
         
         alunoNome: nomeAluno,
         alunoTurma: primeiroAluno?.turma || t.turmaPrincipal || 'N/A',
@@ -412,6 +413,7 @@ router.get('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (r
       id: termo._id,
       codigo: termo.codigo,
       atividade: termo.atividade,
+      descricaoAtividade: termo.descricaoAtividade || '',
       
       alunoNome: termo.alunos?.length > 1 
         ? `${primeiroAluno?.nome || 'Aluno'} + ${termo.alunos.length - 1}`
@@ -480,6 +482,7 @@ router.post('/termos', authenticateToken, verificarPermissaoVisitas, async (req,
     const {
       alunos,
       atividade,
+      descricaoAtividade,   // 🆕
       professores,
       periodo,
       horario,
@@ -552,6 +555,7 @@ router.post('/termos', authenticateToken, verificarPermissaoVisitas, async (req,
       cursoPrincipal: alunosData[0].curso || '',
       
       atividade: atividade.trim(),
+      descricaoAtividade: (descricaoAtividade || '').trim(),   // 🆕
       
       professores: professoresData.map(p => ({
         professorId: p._id,
@@ -673,6 +677,7 @@ router.put('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (r
     
     // Outros campos
     if (updates.atividade) termo.atividade = updates.atividade.trim();
+    if (updates.descricaoAtividade !== undefined) termo.descricaoAtividade = (updates.descricaoAtividade || '').trim();   // 🆕
     if (updates.periodo) termo.periodo = updates.periodo;
     if (updates.horario) termo.horario = updates.horario;
     if (updates.local) termo.local = updates.local.trim();

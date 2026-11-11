@@ -1,6 +1,6 @@
 /* ============================================================
    Portal do Coordenador — EducaPleno
-   v4 — Lógica refinada, sem botão de troca no painel.
+   v5.2 — Categorias na atribuição manual + filtro
    ============================================================ */
 
 (function () {
@@ -25,6 +25,8 @@
     let evAtual = null;
     let avaliadoresDoEvento = [];
     let relatorioData = [];
+    let avaliadoresCadastradosCache = [];
+    let buscaAvaliadorDebounce = null;
 
     // ---------------- API ----------------
     async function api(url, opt = {}) {
@@ -78,14 +80,13 @@
     window.__coordAlert = mostrarAlerta;
 
     // ============================================================
-    // ESTADO INICIAL — checa login e troca obrigatória
+    // ESTADO INICIAL
     // ============================================================
     function decidirTelaInicial() {
         if (!token || !user._id || !user.isCoordenador) {
             mostrarTela('auth');
             return;
         }
-        // Se a senha é temporária, força troca antes de liberar o painel
         if (user.senhaTemporaria === true) {
             mostrarTela('trocar-senha');
             return;
@@ -144,7 +145,6 @@
             localStorage.setItem(TOKEN_KEY, token);
             setUser(user);
 
-            // Se o backend sinalizar senha temporária, força a tela de troca
             if (user.senhaTemporaria === true || data.precisaTrocarSenha === true) {
                 mostrarTela('trocar-senha');
             } else {
@@ -192,7 +192,7 @@
     });
 
     // ============================================================
-    // FORÇA DE SENHA (helper)
+    // FORÇA DE SENHA
     // ============================================================
     function avaliarForcaSenha(s) {
         let score = 0;
@@ -229,7 +229,7 @@
     bindForcaSenha('nova-senha', 'senha-forca-barra', 'senha-forca-texto');
 
     // ============================================================
-    // TROCA OBRIGATÓRIA (primeiro acesso)
+    // TROCA OBRIGATÓRIA DE SENHA
     // ============================================================
     window.trocarSenhaPrimeiroAcesso = async function () {
         const nova = document.getElementById('nova-senha').value;
@@ -246,7 +246,6 @@
                 method: 'PUT',
                 body: JSON.stringify({ novaSenha: nova })
             });
-            // Atualiza estado local
             user.senhaTemporaria = false;
             setUser(user);
             toast('Senha alterada com sucesso!', 'success');
@@ -271,7 +270,6 @@
             const data = await api('/api/eventos/eventos/coordenador-meus');
             eventos = data.eventos || [];
 
-            // Atualiza hero
             document.getElementById('hero-eventos').textContent = eventos.length;
             let totalAv = 0, totalIns = 0;
             eventos.forEach(e => {
@@ -323,14 +321,19 @@
             if (el.getAttribute('onclick')?.includes(id)) el.classList.add('active');
         });
 
+        avaliadoresCadastradosCache = [];
+        const busca = document.getElementById('busca-avaliador-cadastrado');
+        if (busca) busca.value = '';
+
         await carregarAvaliadores();
+        await carregarAvaliadoresCadastrados();
         await carregarConfiguracaoAvaliacao();
         await carregarAtribuicaoManual();
     }
     window.selecionar = selecionar;
 
     // ============================================================
-    // AVALIADORES
+    // AVALIADORES JÁ VINCULADOS AO EVENTO
     // ============================================================
     async function carregarAvaliadores() {
         if (!evAtual) return;
@@ -379,6 +382,165 @@
     }
     window.carregarAvaliadores = carregarAvaliadores;
 
+    // ============================================================
+    // AVALIADORES CADASTRADOS NO SISTEMA (busca global)
+    // ============================================================
+    async function carregarAvaliadoresCadastrados() {
+        if (!evAtual) return;
+        const container = document.getElementById('lista-avaliadores-cadastrados');
+        if (!container) return;
+
+        container.innerHTML = '<div class="coord-empty"><i class="fas fa-circle-notch fa-spin"></i> Buscando...</div>';
+
+        try {
+            const busca = (document.getElementById('busca-avaliador-cadastrado')?.value || '').trim();
+            const params = new URLSearchParams();
+            params.set('eventoId', evAtual._id);
+            if (busca) params.set('busca', busca);
+
+            const data = await api(`/api/eventos/avaliadores/coordenador-listar-cadastrados?${params.toString()}`);
+            const disponiveis = data.avaliadores || [];
+
+            avaliadoresCadastradosCache = disponiveis;
+
+            if (disponiveis.length === 0) {
+                container.innerHTML = `
+                    <div class="coord-empty">
+                        <i class="fas fa-search"></i>
+                        ${busca
+                            ? 'Nenhum avaliador encontrado com esse termo.'
+                            : 'Nenhum avaliador cadastrado disponível para vincular.'}
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = disponiveis.map(u => {
+                const iniciais = (u.nomeCompleto || '?')
+                    .split(' ')
+                    .map(n => n[0])
+                    .slice(0, 2)
+                    .join('')
+                    .toUpperCase();
+
+                const isPendente = u.status === 'Pendente';
+                const badgeStatus = isPendente
+                    ? '<span class="coord-chip coord-chip-warning" style="font-size:10px; padding:2px 6px; margin-left:6px;"><i class="fas fa-clock"></i> Pendente</span>'
+                    : '<span class="coord-chip coord-chip-success" style="font-size:10px; padding:2px 6px; margin-left:6px;"><i class="fas fa-check"></i> Ativo</span>';
+
+                const btnAprovar = isPendente
+                    ? `<button type="button" class="coord-btn coord-btn-success coord-btn-sm" onclick="aprovarAvaliadorCadastrado('${u._id}', this)" title="Aprovar cadastro">
+                        <i class="fas fa-check"></i>
+                    </button>`
+                    : '';
+
+                return `
+                    <li class="coord-user-item">
+                        <div class="coord-user-item-info">
+                            <div class="coord-user-avatar" style="background:linear-gradient(135deg,#0ea5e9,#0284c7);">
+                                ${escapeHtml(iniciais)}
+                            </div>
+                            <div class="coord-user-info-text">
+                                <strong>${escapeHtml(u.nomeCompleto)} ${badgeStatus}</strong>
+                                <small>${escapeHtml(u.email)}</small>
+                            </div>
+                        </div>
+                        <div class="coord-user-actions" style="display:flex; gap:6px;">
+                            ${btnAprovar}
+                            <button type="button"
+                                    class="coord-btn coord-btn-primary coord-btn-sm"
+                                    onclick="vincularAvaliadorCadastrado('${escapeHtml(u.email)}', this)"
+                                    title="Vincular ao evento">
+                                <i class="fas fa-link"></i> Vincular
+                            </button>
+                        </div>
+                    </li>
+                `;
+            }).join('');
+        } catch (err) {
+            container.innerHTML = `
+                <div class="coord-alert coord-alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>${escapeHtml(err.message)}</span>
+                </div>`;
+        }
+    }
+    window.carregarAvaliadoresCadastrados = carregarAvaliadoresCadastrados;
+
+    // ============================================================
+    // APROVAR E VINCULAR direto da lista de busca
+    // ============================================================
+    async function aprovarAvaliadorCadastrado(avaliadorId, btnEl) {
+        if (!evAtual || !evAtual._id) {
+            return toast('Nenhum evento selecionado.', 'error');
+        }
+
+        const original = btnEl ? btnEl.innerHTML : null;
+        if (btnEl) {
+            btnEl.disabled = true;
+            btnEl.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+        }
+
+        try {
+            const res = await api(`/api/eventos/avaliadores/coordenador-aprovar/${avaliadorId}`, { 
+                method: 'PUT',
+                body: JSON.stringify({ eventoId: evAtual._id })
+            });
+            
+            toast(res.message || 'Avaliador aprovado e vinculado com sucesso!', 'success');
+            
+            await carregarAvaliadores();
+            await carregarAvaliadoresCadastrados();
+            await carregarAtribuicaoManual();
+        } catch (err) {
+            console.error('[ERRO] Falha ao aprovar:', err);
+            toast(err.message, 'error');
+            if (btnEl) {
+                btnEl.disabled = false;
+                btnEl.innerHTML = original;
+            }
+        }
+    }
+    window.aprovarAvaliadorCadastrado = aprovarAvaliadorCadastrado;
+
+    // ============================================================
+    // VINCULAR
+    // ============================================================
+    async function vincularAvaliadorCadastrado(email, btnEl) {
+        if (!evAtual) return;
+        const original = btnEl ? btnEl.innerHTML : null;
+        if (btnEl) {
+            btnEl.disabled = true;
+            btnEl.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+        }
+        try {
+            const res = await api('/api/eventos/avaliadores/coordenador-vincular', {
+                method: 'POST',
+                body: JSON.stringify({ eventoId: evAtual._id, email })
+            });
+            toast(res.message || 'Avaliador vinculado!', 'success');
+            await carregarAvaliadores();
+            await carregarAvaliadoresCadastrados();
+            await carregarAtribuicaoManual();
+        } catch (err) {
+            toast(err.message, 'error');
+            if (btnEl) {
+                btnEl.disabled = false;
+                btnEl.innerHTML = original;
+            }
+        }
+    }
+    window.vincularAvaliadorCadastrado = vincularAvaliadorCadastrado;
+
+    function bindBuscaAvaliador() {
+        const input = document.getElementById('busca-avaliador-cadastrado');
+        if (!input || input._bound) return;
+        input._bound = true;
+        input.addEventListener('input', () => {
+            clearTimeout(buscaAvaliadorDebounce);
+            buscaAvaliadorDebounce = setTimeout(() => carregarAvaliadoresCadastrados(), 400);
+        });
+    }
+
     async function vincularAvaliador() {
         const email = document.getElementById('email-avaliador').value.trim();
         if (!email) return toast('Digite o e-mail do avaliador.', 'warning');
@@ -390,6 +552,7 @@
             document.getElementById('email-avaliador').value = '';
             toast(res.message || 'Avaliador vinculado!', 'success');
             await carregarAvaliadores();
+            await carregarAvaliadoresCadastrados();
             await carregarAtribuicaoManual();
         } catch (err) {
             toast(err.message, 'error');
@@ -406,6 +569,7 @@
             });
             toast('Avaliador removido.', 'success');
             await carregarAvaliadores();
+            await carregarAvaliadoresCadastrados();
             await carregarAtribuicaoManual();
         } catch (err) {
             toast(err.message, 'error');
@@ -414,11 +578,19 @@
     window.desvincularAvaliador = desvincularAvaliador;
 
     async function aprovarAvaliador(avaliadorId) {
+        if (!evAtual || !evAtual._id) {
+            return toast('Nenhum evento selecionado.', 'error');
+        }
         try {
-            await api(`/api/eventos/avaliadores/coordenador-aprovar/${avaliadorId}`, { method: 'PUT' });
+            await api(`/api/eventos/avaliadores/coordenador-aprovar/${avaliadorId}`, { 
+                method: 'PUT',
+                body: JSON.stringify({ eventoId: evAtual._id })
+            });
             toast('Avaliador aprovado!', 'success');
             await carregarAvaliadores();
+            await carregarAvaliadoresCadastrados();
         } catch (err) {
+            console.error('[ERRO] Falha ao aprovar:', err);
             toast(err.message, 'error');
         }
     }
@@ -587,20 +759,61 @@
                 return;
             }
 
+            // Filtro de categorias
+            const categoriasUnicas = [...new Set(pendentes.map(p => p.categoria).filter(Boolean))];
+            let filtroHtml = '';
+            if (categoriasUnicas.length > 0) {
+                filtroHtml = `
+                    <div style="margin-bottom:12px; display:flex; align-items:center; gap:10px;">
+                        <label style="font-size:13px; font-weight:600; color:#334155;"><i class="fas fa-filter"></i> Filtrar por Categoria:</label>
+                        <select id="filtro-categoria-atribuicao" class="coord-input" style="max-width:250px;" onchange="filtrarTabelaAtribuicao()">
+                            <option value="">Todas as categorias</option>
+                            ${categoriasUnicas.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}
+                        </select>
+                    </div>
+                `;
+            }
+
             container.innerHTML = `
                 <div class="coord-alert coord-alert-info">
                     <i class="fas fa-hand-paper"></i>
-                    <span>Modo <strong>manual</strong>. Cada inscrição precisa de <strong>${cfg.numAvaliadores || 1}</strong> avaliação(ões).</span>
+                    <span>Modo <strong>manual</strong>. O <strong>anexo avaliativo</strong> da inscrição (a ficha de critérios) será enviado ao avaliador.</span>
                 </div>
+                ${filtroHtml}
                 ${pendentes.length === 0
                     ? '<div class="coord-empty"><i class="fas fa-inbox"></i> Nenhuma inscrição ainda.</div>'
-                    : renderTabelaPendentes(pendentes, cfg)}
+                    : `<div id="container-tabela-atribuicao">${renderTabelaPendentes(pendentes, cfg)}</div>`}
             `;
+            
+            // Guarda os dados na window para o filtro funcionar sem recarregar da API
+            window._pendentesData = pendentes;
+            window._cfgData = cfg;
+
         } catch (err) {
             container.innerHTML = `<div class="coord-alert coord-alert-danger"><i class="fas fa-exclamation-triangle"></i><span>${escapeHtml(err.message)}</span></div>`;
         }
     }
     window.carregarAtribuicaoManual = carregarAtribuicaoManual;
+
+    function filtrarTabelaAtribuicao() {
+        const filtro = document.getElementById('filtro-categoria-atribuicao')?.value || '';
+        const pendentes = window._pendentesData || [];
+        const cfg = window._cfgData || {};
+        
+        const filtrados = filtro 
+            ? pendentes.filter(p => p.categoria === filtro) 
+            : pendentes;
+            
+        const containerTabela = document.getElementById('container-tabela-atribuicao');
+        if (containerTabela) {
+            if (filtrados.length > 0) {
+                containerTabela.innerHTML = renderTabelaPendentes(filtrados, cfg);
+            } else {
+                containerTabela.innerHTML = '<div class="coord-empty" style="padding:20px;"><i class="fas fa-search"></i> Nenhuma inscrição nesta categoria.</div>';
+            }
+        }
+    }
+    window.filtrarTabelaAtribuicao = filtrarTabelaAtribuicao;
 
     function renderTabelaPendentes(pendentes, cfg) {
         return `
@@ -625,6 +838,15 @@
 
     function renderLinhaAtribuicao(p, cfg) {
         const idsAtribuidos = new Set((p.avaliadores || []).map(a => String(a.avaliadorId)));
+
+        // Renderiza a Badge da Categoria, se existir
+        const badgeCategoria = p.categoria
+            ? `<div style="margin-top: 4px;">
+                 <span class="coord-chip" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; font-size:11px; padding:2px 6px;">
+                    <i class="fas fa-tags"></i> ${escapeHtml(p.categoria)}
+                 </span>
+               </div>`
+            : '';
 
         const checkboxes = avaliadoresDoEvento.map(av => {
             const marcado = idsAtribuidos.has(String(av._id));
@@ -667,6 +889,9 @@
                     <i class="fas fa-user-plus"></i> Atribuir manualmente
                 </summary>
                 <div style="margin-top:8px;padding:10px;background:#f8fafc;border-radius:8px;">
+                    <div style="margin-bottom:8px; font-size:11px; color:#64748b;">
+                        ${p.categoria ? `Selecione avaliadores capacitados para a categoria <strong>${escapeHtml(p.categoria)}</strong>.` : 'Selecione os avaliadores:'}
+                    </div>
                     ${checkboxes}
                     <button type="button" class="coord-btn coord-btn-primary coord-btn-sm"
                             onclick="salvarAtribuicoesInscricao('${p.inscricaoId}')">
@@ -678,7 +903,10 @@
 
         return `
             <tr>
-                <td><strong>${escapeHtml(p.participante)}</strong></td>
+                <td>
+                    <strong>${escapeHtml(p.participante)}</strong>
+                    ${badgeCategoria}
+                </td>
                 <td><code>${escapeHtml(p.protocolo)}</code></td>
                 <td style="text-align:center;">${p.concluidas}</td>
                 <td style="text-align:center;">${faltamChip}</td>
@@ -952,9 +1180,9 @@
     // INICIALIZAÇÃO
     // ============================================================
     document.addEventListener('DOMContentLoaded', () => {
-        // Re-checa o usuário a cada boot (se trocaram senha em outra aba)
         user = getUser();
         decidirTelaInicial();
+        bindBuscaAvaliador();
     });
 
 })();

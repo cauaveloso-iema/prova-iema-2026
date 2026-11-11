@@ -487,3 +487,133 @@ html, body { margin: 0; padding: 0; }
     .insc-auth-tab i { display: none; }
     .insc-protocolo .codigo { font-size: 20px; padding: 10px 18px; letter-spacing: 2px; }
 }
+
+/* ============================================================================
+   Estilos migrados do HTML (inscricao.html)
+   ============================================================================ */
+
+.ev-body-inscricao { background: #f0f4f8; }
+
+.ev-container-inscricao { max-width: 860px; }
+
+.ev-erro-slug {
+    text-align: center;
+    padding: 20px;
+    font-size: 16px;
+    border-radius: 12px;
+    margin-top: 20px;
+}
+.ev-erro-slug i {
+    font-size: 28px;
+    margin-bottom: 10px;
+    display: block;
+}
+
+#insc-descricao {
+    margin: 8px 0 0;
+    opacity: .9;
+    font-size: 15px;
+    text-align: justify;
+    text-justify: inter-word;
+}
+
+.insc-status-wrap { margin-top: 20px; }
+
+.insc-hint-top { margin: 4px 0 0; }
+.insc-hint-protocolo { margin: 6px 0 0; }
+.insc-hint-status { margin: 4px 0 0; }
+.insc-protocolo-actions { margin-top: 24px; }
+
+.perfil-sep { margin: 0 6px; }
+
+/* LGPD */
+.ev-lgpd-group {
+    margin-top: 16px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    cursor: pointer;
+}
+.ev-lgpd-group input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    margin-top: 2px;
+    cursor: pointer;
+    flex-shrink: 0;
+    accent-color: #0ea5e9;
+}
+.ev-lgpd-link {
+    color: #0ea5e9;
+    font-weight: 700;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+/* Bloco de cotas (inscrição) */
+#bloco-cotas {
+    margin-top: 24px;
+    padding: 20px;
+    background: #f0f9ff;
+    border: 2px solid #bae6fd;
+    border-radius: 12px;
+}
+#bloco-cotas h4 {
+    margin: 0 0 12px;
+    color: #0369a1;
+    font-size: 16px;
+    font-weight: 700;
+}
+#bloco-cotas .ev-cota-intro {
+    font-size: 13px;
+    color: #64748b;
+    margin: 0 0 16px;
+}
+#bloco-cotas .ev-cota-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    cursor: pointer;
+    padding: 12px;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+#bloco-cotas .ev-cota-check input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    margin-top: 2px;
+    cursor: pointer;
+    flex-shrink: 0;
+    accent-color: #0ea5e9;
+}
+#bloco-cotas .ev-cota-check span { font-size: 14px; color: #1e293b; }
+#bloco-cotas .ev-cota-check small { font-size: 12px; color: #64748b; display: block; margin-top: 4px; }
+
+#bloco-cotas .ev-cota-laudo {
+    display: none;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px dashed #cbd5e1;
+}
+#bloco-cotas .ev-cota-laudo label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #334155;
+    display: block;
+    margin-bottom: 8px;
+}
+#bloco-cotas .ev-cota-laudo input[type="file"] {
+    display: block;
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #93c5fd;
+    border-radius: 8px;
+    background: white;
+    font-size: 13px;
+}
+#bloco-cotas .ev-cota-laudo small {
+    font-size: 11px;
+    color: #94a3b8;
+    margin-top: 8px;
+    display: block;
+}

@@ -1,6 +1,5 @@
 // ============================================================================
 // backend/eventos/routes/publico.js
-// Rotas públicas do portal de eventos (inscrição do participante)
 // ============================================================================
 
 const express = require('express');
@@ -344,7 +343,6 @@ router.post('/:slug/anexo-participante', autenticarParticipante, (req, res, next
         const evento = await Evento.findOne({ slug: req.params.slug, status: 'Publicado' }).populate('modeloId');
         if (!evento) return res.status(404).json({ success: false, error: 'Evento não encontrado' });
 
-        // 🔥 Verifica duplicidade respeitando o flag do evento
         const existente = await Inscricao.findOne({ participanteId: req.participanteId, eventoId: evento._id });
         if (existente && !evento.permiteMultiplasInscricoes) {
             return res.status(409).json({ success: false, error: 'Você já está inscrito', protocolo: existente.protocolo });
@@ -365,7 +363,7 @@ router.post('/:slug/anexo-participante', autenticarParticipante, (req, res, next
 });
 
 // ============================================================================
-// POST /:slug/inscrever — respeita permiteMultiplasInscricoes
+// POST /:slug/inscrever — respeita permiteMultiplasInscricoes e sistema de cotas
 // ============================================================================
 router.post('/:slug/inscrever', autenticarParticipante, async (req, res) => {
     try {
@@ -377,7 +375,6 @@ router.post('/:slug/inscrever', autenticarParticipante, async (req, res) => {
         if (agora > new Date(evento.dataFimInscricao)) return res.status(400).json({ success: false, error: 'Inscrições encerradas' });
         if (evento.vagas !== null && evento.totalParticipantes >= evento.vagas) return res.status(400).json({ success: false, error: 'Vagas esgotadas' });
 
-        // 🔥 REGRA DE DUPLICIDADE
         const existente = await Inscricao.findOne({ participanteId: req.participanteId, eventoId: evento._id });
         if (existente && !evento.permiteMultiplasInscricoes) {
             return res.status(409).json({
@@ -425,6 +422,7 @@ router.post('/:slug/inscrever', autenticarParticipante, async (req, res) => {
         const modelo = evento.modeloId;
         for (const anexo of (modelo?.anexos || [])) {
             if (anexo.isAvaliativo) continue;
+            if (anexo.tipo === 'edital') continue;
 
             for (const campo of (anexo.campos || [])) {
                 if (!campo.obrigatorio) continue;
@@ -483,6 +481,20 @@ router.post('/:slug/inscrever', autenticarParticipante, async (req, res) => {
                 const chave = anexo.labelSolicitacaoAnexo || anexo.labelCustom || anexo.nomeOriginal;
                 if (!anexosParticipante || !anexosParticipante[chave]) {
                     return res.status(400).json({ success: false, error: `Anexo obrigatório: ${chave}` });
+                }
+            }
+        }
+
+        // Validação de cotas
+        if (modelo?.usarSistemaCotas) {
+            const usaCota = dados['__usa_cota'] === 'sim';
+            if (usaCota) {
+                const laudoKey = `__laudo_cota`;
+                if (modelo.laudoCotasObrigatorio && (!anexosParticipante || !anexosParticipante[laudoKey])) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `O laudo é obrigatório para quem opta pelo sistema de cotas.`
+                    });
                 }
             }
         }
@@ -568,7 +580,7 @@ router.get('/minhas-inscricoes', autenticarParticipante, async (req, res) => {
 });
 
 // ============================================================================
-// GET /:slug (público) — expõe permiteMultiplasInscricoes
+// GET /:slug (público) — CORRIGIDO: repassa categorias, anexosExtras, cotas
 // ============================================================================
 router.get('/:slug', opcionalmenteAutenticar, async (req, res) => {
     if (req.params.slug === 'sessoes-assinatura') {
@@ -592,8 +604,9 @@ router.get('/:slug', opcionalmenteAutenticar, async (req, res) => {
         const modelo = evento.modeloId || {};
 
         const anexos = await Promise.all((modelo.anexos || []).map(async (a) => {
+            const ehEdital = a.tipo === 'edital';
             let textoArquivo = '';
-            if (a.exigeAssinatura) {
+            if (a.exigeAssinatura && !ehEdital) {
                 textoArquivo = await lerTextoArquivo(a.arquivo);
             }
             return {
@@ -601,21 +614,21 @@ router.get('/:slug', opcionalmenteAutenticar, async (req, res) => {
                 labelCustom: a.labelCustom || '',
                 nomeOriginal: a.nomeOriginal,
                 arquivo: a.arquivo,
-                campos: (a.campos || []),
-                repetivel: !!a.repetivel,
-                labelGrupoRepetivel: a.labelGrupoRepetivel || '',
-                camposRepetiveis: (a.camposRepetiveis || []),
-                quantidadePadrao: a.quantidadePadrao || 1,
-                maxRepeticoes: a.maxRepeticoes || 10,
-                exigeAssinatura: !!a.exigeAssinatura,
-                exibeModalLeitura: a.exibeModalLeitura !== false,
-                tipoDadosTermo: a.tipoDadosTermo || 'auto',
+                campos: ehEdital ? [] : (a.campos || []),
+                repetivel: ehEdital ? false : !!a.repetivel,
+                labelGrupoRepetivel: ehEdital ? '' : (a.labelGrupoRepetivel || ''),
+                camposRepetiveis: ehEdital ? [] : (a.camposRepetiveis || []),
+                quantidadePadrao: ehEdital ? 1 : (a.quantidadePadrao || 1),
+                maxRepeticoes: ehEdital ? 10 : (a.maxRepeticoes || 10),
+                exigeAssinatura: ehEdital ? false : !!a.exigeAssinatura,
+                exibeModalLeitura: ehEdital ? false : (a.exibeModalLeitura !== false),
+                tipoDadosTermo: ehEdital ? 'auto' : (a.tipoDadosTermo || 'auto'),
                 textoArquivo: textoArquivo,
-                solicitaAnexo: !!a.solicitaAnexo,
-                labelSolicitacaoAnexo: a.labelSolicitacaoAnexo || '',
-                anexoSolicitacaoObrigatorio: !!a.anexoSolicitacaoObrigatorio,
-                isAvaliativo: !!a.isAvaliativo,
-                numAvaliadores: a.numAvaliadores || 1
+                solicitaAnexo: ehEdital ? false : !!a.solicitaAnexo,
+                labelSolicitacaoAnexo: ehEdital ? '' : (a.labelSolicitacaoAnexo || ''),
+                anexoSolicitacaoObrigatorio: ehEdital ? false : !!a.anexoSolicitacaoObrigatorio,
+                isAvaliativo: ehEdital ? false : !!a.isAvaliativo,
+                numAvaliadores: ehEdital ? 1 : (a.numAvaliadores || 1)
             };
         }));
 
@@ -626,8 +639,6 @@ router.get('/:slug', opcionalmenteAutenticar, async (req, res) => {
             const p = await ParticipanteEvento.findById(req.participanteId);
             if (p) perfilParticipante = p.toSafeJSON({ incluirSensiveis: true });
 
-            // 🔥 NOVO: informa ao frontend se o participante já tem inscrição
-            // (útil para decidir exibir ou não o formulário)
             const existente = await Inscricao.findOne({
                 participanteId: req.participanteId,
                 eventoId: evento._id
@@ -643,6 +654,29 @@ router.get('/:slug', opcionalmenteAutenticar, async (req, res) => {
             }
         }
 
+        // 🔥 Sistema de cotas (do modelo)
+        const sistemaCotas = modelo.usarSistemaCotas ? {
+            usarSistemaCotas: true,
+            publicoLaudoCotas: modelo.publicoLaudoCotas || 'professor',
+            labelLaudoCotas: modelo.labelLaudoCotas || 'Laudo Médico',
+            laudoCotasObrigatorio: modelo.laudoCotasObrigatorio !== false
+        } : null;
+
+        // 🔥 Categorias (do modelo)
+        const usarCategorias = !!modelo.usarCategorias;
+        const labelCategorias = modelo.labelCategorias || 'Categoria / Modalidade';
+        const categoriaObrigatoria = modelo.categoriaObrigatoria !== false;
+        const categorias = Array.isArray(modelo.categorias) ? modelo.categorias : [];
+
+        // 🔥 Anexos extras (do modelo)
+        const anexosExtras = Array.isArray(modelo.anexosExtras)
+            ? modelo.anexosExtras.map(e => ({
+                label: e.label,
+                obrigatorio: !!e.obrigatorio,
+                ajuda: e.ajuda || ''
+            }))
+            : [];
+
         res.json({
             success: true,
             evento: {
@@ -655,9 +689,18 @@ router.get('/:slug', opcionalmenteAutenticar, async (req, res) => {
                 dataFimEvento: evento.dataFimEvento,
                 vagas: evento.vagas, totalParticipantes: evento.totalParticipantes,
                 inscricaoAberta,
-                // 🔥 Flag que o frontend usa para decidir se bloqueia duplicidade
-                permiteMultiplasInscricoes: !!evento.permiteMultiplasInscricoes
+                permiteMultiplasInscricoes: !!evento.permiteMultiplasInscricoes,
+
+                // 🔥 CATEGORIAS
+                usarCategorias,
+                labelCategorias,
+                categoriaObrigatoria,
+                categorias,
+
+                // 🔥 ANEXOS EXTRAS
+                anexosExtras
             },
+            sistemaCotas,
             anexos,
             perfilParticipante,
             jaInscritoInfo

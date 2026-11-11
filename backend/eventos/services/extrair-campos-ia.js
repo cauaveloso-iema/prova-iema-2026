@@ -133,12 +133,6 @@ function identificarTipoAnexo(texto, nomeOriginal) {
 // ============================================================
 // PARSER ROBUSTO DE JSON
 // ============================================================
-/**
- * Tenta extrair JSON de uma resposta que pode ter:
- * - ```json ... ```
- * - texto explicativo antes/depois
- * - quebras estranhas
- */
 function parseJSONRobusto(resposta) {
     if (!resposta) return null;
 
@@ -194,16 +188,13 @@ function extrairCamposPorRegex(texto) {
     if (ehFichaAvaliacao) {
         for (const linha of linhas) {
             if (linha.includes('|')) {
-                // Linha de tabela: "Critério | Nota"
                 const partes = linha.split('|').map(p => p.trim()).filter(Boolean);
                 if (partes.length < 2) continue;
 
                 const primeira = partes[0].toLowerCase();
-                // Pula cabeçalhos e totais
                 if (/crit[ée]rio|item|nota|avalia[çc][ãa]o/i.test(primeira) && partes.length <= 2) continue;
                 if (/soma|total/i.test(primeira)) continue;
 
-                // Critério válido: nome com mais de 10 caracteres
                 if (partes[0].length >= 10) {
                     const label = partes[0].replace(/\s+/g, ' ').trim();
                     const descricao = partes.slice(1).join(' — ').replace(/\s+/g, ' ').trim();
@@ -212,14 +203,12 @@ function extrairCamposPorRegex(texto) {
                     }
                 }
             } else {
-                // Linha de texto corrido (não tabela, não cabeçalho de campo)
                 const t = linha.trim();
                 if (t.length > 30 && !/^(nome|t[íi]tulo|professor|equipe|escola|data|cpf|rg|e-mail|telefone)/i.test(t)) {
                     linhasInformativas.push(t);
                 }
             }
 
-            // Legendas: "01 – INSATISFATÓRIO; 02 – REGULAR; ..."
             const regexLegenda = /(\d{1,3})\s*[–\-—]\s*([A-ZÁÉÍÓÚÂÊÔÃÕÇ][A-ZÁÉÍÓÚÂÊÔÃÕÇ\s]{2,40})/g;
             let m;
             while ((m = regexLegenda.exec(linha)) !== null) {
@@ -234,7 +223,6 @@ function extrairCamposPorRegex(texto) {
         }
     }
 
-    // Detecta alunos
     const temAlunos = /(estudante|aluno|integrante|membro|participante)\s*[1-9]/i.test(texto);
     const labelGrupo = temAlunos ? texto.match(/(estudante|aluno|integrante|membro|participante)/i)[0] : 'Estudante';
     const labelGrupoCap = labelGrupo.charAt(0).toUpperCase() + labelGrupo.slice(1);
@@ -328,7 +316,6 @@ ${textoLimitado}
 
     for (const modelo of MODELOS_GROQ) {
         try {
-            // 🔥 Tenta forçar resposta JSON (modelos openai/* suportam)
             const usaJsonMode = /openai\/gpt-oss/i.test(modelo);
 
             const completion = await groqInstance.chat.completions.create({
@@ -421,13 +408,32 @@ async function processarArquivo(caminhoAbsoluto, nomeOriginal, groqInstance) {
     const tamanho = (texto || '').length;
     logger.info(`[EVENTOS] ${nomeOriginal} → texto: ${tamanho} chars`);
 
-    // DEBUG opcional: loga amostra do texto
     if (process.env.DEBUG_IA === '1') {
         logger.info(`[EVENTOS] Amostra do texto: ${texto.substring(0, 500).replace(/\n/g, ' \\n ')}`);
     }
 
     const tipoAnexo = identificarTipoAnexo(texto, nomeOriginal);
     logger.info(`[EVENTOS] ${nomeOriginal} → tipo: ${tipoAnexo}`);
+
+    // 🔥 REGRA: Se for edital, NÃO extrai nada - apenas anexa
+    if (tipoAnexo === 'edital') {
+        logger.info(`📄 [EVENTOS] Edital detectado — não será extraído (apenas anexado)`);
+        return {
+            tipo: 'edital',
+            nomeOriginal,
+            campos: [],
+            camposRepetiveis: [],
+            labelGrupoRepetivel: '',
+            quantidadePadrao: 1,
+            maxRepeticoes: 10,
+            criteriosAvaliacao: [],
+            informacoesDocumento: '',
+            legendasNotas: [],
+            exigeAssinatura: false,
+            isAvaliativo: false,
+            fonte: 'edital'
+        };
+    }
 
     if (groqInstance && texto && tamanho > 20) {
         try {

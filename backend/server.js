@@ -1092,6 +1092,8 @@ app.use('/api/professor', require('./routes/professor'));
 app.use('/api/biblioteca', require('./routes/biblioteca'));
 app.use('/api/biblioteca-publica', require('./routes/biblioteca-publica'));
 app.use('/api/secretaria', require('./routes/secretaria'));
+const visitasProfessorRoutes = require('./routes/visitas-professor');
+app.use('/api/professor/visitas', visitasProfessorRoutes);
 
 // ── Rotas de Recepção e Sessões de Assinatura ──
 const recepcaoRoutes = require('./routes/recepcao-routes');

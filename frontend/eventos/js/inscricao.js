@@ -1,11 +1,6 @@
 /* ==========================================================================
    INSCRIÇÃO PÚBLICA — FRONTEND (professor) - Wizard Step-by-Step
-   ==========================================================================
-   - Wizard com passo 1 (professor/projeto) e passo 2 (alunos)
-   - Assinatura via QR Code + canvas inline
-   - LGPD via modal inline (sem persistência, sem pré-marcar)
-   - Respeita permiteMultiplasInscricoes do evento
-   - Se já inscrito (e não permite múltiplas), mostra tela de protocolo
+   v10.1 — Correções: cotas em qualquer passo, case-insensitive em dadosDoAluno
    ========================================================================== */
 
 const INSC_API = {
@@ -54,6 +49,8 @@ let dadosSalvos = {};
 let sessoesAssinatura = {};
 let __inscricaoEmAndamento = false;
 let __lgpdAceitoNestaSessao = false;
+let sistemaCotasConfig = null;
+let usaCotaSelecionado = false;
 
 // ---------- Utilitários ----------
 function escapeHtml(s) {
@@ -203,8 +200,10 @@ async function buscarCEP(cep) {
 function ehAvaliativo(anexo) { return anexo.isAvaliativo === true; }
 function ehEstudante(anexo) { return anexo.tipoDadosTermo === 'estudante'; }
 function ehRepetivel(anexo) { return anexo.repetivel === true; }
+function ehEdital(anexo) { return anexo.tipo === 'edital'; }
 
 function ehAnexoProfessor(anexo) {
+    if (ehEdital(anexo)) return false;
     if (ehAvaliativo(anexo)) return false;
     if (ehEstudante(anexo)) return false;
     if (ehRepetivel(anexo)) return false;
@@ -212,6 +211,7 @@ function ehAnexoProfessor(anexo) {
 }
 
 function ehAnexoPasso2(anexo) {
+    if (ehEdital(anexo)) return false;
     if (ehAvaliativo(anexo)) return false;
     return ehEstudante(anexo) || ehRepetivel(anexo);
 }
@@ -250,7 +250,7 @@ function esconderTodosOsBlocos() {
         const el = document.getElementById(id);
         if (el) {
             el.classList.add('ev-hidden');
-            el.style.display = ''; // limpa display inline se houver
+            el.style.display = '';
         }
     });
 }
@@ -289,13 +289,20 @@ function mostrarTelaLogado() {
 }
 
 // ============================================================
-// LGPD — Modal inline (sem persistência)
+// LGPD — Modal inline
 // ============================================================
 function aceitarLgpdPrincipal() {
     const chk = document.getElementById('insc-lgpd-confirmo');
     if (!chk) return;
     chk.checked = true;
     __lgpdAceitoNestaSessao = true;
+    atualizarBtnInscrever();
+}
+
+function atualizarBtnInscrever() {
+    const chk = document.getElementById('insc-lgpd-confirmo');
+    const btn = document.getElementById('btn-inscrever');
+    if (chk && btn) btn.disabled = !chk.checked;
 }
 
 function bindCheckboxLgpd() {
@@ -303,50 +310,31 @@ function bindCheckboxLgpd() {
     if (!chk) return;
     if (chk.dataset.lgpdBound === '1') return;
     chk.dataset.lgpdBound = '1';
-    chk.addEventListener('click', (e) => { e.preventDefault(); abrirModalLgpd(); });
-    chk.addEventListener('keydown', (e) => {
-        if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); abrirModalLgpd(); }
+
+    chk.checked = false;
+    atualizarBtnInscrever();
+
+    chk.addEventListener('change', () => {
+        if (chk.checked) {
+            __lgpdAceitoNestaSessao = true;
+        } else {
+            __lgpdAceitoNestaSessao = false;
+            abrirModalLgpd();
+        }
+        atualizarBtnInscrever();
     });
 }
 
 function bindLinkPaginaLgpd() {
-    const chk = document.getElementById('insc-lgpd-confirmo');
-    if (!chk) return;
-    if (chk.dataset.lgpdLinkBound === '1') return;
-    const label = chk.closest('label') || chk.parentElement;
-    if (!label) return;
-    const walker = document.createTreeWalker(label, NodeFilter.SHOW_TEXT, null);
-    let alvoTextNode = null, node;
-    while ((node = walker.nextNode())) {
-        const t = (node.nodeValue || '').toLowerCase();
-        if (t.includes('termos de privacidade') || t.includes('lgpd')) { alvoTextNode = node; break; }
-    }
-    if (!alvoTextNode) return;
-    const textoOriginal = alvoTextNode.nodeValue;
-    const lower = textoOriginal.toLowerCase();
-    const idxTermos = lower.indexOf('termos de privacidade');
-    const idxLgpd = lower.indexOf('(lgpd)');
-    let inicioLink = -1, fimLink = -1;
-    if (idxTermos !== -1) {
-        inicioLink = idxTermos;
-        fimLink = idxLgpd !== -1 ? idxLgpd + '(lgpd)'.length : idxTermos + 'termos de privacidade'.length;
-    } else if (idxLgpd !== -1) {
-        inicioLink = idxLgpd; fimLink = idxLgpd + '(lgpd)'.length;
-    }
-    if (inicioLink === -1) return;
-    const antes = textoOriginal.slice(0, inicioLink);
-    const trecho = textoOriginal.slice(inicioLink, fimLink);
-    const depois = textoOriginal.slice(fimLink);
-    const frag = document.createDocumentFragment();
-    if (antes) frag.appendChild(document.createTextNode(antes));
-    const link = document.createElement('a');
-    link.href = '#'; link.textContent = trecho;
-    link.style.cssText = 'color:#0ea5e9;font-weight:700;text-decoration:underline;cursor:pointer;';
-    link.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); abrirModalLgpd(); });
-    frag.appendChild(link);
-    if (depois) frag.appendChild(document.createTextNode(depois));
-    alvoTextNode.parentNode.replaceChild(frag, alvoTextNode);
-    chk.dataset.lgpdLinkBound = '1';
+    document.querySelectorAll('.ev-lgpd-link').forEach(link => {
+        if (link.dataset.lgpdLinkBound === '1') return;
+        link.dataset.lgpdLinkBound = '1';
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            abrirModalLgpd();
+        });
+    });
 }
 
 function bindLgpd() {
@@ -396,7 +384,6 @@ function abrirModalLgpd() {
 
     const modal = document.getElementById('modalLgpdInline');
     const iframe = document.getElementById('lgpdIframe');
-    const wrapper = iframe.parentElement;
     const checkLi = document.getElementById('lgpdCheckLiAceito');
     const checkLabel = document.getElementById('lgpdCheckLabel');
     const btnConfirmar = document.getElementById('btnConfirmarModalLgpd');
@@ -671,7 +658,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // ============================================================
-// CARREGA EVENTO — 🔥 CORRIGIDO: esconde blocos ANTES de tudo
+// CARREGA EVENTO
 // ============================================================
 async function carregarEvento() {
     const slug = getSlug();
@@ -681,7 +668,6 @@ async function carregarEvento() {
         return;
     }
 
-    // 🔥 1) ESCONDE OS 3 BLOCOS NO INÍCIO (independente do HTML)
     esconderTodosOsBlocos();
 
     try {
@@ -692,7 +678,8 @@ async function carregarEvento() {
         if (!res.ok) throw new Error(data.error || 'Erro ao carregar');
 
         eventoAtual = data.evento;
-        anexosAtuais = (data.anexos || []).filter(a => a.isAvaliativo !== true);
+        sistemaCotasConfig = data.sistemaCotas || null;
+        anexosAtuais = (data.anexos || []).filter(a => a.isAvaliativo !== true && a.tipo !== 'edital');
         perfilParticipante = data.perfilParticipante || null;
         if (data.jaInscritoInfo) eventoAtual._jaInscritoInfo = data.jaInscritoInfo;
 
@@ -703,9 +690,10 @@ async function carregarEvento() {
         });
 
         const temPasso2 = anexosAtuais.some(a => ehEstudante(a) || ehRepetivel(a));
-        totalPassos = temPasso2 ? 2 : 1;
+        const temAnexosExtras = eventoAtual.anexosExtras && eventoAtual.anexosExtras.length > 0;
+        const temCategorias = eventoAtual.usarCategorias && eventoAtual.categorias && eventoAtual.categorias.length > 0;
+        totalPassos = (temPasso2 || temAnexosExtras || temCategorias) ? 2 : 1;
 
-        // Preenche o hero
         document.getElementById('insc-hero').classList.remove('ev-hidden');
         document.getElementById('insc-titulo').textContent = eventoAtual.titulo;
         document.getElementById('insc-descricao').textContent = eventoAtual.descricaoPublica || '';
@@ -718,11 +706,16 @@ async function carregarEvento() {
         const fim = eventoAtual.dataFimInscricao ? new Date(eventoAtual.dataFimInscricao).toLocaleDateString('pt-BR') : '—';
         document.getElementById('insc-periodo').textContent = `Inscrições: ${ini} até ${fim}`;
 
-        if (anexosAtuais.length > 0) {
-            document.getElementById('insc-anexos').innerHTML = anexosAtuais
-                .filter(a => a.arquivo)
-                .map(a => `<a class="insc-anexo" href="${escapeHtml(a.arquivo)}" target="_blank"><i class="fas ${TIPOS_ANEXO_ICON[a.tipo] || 'fa-paperclip'}"></i> ${escapeHtml(labelDoAnexo(a))}</a>`)
-                .join('');
+        // EDITAL no topo
+        const anexosHero = document.getElementById('insc-anexos');
+        anexosHero.innerHTML = '';
+        const editais = (data.anexos || []).filter(a => a.tipo === 'edital');
+        if (editais.length > 0) {
+            anexosHero.innerHTML = editais.map(a => `
+                <a class="insc-anexo" href="${escapeHtml(a.arquivo)}" target="_blank" style="background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe;">
+                    <i class="fas fa-file-download"></i> Baixar ${escapeHtml(labelDoAnexo(a))}
+                </a>
+            `).join('');
         }
 
         const badge = document.getElementById('insc-status-badge');
@@ -732,10 +725,8 @@ async function carregarEvento() {
             badge.innerHTML = '<span class="insc-status-fechado"><i class="fas fa-lock"></i> Inscrições Fechadas</span>';
         }
 
-        // 🔥 2) Revela o container principal
         document.getElementById('insc-conteudo').classList.remove('ev-hidden');
 
-        // 🔥 3) DECISÃO DE TELA (uma única escolha)
         let telaDefinida = false;
 
         if (getToken() && !eventoAtual.permiteMultiplasInscricoes) {
@@ -787,7 +778,7 @@ function renderizarTelaLogado() {
         document.getElementById('perfil-funcao').textContent = perfilParticipante.funcao || '—';
     }
     if (!eventoAtual.inscricaoAberta) {
-        document.getElementById('campos-inscricao').innerHTML = `<div class="ev-alert ev-alert-error" style="margin-top:12px;">🚫 Inscrições encerradas ou vagas esgotadas.</div>`;
+        document.getElementById('campos-inscricao').innerHTML = `<div class="ev-alert ev-alert-error ev-mt-12">🚫 Inscrições encerradas ou vagas esgotadas.</div>`;
         document.getElementById('btn-inscrever').disabled = true;
         return;
     }
@@ -795,6 +786,7 @@ function renderizarTelaLogado() {
     passoAtual = 1;
     dadosSalvos = {};
     renderizarWizard();
+    renderizarBlocoCotasInscricao();
     bindLgpd();
 }
 
@@ -814,7 +806,7 @@ function renderizarWizard() {
         container.insertAdjacentHTML('beforeend', barras);
     }
 
-    const tituloEtapa = passoAtual === 1 ? 'Passo 1: Dados do Professor' : 'Passo 2: Estudantes e Autorizações';
+    const tituloEtapa = passoAtual === 1 ? 'Passo 1: Dados do Professor' : 'Passo 2: Estudantes, Anexos e Autorizações';
     container.insertAdjacentHTML('beforeend', `<h3 style="margin-bottom:16px;color:#1e293b;font-size:18px;">${tituloEtapa}</h3>`);
 
     const divConteudo = document.createElement('div');
@@ -837,15 +829,18 @@ function renderizarWizard() {
     }
 
     const blocoLgpd = document.getElementById('insc-lgpd-confirmo')?.closest('.ev-form-group');
+    const blocoLgpdLabel = document.getElementById('insc-lgpd-confirmo')?.closest('.ev-lgpd-group');
     const btnInscrever = document.getElementById('btn-inscrever');
 
     if (passoAtual < totalPassos) {
         divBotoes.innerHTML += `<button type="button" class="ev-btn ev-btn-primary" id="btn-avancar-passo">Avançar <i class="fas fa-arrow-right"></i></button>`;
         if (blocoLgpd) blocoLgpd.style.display = 'none';
+        if (blocoLgpdLabel) blocoLgpdLabel.style.display = 'none';
         if (btnInscrever) btnInscrever.style.display = 'none';
     } else {
         divBotoes.innerHTML += `<div></div>`;
         if (blocoLgpd) blocoLgpd.style.display = 'flex';
+        if (blocoLgpdLabel) blocoLgpdLabel.style.display = 'flex';
         if (btnInscrever) btnInscrever.style.display = 'inline-block';
     }
 
@@ -868,6 +863,16 @@ function renderizarWizard() {
                 }
             }
         }
+
+        if (eventoAtual.anexosExtras) {
+            for (let i = 0; i < eventoAtual.anexosExtras.length; i++) {
+                const ext = eventoAtual.anexosExtras[i];
+                if (ext.obrigatorio && (!anexosParticipanteState['extra_' + i] || !anexosParticipanteState['extra_' + i].arquivo)) {
+                    return alert(`Anexo obrigatório não enviado: ${ext.label}`);
+                }
+            }
+        }
+
         salvarDadosAtuais();
         passoAtual++;
         renderizarWizard();
@@ -885,6 +890,8 @@ function renderizarWizard() {
     aplicarMascaras();
     configurarRelacaoSelect();
     bindLgpd();
+    // 🔥 Reavalia o bloco de cotas a cada passo
+    renderizarBlocoCotasInscricao();
 }
 
 function salvarDadosAtuais() {
@@ -908,11 +915,168 @@ function renderizarPasso1(container) {
     const anexosProfessor = anexosAtuais.filter(ehAnexoProfessor);
     if (anexosProfessor.length === 0) {
         container.innerHTML = '<p class="ev-alert ev-alert-info">Nenhum dado do professor a ser preenchido no modelo.</p>';
+    } else {
+        anexosProfessor.forEach((anexo) => {
+            const originalIdx = anexosAtuais.indexOf(anexo);
+            container.appendChild(renderizarCardAnexoProfessor(anexo, originalIdx));
+        });
+    }
+}
+
+function renderizarBlocoCotas() {
+    const div = document.createElement('div');
+    div.id = 'bloco-cotas';
+    div.style.cssText = 'margin-top: 24px; padding: 20px; background: #f0f9ff; border: 2px solid #bae6fd; border-radius: 12px;';
+    div.innerHTML = `
+        <h4 style="margin: 0 0 12px; color: #0369a1; font-size: 16px; font-weight: 700;">
+            <i class="fas fa-users"></i> Sistema de Cotas
+        </h4>
+        <p style="font-size: 13px; color: #64748b; margin: 0 0 16px;">
+            Este evento possui sistema de cotas. Se você ou algum aluno faz parte de cotas, diversidade ou inclusão social, marque abaixo e anexe o laudo.
+        </p>
+        <label style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer; padding: 12px; background: white; border-radius: 8px; border: 1px solid #e2e8f0;">
+            <input type="checkbox" id="insc-usa-cota" style="width: 20px; height: 20px; margin-top: 2px; cursor: pointer; flex-shrink: 0;">
+            <span style="font-size: 14px; color: #1e293b;">
+                <strong>Você faz parte de algum sistema de cotas, diversidades ou inclusão social?</strong><br>
+                <span style="font-size: 12px; color: #64748b;">Se sim, marque esta opção e anexe o laudo abaixo.</span>
+            </span>
+        </label>
+        <div id="bloco-laudo-cota" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px dashed #cbd5e1;">
+            <label style="font-size: 13px; font-weight: 600; color: #334155; display: block; margin-bottom: 8px;">
+                ${escapeHtml(sistemaCotasConfig?.labelLaudoCotas || 'Laudo Médico')}
+                ${sistemaCotasConfig?.laudoCotasObrigatorio ? '<span style="color: #ef4444;">*</span>' : ''}
+            </label>
+            <input type="file" id="insc-laudo-cota" accept=".pdf,.png,.jpg,.jpeg" style="display: block; width: 100%; padding: 8px; border: 1px solid #93c5fd; border-radius: 8px; background: white; font-size: 13px;">
+            <div id="status-laudo-cota" style="font-size: 12px; margin-top: 8px;"></div>
+            <p style="font-size: 11px; color: #94a3b8; margin: 8px 0 0;">
+                <i class="fas fa-lock"></i> Seus dados serão tratados com confidencialidade.
+            </p>
+        </div>
+    `;
+    return div;
+}
+
+function renderizarBlocoCotasInscricao() {
+    const bloco = document.getElementById('bloco-cotas-inscricao');
+    if (!bloco) return;
+
+    if (!sistemaCotasConfig || sistemaCotasConfig.usarSistemaCotas !== true) {
+        bloco.hidden = true;
         return;
     }
-    anexosProfessor.forEach((anexo) => {
-        const originalIdx = anexosAtuais.indexOf(anexo);
-        container.appendChild(renderizarCardAnexoProfessor(anexo, originalIdx));
+
+    // 🔥 Mostra em QUALQUER passo (não só no 1)
+    bloco.hidden = false;
+
+    const labelLaudo = document.getElementById('label-laudo-cota');
+    const obrig = sistemaCotasConfig.laudoCotasObrigatorio !== false;
+    if (labelLaudo) {
+        labelLaudo.innerHTML = `${escapeHtml(sistemaCotasConfig.labelLaudoCotas || 'Laudo Médico')} ${obrig ? '<span style="color:#ef4444;">*</span>' : ''}`;
+    }
+
+    const chk = document.getElementById('insc-usa-cota');
+    const blocoLaudo = document.getElementById('bloco-laudo-cota');
+    const inputLaudo = document.getElementById('insc-laudo-cota');
+
+    if (chk && chk._cotasBound !== '1') {
+        chk._cotasBound = '1';
+        chk.addEventListener('change', function () {
+            usaCotaSelecionado = this.checked;
+            if (blocoLaudo) blocoLaudo.hidden = !this.checked;
+            if (!this.checked) {
+                if (inputLaudo) inputLaudo.value = '';
+                const st = document.getElementById('status-laudo-cota');
+                if (st) { st.textContent = ''; st.className = 'ev-status-laudo'; }
+                delete anexosParticipanteState['__laudo_cota'];
+            }
+        });
+    }
+
+    if (inputLaudo && inputLaudo._cotasBound !== '1') {
+        inputLaudo._cotasBound = '1';
+        inputLaudo.addEventListener('change', async function () {
+            if (!this.files || this.files.length === 0) return;
+            const file = this.files[0];
+            const st = document.getElementById('status-laudo-cota');
+            if (st) { st.textContent = '⏳ Enviando laudo...'; st.className = 'ev-status-laudo wait'; }
+
+            const fd = new FormData();
+            fd.append('anexo', file);
+
+            try {
+                const data = await api(INSC_API.uploadAnexo(eventoAtual.slug), { method: 'POST', body: fd }, true);
+                anexosParticipanteState['__laudo_cota'] = {
+                    arquivo: data.arquivo,
+                    nomeOriginal: data.nomeOriginal || file.name,
+                    mimetype: data.mimetype || file.type,
+                    tamanho: data.tamanho || file.size
+                };
+                if (st) { st.textContent = '✓ Laudo enviado!'; st.className = 'ev-status-laudo ok'; }
+            } catch (err) {
+                if (st) { st.textContent = '✗ ' + escapeHtml(err.message); st.className = 'ev-status-laudo err'; }
+            }
+        });
+    }
+}
+
+function renderizarAnexosExtras(container) {
+    if (!eventoAtual.anexosExtras || eventoAtual.anexosExtras.length === 0) return;
+
+    const cardExtras = document.createElement('div');
+    cardExtras.className = 'ev-card';
+    cardExtras.style.marginBottom = '24px';
+    cardExtras.style.background = '#f8fafc';
+    cardExtras.style.border = '1px dashed #cbd5e1';
+
+    let html = `<div class="ev-card-header" style="border-bottom: none; padding-bottom: 0;"><h3 style="font-size: 16px; color: #1e293b;"><i class="fas fa-paperclip"></i> Documentos Adicionais</h3></div>`;
+    html += `<div style="padding: 16px 24px;">`;
+
+    eventoAtual.anexosExtras.forEach((ext, i) => {
+        const temArquivo = anexosParticipanteState['extra_' + i] && anexosParticipanteState['extra_' + i].arquivo;
+
+        html += `
+            <div class="ev-form-group" style="margin-bottom: 16px;">
+                <label style="font-size: 13px; font-weight: 600; color: #334155; display: block; margin-bottom: 6px;">
+                    ${escapeHtml(ext.label)} ${ext.obrigatorio ? '<span style="color:#ef4444;">*</span>' : ''}
+                </label>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="file" class="input-extra-upload" data-idx="${i}" style="display: block; flex: 1; padding: 8px; border: 1px solid #93c5fd; border-radius: 8px; background: white; font-size: 13px;">
+                    <div id="status-extra-${i}" style="font-size: 12px; color: ${temArquivo ? '#10b981' : '#64748b'}; min-width: 100px;">
+                        ${temArquivo ? '<i class="fas fa-check"></i> Enviado' : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    html += `</div>`;
+    cardExtras.innerHTML = html;
+    container.insertBefore(cardExtras, container.firstChild);
+
+    cardExtras.querySelectorAll('.input-extra-upload').forEach(input => {
+        input.addEventListener('change', async function () {
+            if (!this.files || this.files.length === 0) return;
+            const idx = this.dataset.idx;
+            const file = this.files[0];
+            const st = document.getElementById(`status-extra-${idx}`);
+            st.innerHTML = '<span style="color:#0284c7;">⏳ Enviando...</span>';
+
+            const fd = new FormData();
+            fd.append('anexo', file);
+
+            try {
+                const data = await api(INSC_API.uploadAnexo(eventoAtual.slug), { method: 'POST', body: fd }, true);
+                anexosParticipanteState['extra_' + idx] = {
+                    arquivo: data.arquivo,
+                    nomeOriginal: data.nomeOriginal || file.name,
+                    mimetype: data.mimetype || file.type,
+                    tamanho: data.tamanho || file.size
+                };
+                st.innerHTML = '<span style="color:#10b981;"><i class="fas fa-check"></i> Enviado</span>';
+            } catch (err) {
+                st.innerHTML = `<span style="color:#dc2626;"><i class="fas fa-times"></i> ${escapeHtml(err.message)}</span>`;
+            }
+        });
     });
 }
 
@@ -1027,10 +1191,43 @@ function renderizarAssinaturasFinais(container) {
 
 function renderizarPasso2(container) {
     const anexosPasso2 = anexosAtuais.filter(ehAnexoPasso2);
-    if (anexosPasso2.length === 0) {
-        container.innerHTML = '<p class="ev-alert ev-alert-info">Nenhuma autorização ou dado de estudante pendente.</p>';
+    const extras = eventoAtual.anexosExtras || [];
+
+    if (extras.length > 0) {
+        renderizarAnexosExtras(container);
+    }
+
+    // Categorias
+    if (eventoAtual.usarCategorias && eventoAtual.categorias && eventoAtual.categorias.length > 0) {
+        const divCat = document.createElement('div');
+        divCat.className = 'ev-card';
+        divCat.style.cssText = 'margin-bottom:24px; border: 1px solid #bae6fd; background: #f0f9ff;';
+        divCat.innerHTML = `
+            <div class="ev-card-header" style="border-bottom: none; padding-bottom: 0;">
+                <h3 style="font-size: 16px; color: #0369a1;"><i class="fas fa-tags"></i> ${escapeHtml(eventoAtual.labelCategorias || 'Categoria / Modalidade')}</h3>
+            </div>
+            <div style="padding: 16px 24px;">
+                <div class="ev-form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 13px; font-weight: 600; color: #334155; display: block; margin-bottom: 6px;">
+                        Escolha uma opção ${eventoAtual.categoriaObrigatoria ? '<span style="color:#ef4444;">*</span>' : ''}
+                    </label>
+                    <select id="insc-categoria-select" class="ev-input" ${eventoAtual.categoriaObrigatoria ? 'required' : ''} style="width: 100%; padding: 12px; border: 1px solid #93c5fd; border-radius: 8px; font-size: 14px;">
+                        <option value="">Selecione...</option>
+                        ${eventoAtual.categorias.map(c => `<option value="${escapeHtml(c.label)}" ${dadosSalvos['__categoria'] === c.label ? 'selected' : ''}>${escapeHtml(c.label)}</option>`).join('')}
+                    </select>
+                </div>
+            </div>
+        `;
+        container.appendChild(divCat);
+    }
+
+    if (anexosPasso2.length === 0 && extras.length === 0 && (!eventoAtual.categorias || eventoAtual.categorias.length === 0)) {
+        if (container.children.length === 0) {
+            container.innerHTML = '<p class="ev-alert ev-alert-info">Nenhuma autorização ou dado de estudante pendente.</p>';
+        }
         return;
     }
+
     anexosPasso2.forEach((anexo) => {
         const originalIdx = anexosAtuais.indexOf(anexo);
         const titulo = labelDoAnexo(anexo);
@@ -1070,12 +1267,13 @@ function renderizarPasso2(container) {
 
         const renderizarItens = () => {
             const itensHtml = [];
-            const total = estadoRepeticoes[originalIdx].quantidade;
+            const total = estadoRepeticoes[originalIdx]?.quantidade || anexo.quantidadePadrao || 1;
             for (let i = 0; i < total; i++) {
                 let camposHtml = '';
                 if (isEstudante) {
                     camposHtml = porAluno.map((c, cIdx) => {
-                        const labelResp = `${c.label}_Aluno_${i}`;
+                        // 🔥 CORREÇÃO: _aluno_ (minúsculo) para consistência com dadosDoAluno
+                        const labelResp = `${c.label}_aluno_${i}`;
                         const lLowerC = norm(c.label);
                         const ehNasc = lLowerC.includes('nascimento');
                         const valorSalvo = ehNasc ? null : (dadosSalvos[labelResp] || null);
@@ -1329,6 +1527,7 @@ function copiarLinkAssinatura(url) {
 // ============================================================
 async function abrirModalAssinaturaQR(aIdx, alunoIdx) {
     salvarDadosAtuais();
+
     const anexo = anexosAtuais[aIdx];
     const titulo = alunoIdx !== null ? `${labelDoAnexo(anexo)} — Aluno ${alunoIdx + 1}` : labelDoAnexo(anexo);
     let camposProjeto = [], camposAluno = [], camposResponsavel = [];
@@ -1732,15 +1931,20 @@ function obterDadosConsolidados() {
     return todos;
 }
 
+// 🔥 CORREÇÃO: case-insensitive — aceita _Aluno_ e _aluno_
 function dadosDoAluno(dados, alunoIdx) {
     const resultado = {};
-    const sufixo = `_aluno_${alunoIdx}`;
+    const sufixoLower = `_aluno_${alunoIdx}`;
     const prefixoEst = `estudante[${alunoIdx}].`;
     for (const [dk, dv] of Object.entries(dados)) {
         if (!dv) continue;
         let chaveBase = null;
-        if (dk.endsWith(sufixo)) chaveBase = dk.substring(0, dk.length - sufixo.length);
-        else if (dk.startsWith(prefixoEst)) chaveBase = dk.substring(prefixoEst.length);
+        const dkLower = dk.toLowerCase();
+        if (dkLower.endsWith(sufixoLower)) {
+            chaveBase = dk.substring(0, dk.length - sufixoLower.length);
+        } else if (dkLower.startsWith(prefixoEst)) {
+            chaveBase = dk.substring(prefixoEst.length);
+        }
         if (chaveBase) resultado[chaveBase] = dv;
     }
     return resultado;
@@ -1792,7 +1996,7 @@ function juntarCamposProjeto() {
             if (!k || vistos.has(k)) continue;
             if (ehCampoResponsavel(c.label)) continue;
             vistos.add(k);
-            resultado.push({ label: c.label, valor: indiceProfessor[k] || dados[k] || '', origem: labelDoAnexo(outroAnexo) });
+            resultado.push({ label: c.label, valor: indiceProfessor[k] || '', origem: labelDoAnexo(outroAnexo) });
         }
     }
     return resultado;
@@ -1905,6 +2109,13 @@ document.getElementById('btn-inscrever').addEventListener('click', async () => {
     });
     if (cpfInvalido) return mostrarAlerta('inscricao-alert', `CPF inválido: ${cpfInvalido}`, 'error');
 
+    if (eventoAtual.usarCategorias && eventoAtual.categoriaObrigatoria) {
+        const selCat = document.getElementById('insc-categoria-select');
+        if (!selCat || !selCat.value) {
+            return mostrarAlerta('inscricao-alert', `Selecione a ${eventoAtual.labelCategorias || 'Categoria / Modalidade'}.`, 'error');
+        }
+    }
+
     const dados = {};
     document.querySelectorAll('.campo-insc').forEach(el => {
         const label = el.dataset.label;
@@ -1920,6 +2131,26 @@ document.getElementById('btn-inscrever').addEventListener('click', async () => {
     document.querySelectorAll('[data-extra-relacao]').forEach(el => {
         if (el.value) dadosFinais[`${el.dataset.extraRelacao} (Nome)`] = el.value;
     });
+
+    if (eventoAtual.usarCategorias) {
+        const selCat = document.getElementById('insc-categoria-select');
+        if (selCat && selCat.value) {
+            dadosFinais['__categoria'] = selCat.value;
+        }
+    }
+
+    if (sistemaCotasConfig?.usarSistemaCotas && usaCotaSelecionado) {
+        const obrig = sistemaCotasConfig.laudoCotasObrigatorio !== false;
+        if (obrig && (!anexosParticipanteState['__laudo_cota'] || !anexosParticipanteState['__laudo_cota'].arquivo)) {
+            return mostrarAlerta('inscricao-alert',
+                `Anexe o ${sistemaCotasConfig.labelLaudoCotas || 'laudo'} para concorrer às cotas.`,
+                'error');
+        }
+    }
+
+    if (sistemaCotasConfig?.usarSistemaCotas) {
+        dadosFinais['__usa_cota'] = usaCotaSelecionado ? 'sim' : 'nao';
+    }
 
     for (let i = 0; i < anexosAtuais.length; i++) {
         const a = anexosAtuais[i];
@@ -1966,9 +2197,17 @@ document.getElementById('btn-inscrever').addEventListener('click', async () => {
     const anexosParticipante = {};
     Object.entries(anexosParticipanteState).forEach(([idx, v]) => {
         if (v && v.arquivo) {
-            const anexo = anexosAtuais[parseInt(idx)];
-            const chave = anexo ? (anexo.labelSolicitacaoAnexo || anexo.labelCustom || anexo.nomeOriginal) : `anexo_${idx}`;
-            anexosParticipante[chave] = v.arquivo;
+            if (idx.startsWith('extra_')) {
+                const extraIdx = idx.replace('extra_', '');
+                const labelExtra = eventoAtual.anexosExtras[extraIdx]?.label || `Anexo Extra ${extraIdx}`;
+                anexosParticipante[labelExtra] = v.arquivo;
+            } else if (idx === '__laudo_cota') {
+                anexosParticipante['__laudo_cota'] = v.arquivo;
+            } else {
+                const anexo = anexosAtuais[parseInt(idx)];
+                const chave = anexo ? (anexo.labelSolicitacaoAnexo || anexo.labelCustom || anexo.nomeOriginal) : `anexo_${idx}`;
+                anexosParticipante[chave] = v.arquivo;
+            }
         }
     });
 

@@ -13,8 +13,8 @@ class VisitasAdmin {
             status: 'todos',
             turma: 'todas',
             search: '',
-            ordenacao: 'data_desc' 
-    };
+            ordenacao: 'data_desc'
+        };
 
         this.viewMode = localStorage.getItem('visitas_view_mode') || 'grid';
         
@@ -24,10 +24,10 @@ class VisitasAdmin {
         this.alunos = [];
         this.professores = [];
         
-        // 🔥 NOVO: Estado do formulário (múltipla seleção)
+        // Estado do formulário (múltipla seleção)
         this.formData = {
-            alunosSelecionados: [],       // Array de IDs de alunos
-            professoresSelecionados: [],  // Array de IDs de professores
+            alunosSelecionados: [],
+            professoresSelecionados: [],
             localizacao: null
         };
         
@@ -57,7 +57,6 @@ class VisitasAdmin {
             const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
             this.currentUser = userData;
             
-            // 🔥 Carregar configurações ANTES de renderizar
             await this.carregarConfiguracao();
             await this.carregarDados();
             this.renderizar();
@@ -106,7 +105,6 @@ class VisitasAdmin {
             ]);
             
             if (turmasRes.success) {
-                // Normalizar: aceitar string ou objeto
                 this.turmas = (turmasRes.turmas || []).map(t => 
                     typeof t === 'string' ? { id: t, nome: t } : t
                 );
@@ -173,7 +171,6 @@ class VisitasAdmin {
                         </div>
                     </div>
                     <div class="header-actions" style="flex-wrap: wrap;">
-                        <!-- 🔥 NOVO: BOTÃO QR CODE -->
                         <button class="btn-header" onclick="visitasAdmin.abrirQRCodePublico()" 
                                 style="background: #3b82f6; color: white;" 
                                 title="Gerar QR Code para os responsáveis">
@@ -181,7 +178,6 @@ class VisitasAdmin {
                             <span>QR Code</span>
                         </button>
                         
-                        <!-- 🔥 NOVO: BOTÃO COPIAR LINK -->
                         <button class="btn-header" onclick="visitasAdmin.copiarLinkPublico()" 
                                 style="background: #8b5cf6; color: white;" 
                                 title="Copiar link da página pública">
@@ -189,7 +185,6 @@ class VisitasAdmin {
                             <span>Copiar Link</span>
                         </button>
                         
-                        <!-- 🔥 NOVO: BOTÃO ABRIR PÁGINA PÚBLICA -->
                         <button class="btn-header" onclick="visitasAdmin.abrirPaginaPublica()" 
                                 style="background: #10b981; color: white;" 
                                 title="Abrir página pública em nova aba">
@@ -241,7 +236,6 @@ class VisitasAdmin {
                         </div>
                     </div>
                     
-                    <!-- Link visível -->
                     <div style="margin-top: 15px; padding: 12px; background: white; border-radius: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                         <i class="fas fa-link" style="color: #3b82f6;"></i>
                         <input type="text" readonly id="linkPublicoInputVisitas" 
@@ -291,12 +285,9 @@ class VisitasAdmin {
                     </div>
                 </div>
 
-                <!-- ============================================
-                    ABAS DE STATUS + FILTROS
-                    ============================================ -->
+                <!-- ABAS DE STATUS + FILTROS -->
                 <div class="visitas-filters-card">
                     
-                    <!-- 🔥 ABAS DE STATUS (organização rápida) -->
                     <div class="status-tabs" style="display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; padding-bottom: 15px; border-bottom: 2px solid #f0f0f0;">
                         <button class="status-tab ${this.filtros.status === 'todos' ? 'active' : ''}" 
                                 onclick="visitasAdmin.filtrarPorStatus('todos')">
@@ -329,10 +320,8 @@ class VisitasAdmin {
                             <span class="tab-count">${stats.recusados || 0}</span>
                         </button>
                         
-                        <!-- Espaçador -->
                         <div style="flex: 1;"></div>
                         
-                        <!-- Visualização: Grid / Lista -->
                         <div class="view-toggle" style="display: flex; gap: 4px; background: #f3f4f6; padding: 4px; border-radius: 10px;">
                             <button class="view-btn ${this.viewMode !== 'list' ? 'active' : ''}" 
                                     onclick="visitasAdmin.mudarViewMode('grid')" title="Grade">
@@ -403,7 +392,6 @@ class VisitasAdmin {
             </div>
         `;
         
-        // Configurar busca
         const buscaInput = document.getElementById('buscaTermo');
         if (buscaInput) {
             let timeout;
@@ -446,7 +434,6 @@ class VisitasAdmin {
             `;
         }
         
-        // Modo GRID (padrão)
         return `
             <div class="termos-lista">
                 ${this.termosFiltrados.map(termo => this.renderizarCardTermo(termo)).join('')}
@@ -540,27 +527,19 @@ class VisitasAdmin {
         `;
     }
 
-    // ============================================
-    // 🎨 MUDAR VIEW MODE (grid/list)
-    // ============================================
     mudarViewMode(mode) {
         this.viewMode = mode;
         localStorage.setItem('visitas_view_mode', mode);
         
-        // Re-renderizar apenas a lista
         const container = document.getElementById('listaTermos');
         if (container) {
             container.innerHTML = this.renderizarListaTermos();
         }
         
-        // Atualizar botões
         document.querySelectorAll('.view-btn').forEach(btn => btn.classList.remove('active'));
         document.querySelector(`.view-btn[onclick*="'${mode}'"]`)?.classList.add('active');
     }
 
-    // ============================================
-    // 🔤 ORDENAR TERMOS
-    // ============================================
     ordenarTermos(ordenacao) {
         this.filtros.ordenacao = ordenacao;
         
@@ -602,7 +581,6 @@ class VisitasAdmin {
             'recusado': '❌ Recusado'
         }[status] || status;
         
-        // 🔥 Indicadores de múltiplos
         const badgeMultiplosAlunos = termo.totalAlunos > 1 
             ? `<span style="background: rgba(255,255,255,0.3); padding: 2px 8px; border-radius: 30px; font-size: 10px; margin-left: 6px;">+${termo.totalAlunos - 1} aluno(s)</span>`
             : '';
@@ -611,7 +589,6 @@ class VisitasAdmin {
             ? `<span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 30px; font-size: 10px; margin-left: 6px;">+${termo.totalProfessores - 1} prof.</span>`
             : '';
         
-        // Progresso de autorizações
         const progresso = termo.totalResponsaveis > 0
             ? `<div style="font-size: 11px; color: #6b7280; margin-top: 8px;">
                 <i class="fas fa-check-circle" style="color: #10b981;"></i>
@@ -727,7 +704,7 @@ class VisitasAdmin {
     }
 
     limparFiltros() {
-        this.filtros = { status: 'todos', turma: 'todas', search: '' };
+        this.filtros = { status: 'todos', turma: 'todas', search: '', ordenacao: 'data_desc' };
         this.paginaAtual = 1;
         this.carregarTermos().then(() => this.renderizar());
     }
@@ -761,7 +738,6 @@ class VisitasAdmin {
         
         modalBody.innerHTML = this.renderizarFormularioTermo(termo);
         
-        // Configurar eventos
         this.configurarFormularioTermo(termo);
         
         modalSaveBtn.innerHTML = termoId ? '💾 Salvar Alterações' : '✏️ Criar Termo';
@@ -772,7 +748,6 @@ class VisitasAdmin {
     }
 
     renderizarFormularioTermo(termo = null) {
-        // 🔥 Restaurar estado se for edição
         if (termo) {
             this.formData.alunosSelecionados = (termo.alunos || []).map(a => 
                 (a.alunoId?._id || a.alunoId || '').toString()
@@ -789,7 +764,6 @@ class VisitasAdmin {
         
         return `
             <div class="visita-modal-body">
-                <!-- HEADER DO MODAL -->
                 <div class="visita-modal-header-custom">
                     <div class="header-icon">
                         <i class="fas fa-map-marked-alt"></i>
@@ -804,9 +778,7 @@ class VisitasAdmin {
 
                 <form id="formTermoVisita">
 
-                    <!-- ============================================ -->
-                    <!-- SEÇÃO 1: ALUNOS (MÚLTIPLOS) -->
-                    <!-- ============================================ -->
+                    <!-- SEÇÃO 1: ALUNOS -->
                     <div class="visita-form-section">
                         <div class="visita-form-section-title">
                             <i class="fas fa-user-graduate"></i>
@@ -816,7 +788,6 @@ class VisitasAdmin {
                             </span>
                         </div>
 
-                        <!-- Filtros de busca -->
                         <div class="visita-form-row">
                             <div class="visita-form-group">
                                 <label><i class="fas fa-school"></i> Turma <span class="required">*</span></label>
@@ -841,7 +812,6 @@ class VisitasAdmin {
                             </div>
                         </div>
 
-                        <!-- Busca por nome -->
                         <div class="visita-form-row">
                             <div class="visita-form-group full-width">
                                 <label><i class="fas fa-search"></i> Buscar Aluno</label>
@@ -851,7 +821,6 @@ class VisitasAdmin {
                             </div>
                         </div>
 
-                        <!-- Botões de ação em massa -->
                         <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
                             <button type="button" class="btn-filter" onclick="visitasAdmin.selecionarTodosAlunos()" style="padding: 6px 14px; font-size: 12px;">
                                 <i class="fas fa-check-double"></i> Selecionar Todos
@@ -864,7 +833,6 @@ class VisitasAdmin {
                             </span>
                         </div>
 
-                        <!-- Lista de alunos -->
                         <div id="listaAlunosSelecao" style="max-height: 300px; overflow-y: auto; border: 2px solid #e5e7eb; border-radius: 12px; background: white;">
                             ${this.renderizarListaAlunosSelecao(termo)}
                         </div>
@@ -872,9 +840,7 @@ class VisitasAdmin {
                         <input type="hidden" id="formAlunosIDs" value='${JSON.stringify(this.formData.alunosSelecionados)}'>
                     </div>
 
-                    <!-- ============================================ -->
                     <!-- SEÇÃO 2: ATIVIDADE E PERÍODO -->
-                    <!-- ============================================ -->
                     <div class="visita-form-section">
                         <div class="visita-form-section-title">
                             <i class="fas fa-tasks"></i>
@@ -887,6 +853,20 @@ class VisitasAdmin {
                                 <input type="text" id="formAtividade" class="form-input" 
                                     placeholder="Ex: Visita Técnica ao Porto do Itaqui"
                                     value="${termo?.atividade || ''}">
+                            </div>
+                        </div>
+
+                        <!-- 🆕 CAMPO DE DESCRIÇÃO DA ATIVIDADE -->
+                        <div class="visita-form-row">
+                            <div class="visita-form-group full-width">
+                                <label><i class="fas fa-align-left"></i> Descrição da Atividade</label>
+                                <textarea id="formDescricaoAtividade" class="form-input" 
+                                    placeholder="Descreva os objetivos, roteiro ou detalhes importantes da atividade..."
+                                    rows="3"
+                                    style="resize: vertical; min-height: 80px; font-family: inherit;">${termo?.descricaoAtividade || ''}</textarea>
+                                <small style="color: #6b7280; font-size: 12px; margin-top: 4px; display: block;">
+                                    <i class="fas fa-info-circle"></i> Este texto aparecerá no termo oficial impresso
+                                </small>
                             </div>
                         </div>
 
@@ -926,9 +906,7 @@ class VisitasAdmin {
                         </div>
                     </div>
 
-                    <!-- ============================================ -->
-                    <!-- SEÇÃO 3: PROFESSORES (MÚLTIPLOS) -->
-                    <!-- ============================================ -->
+                    <!-- SEÇÃO 3: PROFESSORES -->
                     <div class="visita-form-section">
                         <div class="visita-form-section-title">
                             <i class="fas fa-chalkboard-teacher"></i>
@@ -938,7 +916,6 @@ class VisitasAdmin {
                             </span>
                         </div>
 
-                        <!-- Select para adicionar professor -->
                         <div class="visita-form-row">
                             <div class="visita-form-group full-width">
                                 <label><i class="fas fa-user-plus"></i> Adicionar Professor</label>
@@ -956,7 +933,6 @@ class VisitasAdmin {
                             </div>
                         </div>
 
-                        <!-- Lista de professores selecionados (chips) -->
                         <div style="margin-bottom: 12px;">
                             <label style="display: block; font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 8px;">
                                 <i class="fas fa-users"></i> Professores Selecionados:
@@ -969,9 +945,7 @@ class VisitasAdmin {
                         <input type="hidden" id="formProfessoresIDs" value='${JSON.stringify(this.formData.professoresSelecionados)}'>
                     </div>
 
-                    <!-- ============================================ -->
-                    <!-- SEÇÃO 4: LOCAL DA VISITA -->
-                    <!-- ============================================ -->
+                    <!-- SEÇÃO 4: LOCAL -->
                     <div class="visita-form-section">
                         <div class="visita-form-section-title">
                             <i class="fas fa-map-marker-alt"></i>
@@ -1009,9 +983,7 @@ class VisitasAdmin {
                         <input type="hidden" id="formLocalizacaoJSON" value='${JSON.stringify(termo?.localizacao || {})}'>
                     </div>
 
-                    <!-- ============================================ -->
-                    <!-- SEÇÃO 5: ASSINATURA DO GESTOR (OPCIONAL) -->
-                    <!-- ============================================ -->
+                    <!-- SEÇÃO 5: ASSINATURA DO GESTOR -->
                     <div class="visita-form-section">
                         <div class="visita-form-section-title">
                             <i class="fas fa-signature"></i>
@@ -1037,9 +1009,6 @@ class VisitasAdmin {
         `;
     }
 
-    // ============================================
-    // 🎓 RENDERIZAR LISTA DE ALUNOS PARA SELEÇÃO
-    // ============================================
     renderizarListaAlunosSelecao(termo = null) {
         if (!this.alunos || this.alunos.length === 0) {
             return `
@@ -1095,9 +1064,6 @@ class VisitasAdmin {
         }).join('');
     }
 
-    // ============================================
-    // ✅ TOGGLE ALUNO (marcar/desmarcar)
-    // ============================================
     toggleAluno(alunoId) {
         alunoId = alunoId.toString();
         const idx = this.formData.alunosSelecionados.indexOf(alunoId);
@@ -1111,49 +1077,34 @@ class VisitasAdmin {
         this.atualizarListaAlunosSelecao();
     }
 
-    // ============================================
-    // ✅ SELECIONAR TODOS OS ALUNOS
-    // ============================================
     selecionarTodosAlunos() {
         this.formData.alunosSelecionados = this.alunos.map(a => a.id.toString());
         this.atualizarListaAlunosSelecao();
         this.showToast(`✅ ${this.alunos.length} aluno(s) selecionado(s)`, 'success');
     }
 
-    // ============================================
-    // ❌ LIMPAR SELEÇÃO DE ALUNOS
-    // ============================================
     limparSelecaoAlunos() {
         this.formData.alunosSelecionados = [];
         this.atualizarListaAlunosSelecao();
     }
 
-    // ============================================
-    // 🔄 ATUALIZAR LISTA E CONTADOR DE ALUNOS
-    // ============================================
     atualizarListaAlunosSelecao() {
-        // Atualizar lista
         const container = document.getElementById('listaAlunosSelecao');
         if (container) {
             container.innerHTML = this.renderizarListaAlunosSelecao();
         }
         
-        // Atualizar contador
         const contador = document.getElementById('contadorAlunos');
         if (contador) {
             contador.textContent = `${this.formData.alunosSelecionados.length} selecionado(s)`;
         }
         
-        // Atualizar hidden input
         const hidden = document.getElementById('formAlunosIDs');
         if (hidden) {
             hidden.value = JSON.stringify(this.formData.alunosSelecionados);
         }
     }
 
-    // ============================================
-    // 👨‍🏫 ADICIONAR PROFESSOR À LISTA
-    // ============================================
     adicionarProfessor() {
         const select = document.getElementById('formProfessorSelect');
         if (!select) return;
@@ -1170,20 +1121,13 @@ class VisitasAdmin {
         }
         
         this.formData.professoresSelecionados.push(professorId);
-        
-        // Resetar select
         select.value = '';
-        
-        // Atualizar UI
         this.atualizarChipsProfessores();
         
         const professor = this.professores.find(p => p.id === professorId);
         this.showToast(`✅ ${professor?.nome || 'Professor'} adicionado`, 'success');
     }
 
-    // ============================================
-    // 🗑️ REMOVER PROFESSOR DA LISTA
-    // ============================================
     removerProfessor(professorId) {
         const idx = this.formData.professoresSelecionados.indexOf(professorId);
         if (idx >= 0) {
@@ -1192,9 +1136,6 @@ class VisitasAdmin {
         }
     }
 
-    // ============================================
-    // 🎨 RENDERIZAR CHIPS DE PROFESSORES
-    // ============================================
     renderizarChipsProfessores() {
         if (this.formData.professoresSelecionados.length === 0) {
             return `
@@ -1227,9 +1168,6 @@ class VisitasAdmin {
         `;
     }
 
-    // ============================================
-    // 🔄 ATUALIZAR CHIPS E CONTADOR DE PROFESSORES
-    // ============================================
     atualizarChipsProfessores() {
         const container = document.getElementById('listaProfessoresChips');
         if (container) {
@@ -1248,7 +1186,6 @@ class VisitasAdmin {
     }
 
     configurarFormularioTermo(termo) {
-        // Busca de local com debounce
         const inputLocal = document.getElementById('formLocal');
         if (inputLocal) {
             let timeout;
@@ -1271,7 +1208,6 @@ class VisitasAdmin {
             });
         }
         
-        // Busca de alunos com debounce
         const inputBuscaAluno = document.getElementById('formBuscaAluno');
         if (inputBuscaAluno) {
             let timeout;
@@ -1281,18 +1217,13 @@ class VisitasAdmin {
             });
         }
         
-        // Inicializar assinatura
         setTimeout(() => this.inicializarAssinaturaGestor(), 200);
         
-        // Se for edição, carregar alunos da turma
         if (termo?.turmaPrincipal) {
             setTimeout(() => this.buscarAlunos(), 300);
         }
     }
 
-    // ============================================
-    // BUSCAR LOCALIZAÇÃO
-    // ============================================
     async buscarLocalizacao(query) {
         try {
             const response = await this.apiRequest(`/api/setor-pedagogico/visitas/buscar-localizacao?query=${encodeURIComponent(query)}`);
@@ -1323,11 +1254,9 @@ class VisitasAdmin {
         
         document.getElementById('sugestoesLocal').classList.remove('active');
         
-        // Salvar dados da localização
         this.formData.localizacao = local;
         document.getElementById('formLocalizacaoJSON').value = JSON.stringify(local);
         
-        // Mostrar localização selecionada
         const infoDiv = document.getElementById('localizacaoSelecionada');
         infoDiv.style.display = 'block';
         infoDiv.innerHTML = `
@@ -1341,9 +1270,6 @@ class VisitasAdmin {
         `;
     }
 
-    // ============================================
-    // BUSCAR ALUNOS
-    // ============================================
     async buscarAlunos() {
         const turma = document.getElementById('formTurma')?.value;
         const curso = document.getElementById('formCurso')?.value;
@@ -1365,7 +1291,6 @@ class VisitasAdmin {
             if (response.success) {
                 let alunos = response.alunos || [];
                 
-                // Filtrar por nome se tiver busca
                 if (busca) {
                     alunos = alunos.filter(a => 
                         (a.nome || '').toLowerCase().includes(busca)
@@ -1381,7 +1306,6 @@ class VisitasAdmin {
     }
 
     selecionarAluno(alunoId) {
-        // Buscar dados completos do aluno
         const buscarAluno = async () => {
             try {
                 const turma = document.getElementById('formTurma')?.value;
@@ -1425,9 +1349,6 @@ class VisitasAdmin {
         buscarAluno();
     }
 
-    // ============================================
-    // ASSINATURA DO GESTOR
-    // ============================================
     inicializarAssinaturaGestor() {
         const canvas = document.getElementById('assinaturaGestorCanvas');
         if (!canvas) return;
@@ -1526,11 +1447,11 @@ class VisitasAdmin {
     // ============================================
     async salvarTermo(termoId = null) {
         try {
-            // 🔥 Coletar alunos selecionados
             const alunosIDs = this.formData.alunosSelecionados;
             const professoresIDs = this.formData.professoresSelecionados;
             
             const atividade = document.getElementById('formAtividade')?.value;
+            const descricaoAtividade = document.getElementById('formDescricaoAtividade')?.value || ''; // 🆕
             const periodo = document.getElementById('formPeriodo')?.value;
             const horario = document.getElementById('formHorario')?.value;
             const local = document.getElementById('formLocal')?.value;
@@ -1557,9 +1478,10 @@ class VisitasAdmin {
             } catch (e) {}
             
             const dados = {
-                alunos: alunosIDs,           // ← Array
-                professores: professoresIDs, // ← Array
+                alunos: alunosIDs,
+                professores: professoresIDs,
                 atividade,
+                descricaoAtividade,   // 🆕
                 periodo,
                 horario,
                 local,
@@ -1584,7 +1506,6 @@ class VisitasAdmin {
             if (response.success) {
                 this.showToast(`✅ Termo ${termoId ? 'atualizado' : 'criado'}!`, 'success');
                 
-                // Adicionar assinatura do gestor se tiver
                 if (this.assinatura.temAssinatura) {
                     const assinaturaBase64 = this.assinatura.canvas.toDataURL('image/png');
                     const novoTermoId = termoId || response.termo._id;
@@ -1597,7 +1518,6 @@ class VisitasAdmin {
                 
                 this.closeModal();
                 
-                // Resetar formulário
                 this.formData = {
                     alunosSelecionados: [],
                     professoresSelecionados: [],
@@ -1633,7 +1553,6 @@ class VisitasAdmin {
             document.getElementById('modalBody').innerHTML = `
                 <div style="padding: 10px;">
                     
-                    <!-- STATUS -->
                     <div style="text-align: center; margin-bottom: 20px;">
                         <span class="termo-status-badge ${t.status}" style="font-size: 14px; padding: 8px 20px;">
                             ${t.status === 'pendente' ? '⏳ PENDENTE' : 
@@ -1643,13 +1562,22 @@ class VisitasAdmin {
                         </span>
                     </div>
                     
-                    <!-- ATIVIDADE -->
                     <div style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 15px; border-radius: 12px; margin-bottom: 20px;">
                         <div style="font-size: 11px; opacity: 0.85;">ATIVIDADE</div>
                         <div style="font-size: 16px; font-weight: 600;">${this.escapeHtml(t.atividade)}</div>
                     </div>
                     
-                    <!-- ALUNOS -->
+                    ${t.descricaoAtividade ? `
+                        <div style="background: #f8fafc; border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid #e2e8f0; border-left: 4px solid #3b82f6;">
+                            <h4 style="margin: 0 0 8px; font-size: 14px; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-align-left" style="color: #3b82f6;"></i> Descrição da Atividade
+                            </h4>
+                            <p style="margin: 0; font-size: 13px; color: #4b5563; white-space: pre-wrap; line-height: 1.6;">
+                                ${this.escapeHtml(t.descricaoAtividade)}
+                            </p>
+                        </div>
+                    ` : ''}
+                    
                     <div style="background: #f8fafc; border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid #e2e8f0;">
                         <h4 style="margin: 0 0 12px; font-size: 15px; color: #1e293b; display: flex; align-items: center; gap: 8px;">
                             <i class="fas fa-user-graduate" style="color: #4f46e5;"></i>
@@ -1677,7 +1605,6 @@ class VisitasAdmin {
                         </div>
                     </div>
                     
-                    <!-- PROFESSORES -->
                     <div style="background: #fef3c7; border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid #fde68a;">
                         <h4 style="margin: 0 0 12px; font-size: 15px; color: #92400e; display: flex; align-items: center; gap: 8px;">
                             <i class="fas fa-chalkboard-teacher"></i>
@@ -1702,7 +1629,6 @@ class VisitasAdmin {
                         </div>
                     </div>
                     
-                    <!-- DETALHES -->
                     <div style="background: #f8fafc; border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid #e2e8f0;">
                         <h4 style="margin: 0 0 12px; font-size: 15px; color: #1e293b;">
                             <i class="fas fa-info-circle"></i> Detalhes
@@ -1722,7 +1648,6 @@ class VisitasAdmin {
                         </div>
                     </div>
                     
-                    <!-- RESPONSÁVEIS (AUTORIZAÇÕES) -->
                     ${t.responsaveis && t.responsaveis.length > 0 ? `
                         <div style="background: #f0fdf4; border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid #bbf7d0;">
                             <h4 style="margin: 0 0 12px; font-size: 15px; color: #065f46; display: flex; align-items: center; gap: 8px;">
@@ -1760,7 +1685,6 @@ class VisitasAdmin {
                         </div>
                     ` : ''}
                     
-                    <!-- BOTÃO IMPRIMIR -->
                     <div style="text-align: center; margin-top: 20px;">
                         <button class="btn-filter" onclick="visitasAdmin.imprimirTermo('${t._id}')">
                             <i class="fas fa-print"></i> Imprimir Termo
@@ -1805,12 +1729,8 @@ class VisitasAdmin {
         }
     }
 
-    // ============================================
-    // 🖨️ IMPRIMIR TERMO OFICIAL (mesmo endpoint do público)
-    // ============================================
     async imprimirTermo(termoId) {
         try {
-            // 🔥 Se o termo ainda não foi autorizado, avisar
             const termoResponse = await this.apiRequest(`/api/setor-pedagogico/visitas/termos/${termoId}`);
             const termo = termoResponse.termo;
             
@@ -1818,7 +1738,6 @@ class VisitasAdmin {
                 throw new Error('Termo não encontrado');
             }
             
-            // Verificar se tem pelo menos 1 autorização
             const autorizados = (termo.responsaveis || []).filter(r => r.status === 'autorizado');
             
             if (autorizados.length === 0) {
@@ -1832,7 +1751,6 @@ class VisitasAdmin {
             
             this.showToast('📄 Gerando termo...', 'info');
             
-            // 🔥 Usar o MESMO endpoint público (garante mesmo layout)
             const response = await fetch(`/api/visitas-publico/termo-oficial/${termoId}`);
             const data = await response.json();
             
@@ -1856,9 +1774,6 @@ class VisitasAdmin {
         }
     }
 
-    // ============================================
-    // 🖨️ IMPRIMIR TODOS OS TERMOS (EM LOTE)
-    // ============================================
     async imprimirTodosTermos() {
         try {
             if (!this.termosFiltrados || this.termosFiltrados.length === 0) {
@@ -1868,7 +1783,6 @@ class VisitasAdmin {
             
             const total = this.termosFiltrados.length;
             
-            // 🔥 Aviso para muitos termos
             if (total > 50) {
                 const continuar = await this.confirmar(
                     '⚠️ Muitos Termos',
@@ -1892,7 +1806,6 @@ class VisitasAdmin {
             
             const ids = this.termosFiltrados.map(t => t._id);
             
-            // 🔥 Chamar endpoint em lote
             const response = await this.apiRequest('/api/visitas-publico/termos-oficiais-lote', {
                 method: 'POST',
                 body: JSON.stringify({ 
@@ -1902,12 +1815,10 @@ class VisitasAdmin {
             });
             
             if (!response.success) {
-                // Fallback: buscar termo por termo
                 console.warn('⚠️ Endpoint em lote falhou, usando fallback...');
                 return this.imprimirTermosFallback(ids);
             }
             
-            // 🔥 Abrir janela com o HTML pronto
             const win = window.open('', '_blank');
             win.document.write(response.html);
             win.document.close();
@@ -1931,14 +1842,10 @@ class VisitasAdmin {
         }
     }
 
-    // ============================================
-    // 🔄 FALLBACK: IMPRIMIR TERMOS UM POR UM
-    // ============================================
     async imprimirTermosFallback(ids) {
         try {
             this.showToast(`📄 Carregando ${ids.length} termo(s)...`, 'info');
             
-            // 🔥 Buscar todos os termos em paralelo
             const respostas = await Promise.all(
                 ids.map(id => 
                     fetch(`/api/visitas-publico/termo-oficial/${id}`)
@@ -1947,31 +1854,15 @@ class VisitasAdmin {
                 )
             );
             
-            // Filtrar apenas sucessos
             const termosValidos = respostas.filter(r => r && r.success && r.html);
             
             if (termosValidos.length === 0) {
                 throw new Error('Nenhum termo pôde ser gerado');
             }
             
-            // 🔥 Montar HTML único com todos os termos + quebras de página
-            const htmlsComQuebra = termosValidos.map((r, index) => {
-                // Extrair apenas o conteúdo do <body>
-                const bodyMatch = r.html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-                const conteudo = bodyMatch ? bodyMatch[1] : r.html;
-                
-                return `
-                    <div style="page-break-after: always; ${index === termosValidos.length - 1 ? 'page-break-after: auto;' : ''}">
-                        ${conteudo}
-                    </div>
-                `;
-            }).join('');
-            
-            // 🔥 Extrair o <head> do primeiro termo (CSS)
             const headMatch = termosValidos[0].html.match(/<head[^>]*>([\s\S]*)<\/head>/i);
             const head = headMatch ? headMatch[1] : '';
             
-            // 🔥 HTML final
             const htmlFinal = `
                 <!DOCTYPE html>
                 <html lang="pt-BR">
@@ -1980,7 +1871,6 @@ class VisitasAdmin {
                     <title>Termos de Visita - Impressão em Lote</title>
                     ${head}
                     <style>
-                        /* 🔥 Garantir quebra de página entre termos */
                         .termo-print {
                             page-break-after: always;
                             page-break-inside: avoid;
@@ -1988,7 +1878,6 @@ class VisitasAdmin {
                         .termo-print:last-child {
                             page-break-after: auto;
                         }
-                        
                         @media print {
                             body { margin: 0; padding: 0; }
                             .termo-print { page-break-after: always; }
@@ -1997,7 +1886,7 @@ class VisitasAdmin {
                     </style>
                 </head>
                 <body>
-                    ${termosValidos.map((r, index) => {
+                    ${termosValidos.map((r) => {
                         const bodyMatch = r.html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
                         const conteudo = bodyMatch ? bodyMatch[1] : r.html;
                         
@@ -2011,7 +1900,6 @@ class VisitasAdmin {
                 </html>
             `;
             
-            // 🔥 Abrir janela e imprimir
             const win = window.open('', '_blank');
             win.document.write(htmlFinal);
             win.document.close();
@@ -2106,6 +1994,13 @@ class VisitasAdmin {
                         sob coordenação do(a) professor(a) <span class="destaque">${t.professorNome}</span>.
                     </p>
                     
+                    ${t.descricaoAtividade ? `
+                        <div style="background: #f8fafc; border-left: 3px solid #3b82f6; padding: 10px 15px; margin: 20px 0; font-size: 11pt; line-height: 1.6;">
+                            <strong>📋 Descrição da Atividade:</strong>
+                            <p style="margin: 6px 0 0 0; text-indent: 0;">${t.descricaoAtividade}</p>
+                        </div>
+                    ` : ''}
+                    
                     ${t.localizacao?.enderecoCompleto ? `
                         <p style="margin-top: 15px; font-size: 10pt; color: #555;">
                             <strong>Endereço:</strong> ${t.localizacao.enderecoCompleto}
@@ -2178,9 +2073,6 @@ class VisitasAdmin {
         });
     }
 
-    // ============================================
-    // 🔗 COPIAR LINK PÚBLICO
-    // ============================================
     async copiarLinkPublico() {
         const link = `${window.location.origin}/visitas-publico.html`;
         
@@ -2188,7 +2080,6 @@ class VisitasAdmin {
             if (navigator.clipboard && window.isSecureContext) {
                 await navigator.clipboard.writeText(link);
             } else {
-                // Fallback para HTTP ou navegadores antigos
                 const textarea = document.createElement('textarea');
                 textarea.value = link;
                 textarea.style.position = 'fixed';
@@ -2202,22 +2093,15 @@ class VisitasAdmin {
             this.showToast('✅ Link copiado para a área de transferência!', 'success');
         } catch (error) {
             console.error('Erro ao copiar:', error);
-            // Mostrar link para copiar manualmente
             prompt('Copie o link abaixo:', link);
         }
     }
 
-    // ============================================
-    // 🌐 ABRIR PÁGINA PÚBLICA EM NOVA ABA
-    // ============================================
     abrirPaginaPublica() {
         const url = `${window.location.origin}/visitas-publico.html`;
         window.open(url, '_blank');
     }
 
-    // ============================================
-    // 📱 ABRIR MODAL DE QR CODE
-    // ============================================
     abrirQRCodePublico() {
         const url = `${window.location.origin}/visitas-publico.html`;
         const modalBody = document.getElementById('modalBody');
@@ -2291,18 +2175,13 @@ class VisitasAdmin {
         modalSaveBtn.style.display = 'none';
         this.openModal();
         
-        // Gerar QR Code
         this.gerarQRCode(url);
     }
 
-    // ============================================
-    // 📱 GERAR QR CODE (via API interna)
-    // ============================================
     async gerarQRCode(url) {
         try {
             const QRCodeLib = window.QRCode || (typeof QRCode !== 'undefined' ? QRCode : null);
             
-            // Tentar usar biblioteca local se disponível
             if (QRCodeLib && typeof QRCodeLib.toDataURL === 'function') {
                 const dataUrl = await QRCodeLib.toDataURL(url, {
                     errorCorrectionLevel: 'H',
@@ -2314,7 +2193,6 @@ class VisitasAdmin {
                 return;
             }
             
-            // Fallback: usar API externa
             const apiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(url)}&color=1e40af&bgcolor=ffffff`;
             
             const img = new Image();
@@ -2323,7 +2201,6 @@ class VisitasAdmin {
                 this.mostrarQRCode(img.src);
             };
             img.onerror = () => {
-                // Último fallback: usar a URL direta
                 this.mostrarQRCode(apiUrl);
             };
             img.src = apiUrl;
@@ -2349,9 +2226,6 @@ class VisitasAdmin {
         }
     }
 
-    // ============================================
-    // 💾 BAIXAR QR CODE COMO IMAGEM
-    // ============================================
     baixarQRCode() {
         const img = document.getElementById('qrCodeImgVisitas');
         if (!img || !img.src) {
@@ -2367,9 +2241,6 @@ class VisitasAdmin {
         this.showToast('✅ QR Code baixado!', 'success');
     }
 
-    // ============================================
-    // 🖨️ IMPRIMIR QR CODE
-    // ============================================
     imprimirQRCode() {
         const img = document.getElementById('qrCodeImgVisitas');
         if (!img || !img.src) {
@@ -2405,17 +2276,8 @@ class VisitasAdmin {
                         width: 100%;
                         background: #f0f9ff;
                     }
-                    h1 {
-                        color: #1e40af;
-                        font-size: 22px;
-                        margin-bottom: 10px;
-                    }
-                    h2 {
-                        color: #3b82f6;
-                        font-size: 16px;
-                        font-weight: normal;
-                        margin-bottom: 25px;
-                    }
+                    h1 { color: #1e40af; font-size: 22px; margin-bottom: 10px; }
+                    h2 { color: #3b82f6; font-size: 16px; font-weight: normal; margin-bottom: 25px; }
                     img {
                         width: 300px;
                         height: 300px;
@@ -2449,21 +2311,15 @@ class VisitasAdmin {
                     .instrucoes strong { color: #78350f; }
                     .instrucoes ol { margin: 8px 0 0 20px; }
                     .instrucoes li { margin-bottom: 4px; }
-                    @media print {
-                        body { padding: 0; }
-                        .container { border: 2px solid #1e40af; }
-                    }
+                    @media print { body { padding: 0; } .container { border: 2px solid #1e40af; } }
                 </style>
             </head>
             <body>
                 <div class="container">
                     <h1>📱 Autorização de Visitas</h1>
                     <h2>Escaneie o QR Code para autorizar</h2>
-                    
                     <img src="${img.src}" alt="QR Code">
-                    
                     <div class="url">${url}</div>
-                    
                     <div class="instrucoes">
                         <strong>📋 Como usar:</strong>
                         <ol>
@@ -2484,9 +2340,6 @@ class VisitasAdmin {
         win.onload = () => setTimeout(() => win.print(), 500);
     }
 
-    // ============================================
-    // 🔄 TOGGLE VISITAS ABERTAS (Config da página pública)
-    // ============================================
     async toggleVisitasPublicas(abertas) {
         try {
             const response = await this.apiRequest('/api/setor-pedagogico/visitas/configuracao', {
@@ -2501,7 +2354,6 @@ class VisitasAdmin {
                     'success'
                 );
                 
-                // Atualizar label
                 const label = document.querySelector('label:has(#toggleVisitasPublicas) span');
                 if (label) {
                     label.textContent = abertas ? '🟢 Autorizações Abertas' : '🔴 Autorizações Fechadas';
@@ -2510,14 +2362,10 @@ class VisitasAdmin {
         } catch (error) {
             console.error('Erro:', error);
             this.showToast('❌ Erro ao atualizar configuração', 'error');
-            // Reverter checkbox
             document.getElementById('toggleVisitasPublicas').checked = !abertas;
         }
     }
 
-    // ============================================
-    // 📥 CARREGAR CONFIGURAÇÃO
-    // ============================================
     async carregarConfiguracao() {
         try {
             const response = await this.apiRequest('/api/setor-pedagogico/visitas/configuracao');
@@ -2529,9 +2377,6 @@ class VisitasAdmin {
         }
     }
 
-    // ============================================
-    // UTILITÁRIOS — USANDO API DO BOOTSTRAP
-    // ============================================
     openModal() {
         const modalEl = document.getElementById('modal');
         if (!modalEl) {
@@ -2539,10 +2384,8 @@ class VisitasAdmin {
             return;
         }
         
-        // Garantir que o modal não fique com display:flex quando fechado
         modalEl.style.display = '';
         
-        // Usar API do Bootstrap corretamente
         let modal = bootstrap.Modal.getInstance(modalEl);
         if (!modal) {
             modal = new bootstrap.Modal(modalEl, {
@@ -2562,12 +2405,10 @@ class VisitasAdmin {
         if (modal) {
             modal.hide();
         } else {
-            // Fallback se não houver instância
             modalEl.style.display = 'none';
             modalEl.classList.remove('show');
         }
         
-        // Limpar backdrop órfão (caso exista)
         setTimeout(() => {
             document.querySelectorAll('.modal-backdrop').forEach(b => {
                 if (!document.querySelector('.modal.show')) {

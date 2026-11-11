@@ -33,7 +33,7 @@
     <button id="btnScrollToBottom" onclick="scrollToBottom()"><i class="fas fa-arrow-down"></i></button>
     
     <div class="container">
-        <!-- SIDEBAR LIMPA (Sem os botões de ação) -->
+        <!-- SIDEBAR -->
         <aside class="sidebar">
             <div class="sidebar-logo">
                 <div class="logo-icon"><i class="fas fa-graduation-cap"></i></div>
@@ -64,7 +64,6 @@
                     <p class="header-subtitle">Gerencie suas provas, turmas e resultados de forma eficiente</p>
                 </div>
                 
-                <!-- NOTIFICAÇÕES E MENU DE PERFIL NO TOPO DIREITO -->
                 <div style="display: flex; gap: 12px; align-items: center;">
                     <div class="push-indicator-container" id="pushIndicatorContainer" style="display: none;">
                         <div class="push-indicator" title="Push desativado pelo administrador"><i class="fas fa-bell-slash"></i><span class="push-text">Push desativado</span></div>
@@ -81,7 +80,6 @@
                         </div>
                     </div>
                     
-                    <!-- MENU DE PERFIL COM OS BOTÕES QUE SAÍRAM DA SIDEBAR -->
                     <div class="user-menu-container" id="professorUserMenu" style="position: relative;">
                         <div class="user-trigger" onclick="toggleUserMenu(event)" style="display: flex; align-items: center; gap: 10px; padding: 6px 16px 6px 6px; background: white; border: 1px solid #e5e7eb; border-radius: 50px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
                             <div class="user-avatar" id="professorHeaderAvatar" style="width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, #4f46e5, #7c3aed); display: flex; align-items: center; justify-content: center; color: white; font-size: 15px; font-weight: 700; overflow: hidden;">
@@ -94,13 +92,17 @@
                             <i class="fas fa-chevron-down" style="font-size: 11px; color: #94a3b8; transition: transform 0.2s;"></i>
                         </div>
                         
-                        <!-- DROPDOWN COM TUDO -->
                         <div class="user-dropdown-menu" id="userDropdown" style="position: absolute; top: calc(100% + 10px); right: 0; background: white; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 20px 40px rgba(15, 23, 42, 0.12); padding: 8px; min-width: 240px; opacity: 0; visibility: hidden; transform: translateY(-10px); transition: all 0.2s; z-index: 9999;">
-                            <!-- Acompanhamento -->
+                            <!-- Acompanhamento de Alunos -->
                             <div class="dropdown-item" onclick="mostrarTab('acompanhamento'); toggleUserMenu(event);" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; color: #1e293b; font-size: 14px; font-weight: 500;">
                                 <div class="icon-box" style="width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(135deg, #0d9488, #0f766e); color: white; display: flex; align-items: center; justify-content: center; font-size: 14px;"><i class="fas fa-user-clock"></i></div>
-                                <div class="item-text">Acompanhamento</div>
+                                <div class="item-text">Acompanhamento de Alunos</div>
                                 <span id="badgeAcompanhamentoTopo" class="sidebar-badge" style="margin-left: auto; background: #ef4444; color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px;">0</span>
+                            </div>
+                            <!-- 🔥 NOVO: Acompanhamento de Visitas no Dropdown -->
+                            <div class="dropdown-item" onclick="mostrarTab('visitas-professor'); toggleUserMenu(event);" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; color: #1e293b; font-size: 14px; font-weight: 500;">
+                                <div class="icon-box" style="width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; display: flex; align-items: center; justify-content: center; font-size: 14px;"><i class="fas fa-map-marked-alt"></i></div>
+                                <div class="item-text">Acompanhamento de Visitas</div>
                             </div>
                             <!-- Adaptar Documento -->
                             <div class="dropdown-item" onclick="abrirModalUploadAdaptarDocumento(); toggleUserMenu(event);" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; color: #1e293b; font-size: 14px; font-weight: 500;">
@@ -372,6 +374,83 @@
                 </div>
                 <div id="acompanhamentoLista" class="acompanhamento-lista"><div class="acompanhamento-empty"><i class="fas fa-spinner fa-spin"></i><p>Carregando...</p></div></div>
             </div>
+
+            <!-- 🔥 NOVO: ABA DE ACOMPANHAMENTO DE VISITAS DO PROFESSOR -->
+            <div id="visitas-professor" class="tab-content">
+                <div style="padding: 20px; max-width: 1400px; margin: 0 auto;">
+                    
+                    <!-- Header -->
+                    <div style="background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 20px; padding: 25px; color: white; margin-bottom: 20px; position: relative; overflow: hidden;">
+                        <div style="position: absolute; top: -50px; right: -50px; width: 200px; height: 200px; background: rgba(255,255,255,0.1); border-radius: 50%;"></div>
+                        <div style="position: absolute; bottom: -80px; left: -80px; width: 250px; height: 250px; background: rgba(255,255,255,0.05); border-radius: 50%;"></div>
+                        <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap; position: relative; z-index: 2;">
+                            <div style="width: 60px; height: 60px; background: rgba(255,255,255,0.2); border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 28px; backdrop-filter: blur(10px);">
+                                <i class="fas fa-map-marked-alt"></i>
+                            </div>
+                            <div style="flex: 1; min-width: 200px;">
+                                <h1 style="margin: 0 0 4px; font-size: 1.5rem;">Acompanhamento de Visitas</h1>
+                                <p style="margin: 0; opacity: 0.9; font-size: 14px;">
+                                    Acompanhe as visitas técnicas onde você é coordenador
+                                </p>
+                            </div>
+                            <button onclick="carregarAcompanhamentoVisitasProfessor()" 
+                                    style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 10px 20px; border-radius: 30px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; backdrop-filter: blur(10px);">
+                                <i class="fas fa-sync-alt"></i> Atualizar
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Estatísticas -->
+                    <div id="visitasProfessorStats" style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px;"></div>
+                    
+                    <!-- Filtros -->
+                    <div style="background: white; border-radius: 16px; padding: 18px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 2fr auto; gap: 12px; align-items: end;">
+                            <div>
+                                <label style="display: block; font-size: 12px; font-weight: 600; color: #4b5563; margin-bottom: 6px;">
+                                    <i class="fas fa-filter"></i> Status
+                                </label>
+                                <select id="visitasProfessorFiltroStatus" onchange="filtrarVisitasProfessor()"
+                                        style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 14px; background: white;">
+                                    <option value="todos">Todos</option>
+                                    <option value="pendente">⏳ Pendentes</option>
+                                    <option value="parcialmente_autorizado">🔶 Parciais</option>
+                                    <option value="autorizado">✅ Autorizados</option>
+                                    <option value="recusado">❌ Recusados</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 12px; font-weight: 600; color: #4b5563; margin-bottom: 6px;">
+                                    <i class="fas fa-school"></i> Turma
+                                </label>
+                                <select id="visitasProfessorFiltroTurma" onchange="filtrarVisitasProfessor()"
+                                        style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 14px; background: white;">
+                                    <option value="todas">Todas as turmas</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 12px; font-weight: 600; color: #4b5563; margin-bottom: 6px;">
+                                    <i class="fas fa-search"></i> Buscar
+                                </label>
+                                <input type="text" id="visitasProfessorBusca" 
+                                       placeholder="Aluno, código, atividade..."
+                                       onkeypress="if(event.key === 'Enter') filtrarVisitasProfessor()"
+                                       style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 14px; box-sizing: border-box;">
+                            </div>
+                            <div>
+                                <button onclick="limparFiltrosVisitasProfessor()"
+                                        style="padding: 10px 16px; background: #f3f4f6; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; white-space: nowrap;">
+                                    <i class="fas fa-eraser"></i> Limpar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Lista -->
+                    <div id="visitasProfessorLista"></div>
+                </div>
+            </div>
+            <!-- 🔥 FIM: ABA DE ACOMPANHAMENTO DE VISITAS -->
         </main>
     </div>
 
@@ -395,6 +474,8 @@
                 <a href="#" onclick="mostrarTabMobile('minhas-provas'); return false;" class="mobile-menu-item"><i class="fas fa-file-alt"></i><span>Minhas Provas</span></a>
                 <a href="#" onclick="mostrarTabMobile('turmas'); return false;" class="mobile-menu-item"><i class="fas fa-school"></i><span>Minhas Turmas</span></a>
                 <a href="#" onclick="mostrarTabMobile('resultados-gerais'); return false;" class="mobile-menu-item"><i class="fas fa-chart-bar"></i><span>Resultados</span></a>
+                <!-- 🔥 NOVO: Acompanhamento de Visitas no menu mobile -->
+                <a href="#" onclick="mostrarTabMobile('visitas-professor'); return false;" class="mobile-menu-item"><i class="fas fa-map-marked-alt"></i><span>Acompanhamento de Visitas</span></a>
                 <div class="mobile-menu-divider" style="height: 1px; background: #e5e7eb; margin: 12px 16px;"></div>
                 <a href="calendario.html" class="mobile-menu-item"><i class="fas fa-calendar-alt"></i><span>Calendário</span></a>
                 <a href="cardapio.html" class="mobile-menu-item"><i class="fas fa-utensils"></i><span>Cardápio</span></a>
@@ -417,8 +498,14 @@
         document.addEventListener('click', function(e) {
             const container = document.getElementById('professorUserMenu');
             const dropdown = document.getElementById('userDropdown');
+            
+            // Se o clique NÃO foi no container do menu, e o menu está aberto
             if (container && !container.contains(e.target)) {
-                if (dropdown) { dropdown.style.opacity = '0'; dropdown.style.visibility = 'hidden'; dropdown.style.transform = 'translateY(-10px)'; }
+                if (dropdown && dropdown.style.opacity === '1') { 
+                    dropdown.style.opacity = '0'; 
+                    dropdown.style.visibility = 'hidden'; 
+                    dropdown.style.transform = 'translateY(-10px)'; 
+                }
             }
         });
         document.addEventListener('DOMContentLoaded', function() {

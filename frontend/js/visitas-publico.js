@@ -13,7 +13,6 @@ class VisitasPublico {
         this.alunoSelecionado = null;
         this.termoAtual = null;
         
-        // Estado do formulário
         this.responsavel = {
             nome: '',
             rg: '',
@@ -22,13 +21,9 @@ class VisitasPublico {
             email: ''
         };
         
-        // LGPD
         this.lgpdAceito = false;
-        
-        // TOTP
         this.totpSecret = null;
         
-        // Assinatura
         this.assinatura = {
             canvas: null,
             ctx: null,
@@ -38,7 +33,6 @@ class VisitasPublico {
             lastY: 0
         };
         
-        // Localização
         this.localizacao = null;
     }
 
@@ -159,7 +153,6 @@ class VisitasPublico {
             });
         }
         
-        // 🔎 Busca por código do termo
         const buscaCodigoInput = document.getElementById('buscaCodigoPublico');
         if (buscaCodigoInput) {
             let timeout;
@@ -177,7 +170,6 @@ class VisitasPublico {
             });
         }
         
-        // Máscara CPF
         const cpfInput = document.getElementById('respCPF');
         if (cpfInput) {
             cpfInput.addEventListener('input', (e) => {
@@ -189,7 +181,6 @@ class VisitasPublico {
             });
         }
         
-        // Máscara Telefone
         const telInput = document.getElementById('respTelefone');
         if (telInput) {
             telInput.addEventListener('input', (e) => {
@@ -201,7 +192,6 @@ class VisitasPublico {
             });
         }
         
-        // Enter no TOTP verifica
         const totpInput = document.getElementById('totpCodigo');
         if (totpInput) {
             totpInput.addEventListener('keypress', (e) => {
@@ -243,9 +233,6 @@ class VisitasPublico {
         }
     }
 
-    // ============================================
-    // 🔎 BUSCAR POR CÓDIGO DO TERMO
-    // ============================================
     async buscarPorCodigo() {
         const codigo = document.getElementById('buscaCodigoPublico')?.value?.trim();
         
@@ -300,7 +287,6 @@ class VisitasPublico {
                 badgeStatus = '<span class="badge-termo pendente">⏳ Pendente</span>';
             }
             
-            // 🔥 NOVO: botão de imprimir POR ALUNO
             const alunosHTML = (t.alunos || []).map(a => {
                 const alunoId = a.alunoId?._id || a.alunoId || a._id || a.id || '';
                 return `
@@ -329,6 +315,12 @@ class VisitasPublico {
                         <h4 style="margin: 0;">${this.escapeHtml(t.atividade)}</h4>
                         ${badgeStatus}
                     </div>
+                    
+                    ${t.descricaoAtividade ? `
+                        <div style="background: #f0f9ff; border-left: 3px solid #3b82f6; padding: 8px 12px; margin: 8px 0; border-radius: 6px; font-size: 12px; color: #1e40af;">
+                            <i class="fas fa-align-left"></i> ${this.escapeHtml(t.descricaoAtividade)}
+                        </div>
+                    ` : ''}
                     
                     <div class="info"><i class="fas fa-barcode"></i> <strong>Código:</strong> <code>${t.codigo}</code></div>
                     <div class="info"><i class="fas fa-chalkboard-teacher"></i> ${this.escapeHtml(t.professor)}</div>
@@ -424,14 +416,10 @@ class VisitasPublico {
         }
     }
 
-    // ============================================
-    // 📋 MOSTRAR TERMOS DO ALUNO (COM BOTÃO IMPRIMIR INDIVIDUAL)
-    // ============================================
     mostrarTermos() {
         const container = document.getElementById('listaTermosPublico');
         if (!container) return;
         
-        // 🔥 Pega o ID do aluno selecionado (para passar no imprimir)
         const alunoSelecionadoId = this.alunoSelecionado?.id 
             || this.alunoSelecionado?._id 
             || null;
@@ -477,6 +465,14 @@ class VisitasPublico {
                         <h4 style="margin: 0;">${this.escapeHtml(t.atividade)}</h4>
                         ${badgeStatus}
                     </div>
+                    
+                    ${t.descricaoAtividade ? `
+                        <div style="background: #f0f9ff; border-left: 3px solid #3b82f6; padding: 8px 12px; margin: 8px 0; border-radius: 6px; font-size: 12px; color: #1e40af; line-height: 1.5;">
+                            <i class="fas fa-align-left"></i> <strong>Descrição:</strong>
+                            <p style="margin: 4px 0 0; text-indent: 0;">${this.escapeHtml(t.descricaoAtividade)}</p>
+                        </div>
+                    ` : ''}
+                    
                     <div class="info"><i class="fas fa-barcode"></i> <code style="font-size: 11px;">${t.codigo}</code></div>
                     <div class="info"><i class="fas fa-chalkboard-teacher"></i> ${this.escapeHtml(t.professor)}</div>
                     <div class="info"><i class="fas fa-calendar-alt"></i> ${dataVisita}</div>
@@ -510,7 +506,7 @@ class VisitasPublico {
     }
 
     // ============================================
-    // PASSO 2: ABRIR TERMO (APENAS SE PENDENTE)
+    // PASSO 2: ABRIR TERMO
     // ============================================
     async abrirTermo(termoId) {
         try {
@@ -530,7 +526,6 @@ class VisitasPublico {
             this.lgpdAceito = false;
             this.totpSecret = null;
             
-            // 🔥 Guarda o alunoId do aluno selecionado para o imprimir
             if (this.alunoSelecionado) {
                 this.termoAtual.alunoIdFoco = this.alunoSelecionado.id || this.alunoSelecionado._id;
             } else if (this.termoAtual.alunos?.length === 1) {
@@ -545,6 +540,16 @@ class VisitasPublico {
                             <i class="fas fa-file-alt" style="font-size: 24px;"></i>
                             <h3 style="margin: 0; font-size: 18px;">${this.escapeHtml(this.termoAtual.atividade)}</h3>
                         </div>
+                        
+                        ${this.termoAtual.descricaoAtividade ? `
+                            <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 10px; margin-bottom: 12px; font-size: 13px; text-align: left;">
+                                <strong style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                                    <i class="fas fa-align-left"></i> Descrição da Atividade:
+                                </strong>
+                                <p style="margin: 0; opacity: 0.95; white-space: pre-wrap; line-height: 1.5;">${this.escapeHtml(this.termoAtual.descricaoAtividade)}</p>
+                            </div>
+                        ` : ''}
+                        
                         <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 10px; font-size: 13px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                             <div><strong>Aluno:</strong> ${this.escapeHtml(this.termoAtual.alunoNome)}</div>
                             <div><strong>Turma:</strong> ${this.termoAtual.alunoTurma || 'N/A'}</div>
@@ -615,7 +620,6 @@ class VisitasPublico {
             document.getElementById('totpLoading').style.display = 'flex';
             document.getElementById('totpQRCodeBox').style.display = 'none';
             
-            // 🔥 Esconder o box do secret ao recomeçar
             const secretBox = document.getElementById('totpSecretBox');
             if (secretBox) secretBox.style.display = 'none';
             
@@ -643,8 +647,6 @@ class VisitasPublico {
             document.getElementById('totpQRCodeImg').src = data.qrCode;
             
             this.totpSecret = data.secret;
-            
-            // 🔥 MOSTRAR A CHAVE SECRETA PARA DIGITAÇÃO MANUAL
             this.mostrarSecretTOTP(data.secret);
             
             console.log('✅ QR Code TOTP pronto');
@@ -665,7 +667,6 @@ class VisitasPublico {
         }
     }
 
-    // 🔥 NOVO: Exibe a chave secreta formatada
     mostrarSecretTOTP(secret) {
         if (!secret) return;
         
@@ -674,18 +675,14 @@ class VisitasPublico {
         
         if (!box || !textEl) return;
         
-        // Formata o secret em grupos de 4 caracteres para facilitar leitura
-        // Ex: JBSWY3DPEHPK3PXP -> JBSW Y3DP EHPK 3PXP
         const secretFormatado = secret.match(/.{1,4}/g)?.join(' ') || secret;
         
         textEl.textContent = secretFormatado;
-        // Guarda o valor "cru" (sem espaços) para copiar
         textEl.dataset.secretRaw = secret;
         
         box.style.display = 'block';
     }
 
-    // 🔥 NOVO: Copia a chave secreta para a área de transferência
     async copiarSecretTOTP() {
         const textEl = document.getElementById('totpSecretText');
         const valueEl = document.getElementById('totpSecretValue');
@@ -695,15 +692,12 @@ class VisitasPublico {
             return;
         }
         
-        // Usa o valor "cru" (sem espaços)
         const secretRaw = textEl.dataset.secretRaw || this.totpSecret;
         
         try {
-            // Tentar API moderna primeiro
             if (navigator.clipboard && window.isSecureContext) {
                 await navigator.clipboard.writeText(secretRaw);
             } else {
-                // Fallback para navegadores antigos / HTTP
                 const textarea = document.createElement('textarea');
                 textarea.value = secretRaw;
                 textarea.style.position = 'fixed';
@@ -716,7 +710,6 @@ class VisitasPublico {
                 document.body.removeChild(textarea);
             }
             
-            // Feedback visual
             if (valueEl) {
                 valueEl.classList.add('copiado');
                 const icon = valueEl.querySelector('i.fa-copy');
@@ -796,9 +789,6 @@ class VisitasPublico {
         window.scrollTo({ top: 200, behavior: 'smooth' });
     }
 
-    // ============================================
-    // ASSINATURA
-    // ============================================
     inicializarAssinatura() {
         const canvas = document.getElementById('assinaturaCanvasPublic');
         if (!canvas) return;
@@ -949,7 +939,6 @@ class VisitasPublico {
             return this.showToast('Assine o documento antes de continuar', 'error');
         }
         
-        // 🔥 PEGAR O ALUNO CORRETO DO TERMO ATUAL
         const alunoId = this.termoAtual.alunoIdFoco
             || this.termoAtual.alunos?.[0]?.alunoId 
             || this.termoAtual.alunos?.[0]?._id 
@@ -1037,7 +1026,6 @@ class VisitasPublico {
     mostrarSucesso(termo) {
         const container = document.querySelector('.container-public');
         
-        // 🔥 Pega o alunoId do termo autorizado
         const alunoId = termo.alunos?.[0]?.alunoId 
             || termo.alunos?.[0]?._id 
             || this.alunoSelecionado?.id 
@@ -1091,13 +1079,12 @@ class VisitasPublico {
     }
 
     // ============================================
-    // 📄 IMPRIMIR TERMO OFICIAL (SOMENTE DO ALUNO CONSULTADO)
+    // 📄 IMPRIMIR TERMO OFICIAL
     // ============================================
     async imprimirTermoOficial(termoId, alunoId = null) {
         try {
             this.showToast('📄 Gerando termo oficial...', 'info');
             
-            // 🔥 Se não veio por parâmetro, tenta pegar do estado atual
             if (!alunoId) {
                 alunoId = this.termoAtual?.alunoIdFoco
                     || this.termoAtual?.alunos?.[0]?.alunoId 
@@ -1107,12 +1094,10 @@ class VisitasPublico {
                     || null;
             }
             
-            // 🔥 Normalizar (pode vir ObjectId)
             if (alunoId && typeof alunoId === 'object') {
                 alunoId = alunoId._id || alunoId.id || alunoId.toString();
             }
             
-            // Monta URL com o alunoId
             let url = `${this.apiBase}/termo-oficial/${termoId}`;
             if (alunoId) {
                 url += `?alunoId=${encodeURIComponent(alunoId)}`;
@@ -1137,7 +1122,6 @@ class VisitasPublico {
                 }, 800);
             };
             
-            // Mostra info do modo
             if (data.modoIndividual) {
                 this.showToast(`📄 Termo de ${data.termo.alunoImpresso} gerado!`, 'success');
             } else {

@@ -13526,6 +13526,503 @@ function getSetorConfig(setor) {
     };
 }
 
+// ============================================================================
+// MÓDULO DE ACOMPANHAMENTO DE VISITAS DO PROFESSOR
+// Mostra apenas visitas onde o professor está como coordenador
+// ============================================================================
+
+window.visitasProfessor = {
+    dados: null,
+    filtroStatus: 'todos',
+    filtroTurma: 'todas',
+    filtroBusca: '',
+    termoAberto: null
+};
+
+async function carregarAcompanhamentoVisitasProfessor() {
+    const container = document.getElementById('visitasProfessorLista');
+    if (!container) return;
+
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+
+    container.innerHTML = `
+        <div style="text-align: center; padding: 50px; color: #6b7280;">
+            <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
+            <p style="margin-top: 15px;">Carregando suas visitas...</p>
+        </div>`;
+
+    try {
+        const params = new URLSearchParams();
+        if (window.visitasProfessor.filtroStatus !== 'todos') {
+            params.append('status', window.visitasProfessor.filtroStatus);
+        }
+        if (window.visitasProfessor.filtroTurma !== 'todas') {
+            params.append('turma', window.visitasProfessor.filtroTurma);
+        }
+        if (window.visitasProfessor.filtroBusca) {
+            params.append('busca', window.visitasProfessor.filtroBusca);
+        }
+        params.append('limit', '100');
+
+        const response = await fetch(`/api/professor/visitas/minhas-visitas?${params}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.error || 'Erro ao carregar visitas');
+        }
+
+        window.visitasProfessor.dados = data;
+
+        renderizarStatsVisitasProfessor(data.estatisticas);
+        popularFiltroTurmasVisitas(data.turmas || []);
+        renderizarListaVisitasProfessor(data.termos || []);
+
+    } catch (error) {
+        console.error('❌ Erro ao carregar visitas:', error);
+        container.innerHTML = `
+            <div style="background: #fef2f2; border-left: 4px solid #ef4444; padding: 20px; border-radius: 12px;">
+                <h4 style="color: #991b1b; margin: 0 0 10px;">
+                    <i class="fas fa-exclamation-triangle"></i> Erro ao carregar visitas
+                </h4>
+                <p style="color: #7f1d1d; margin: 0 0 15px;">${error.message}</p>
+                <button onclick="carregarAcompanhamentoVisitasProfessor()" 
+                        style="padding: 10px 20px; background: #ef4444; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                    <i class="fas fa-redo"></i> Tentar novamente
+                </button>
+            </div>
+        `;
+    }
+}
+
+function renderizarStatsVisitasProfessor(stats) {
+    const container = document.getElementById('visitasProfessorStats');
+    if (!container || !stats) return;
+
+    const cards = [
+        { label: 'Total', valor: stats.total || 0, cor: '#3b82f6', bg: '#eff6ff', icon: 'fa-file-alt' },
+        { label: 'Pendentes', valor: stats.pendentes || 0, cor: '#f59e0b', bg: '#fffbeb', icon: 'fa-clock' },
+        { label: 'Parciais', valor: stats.parciais || 0, cor: '#8b5cf6', bg: '#f5f3ff', icon: 'fa-adjust' },
+        { label: 'Autorizados', valor: stats.autorizados || 0, cor: '#10b981', bg: '#ecfdf5', icon: 'fa-check-circle' },
+        { label: 'Recusados', valor: stats.recusados || 0, cor: '#ef4444', bg: '#fef2f2', icon: 'fa-times-circle' }
+    ];
+
+    container.innerHTML = cards.map(c => `
+        <div style="background: ${c.bg}; border-radius: 12px; padding: 15px; border-left: 4px solid ${c.cor}; flex: 1; min-width: 120px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <i class="fas ${c.icon}" style="color: ${c.cor}; font-size: 22px;"></i>
+                <div>
+                    <div style="font-size: 24px; font-weight: 700; color: ${c.cor}; line-height: 1;">${c.valor}</div>
+                    <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">${c.label}</div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function popularFiltroTurmasVisitas(turmas) {
+    const select = document.getElementById('visitasProfessorFiltroTurma');
+    if (!select) return;
+
+    const valorAtual = select.value;
+    let html = '<option value="todas">🏫 Todas as turmas</option>';
+
+    (turmas || []).forEach(t => {
+        const nome = typeof t === 'string' ? t : (t.nome || t);
+        html += `<option value="${escapeHtmlProfessor(nome)}">${escapeHtmlProfessor(nome)}</option>`;
+    });
+
+    select.innerHTML = html;
+    if (valorAtual) select.value = valorAtual;
+}
+
+function renderizarListaVisitasProfessor(termos) {
+    const container = document.getElementById('visitasProfessorLista');
+    if (!container) return;
+
+    if (!termos || termos.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 60px 20px; color: #9ca3af;">
+                <i class="fas fa-map-marked-alt" style="font-size: 48px; margin-bottom: 15px; display: block;"></i>
+                <h4 style="color: #6b7280; margin-bottom: 8px;">Nenhuma visita encontrada</h4>
+                <p style="margin: 0;">Você ainda não foi vinculado como coordenador de nenhuma visita técnica.</p>
+            </div>`;
+        return;
+    }
+
+    const statusConfig = {
+        pendente: { label: '⏳ Pendente', cor: '#f59e0b', bg: '#fffbeb' },
+        parcialmente_autorizado: { label: '🔶 Parcial', cor: '#8b5cf6', bg: '#f5f3ff' },
+        autorizado: { label: '✅ Autorizado', cor: '#10b981', bg: '#ecfdf5' },
+        recusado: { label: '❌ Recusado', cor: '#ef4444', bg: '#fef2f2' }
+    };
+
+    container.innerHTML = termos.map(t => {
+        const status = statusConfig[t.status] || statusConfig.pendente;
+        const dataVisita = t.dataVisita
+            ? new Date(t.dataVisita).toLocaleDateString('pt-BR', {
+                day: '2-digit', month: 'short', year: 'numeric'
+            })
+            : 'Não definida';
+
+        return `
+            <div style="
+                background: white;
+                border-radius: 16px;
+                padding: 18px;
+                margin-bottom: 12px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                border-left: 4px solid ${status.cor};
+                transition: all 0.2s;
+                cursor: pointer;
+            "
+            onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,0.1)'; this.style.transform='translateY(-2px)'"
+            onmouseout="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.05)'; this.style.transform='translateY(0)'"
+            onclick="abrirDetalheVisitaProfessor('${t._id}')">
+                
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;">
+                    <div style="flex: 1; min-width: 200px;">
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px;">
+                            <span style="font-family: monospace; font-size: 11px; background: #f3f4f6; padding: 3px 10px; border-radius: 6px; color: #374151;">
+                                ${escapeHtmlProfessor(t.codigo)}
+                            </span>
+                            <span style="font-size: 11px; font-weight: 600; color: ${status.cor}; background: ${status.bg}; padding: 3px 10px; border-radius: 20px;">
+                                ${status.label}
+                            </span>
+                        </div>
+                        <h4 style="margin: 0 0 6px; font-size: 15px; color: #111827;">
+                            <i class="fas fa-clipboard-list" style="color: #667eea;"></i>
+                            ${escapeHtmlProfessor(t.atividade)}
+                        </h4>
+                        <div style="font-size: 12px; color: #6b7280;">
+                            <i class="fas fa-user-graduate"></i> ${escapeHtmlProfessor(t.alunoNome)}
+                            ${t.totalAlunos > 1 ? `<span style="background: #e0e7ff; color: #3730a3; padding: 1px 8px; border-radius: 20px; font-size: 10px; margin-left: 6px;">+${t.totalAlunos - 1}</span>` : ''}
+                        </div>
+                    </div>
+                    
+                    <div style="text-align: right;">
+                        <div style="font-size: 11px; color: #6b7280; margin-bottom: 4px;">Autorizações</div>
+                        <div style="font-size: 20px; font-weight: 700; color: ${status.cor};">
+                            ${t.responsaveisAutorizados}/${t.totalResponsaveis}
+                        </div>
+                        <div style="background: #e5e7eb; border-radius: 10px; height: 6px; margin-top: 6px; overflow: hidden; width: 100px;">
+                            <div style="background: ${status.cor}; height: 100%; width: ${t.progressoAutorizacao}%; transition: width 0.3s;"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 15px; flex-wrap: wrap; font-size: 12px; color: #6b7280; padding-top: 10px; border-top: 1px dashed #e5e7eb;">
+                    <span><i class="fas fa-calendar"></i> ${dataVisita}</span>
+                    <span><i class="fas fa-clock"></i> ${escapeHtmlProfessor(t.horario)}</span>
+                    <span><i class="fas fa-map-marker-alt"></i> ${escapeHtmlProfessor(t.local)}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+async function abrirDetalheVisitaProfessor(termoId) {
+    try {
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch(`/api/professor/visitas/minhas-visitas/${termoId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Erro ao carregar');
+
+        window.visitasProfessor.termoAberto = data.termo;
+        renderizarModalDetalheVisita(data.termo);
+
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        mostrarAlertaGeralProfessor('❌ ' + error.message, 'error');
+    }
+}
+
+function renderizarModalDetalheVisita(termo) {
+    let modal = document.getElementById('modalDetalheVisitaProfessor');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modalDetalheVisitaProfessor';
+        modal.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); z-index: 99999;
+            display: flex; align-items: center; justify-content: center;
+            padding: 20px; box-sizing: border-box;
+        `;
+        document.body.appendChild(modal);
+    }
+
+    const dataVisita = new Date(termo.dataVisita).toLocaleDateString('pt-BR', {
+        day: '2-digit', month: 'long', year: 'numeric'
+    });
+
+    const statusLabel = {
+        pendente: '⏳ PENDENTE',
+        parcialmente_autorizado: '🔶 PARCIAL',
+        autorizado: '✅ AUTORIZADO',
+        recusado: '❌ RECUSADO'
+    }[termo.status] || termo.status;
+
+    const statusCor = {
+        pendente: '#f59e0b',
+        parcialmente_autorizado: '#8b5cf6',
+        autorizado: '#10b981',
+        recusado: '#ef4444'
+    }[termo.status] || '#6b7280';
+
+    modal.innerHTML = `
+        <div style="
+            background: white; border-radius: 24px; max-width: 750px; width: 100%;
+            max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px rgba(0,0,0,0.25);
+        ">
+            <div style="
+                background: linear-gradient(135deg, #667eea, #764ba2);
+                color: white; padding: 25px; border-radius: 24px 24px 0 0;
+                position: sticky; top: 0; z-index: 10;
+            ">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <h2 style="margin: 0 0 6px; font-size: 1.4rem;">${escapeHtmlProfessor(termo.atividade)}</h2>
+                        <p style="margin: 0; opacity: 0.9; font-size: 13px;">
+                            <i class="fas fa-barcode"></i> ${escapeHtmlProfessor(termo.codigo)}
+                        </p>
+                    </div>
+                    <button onclick="fecharModalVisitaProfessor()" style="
+                        background: rgba(255,255,255,0.2); border: none; color: white;
+                        font-size: 24px; width: 40px; height: 40px; border-radius: 12px;
+                        cursor: pointer; display: flex; align-items: center; justify-content: center;
+                    ">&times;</button>
+                </div>
+            </div>
+            
+            <div style="padding: 25px;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <span style="
+                        background: ${statusCor}20; color: ${statusCor};
+                        padding: 8px 24px; border-radius: 30px; font-weight: 700; font-size: 14px;
+                        border: 2px solid ${statusCor}40;
+                    ">${statusLabel}</span>
+                </div>
+                
+                ${termo.descricaoAtividade ? `
+                    <div style="background: #f0f9ff; border-left: 4px solid #3b82f6; padding: 15px; border-radius: 12px; margin-bottom: 20px;">
+                        <h4 style="margin: 0 0 8px; color: #1e40af; font-size: 14px;">
+                            <i class="fas fa-align-left"></i> Descrição da Atividade
+                        </h4>
+                        <p style="margin: 0; color: #1e3a8a; font-size: 13px; line-height: 1.6; white-space: pre-wrap;">
+                            ${escapeHtmlProfessor(termo.descricaoAtividade)}
+                        </p>
+                    </div>
+                ` : ''}
+                
+                <div style="background: #f8fafc; border-radius: 16px; padding: 18px; margin-bottom: 20px; border: 1px solid #e5e7eb;">
+                    <h4 style="margin: 0 0 15px; color: #1f2937; font-size: 15px;">
+                        <i class="fas fa-info-circle" style="color: #667eea;"></i> Informações da Visita
+                    </h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; font-size: 13px;">
+                        <div><strong>Data:</strong><br>${dataVisita}</div>
+                        <div><strong>Horário:</strong><br>${escapeHtmlProfessor(termo.horario)}</div>
+                        <div><strong>Período:</strong><br>${escapeHtmlProfessor(termo.periodo)}</div>
+                        <div><strong>Cidade:</strong><br>${escapeHtmlProfessor(termo.cidade || 'N/A')}</div>
+                        <div style="grid-column: span 2;"><strong>Local:</strong><br>${escapeHtmlProfessor(termo.local)}</div>
+                        ${termo.localizacao?.enderecoCompleto ? `
+                            <div style="grid-column: span 2;">
+                                <strong>Endereço:</strong><br>
+                                <small style="color: #6b7280;">${escapeHtmlProfessor(termo.localizacao.enderecoCompleto)}</small>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+                
+                <div style="background: #f8fafc; border-radius: 16px; padding: 18px; margin-bottom: 20px; border: 1px solid #e5e7eb;">
+                    <h4 style="margin: 0 0 15px; color: #1f2937; font-size: 15px; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-user-graduate" style="color: #4f46e5;"></i>
+                        Alunos (${termo.alunos.length})
+                    </h4>
+                    ${termo.alunos.map(a => `
+                        <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: white; border-radius: 10px; margin-bottom: 8px; border-left: 3px solid #4f46e5;">
+                            <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #4f46e5, #7c3aed); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 13px; flex-shrink: 0;">
+                                ${(a.nome || 'A').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+                            </div>
+                            <div style="flex: 1;">
+                                <div style="font-weight: 600; color: #1f2937; font-size: 13px;">${escapeHtmlProfessor(a.nome)}</div>
+                                <div style="font-size: 11px; color: #6b7280;">
+                                    ${a.matricula ? `Matrícula: ${escapeHtmlProfessor(a.matricula)} • ` : ''}
+                                    ${a.turma ? `Turma: ${escapeHtmlProfessor(a.turma)}` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                
+                <div style="background: #f0fdf4; border-radius: 16px; padding: 18px; margin-bottom: 20px; border: 1px solid #bbf7d0;">
+                    <h4 style="margin: 0 0 15px; color: #065f46; font-size: 15px; display: flex; align-items: center; justify-content: space-between;">
+                        <span><i class="fas fa-user-check"></i> Autorizações</span>
+                        <span style="background: #10b981; color: white; padding: 3px 12px; border-radius: 20px; font-size: 12px;">
+                            ${termo.responsaveisAutorizados}/${termo.totalResponsaveis}
+                        </span>
+                    </h4>
+                    ${termo.responsaveis.length === 0 ? `
+                        <p style="color: #6b7280; text-align: center; margin: 0;">Nenhum responsável cadastrado ainda</p>
+                    ` : termo.responsaveis.map(r => {
+                        const cor = r.status === 'autorizado' ? '#10b981' :
+                                   r.status === 'recusado' ? '#ef4444' : '#f59e0b';
+                        const label = r.status === 'autorizado' ? '✅ Autorizado' :
+                                     r.status === 'recusado' ? '❌ Recusado' : '⏳ Pendente';
+                        return `
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: white; border-radius: 10px; margin-bottom: 8px; border-left: 3px solid ${cor};">
+                                <div>
+                                    <div style="font-weight: 600; color: #1f2937; font-size: 13px;">
+                                        ${escapeHtmlProfessor(r.alunoNome || 'Aluno')}
+                                    </div>
+                                    <div style="font-size: 11px; color: #6b7280;">
+                                        ${r.nome ? `Resp: ${escapeHtmlProfessor(r.nome)}` : 'Aguardando responsável'}
+                                    </div>
+                                    ${r.motivoRecusa ? `<div style="font-size: 11px; color: #991b1b; margin-top: 3px;">Motivo: ${escapeHtmlProfessor(r.motivoRecusa)}</div>` : ''}
+                                </div>
+                                <span style="padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; background: ${cor}20; color: ${cor};">
+                                    ${label}
+                                </span>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+                
+                <div style="display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap;">
+                    ${termo.responsaveisAutorizados > 0 ? `
+                        <button onclick="imprimirVisitaProfessor('${termo._id}')" style="
+                            padding: 12px 24px; background: #3b82f6; color: white;
+                            border: none; border-radius: 30px; font-weight: 600; cursor: pointer;
+                            display: flex; align-items: center; gap: 8px;
+                        ">
+                            <i class="fas fa-print"></i> Imprimir Termo
+                        </button>
+                    ` : ''}
+                    <button onclick="fecharModalVisitaProfessor()" style="
+                        padding: 12px 24px; background: #6b7280; color: white;
+                        border: none; border-radius: 30px; font-weight: 600; cursor: pointer;
+                    ">
+                        <i class="fas fa-times"></i> Fechar
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function fecharModalVisitaProfessor() {
+    const modal = document.getElementById('modalDetalheVisitaProfessor');
+    if (modal) modal.remove();
+}
+
+async function imprimirVisitaProfessor(termoId) {
+    try {
+        mostrarAlertaGeralProfessor('📄 Gerando termo oficial...', 'info');
+
+        const response = await fetch(`/api/visitas-publico/termo-oficial/${termoId}`);
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error || 'Erro ao gerar termo');
+
+        const win = window.open('', '_blank');
+        win.document.write(data.html);
+        win.document.close();
+        win.onload = () => setTimeout(() => win.print(), 800);
+
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        mostrarAlertaGeralProfessor('❌ ' + error.message, 'error');
+    }
+}
+
+function filtrarVisitasProfessor() {
+    const status = document.getElementById('visitasProfessorFiltroStatus')?.value || 'todos';
+    const turma = document.getElementById('visitasProfessorFiltroTurma')?.value || 'todas';
+    const busca = document.getElementById('visitasProfessorBusca')?.value || '';
+
+    window.visitasProfessor.filtroStatus = status;
+    window.visitasProfessor.filtroTurma = turma;
+    window.visitasProfessor.filtroBusca = busca;
+
+    carregarAcompanhamentoVisitasProfessor();
+}
+
+function limparFiltrosVisitasProfessor() {
+    const statusEl = document.getElementById('visitasProfessorFiltroStatus');
+    const turmaEl = document.getElementById('visitasProfessorFiltroTurma');
+    const buscaEl = document.getElementById('visitasProfessorBusca');
+
+    if (statusEl) statusEl.value = 'todos';
+    if (turmaEl) turmaEl.value = 'todas';
+    if (buscaEl) buscaEl.value = '';
+
+    window.visitasProfessor.filtroStatus = 'todos';
+    window.visitasProfessor.filtroTurma = 'todas';
+    window.visitasProfessor.filtroBusca = '';
+
+    carregarAcompanhamentoVisitasProfessor();
+}
+
+function escapeHtmlProfessor(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function mostrarAlertaGeralProfessor(msg, tipo = 'info') {
+    if (typeof mostrarAlerta === 'function') {
+        const cores = { success: '#10b981', error: '#ef4444', info: '#3b82f6', warning: '#f59e0b' };
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            position: fixed; top: 20px; right: 20px;
+            padding: 14px 20px; border-radius: 12px;
+            background: ${cores[tipo] || cores.info};
+            color: white; font-size: 14px; font-weight: 500;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+            z-index: 999999; max-width: 340px;
+        `;
+        toast.textContent = msg;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 4000);
+    } else {
+        console.log(`[${tipo}] ${msg}`);
+    }
+}
+
+// Expor globalmente
+window.carregarAcompanhamentoVisitasProfessor = carregarAcompanhamentoVisitasProfessor;
+window.filtrarVisitasProfessor = filtrarVisitasProfessor;
+window.limparFiltrosVisitasProfessor = limparFiltrosVisitasProfessor;
+window.abrirDetalheVisitaProfessor = abrirDetalheVisitaProfessor;
+window.fecharModalVisitaProfessor = fecharModalVisitaProfessor;
+window.imprimirVisitaProfessor = imprimirVisitaProfessor;
+
+// Inicializar quando a aba for ativada
+document.addEventListener('DOMContentLoaded', function() {
+    const wrapper = () => {
+        if (typeof window.mostrarTab === 'function' && !window.mostrarTab._wrappedVisitas) {
+            const original = window.mostrarTab;
+            window.mostrarTab = function(tabId) {
+                original.apply(this, arguments);
+                if (tabId === 'visitas-professor' || tabId === 'acompanhamento-visitas') {
+                    setTimeout(carregarAcompanhamentoVisitasProfessor, 200);
+                }
+            };
+            window.mostrarTab._wrappedVisitas = true;
+        }
+    };
+    wrapper();
+});
+
 // ============================================
 // INICIALIZAÇÃO PRINCIPAL
 // ============================================

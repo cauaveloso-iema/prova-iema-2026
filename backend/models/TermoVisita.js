@@ -34,6 +34,12 @@ const TermoVisitaSchema = new mongoose.Schema({
     required: true
   },
   
+  // 🆕 DESCRIÇÃO DA ATIVIDADE
+  descricaoAtividade: {
+    type: String,
+    default: ''
+  },
+  
   // ============ PROFESSORES ============
   professores: [{
     professorId: {

@@ -89,14 +89,13 @@ router.post('/login', async (req, res) => {
                 ...safe,
                 senhaTemporaria: avaliador.senhaTemporaria === true
             },
-            // 👇 Compat: sinaliza explicitamente para o frontend
             precisaTrocarSenha: avaliador.senhaTemporaria === true
         });
     } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
 // ============================================================
-// 🔑 TROCA DE SENHA (1º ACESSO ou LOGADO)
+// 🔑 TROCA DE SENHA
 // ============================================================
 router.put('/trocar-senha', authenticateAvaliador, async (req, res) => {
     try {
@@ -109,7 +108,6 @@ router.put('/trocar-senha', authenticateAvaliador, async (req, res) => {
         const av = await Avaliador.findById(req.avaliadorId).select('+senhaHash');
         if (!av) return res.status(404).json({ success: false, error: 'Usuário não encontrado.' });
 
-        // Se o usuário ainda está com senha temporária, não exige a atual
         const precisaSenhaAtual = av.senhaTemporaria !== true;
 
         if (precisaSenhaAtual) {
@@ -122,7 +120,6 @@ router.put('/trocar-senha', authenticateAvaliador, async (req, res) => {
             }
         }
 
-        // Reutiliza o método do model para manter o padrão de hash
         await av.setSenha(String(novaSenha));
         av.senhaTemporaria = false;
         av.senhaTemporariaEm = null;
@@ -198,6 +195,55 @@ router.get('/coordenador-lista', authenticateAvaliador, isCoordenadorEvento, asy
         const avaliadores = await Avaliador.find(query).sort({ nomeCompleto: 1 });
         res.json({ success: true, avaliadores });
     } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+});
+
+// ============================================================================
+// Lista avaliadores cadastrados (Pendentes ou Ativos) que ainda NÃO estão
+// vinculados ao evento — usado na busca do coordenador
+// ============================================================================
+router.get('/coordenador-listar-cadastrados', authenticateAvaliador, async (req, res) => {
+    try {
+        const { eventoId, busca = '' } = req.query;
+        if (!eventoId) {
+            return res.status(400).json({ success: false, error: 'eventoId obrigatório.' });
+        }
+
+        const evento = await Evento.findById(eventoId).select('coordenadores titulo');
+        if (!evento) {
+            return res.status(404).json({ success: false, error: 'Evento não encontrado.' });
+        }
+
+        const souCoordenador = (evento.coordenadores || [])
+            .some(id => String(id) === String(req.avaliadorId));
+        if (!souCoordenador) {
+            return res.status(403).json({ success: false, error: 'Você não é coordenador deste evento.' });
+        }
+
+        // Quem já está vinculado ao evento (para excluir da lista)
+        const jaVinculados = await Avaliador.find({ eventos: eventoId }).select('_id');
+        const idsVinculados = jaVinculados.map(a => String(a._id));
+
+        const filtro = {
+            isCoordenador: { $ne: true },
+            _id: { $nin: idsVinculados }
+            // Traz Pendentes também
+        };
+        if (String(busca).trim()) {
+            const regex = new RegExp(String(busca).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            filtro.$or = [{ nomeCompleto: regex }, { email: regex }];
+        }
+
+        const avaliadores = await Avaliador.find(filtro)
+            .select('_id nomeCompleto email status')
+            .sort({ nomeCompleto: 1 })
+            .limit(60)
+            .lean();
+
+        res.json({ success: true, avaliadores });
+    } catch (error) {
+        logger.error('❌ [AVALIADORES] Erro em /coordenador-listar-cadastrados:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
 // ============================================================
@@ -290,7 +336,46 @@ async function aprovarUsuario(req, res) {
     }
 }
 router.put('/:id/aprovar', authenticateToken, isSuperAdmin, aprovarUsuario);
-router.put('/coordenador-aprovar/:id', authenticateAvaliador, isCoordenadorEvento, aprovarUsuario);
+
+// 🔥 ROTA CORRIGIDA: Coordenador aprova e já vincula ao evento dele
+router.put('/coordenador-aprovar/:id', authenticateAvaliador, async (req, res) => {
+    try {
+        const { eventoId } = req.body;
+        if (!eventoId) {
+            return res.status(400).json({ success: false, error: 'eventoId é obrigatório para aprovar via coordenador.' });
+        }
+
+        // 1. Valida se o evento existe e se o usuário logado é coordenador DELE
+        const evento = await Evento.findById(eventoId);
+        if (!evento) return res.status(404).json({ success: false, error: 'Evento não encontrado.' });
+
+        const souCoordenador = (evento.coordenadores || []).some(id => String(id) === String(req.avaliadorId));
+        if (!souCoordenador) {
+            return res.status(403).json({ success: false, error: 'Você não é coordenador deste evento.' });
+        }
+
+        // 2. Atualiza o status do avaliador para Ativo
+        const avaliador = await Avaliador.findById(req.params.id);
+        if (!avaliador) return res.status(404).json({ success: false, error: 'Avaliador não encontrado.' });
+        
+        avaliador.status = 'Ativo';
+
+        // 3. Já vincula o avaliador ao evento automaticamente
+        if (!avaliador.eventos) avaliador.eventos = [];
+        if (!avaliador.eventos.some(id => String(id) === String(eventoId))) {
+            avaliador.eventos.push(eventoId);
+        }
+
+        await avaliador.save();
+        
+        logger.info(`✅ [AVALIADORES] ${avaliador.nomeCompleto} APROVADO e VINCULADO ao evento "${evento.titulo}" pelo coordenador.`);
+
+        res.json({ success: true, avaliador, message: 'Avaliador aprovado e vinculado com sucesso!' });
+    } catch (e) {
+        logger.error('❌ [AVALIADORES] Erro em coordenador-aprovar:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
 
 // ============================================================
 // 🔥 Lista avaliadores vinculados ao evento (para atribuição manual)

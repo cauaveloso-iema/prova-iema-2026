@@ -1714,3 +1714,30 @@
 
     #qrCodeDisplay { width: 130px !important; height: 130px !important; }
 }
+
+/* Ajuste da Sidebar para não cortar e permitir rolagem */
+.professor-mobile-sidebar {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100vh !important; /* Ocupa a tela toda */
+    max-height: 100vh !important;
+    overflow: hidden !important; /* Impede o scroll geral da barra */
+}
+
+/* Faz a lista de itens rolar se ficar muito grande */
+.professor-mobile-menu-items {
+    flex: 1 !important; /* Ocupa todo o espaço restante */
+    overflow-y: auto !important; /* Ativa a rolagem apenas na lista */
+    padding-bottom: 20px !important;
+}
+
+/* Garante que o botão Sair fique fixo lá embaixo, sem subir */
+.professor-mobile-sidebar-footer {
+    position: relative !important; /* Remove o absolute/fixed que causava o problema */
+    margin-top: auto !important; /* Empurra para o final */
+    background: #1e293b !important; /* Cor de fundo igual ao menu */
+    padding: 15px 16px !important;
+    border-top: 1px solid #334155 !important;
+    z-index: 10 !important;
+    flex-shrink: 0 !important; /* Não deixa o botão ser esmagado */
+}

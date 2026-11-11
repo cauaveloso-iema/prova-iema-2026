@@ -47,21 +47,25 @@ try {
     logger.warn('⚠️ [EVENTOS] Erro no multer:', err.message);
 }
 
-// --- Helpers ---
 function sanitizarAnexos(anexosPayload) {
     const tiposAnexoValidos = ['edital', 'formulario', 'termo_lgpd', 'termo_imagem', 'outro', 'ficha_avaliacao'];
 
     return anexosPayload.map(a => {
         if (!a.arquivo || !a.nomeOriginal) throw new Error('Anexo sem nome/arquivo');
         if (!tiposAnexoValidos.includes(a.tipo)) a.tipo = 'outro';
-        a.campos = Array.isArray(a.campos) ? a.campos : [];
+
+        const ehEdital = a.tipo === 'edital';
+
+        a.campos = ehEdital ? [] : (Array.isArray(a.campos) ? a.campos : []);
+        a.camposRepetiveis = ehEdital ? [] : (Array.isArray(a.camposRepetiveis) ? a.camposRepetiveis : []);
+        a.repetivel = ehEdital ? false : !!a.repetivel;
+        a.isAvaliativo = ehEdital ? false : !!a.isAvaliativo;
+
         a.solicitaAnexo = !!a.solicitaAnexo;
         a.labelSolicitacaoAnexo = (a.labelSolicitacaoAnexo || '').trim();
         a.anexoSolicitacaoObrigatorio = !!a.anexoSolicitacaoObrigatorio;
-        a.isAvaliativo = !!a.isAvaliativo;
         a.numAvaliadores = Math.max(1, parseInt(a.numAvaliadores) || 1);
 
-        // 🔥 NOVO: distribuição + média + assinatura do avaliador
         a.modoDistribuicao = ['aleatorio', 'manual'].includes(a.modoDistribuicao)
             ? a.modoDistribuicao
             : 'aleatorio';
@@ -71,8 +75,7 @@ function sanitizarAnexos(anexosPayload) {
             : 'aritmetica';
         a.exigeAssinaturaAvaliador = !!a.exigeAssinaturaAvaliador;
 
-        // Sanitiza critérios
-        if (Array.isArray(a.criteriosAvaliacao)) {
+        if (!ehEdital && Array.isArray(a.criteriosAvaliacao)) {
             a.criteriosAvaliacao = a.criteriosAvaliacao
                 .filter(c => c && c.label && String(c.label).trim())
                 .map(c => ({
@@ -86,8 +89,7 @@ function sanitizarAnexos(anexosPayload) {
             a.criteriosAvaliacao = [];
         }
 
-        // Sanitiza legendas
-        if (Array.isArray(a.legendasNotas)) {
+        if (!ehEdital && Array.isArray(a.legendasNotas)) {
             a.legendasNotas = a.legendasNotas
                 .filter(l => l && l.label && typeof l.valor !== 'undefined')
                 .map(l => ({ valor: parseFloat(l.valor), label: String(l.label).trim() }));
@@ -95,11 +97,12 @@ function sanitizarAnexos(anexosPayload) {
             a.legendasNotas = [];
         }
 
+        if (ehEdital) a.informacoesDocumento = '';
+
         return a;
     });
 }
 
-// GET / - Listar modelos
 router.get('/', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
         const modelos = await ModeloEvento.find({ ativo: true }).sort({ createdAt: -1 }).populate('criadoPor', 'nome email');
@@ -109,7 +112,6 @@ router.get('/', authenticateToken, isSuperAdmin, async (req, res) => {
     }
 });
 
-// GET /:id - Buscar modelo
 router.get('/:id', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ success: false, error: 'ID inválido' });
@@ -121,7 +123,6 @@ router.get('/:id', authenticateToken, isSuperAdmin, async (req, res) => {
     }
 });
 
-// POST /extrair-campos
 router.post('/extrair-campos', authenticateToken, isSuperAdmin, (req, res, next) => {
     upload(req, res, (err) => {
         if (err) return res.status(400).json({ success: false, error: err.message });
@@ -132,6 +133,8 @@ router.post('/extrair-campos', authenticateToken, isSuperAdmin, (req, res, next)
         if (!req.files || req.files.length === 0) {
             return res.status(400).json({ success: false, error: 'Nenhum arquivo enviado' });
         }
+
+        const isEdital = req.body.forcar_edital === 'true';
 
         let groq = global.groq || null;
         if (!groq && process.env.GROQ_API_KEY) {
@@ -145,7 +148,14 @@ router.post('/extrair-campos', authenticateToken, isSuperAdmin, (req, res, next)
 
         for (const file of req.files) {
             try {
-                const r = await processarArquivo(file.path, file.originalname, groq);
+                let r;
+                if (isEdital) {
+                    r = { tipo: 'edital', campos: [], camposRepetiveis: [], labelGrupoRepetivel: '', quantidadePadrao: 1, maxRepeticoes: 10, criteriosAvaliacao: [], informacoesDocumento: '', legendasNotas: [], exigeAssinatura: false, isAvaliativo: false, fonte: 'edital' };
+                } else {
+                    r = await processarArquivo(file.path, file.originalname, groq);
+                }
+
+                const ehEdital = r.tipo === 'edital';
 
                 arquivosProcessados.push({
                     nomeOriginal: file.originalname,
@@ -153,21 +163,22 @@ router.post('/extrair-campos', authenticateToken, isSuperAdmin, (req, res, next)
                     mimetype: file.mimetype,
                     tamanho: file.size,
                     tipoAnexo: r.tipo,
-                    campos: r.campos || [],
-                    repetivel: r.camposRepetiveis && r.camposRepetiveis.length > 0,
-                    labelGrupoRepetivel: r.labelGrupoRepetivel || '',
-                    camposRepetiveis: r.camposRepetiveis || [],
-                    quantidadePadrao: r.quantidadePadrao || 1,
-                    maxRepeticoes: r.maxRepeticoes || 10,
-                    exigeAssinatura: !!r.exigeAssinatura,
-                    isAvaliativo: !!r.isAvaliativo,
-                    criteriosAvaliacao: r.criteriosAvaliacao || [],
-                    // 🔥 NOVO: defaults de distribuição
+                    campos: ehEdital ? [] : (r.campos || []),
+                    repetivel: ehEdital ? false : (r.camposRepetiveis && r.camposRepetiveis.length > 0),
+                    labelGrupoRepetivel: ehEdital ? '' : (r.labelGrupoRepetivel || ''),
+                    camposRepetiveis: ehEdital ? [] : (r.camposRepetiveis || []),
+                    quantidadePadrao: ehEdital ? 1 : (r.quantidadePadrao || 1),
+                    maxRepeticoes: ehEdital ? 10 : (r.maxRepeticoes || 10),
+                    exigeAssinatura: ehEdital ? false : !!r.exigeAssinatura,
+                    isAvaliativo: ehEdital ? false : !!r.isAvaliativo,
+                    criteriosAvaliacao: ehEdital ? [] : (r.criteriosAvaliacao || []),
+                    informacoesDocumento: ehEdital ? '' : (r.informacoesDocumento || ''),
+                    legendasNotas: ehEdital ? [] : (r.legendasNotas || []),
                     modoDistribuicao: 'aleatorio',
                     calcularMedia: true,
                     tipoMedia: 'aritmetica',
                     exigeAssinaturaAvaliador: false,
-                    fonte: r.fonte
+                    fonte: ehEdital ? 'edital' : r.fonte
                 });
             } catch (e) {
                 logger.error(`Erro extraindo ${file.originalname}:`, e);
@@ -188,8 +199,8 @@ router.post('/extrair-campos', authenticateToken, isSuperAdmin, (req, res, next)
         }
 
         const fonteFinal = arquivosProcessados.some(a => a.fonte === 'ia') ? 'ia'
-            : (arquivosProcessados.some(a => a.fonte === 'regex') ? 'regex' : 'padrao');
-        const mensagens = { ia: '🤖 Extraído com IA', regex: '🔍 Extraído localmente', padrao: '📋 Template padrão' };
+            : (arquivosProcessados.some(a => a.fonte === 'regex') ? 'regex' : (isEdital ? 'edital' : 'padrao'));
+        const mensagens = { ia: '🤖 Extraído com IA', regex: '🔍 Extraído localmente', padrao: '📋 Template padrão', edital: '📄 Edital anexado (sem extração)' };
 
         res.json({
             success: true,
@@ -204,10 +215,15 @@ router.post('/extrair-campos', authenticateToken, isSuperAdmin, (req, res, next)
     }
 });
 
-// POST / - Criar modelo
 router.post('/', authenticateToken, isSuperAdmin, (req, res, next) => upload(req, res, next), async (req, res) => {
     try {
-        const { nomeModelo, descricao, anexos, requerAvaliacao, permiteMultiplasInscricoes } = req.body;
+        const {
+            nomeModelo, descricao, anexos, requerAvaliacao, permiteMultiplasInscricoes,
+            usarSistemaCotas, publicoLaudoCotas, labelLaudoCotas, laudoCotasObrigatorio,
+            anexosExtras, // 🔥
+            usarCategorias, labelCategorias, categorias, categoriaObrigatoria // 🔥 NOVO
+        } = req.body;
+
         if (!nomeModelo || !nomeModelo.trim()) return res.status(400).json({ success: false, error: 'Nome do modelo é obrigatório' });
 
         let anexosPayload = [];
@@ -215,16 +231,48 @@ router.post('/', authenticateToken, isSuperAdmin, (req, res, next) => upload(req
             try { anexosPayload = typeof anexos === 'string' ? JSON.parse(anexos) : anexos; }
             catch (e) { return res.status(400).json({ success: false, error: 'anexos inválido' }); }
         }
-
         anexosPayload = sanitizarAnexos(anexosPayload);
+
+        let extrasPayload = [];
+        if (anexosExtras) {
+            try { 
+                const parsed = typeof anexosExtras === 'string' ? JSON.parse(anexosExtras) : anexosExtras; 
+                if (Array.isArray(parsed)) {
+                    extrasPayload = parsed
+                        .filter(e => e && e.label && e.label.trim())
+                        .map(e => ({ label: e.label.trim(), obrigatorio: !!e.obrigatorio, ajuda: e.ajuda || '' }));
+                }
+            } catch (e) {}
+        }
+
+        let categoriasPayload = [];
+        if (categorias) {
+            try {
+                const parsed = typeof categorias === 'string' ? JSON.parse(categorias) : categorias;
+                if (Array.isArray(parsed)) {
+                    categoriasPayload = parsed
+                        .filter(c => c && c.label && c.label.trim())
+                        .map(c => ({ label: c.label.trim() }));
+                }
+            } catch (e) {}
+        }
 
         const novoModelo = new ModeloEvento({
             nomeModelo: nomeModelo.trim(),
             descricao: (descricao || '').trim(),
             anexos: anexosPayload,
+            anexosExtras: extrasPayload,
+            usarCategorias: usarCategorias === 'true' || usarCategorias === true,
+            labelCategorias: (labelCategorias || 'Categoria / Modalidade').trim(),
+            categorias: categoriasPayload,
+            categoriaObrigatoria: categoriaObrigatoria !== 'false' && categoriaObrigatoria !== false,
             criadoPor: req.userId,
             requerAvaliacao: requerAvaliacao === 'true' || requerAvaliacao === true,
-            permiteMultiplasInscricoes: permiteMultiplasInscricoes === 'true' || permiteMultiplasInscricoes === true
+            permiteMultiplasInscricoes: permiteMultiplasInscricoes === 'true' || permiteMultiplasInscricoes === true,
+            usarSistemaCotas: usarSistemaCotas === 'true' || usarSistemaCotas === true,
+            publicoLaudoCotas: ['professor', 'aluno', 'ambos'].includes(publicoLaudoCotas) ? publicoLaudoCotas : 'professor',
+            labelLaudoCotas: (labelLaudoCotas || 'Laudo Médico').trim(),
+            laudoCotasObrigatorio: laudoCotasObrigatorio !== 'false' && laudoCotasObrigatorio !== false
         });
         await novoModelo.save();
         res.status(201).json({ success: true, modelo: novoModelo });
@@ -233,19 +281,33 @@ router.post('/', authenticateToken, isSuperAdmin, (req, res, next) => upload(req
     }
 });
 
-// PUT /:id - Atualizar modelo
 router.put('/:id', authenticateToken, isSuperAdmin, (req, res, next) => upload(req, res, next), async (req, res) => {
     try {
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ success: false, error: 'ID inválido' });
         const modelo = await ModeloEvento.findById(req.params.id);
         if (!modelo) return res.status(404).json({ success: false, error: 'Modelo não encontrado' });
 
-        const { nomeModelo, descricao, anexos, requerAvaliacao, permiteMultiplasInscricoes } = req.body;
+        const {
+            nomeModelo, descricao, anexos, requerAvaliacao, permiteMultiplasInscricoes,
+            usarSistemaCotas, publicoLaudoCotas, labelLaudoCotas, laudoCotasObrigatorio,
+            anexosExtras,
+            usarCategorias, labelCategorias, categorias, categoriaObrigatoria // 🔥 NOVO
+        } = req.body;
+
         if (nomeModelo) modelo.nomeModelo = nomeModelo.trim();
         if (descricao !== undefined) modelo.descricao = descricao.trim();
         if (requerAvaliacao !== undefined) modelo.requerAvaliacao = requerAvaliacao === 'true' || requerAvaliacao === true;
         if (permiteMultiplasInscricoes !== undefined) {
             modelo.permiteMultiplasInscricoes = permiteMultiplasInscricoes === 'true' || permiteMultiplasInscricoes === true;
+        }
+
+        if (usarSistemaCotas !== undefined) modelo.usarSistemaCotas = usarSistemaCotas === 'true' || usarSistemaCotas === true;
+        if (publicoLaudoCotas !== undefined && ['professor', 'aluno', 'ambos'].includes(publicoLaudoCotas)) {
+            modelo.publicoLaudoCotas = publicoLaudoCotas;
+        }
+        if (labelLaudoCotas !== undefined) modelo.labelLaudoCotas = (labelLaudoCotas || 'Laudo Médico').trim();
+        if (laudoCotasObrigatorio !== undefined) {
+            modelo.laudoCotasObrigatorio = laudoCotasObrigatorio !== 'false' && laudoCotasObrigatorio !== false;
         }
 
         if (anexos) {
@@ -257,6 +319,32 @@ router.put('/:id', authenticateToken, isSuperAdmin, (req, res, next) => upload(r
             } catch (e) { return res.status(400).json({ success: false, error: 'anexos inválido' }); }
         }
 
+        if (anexosExtras) {
+            try {
+                const parsed = typeof anexosExtras === 'string' ? JSON.parse(anexosExtras) : anexosExtras;
+                if (Array.isArray(parsed)) {
+                    modelo.anexosExtras = parsed
+                        .filter(e => e && e.label && e.label.trim())
+                        .map(e => ({ label: e.label.trim(), obrigatorio: !!e.obrigatorio, ajuda: e.ajuda || '' }));
+                }
+            } catch (e) {}
+        }
+
+        if (usarCategorias !== undefined) modelo.usarCategorias = usarCategorias === 'true' || usarCategorias === true;
+        if (labelCategorias !== undefined) modelo.labelCategorias = (labelCategorias || 'Categoria / Modalidade').trim();
+        if (categoriaObrigatoria !== undefined) modelo.categoriaObrigatoria = categoriaObrigatoria !== 'false' && categoriaObrigatoria !== false;
+        
+        if (categorias) {
+            try {
+                const parsed = typeof categorias === 'string' ? JSON.parse(categorias) : categorias;
+                if (Array.isArray(parsed)) {
+                    modelo.categorias = parsed
+                        .filter(c => c && c.label && c.label.trim())
+                        .map(c => ({ label: c.label.trim() }));
+                }
+            } catch (e) {}
+        }
+
         await modelo.save();
         res.json({ success: true, modelo });
     } catch (error) {
@@ -264,7 +352,6 @@ router.put('/:id', authenticateToken, isSuperAdmin, (req, res, next) => upload(r
     }
 });
 
-// DELETE /:id
 router.delete('/:id', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ success: false, error: 'ID inválido' });
