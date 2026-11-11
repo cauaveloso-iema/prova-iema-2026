@@ -774,6 +774,17 @@ const connectToDatabase = async () => {
       logger.warn('⚠️ Erro ao iniciar cron de aniversários:', error.message);
     }
 
+    // 🔔 NOVO: Agendador de lembretes de visita (5 min antes do início)
+    try {
+      const lembretesVisita = require('./services/visita-lembretes-service');
+      lembretesVisita.iniciarAgendador(5, 60 * 1000); // 5 min antes, checa a cada 60s
+      const idTimer = lembretesVisita.getIntervalId?.();
+      if (idTimer) registrarTimer(idTimer);
+      logger.info('✅ Agendador de lembretes de visita iniciado (5 min antes)');
+    } catch (error) {
+      logger.warn('⚠️ Erro ao iniciar agendador de lembretes de visita:', error.message);
+    }
+
     let reconectando = false;
 
     mongoose.connection.on('disconnected', () => {

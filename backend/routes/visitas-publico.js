@@ -42,6 +42,129 @@ const paraObjectId = (id) => {
 };
 
 // ============================================
+// 🔔 NOTIFICAR: PROFESSOR ASSOCIADO + CRIADOR DO TERMO
+//   Dispara SOMENTE quando TODAS as assinaturas forem coletadas.
+// ============================================
+async function notificarTermoCompleto(termo) {
+  try {
+    const totalResponsaveis = (termo.responsaveis || []).length;
+    const totalAutorizados = (termo.responsaveis || []).filter(r => r.status === 'autorizado').length;
+    const totalAlunos = (termo.alunos || []).length;
+
+    if (totalResponsaveis === 0) {
+      return { notificado: false, motivo: 'Termo sem responsáveis' };
+    }
+    if (totalAutorizados < totalResponsaveis) {
+      console.log(
+        `⏳ Termo ${termo.codigo}: ${totalAutorizados}/${totalResponsaveis} assinaturas — aguardando`
+      );
+      return { notificado: false, motivo: 'Ainda faltam assinaturas' };
+    }
+
+    // ============================================
+    // 🎯 MONTAR LISTA ÚNICA DE DESTINATÁRIOS
+    //   - Quem criou o termo (criadoPor)
+    //   - Todos os professores vinculados (professores[].professorId)
+    // ============================================
+    const destinatariosSet = new Set();
+
+    if (termo.criadoPor) {
+      destinatariosSet.add(normalizarId(termo.criadoPor));
+    }
+
+    (termo.professores || []).forEach(p => {
+      const pid = normalizarId(p.professorId) || normalizarId(p._id);
+      if (pid) destinatariosSet.add(pid);
+    });
+
+    const destinatarios = Array.from(destinatariosSet).filter(Boolean);
+
+    if (destinatarios.length === 0) {
+      console.warn(`⚠️ Termo ${termo.codigo} sem destinatários válidos`);
+      return { notificado: false, motivo: 'Sem destinatários' };
+    }
+
+    console.log(
+      `🎉 Termo ${termo.codigo} 100% autorizado — notificando ${destinatarios.length} destinatário(s) ` +
+      `(${totalAlunos} aluno(s), ${totalResponsaveis} assinatura(s))`
+    );
+
+    // ============================================
+    // 📨 TÍTULO E MENSAGEM
+    // ============================================
+    const titulo = '✅ Termo Totalmente Autorizado';
+    const mensagem = `Todas as ${totalResponsaveis} assinatura(s) foram coletadas. ` +
+                     `${totalAlunos} aluno(s) confirmado(s) para "${termo.atividade}" (${termo.codigo}).`;
+
+    // ============================================
+    // 💾 1) NOTIFICAÇÃO NO BANCO (para cada destinatário)
+    // ============================================
+    const notificacoesCriadas = [];
+    for (const usuarioId of destinatarios) {
+      try {
+        const notificacao = new NotificacaoVisita({
+          usuarioId,
+          tipo: 'autorizacao',
+          titulo,
+          mensagem,
+          termoId: termo._id
+        });
+        await notificacao.save();
+        notificacoesCriadas.push(usuarioId);
+      } catch (err) {
+        console.warn(`⚠️ Erro ao salvar NotificacaoVisita para ${usuarioId}:`, err.message);
+      }
+    }
+
+    // ============================================
+    // 📱 2) PUSH ONESIGNAL (para cada destinatário)
+    // ============================================
+    const pushesEnviados = [];
+    try {
+      const OneSignalService = require('../services/onesignal-service');
+      const oneSignal = new OneSignalService();
+
+      const dadosPush = {
+        tipo: 'visita_autorizada_completa',
+        termoId: termo._id.toString(),
+        codigo: termo.codigo,
+        totalAlunos,
+        totalResponsaveis
+      };
+
+      for (const usuarioId of destinatarios) {
+        try {
+          const ok = await oneSignal.enviarPush(
+            usuarioId,
+            titulo,
+            mensagem,
+            dadosPush
+          );
+          if (ok) {
+            pushesEnviados.push(usuarioId);
+            console.log(`📱 Push enviado para ${usuarioId}`);
+          }
+        } catch (pushErr) {
+          console.warn(`⚠️ Erro no push para ${usuarioId}:`, pushErr.message);
+        }
+      }
+    } catch (serviceErr) {
+      console.warn('⚠️ OneSignalService indisponível:', serviceErr.message);
+    }
+
+    return {
+      notificado: notificacoesCriadas.length > 0 || pushesEnviados.length > 0,
+      destinatarios,
+      notificacoesCriadas: notificacoesCriadas.length,
+      pushesEnviados: pushesEnviados.length
+    };
+  } catch (error) {
+    console.error('❌ Erro em notificarTermoCompleto:', error.message);
+    return { notificado: false, erro: error.message };
+  }
+}
+
+// ============================================
 // 🔥 ASSINATURA PADRÃO DO GESTOR (FALLBACK)
 // ============================================
 let ASSINATURA_GESTOR_PADRAO_BASE64 = '';
@@ -771,6 +894,9 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
     
     console.log(`✅ Termo ${termo.codigo} autorizado por ${nome}`);
     
+    // ============================================
+    // 💾 LGPD
+    // ============================================
     try {
       await ConsentimentoLGPD.create({
         titular: {
@@ -799,35 +925,25 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
       console.warn('⚠️ Erro ao registrar consentimento LGPD:', lgpdErr.message);
     }
     
+    // ============================================
+    // 🔔 NOTIFICAÇÃO — PROFESSOR(ES) + CRIADOR
+    //    Somente quando TODAS as assinaturas forem coletadas
+    // ============================================
+    let resultadoNotificacao = { notificado: false };
     try {
-      const notificacao = new NotificacaoVisita({
-        usuarioId: termo.criadoPor,
-        tipo: 'autorizacao',
-        titulo: '✅ Visita Autorizada',
-        mensagem: `${nome} autorizou a visita de ${alunoNomeParaSalvar || 'Aluno'} - ${termo.codigo}`,
-        termoId: termo._id
-      });
-      await notificacao.save();
-      
-      try {
-        const OneSignalService = require('../services/onesignal-service');
-        const oneSignal = new OneSignalService();
-        await oneSignal.enviarPush(
-          termo.criadoPor,
-          '✅ Visita Autorizada',
-          `${alunoNomeParaSalvar || 'Aluno'} - ${termo.codigo}`,
-          { tipo: 'visita_autorizada', termoId: termo._id, codigo: termo.codigo }
-        );
-      } catch (pushError) {
-        console.warn('⚠️ Erro no push:', pushError.message);
-      }
-    } catch (notifError) {
-      console.warn('⚠️ Erro ao notificar:', notifError.message);
+      resultadoNotificacao = await notificarTermoCompleto(termo);
+    } catch (notifErr) {
+      console.warn('⚠️ Erro ao notificar professor(es)/criador:', notifErr.message);
     }
     
+    // ============================================
+    // RESPOSTA
+    // ============================================
     res.json({
       success: true,
       message: 'Visita autorizada com sucesso!',
+      notificacaoDisparada: resultadoNotificacao.notificado === true,
+      destinatariosNotificados: resultadoNotificacao.destinatarios || [],
       termo: {
         id: termo._id,
         codigo: termo.codigo,
@@ -909,17 +1025,31 @@ router.post('/recusar/:termoId', rateLimit(5, 10), async (req, res) => {
     termo.atualizarStatusGeral();
     await termo.save();
     
+    // Notificar recusa (criador + professores do termo)
     try {
-      const notificacao = new NotificacaoVisita({
-        usuarioId: termo.criadoPor,
-        tipo: 'recusa',
-        titulo: '❌ Visita Recusada',
-        mensagem: `A visita de ${alunoCorrespondente?.nome || 'Aluno'} foi recusada. Motivo: ${motivo || 'Não informado'}`,
-        termoId: termo._id
+      const destinatariosSet = new Set();
+      if (termo.criadoPor) destinatariosSet.add(normalizarId(termo.criadoPor));
+      (termo.professores || []).forEach(p => {
+        const pid = normalizarId(p.professorId) || normalizarId(p._id);
+        if (pid) destinatariosSet.add(pid);
       });
-      await notificacao.save();
+
+      for (const usuarioId of destinatariosSet) {
+        try {
+          const notificacao = new NotificacaoVisita({
+            usuarioId,
+            tipo: 'recusa',
+            titulo: '❌ Visita Recusada',
+            mensagem: `A visita de ${alunoCorrespondente?.nome || 'Aluno'} foi recusada. Motivo: ${motivo || 'Não informado'}`,
+            termoId: termo._id
+          });
+          await notificacao.save();
+        } catch (e) {
+          console.warn(`⚠️ Erro ao notificar recusa para ${usuarioId}:`, e.message);
+        }
+      }
     } catch (notifError) {
-      console.warn('⚠️ Erro ao notificar:', notifError.message);
+      console.warn('⚠️ Erro ao notificar recusa:', notifError.message);
     }
     
     res.json({ success: true, message: 'Visita recusada' });
@@ -960,7 +1090,7 @@ async function gerarQRCodeAlunoBase64(alunoId) {
 router.get('/termo-oficial/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { alunoId } = req.query; // 🔥 NOVO: filtro por aluno
+    const { alunoId } = req.query;
     
     console.log(`📄 [TERMO-OFICIAL] Termo: ${id} | Aluno: ${alunoId || 'TODOS'}`);
     
@@ -970,9 +1100,6 @@ router.get('/termo-oficial/:id', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Termo não encontrado' });
     }
     
-    // ============================================
-    // 🔥 SE VEIO alunoId → FILTRA APENAS ESSE ALUNO
-    // ============================================
     let termoParaImprimir = termo;
     let modoIndividual = false;
     let alunoFoco = null;
@@ -992,7 +1119,6 @@ router.get('/termo-oficial/:id', async (req, res) => {
         });
       }
       
-      // 🔥 Cria uma cópia do termo apenas com esse aluno
       alunoFoco = alunoEncontrado;
       termoParaImprimir = {
         ...termo,
@@ -1004,13 +1130,9 @@ router.get('/termo-oficial/:id', async (req, res) => {
       console.log(`   → Modo INDIVIDUAL: ${alunoEncontrado.nome}`);
     }
     
-    // ============================================
-    // VERIFICA SE TEM AUTORIZAÇÃO
-    // ============================================
     const responsaveisAutorizados = (termoParaImprimir.responsaveis || []).filter(r => {
       if (r.status !== 'autorizado') return false;
       
-      // Se modo individual, filtra o responsável do aluno também
       if (modoIndividual && alunoFoco) {
         const rId = normalizarId(r.alunoId);
         const aId = normalizarId(alunoFoco.alunoId);
@@ -1020,8 +1142,6 @@ router.get('/termo-oficial/:id', async (req, res) => {
       return true;
     });
     
-    // No modo individual, permite imprimir mesmo se ainda não autorizado
-    // No modo "todos", exige pelo menos 1 autorização
     if (!modoIndividual && responsaveisAutorizados.length === 0) {
       return res.status(400).json({ 
         success: false, 
@@ -1029,16 +1149,11 @@ router.get('/termo-oficial/:id', async (req, res) => {
       });
     }
     
-    // ============================================
-    // GERA O HTML
-    // ============================================
     let html;
     
     if (modoIndividual) {
-      // 🔥 Gera apenas 1 página (do aluno específico)
       html = await gerarPaginaTermoOficial(termoParaImprimir, alunoFoco, 1, 1);
     } else {
-      // Gera uma página por aluno (comportamento atual)
       html = await gerarHTMLTermoOficial(termoParaImprimir);
     }
     
@@ -1189,30 +1304,25 @@ async function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas)
 
   const alunoIdStr = normalizarId(aluno.alunoId) || normalizarId(aluno._id);
   
-  // Busca o responsável deste aluno
   let responsavelFinal = (termo.responsaveis || []).find(r => {
     const rId = normalizarId(r.alunoId);
     return rId && alunoIdStr && rId === alunoIdStr;
   });
   
-  // Fallback 1: por alunoNome
   if (!responsavelFinal && aluno.nome) {
     responsavelFinal = (termo.responsaveis || []).find(r => 
       r.alunoNome && r.alunoNome === aluno.nome
     );
   }
   
-  // Fallback 2: se só tem 1 aluno e 1 responsável
   if (!responsavelFinal && (termo.alunos || []).length === 1 && (termo.responsaveis || []).length === 1) {
     responsavelFinal = termo.responsaveis[0];
   }
   
-  // Fallback 3: pega qualquer autorizado
   if (!responsavelFinal) {
     responsavelFinal = (termo.responsaveis || []).find(r => r.status === 'autorizado');
   }
   
-  // Fallback 4: por índice
   if (!responsavelFinal) {
     const idxAluno = (termo.alunos || []).findIndex(a => 
       normalizarId(a.alunoId) === alunoIdStr
@@ -1222,7 +1332,6 @@ async function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas)
     }
   }
   
-  // Fallback 5: primeiro disponível
   if (!responsavelFinal && (termo.responsaveis || []).length > 0) {
     responsavelFinal = termo.responsaveis[0];
   }
@@ -1230,7 +1339,6 @@ async function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas)
   const nomeResponsavel = responsavelFinal?.nome || 'Aguardando responsável';
   const statusResponsavel = responsavelFinal?.status || 'pendente';
 
-  // Descriptografar assinatura
   let assinaturaResponsavel = '';
   try {
     if (responsavelFinal?.assinaturaBase64) {
@@ -1240,7 +1348,6 @@ async function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas)
     console.warn('⚠️ Erro ao descriptografar assinatura:', err.message);
   }
 
-  // Descriptografar CPF
   let cpfResponsavel = '';
   try {
     if (responsavelFinal?.cpf) {
@@ -1254,7 +1361,6 @@ async function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas)
     ? String(cpfResponsavel).replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
     : '—';
 
-  // Professores
   const professores = termo.professores || [];
   let professoresTexto = '';
   
@@ -1270,7 +1376,6 @@ async function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas)
     professoresTexto = '<span class="destaque">Professor(a)</span>';
   }
 
-  // Assinatura do gestor
   let assinaturaGestorDigital = '';
   try {
     if (termo.assinaturaGestor?.base64) {
@@ -1297,7 +1402,6 @@ async function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas)
     statusBadge = '<span class="badge pendente">⏳ Pendente</span>';
   }
 
-  // 🔥 GERAR QR CODE EM BASE64
   const alunoIdParaQR = aluno.alunoId || aluno._id;
   let qrCodeAlunoBase64 = '';
   

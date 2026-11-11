@@ -213,6 +213,11 @@ TermoVisitaSchema.index({ 'responsaveis.cpfHash': 1 });
 TermoVisitaSchema.index({ expiraEm: 1, anonimizado: 1 });
 TermoVisitaSchema.index({ turmas: 1 }); // 🆕 índice multi-turma
 
+// 🆕 ÍNDICE COMPOSTO OTIMIZADO PARA O AGENDADOR DE LEMBRETES
+// Usado por services/visita-lembretes-service.js:
+//   TermoVisita.find({ ativo: true, dataVisita: { $gte, $lt } })
+TermoVisitaSchema.index({ ativo: 1, dataVisita: 1 });
+
 // ============================================
 // MÉTODOS ESTÁTICOS
 // ============================================
