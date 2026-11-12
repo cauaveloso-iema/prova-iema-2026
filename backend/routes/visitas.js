@@ -329,7 +329,7 @@ router.get('/buscar-localizacao', authenticateToken, verificarPermissaoVisitas, 
 // CRUD TERMOS
 // ============================================
 
-// Listar todos os termos (🚀 OTIMIZADO)
+// Listar todos os termos (🚀 OTIMIZADO COM SELECT)
 router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, res) => {
   try {
     const { status, turma, search, page = 1, limit = 20 } = req.query;
@@ -370,10 +370,11 @@ router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, 
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
     // ============================================
-    // 🚀 OTIMIZAÇÃO: Busca + Contagem + Agregação em paralelo
+    // 🚀 OTIMIZAÇÃO: Busca + Contagem + Agregação em paralelo + SELECT
     // ============================================
     const [termosRaw, total, aggStats] = await Promise.all([
       TermoVisita.find(query)
+        .select('-responsaveis.assinaturaBase64 -responsaveis.cpf -responsaveis.rg -responsaveis.telefone -assinaturaGestor.base64')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit))
@@ -484,10 +485,13 @@ router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, 
   }
 });
 
-// Buscar termo por ID
+// Buscar termo por ID (🚀 OTIMIZADO COM SELECT)
 router.get('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (req, res) => {
   try {
-    const termo = await TermoVisita.findById(req.params.id).lean();
+    const termo = await TermoVisita.findById(req.params.id)
+      .select('-responsaveis.assinaturaBase64 -responsaveis.cpf -responsaveis.rg -responsaveis.telefone -assinaturaGestor.base64')
+      .lean();
+    
     if (!termo) return res.status(404).json({ success: false, error: 'Termo não encontrado' });
     
     const primeiroAluno = termo.alunos?.[0];
