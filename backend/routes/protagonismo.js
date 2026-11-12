@@ -34,8 +34,14 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
+// 🔥 CORRIGIDO: 'gestao_geral' liberado para o acompanhamento de tutoria
 const verificarProtagonismo = (req, res, next) => {
-  const allowedRoles = ['protagonismo', 'super_admin', 'admin'];
+  const allowedRoles = [
+    'protagonismo',
+    'super_admin',
+    'admin',
+    'gestao_geral'    // 👈 ADICIONADO
+  ];
   if (!allowedRoles.includes(req.userRole)) {
     return res.status(403).json({
       success: false,
@@ -639,7 +645,6 @@ const NOMES_MESES = [
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
 ];
 
-// 🔥 Buscar TODOS os perfis do banco
 router.get('/aniversarios/buscar-perfis', authenticateToken, verificarProtagonismo, async (req, res) => {
   try {
     const { q, limit = 1000 } = req.query;
@@ -844,8 +849,8 @@ router.post('/aniversarios', authenticateToken, verificarProtagonismo, async (re
         usuarioId: user._id,
         nome: user.nome,
         dataNascimento: dataObj,
-        mes: dataObj.getUTCMonth() + 1, // 🔥 Cálculo manual do mês
-        dia: dataObj.getUTCDate(),      // 🔥 Cálculo manual do dia
+        mes: dataObj.getUTCMonth() + 1,
+        dia: dataObj.getUTCDate(),
         email: user.email || email || '',
         telefone: user.telefone || telefone || '',
         turma: user.turma || turma || '',
@@ -879,8 +884,8 @@ router.post('/aniversarios', authenticateToken, verificarProtagonismo, async (re
     const aniversario = new Aniversario({
       nome: nome.trim(),
       dataNascimento: data,
-      mes: data.getUTCMonth() + 1, // 🔥 Cálculo manual do mês
-      dia: data.getUTCDate(),      // 🔥 Cálculo manual do dia
+      mes: data.getUTCMonth() + 1,
+      dia: data.getUTCDate(),
       email: email || '',
       telefone: telefone || '',
       turma: turma || '',
@@ -911,8 +916,8 @@ router.put('/aniversarios/:id', authenticateToken, verificarProtagonismo, async 
     if (dataNascimento) {
       const data = new Date(dataNascimento);
       aniversario.dataNascimento = data;
-      aniversario.mes = data.getUTCMonth() + 1; // 🔥 Cálculo manual do mês
-      aniversario.dia = data.getUTCDate();      // 🔥 Cálculo manual do dia
+      aniversario.mes = data.getUTCMonth() + 1;
+      aniversario.dia = data.getUTCDate();
     }
     if (email !== undefined) aniversario.email = email;
     if (telefone !== undefined) aniversario.telefone = telefone;
@@ -1075,7 +1080,7 @@ router.get('/estatisticas', authenticateToken, verificarProtagonismo, async (req
         totalVotos,
         totalAniversarios,
         inscricoesAbertas: config.inscricoesClubesAbertas,
-        eleicaoAberta: config.eleicaoLiderAberta
+        eleicaoLiderAberta: config.eleicaoLiderAberta
       },
       topClubes
     });
