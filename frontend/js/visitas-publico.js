@@ -1306,4 +1306,4 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => visitasPublico.init());
 } else {
     visitasPublico.init();
-}
+} 

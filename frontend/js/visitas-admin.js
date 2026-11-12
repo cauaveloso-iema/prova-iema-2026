@@ -26,7 +26,7 @@ class VisitasAdmin {
         
         // Estado do formulário (múltipla seleção)
         this.formData = {
-            turmasSelecionadas: [],       // 🆕 múltiplas turmas
+            turmasSelecionadas: [],
             alunosSelecionados: [],
             professoresSelecionados: [],
             localizacao: null
@@ -41,6 +41,40 @@ class VisitasAdmin {
             lastX: 0,
             lastY: 0
         };
+    }
+
+    // ============================================
+    // HELPERS DE HORÁRIO (input type="time")
+    // ============================================
+
+    /**
+     * Extrai o horário de INÍCIO de uma string tipo "14:00 às 17:00" ou "14hrs às 17hrs".
+     * Retorna "HH:MM" ou "" se não encontrar.
+     */
+    extrairHoraInicio(horario) {
+        if (!horario) return '';
+        const m = String(horario).match(/(\d{1,2})\s*(?:[:h]|hs|hrs|hts|horas?|hora)\s*(\d{1,2})?/);
+        if (!m) return '';
+        const h = parseInt(m[1], 10);
+        const min = m[2] !== undefined ? parseInt(m[2], 10) : 0;
+        if (h < 0 || h > 23 || min < 0 || min > 59) return '';
+        return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+    }
+
+    /**
+     * Extrai o horário de FIM (o segundo horário da string).
+     * Retorna "HH:MM" ou "" se não encontrar.
+     */
+    extrairHoraFim(horario) {
+        if (!horario) return '';
+        const matches = String(horario).matchAll(/(\d{1,2})\s*(?:[:h]|hs|hrs|hts|horas?|hora)\s*(\d{1,2})?/g);
+        const arr = Array.from(matches);
+        if (arr.length < 2) return '';
+        const m = arr[1];
+        const h = parseInt(m[1], 10);
+        const min = m[2] !== undefined ? parseInt(m[2], 10) : 0;
+        if (h < 0 || h > 23 || min < 0 || min > 59) return '';
+        return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
     }
 
     // ============================================
@@ -466,12 +500,10 @@ class VisitasAdmin {
             ? `<span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 20px; font-size: 10px; margin-left: 6px;">+${termo.totalProfessores - 1}</span>`
             : '';
         
-        // 🆕 Badge de múltiplas turmas
         const badgeTurmas = (termo.totalTurmas && termo.totalTurmas > 1)
             ? `<span style="background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 20px; font-size: 10px; margin-left: 6px;"><i class="fas fa-school"></i> ${termo.totalTurmas} turmas</span>`
             : '';
         
-        // 🆕 Turmas exibidas
         const turmasTexto = (termo.turmas && termo.turmas.length > 0)
             ? termo.turmas.slice(0, 2).join(', ') + (termo.turmas.length > 2 ? ` +${termo.turmas.length - 2}` : '')
             : (termo.alunoTurma || 'N/A');
@@ -601,12 +633,10 @@ class VisitasAdmin {
             ? `<span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 30px; font-size: 10px; margin-left: 6px;">+${termo.totalProfessores - 1} prof.</span>`
             : '';
         
-        // 🆕 Badge de múltiplas turmas
         const badgeTurmas = (termo.totalTurmas && termo.totalTurmas > 1)
             ? `<span style="background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 30px; font-size: 10px; margin-left: 6px;"><i class="fas fa-school"></i> ${termo.totalTurmas} turmas</span>`
             : '';
         
-        // 🆕 Turmas exibidas
         const turmasTexto = (termo.turmas && termo.turmas.length > 0)
             ? termo.turmas.slice(0, 2).join(', ') + (termo.turmas.length > 2 ? ` +${termo.turmas.length - 2}` : '')
             : (termo.alunoTurma || 'N/A');
@@ -770,7 +800,6 @@ class VisitasAdmin {
     }
 
     renderizarFormularioTermo(termo = null) {
-        // 🆕 Carrega turmas do termo (multi-turma com fallback)
         if (termo) {
             const turmasDoTermo = (termo.turmas && termo.turmas.length > 0)
                 ? [...termo.turmas]
@@ -790,6 +819,10 @@ class VisitasAdmin {
             this.formData.professoresSelecionados = [];
             this.formData.localizacao = null;
         }
+
+        // 🆕 Horário atual (para edição): separa início e fim
+        const horarioInicioValue = this.extrairHoraInicio(termo?.horario) || '';
+        const horarioFimValue = this.extrairHoraFim(termo?.horario) || '';
         
         return `
             <div class="visita-modal-body">
@@ -817,7 +850,6 @@ class VisitasAdmin {
                             </span>
                         </div>
 
-                        <!-- 🆕 SELEÇÃO MÚLTIPLA DE TURMAS -->
                         <div class="visita-form-row">
                             <div class="visita-form-group full-width">
                                 <label>
@@ -858,7 +890,6 @@ class VisitasAdmin {
                             </div>
                         </div>
 
-                        <!-- FILTRO POR CURSO -->
                         <div class="visita-form-row">
                             <div class="visita-form-group">
                                 <label><i class="fas fa-book"></i> Filtrar por Curso (opcional)</label>
@@ -914,7 +945,6 @@ class VisitasAdmin {
                             </div>
                         </div>
 
-                        <!-- CAMPO DE DESCRIÇÃO DA ATIVIDADE -->
                         <div class="visita-form-row">
                             <div class="visita-form-group full-width">
                                 <label><i class="fas fa-align-left"></i> Descrição da Atividade</label>
@@ -943,9 +973,21 @@ class VisitasAdmin {
                             </div>
                             <div class="visita-form-group">
                                 <label><i class="fas fa-clock"></i> Horário <span class="required">*</span></label>
-                                <input type="text" id="formHorario" class="form-input" 
-                                    placeholder="Ex: 14:00 às 17:00"
-                                    value="${termo?.horario || ''}">
+                                <div style="display: flex; gap: 8px; align-items: flex-end;">
+                                    <div style="flex: 1;">
+                                        <small style="display: block; font-size: 11px; color: #6b7280; margin-bottom: 4px;">Início</small>
+                                        <input type="time" id="formHorarioInicio" class="form-input" 
+                                            value="${horarioInicioValue}"
+                                            style="width: 100%;">
+                                    </div>
+                                    <span style="color: #9ca3af; padding-bottom: 12px;">às</span>
+                                    <div style="flex: 1;">
+                                        <small style="display: block; font-size: 11px; color: #6b7280; margin-bottom: 4px;">Fim</small>
+                                        <input type="time" id="formHorarioFim" class="form-input" 
+                                            value="${horarioFimValue}"
+                                            style="width: 100%;">
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -1068,7 +1110,7 @@ class VisitasAdmin {
     }
 
     // ============================================
-    // 🆕 CHIPS DE TURMAS
+    // CHIPS DE TURMAS
     // ============================================
     renderizarChipsTurmas() {
         if (this.formData.turmasSelecionadas.length === 0) {
@@ -1115,10 +1157,7 @@ class VisitasAdmin {
         this.formData.turmasSelecionadas.push(turma);
         select.value = '';
         this.atualizarChipsTurmas();
-        
-        // Recarrega alunos de todas as turmas
         this.buscarAlunos();
-        
         this.showToast(`✅ Turma "${turma}" adicionada`, 'success');
     }
 
@@ -1127,8 +1166,6 @@ class VisitasAdmin {
         if (idx >= 0) {
             this.formData.turmasSelecionadas.splice(idx, 1);
             this.atualizarChipsTurmas();
-            
-            // Remove alunos que pertencem apenas a essa turma
             this.buscarAlunos();
         }
     }
@@ -1157,7 +1194,6 @@ class VisitasAdmin {
             hidden.value = JSON.stringify(this.formData.turmasSelecionadas);
         }
         
-        // Atualiza select removendo turmas já adicionadas
         const select = document.getElementById('formTurmaSelect');
         if (select) {
             select.innerHTML = `
@@ -1194,7 +1230,6 @@ class VisitasAdmin {
             `;
         }
         
-        // Agrupa por turma
         const porTurma = {};
         this.alunos.forEach(aluno => {
             const turma = aluno.turma || 'Sem turma';
@@ -1413,7 +1448,6 @@ class VisitasAdmin {
         
         setTimeout(() => this.inicializarAssinaturaGestor(), 200);
         
-        // Se editando ou já tem turmas selecionadas, carrega alunos
         if (this.formData.turmasSelecionadas.length > 0) {
             setTimeout(() => this.buscarAlunos(), 300);
         }
@@ -1469,7 +1503,6 @@ class VisitasAdmin {
         const curso = document.getElementById('formCurso')?.value;
         const busca = document.getElementById('formBuscaAluno')?.value?.toLowerCase() || '';
         
-        // 🆕 Usa TODAS as turmas selecionadas
         if (this.formData.turmasSelecionadas.length === 0) {
             this.alunos = [];
             this.atualizarListaAlunosSelecao();
@@ -1494,7 +1527,6 @@ class VisitasAdmin {
                 
                 this.alunos = alunos;
                 
-                // Limpa seleção de alunos que não estão mais presentes
                 const idsValidos = new Set(alunos.map(a => a.id.toString()));
                 this.formData.alunosSelecionados = this.formData.alunosSelecionados
                     .filter(id => idsValidos.has(id));
@@ -1610,11 +1642,23 @@ class VisitasAdmin {
             const atividade = document.getElementById('formAtividade')?.value;
             const descricaoAtividade = document.getElementById('formDescricaoAtividade')?.value || '';
             const periodo = document.getElementById('formPeriodo')?.value;
-            const horario = document.getElementById('formHorario')?.value;
             const local = document.getElementById('formLocal')?.value;
             const dataVisita = document.getElementById('formDataVisita')?.value;
             const cidade = document.getElementById('formCidade')?.value;
             const localizacaoJSON = document.getElementById('formLocalizacaoJSON')?.value;
+
+            // 🆕 HORÁRIO — monta a partir dos dois <input type="time">
+            const horarioInicio = document.getElementById('formHorarioInicio')?.value; // "14:00"
+            const horarioFim = document.getElementById('formHorarioFim')?.value;       // "17:00"
+
+            let horario = '';
+            if (horarioInicio && horarioFim) {
+                horario = `${horarioInicio} às ${horarioFim}`;
+            } else if (horarioInicio) {
+                horario = horarioInicio;
+            } else if (horarioFim) {
+                horario = horarioFim;
+            }
             
             // ============ VALIDAÇÕES ============
             if (this.formData.turmasSelecionadas.length === 0) {
@@ -1628,7 +1672,11 @@ class VisitasAdmin {
             }
             if (!atividade) return this.showToast('❌ Informe a atividade', 'error');
             if (!periodo) return this.showToast('❌ Selecione o período', 'error');
-            if (!horario) return this.showToast('❌ Informe o horário', 'error');
+            if (!horarioInicio) return this.showToast('❌ Informe o horário de início', 'error');
+            if (!horarioFim) return this.showToast('❌ Informe o horário de término', 'error');
+            if (horarioInicio >= horarioFim) {
+                return this.showToast('❌ O horário de término deve ser depois do início', 'error');
+            }
             if (!local) return this.showToast('❌ Informe o local', 'error');
             if (!dataVisita) return this.showToast('❌ Informe a data', 'error');
             
@@ -1643,12 +1691,11 @@ class VisitasAdmin {
                 atividade,
                 descricaoAtividade,
                 periodo,
-                horario,
+                horario,              // 👈 "14:00 às 17:00"
                 local,
                 localizacao,
                 dataVisita,
                 cidade: cidade || 'São Luís'
-                // 🆕 turmas são calculadas no backend a partir dos alunos
             };
             
             const url = termoId 
@@ -1710,7 +1757,6 @@ class VisitasAdmin {
                 ? new Date(t.dataVisita).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
                 : 'N/A';
             
-            // 🆕 Turmas do termo
             const turmasDoTermo = (t.turmas && t.turmas.length > 0)
                 ? t.turmas
                 : (t.turmaPrincipal ? [t.turmaPrincipal] : []);
@@ -2486,4 +2532,4 @@ class VisitasAdmin {
 const visitasAdmin = new VisitasAdmin();
 window.visitasAdmin = visitasAdmin;
 
-console.log('✅ visitas-admin.js carregado (v2.1 - multi-turma)');
+console.log('✅ visitas-admin.js carregado (v3.0 - horário com input time)');

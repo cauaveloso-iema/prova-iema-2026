@@ -49,6 +49,36 @@ function extrairTurmasCursos(alunosData) {
 }
 
 // ============================================
+// 🆕 HELPER — normaliza horário recebido do frontend
+//   Aceita: "14:00", "14:00 às 17:00", "14:00 - 17:00", "14:00às17:00"
+//   Retorna SEMPRE "HH:MM às HH:MM" (ou "HH:MM" se só veio um)
+//   Se não conseguir, retorna null (frontend deve validar antes)
+// ============================================
+function normalizarHorario(horario) {
+  if (!horario) return null;
+  const texto = String(horario).trim();
+  if (!texto) return null;
+
+  // Extrai todos os pares HH:MM
+  const matches = [...texto.matchAll(/(\d{1,2})\s*:\s*(\d{2})/g)];
+  if (matches.length === 0) return null;
+
+  const horarios = matches.map(m => {
+    const h = parseInt(m[1], 10);
+    const min = parseInt(m[2], 10);
+    if (h < 0 || h > 23 || min < 0 || min > 59) return null;
+    return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+  }).filter(Boolean);
+
+  if (horarios.length === 0) return null;
+  if (horarios.length === 1) return horarios[0];
+
+  const [inicio, ...rest] = horarios;
+  const fim = rest[rest.length - 1];
+  return `${inicio} às ${fim}`;
+}
+
+// ============================================
 // MIDDLEWARES
 // ============================================
 const authenticateToken = (req, res, next) => {
@@ -115,7 +145,7 @@ router.get('/health', (req, res) => {
     success: true,
     status: 'online',
     service: 'Autorizacao de Visitas',
-    versao: '2.1-multi-turma',
+    versao: '3.0-horario-time',
     _debug: {
       hojeBR: getDataHojeBR(),
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -184,7 +214,6 @@ router.get('/alunos-por-turma', authenticateToken, verificarPermissaoVisitas, as
     
     let query = { role: 'aluno', ativo: true };
     
-    // 🆕 Suporte a múltiplas turmas (separadas por vírgula)
     const listaTurmas = (turmas || turma || '')
       .split(',')
       .map(t => t.trim())
@@ -311,7 +340,6 @@ router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, 
       query.status = status;
     }
     
-    // 🆕 Filtro por turma considera tanto turmaPrincipal quanto turmas[]
     if (turma && turma !== 'todas') {
       query.$or = [
         { turmaPrincipal: turma },
@@ -328,7 +356,6 @@ router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, 
         { atividade: { $regex: search, $options: 'i' } }
       ];
       
-      // Combina com filtro de turma se existir
       if (query.$or) {
         query.$and = [
           { $or: query.$or },
@@ -351,7 +378,6 @@ router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, 
       TermoVisita.countDocuments(query)
     ]);
     
-    // Normalizar
     const termos = termosRaw.map(t => {
       const primeiroAluno = t.alunos?.[0];
       const nomeAluno = t.alunos?.length > 1 
@@ -363,7 +389,6 @@ router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, 
         ? `${primeiroProf?.nome || 'Professor'} + ${t.professores.length - 1}`
         : (primeiroProf?.nome || 'Professor');
       
-      // 🆕 Turmas (com fallback para turmaPrincipal)
       const turmasDoTermo = (t.turmas && t.turmas.length > 0)
         ? t.turmas
         : (t.turmaPrincipal ? [t.turmaPrincipal] : []);
@@ -400,7 +425,6 @@ router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, 
         status: t.status,
         statusData: t.statusData,
         
-        // Responsáveis — dados sensíveis NÃO são enviados na listagem
         responsaveis: (t.responsaveis || []).map(r => ({
           alunoId: r.alunoId,
           alunoNome: r.alunoNome,
@@ -453,7 +477,6 @@ router.get('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (r
     const primeiroAluno = termo.alunos?.[0];
     const primeiroProf = termo.professores?.[0];
     
-    // 🆕 Turmas (com fallback)
     const turmasDoTermo = (termo.turmas && termo.turmas.length > 0)
       ? termo.turmas
       : (termo.turmaPrincipal ? [termo.turmaPrincipal] : []);
@@ -494,7 +517,6 @@ router.get('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (r
       status: termo.status,
       statusData: termo.statusData,
       
-      // Responsáveis COM mascaramento (CPF/RG/telefone)
       responsaveis: (termo.responsaveis || []).map(r => ({
         alunoId: r.alunoId,
         alunoNome: r.alunoNome,
@@ -536,7 +558,7 @@ router.post('/termos', authenticateToken, verificarPermissaoVisitas, async (req,
     const {
       alunos,
       atividade,
-      descricaoAtividade,   // 🆕
+      descricaoAtividade,
       professores,
       periodo,
       horario,
@@ -558,10 +580,18 @@ router.post('/termos', authenticateToken, verificarPermissaoVisitas, async (req,
     if (!atividade || !periodo || !horario || !local || !dataVisita) {
       return res.status(400).json({ success: false, error: 'Preencha todos os campos obrigatórios' });
     }
+
+    // 🆕 Normaliza e valida o horário — agora deve ser "HH:MM às HH:MM"
+    const horarioNormalizado = normalizarHorario(horario);
+    if (!horarioNormalizado) {
+      return res.status(400).json({
+        success: false,
+        error: 'Horário inválido. Use o formato "HH:MM às HH:MM" (ex: "14:00 às 17:00").'
+      });
+    }
     
-    console.log(`📝 Criando termo: ${alunos.length} aluno(s), ${professores.length} professor(es)`);
+    console.log(`📝 Criando termo: ${alunos.length} aluno(s), ${professores.length} professor(es) | horário: ${horarioNormalizado}`);
     
-    // Buscar dados dos alunos
     const alunosData = await User.find({ 
       _id: { $in: alunos },
       role: 'aluno'
@@ -571,7 +601,6 @@ router.post('/termos', authenticateToken, verificarPermissaoVisitas, async (req,
       return res.status(404).json({ success: false, error: 'Nenhum aluno válido encontrado' });
     }
     
-    // Buscar dados dos professores
     const professoresData = await User.find({
       _id: { $in: professores },
       role: 'professor'
@@ -581,20 +610,16 @@ router.post('/termos', authenticateToken, verificarPermissaoVisitas, async (req,
       return res.status(404).json({ success: false, error: 'Nenhum professor válido encontrado' });
     }
     
-    // 🆕 Extrair múltiplas turmas/cursos automaticamente dos alunos
     const { turmas, cursos, turmaPrincipal, cursoPrincipal } = extrairTurmasCursos(alunosData);
     
-    // Gerar código único
     const codigo = await TermoVisita.gerarCodigo();
     
-    // Montar array de responsáveis
     const responsaveisIniciais = alunosData.map(aluno => ({
       alunoId: aluno._id,
       alunoNome: aluno.nome,
       status: 'pendente'
     }));
     
-    // Criar termo
     const termo = new TermoVisita({
       codigo,
       
@@ -608,14 +633,13 @@ router.post('/termos', authenticateToken, verificarPermissaoVisitas, async (req,
       })),
       totalAlunos: alunosData.length,
       
-      // 🆕 Multi-turma
       turmas,
       cursos,
       turmaPrincipal,
       cursoPrincipal,
       
       atividade: atividade.trim(),
-      descricaoAtividade: (descricaoAtividade || '').trim(),   // 🆕
+      descricaoAtividade: (descricaoAtividade || '').trim(),
       
       professores: professoresData.map(p => ({
         professorId: p._id,
@@ -625,12 +649,11 @@ router.post('/termos', authenticateToken, verificarPermissaoVisitas, async (req,
       })),
       
       periodo,
-      horario,
+      horario: horarioNormalizado,   // 👈 sempre "HH:MM às HH:MM"
       
       local: local.trim(),
       localizacao: localizacao || {},
       
-      // 🆕 Data em BRT (meio-dia) para evitar virada de dia
       dataVisita: meioDiaBR(dataVisita),
       cidade: cidade || 'São Luís',
       
@@ -642,9 +665,8 @@ router.post('/termos', authenticateToken, verificarPermissaoVisitas, async (req,
     
     await termo.save();
     
-    console.log(`✅ Termo criado: ${codigo} | Turmas: ${turmas.join(', ')}`);
+    console.log(`✅ Termo criado: ${codigo} | Turmas: ${turmas.join(', ')} | Horário: ${horarioNormalizado}`);
     
-    // Criar notificação
     try {
       const notificacao = new NotificacaoVisita({
         usuarioId: req.userId,
@@ -676,7 +698,6 @@ router.put('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (r
     const { id } = req.params;
     const updates = req.body;
     
-    // Campos que NÃO podem ser atualizados diretamente
     delete updates.codigo;
     delete updates.responsaveis;
     delete updates.assinaturaGestor;
@@ -686,7 +707,6 @@ router.put('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (r
     const termo = await TermoVisita.findById(id);
     if (!termo) return res.status(404).json({ success: false, error: 'Termo não encontrado' });
     
-    // Se veio array de alunos
     if (updates.alunos && Array.isArray(updates.alunos)) {
       const alunosData = await User.find({
         _id: { $in: updates.alunos },
@@ -703,14 +723,12 @@ router.put('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (r
       }));
       termo.totalAlunos = alunosData.length;
       
-      // 🆕 Recalcular múltiplas turmas/cursos
       const { turmas, cursos, turmaPrincipal, cursoPrincipal } = extrairTurmasCursos(alunosData);
       termo.turmas = turmas;
       termo.cursos = cursos;
       termo.turmaPrincipal = turmaPrincipal;
       termo.cursoPrincipal = cursoPrincipal;
       
-      // Manter responsáveis existentes, adicionar novos
       const responsaveisExistentes = new Map(
         (termo.responsaveis || []).map(r => [r.alunoId?.toString(), r])
       );
@@ -725,7 +743,6 @@ router.put('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (r
       });
     }
     
-    // Se veio array de professores
     if (updates.professores && Array.isArray(updates.professores)) {
       const professoresData = await User.find({
         _id: { $in: updates.professores },
@@ -740,20 +757,30 @@ router.put('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (r
       }));
     }
     
-    // Outros campos
     if (updates.atividade) termo.atividade = updates.atividade.trim();
-    if (updates.descricaoAtividade !== undefined) termo.descricaoAtividade = (updates.descricaoAtividade || '').trim();   // 🆕
+    if (updates.descricaoAtividade !== undefined) termo.descricaoAtividade = (updates.descricaoAtividade || '').trim();
     if (updates.periodo) termo.periodo = updates.periodo;
-    if (updates.horario) termo.horario = updates.horario;
+
+    // 🆕 Normaliza e valida o horário (se foi enviado)
+    if (updates.horario !== undefined) {
+      const horarioNormalizado = normalizarHorario(updates.horario);
+      if (!horarioNormalizado) {
+        return res.status(400).json({
+          success: false,
+          error: 'Horário inválido. Use o formato "HH:MM às HH:MM" (ex: "14:00 às 17:00").'
+        });
+      }
+      termo.horario = horarioNormalizado;
+    }
+
     if (updates.local) termo.local = updates.local.trim();
     if (updates.localizacao) termo.localizacao = updates.localizacao;
-    // 🆕 Data em BRT (meio-dia) para evitar virada de dia
     if (updates.dataVisita) termo.dataVisita = meioDiaBR(updates.dataVisita);
     if (updates.cidade) termo.cidade = updates.cidade;
     
     await termo.save();
     
-    console.log(`✏️ Termo ${termo.codigo} atualizado | Turmas: ${(termo.turmas || []).join(', ')}`);
+    console.log(`✏️ Termo ${termo.codigo} atualizado | Turmas: ${(termo.turmas || []).join(', ')} | Horário: ${termo.horario}`);
     
     res.json({
       success: true,
@@ -818,7 +845,6 @@ router.put('/configuracao', authenticateToken, verificarPermissaoVisitas, async 
     const config = await ConfiguracaoVisita.getConfig();
     
     if (typeof visitasAbertas === 'boolean') config.visitasAbertas = visitasAbertas;
-    // 🆕 Datas em BRT (meio-dia)
     if (dataAbertura !== undefined) config.dataAbertura = dataAbertura ? meioDiaBR(dataAbertura) : null;
     if (dataFechamento !== undefined) config.dataFechamento = dataFechamento ? meioDiaBR(dataFechamento) : null;
     if (avisoPublico !== undefined) config.avisoPublico = avisoPublico;
@@ -845,7 +871,6 @@ router.get('/estatisticas', authenticateToken, verificarPermissaoVisitas, async 
       TermoVisita.countDocuments({ status: 'recusado' })
     ]);
     
-    // 🆕 Estatísticas por turma (unwinding turmas[])
     const porTurma = await TermoVisita.aggregate([
       { $match: { ativo: true } },
       { 
