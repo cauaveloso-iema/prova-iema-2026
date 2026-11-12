@@ -4826,40 +4826,94 @@ function finalizarAposSucesso() {
 }
 
 function limparTela() {
+    // ==========================================
+    // 1) Reset da área individual
+    // ==========================================
     safeGet('alunoInfo').style.display = 'none';
     safeGet('formRegistro').style.display = 'none';
     currentAluno = null;
     currentAtendimento = null;
     __tiposSelecionados = [];
     tipoTarefaSelecionado = null;
-    
+
+    // ==========================================
+    // 2) Reset do ATENDIMENTO COLETIVO
+    //    (checkbox, tela de captura, botão e chips)
+    // ==========================================
     const checkColetivo = safeGet('supervisaoAtendimentoColetivo');
     if (checkColetivo) checkColetivo.checked = false;
-    const containerColetivo = safeGet('containerAlunosColetivo');
-    if (containerColetivo) containerColetivo.style.display = 'none';
+
+    const telaCaptura = safeGet('telaCapturaColetivo');
+    if (telaCaptura) telaCaptura.style.display = 'none';
+
+    // Restaura o botão "Concluir Leitura" ao estado original
+    const btnConcluir = document.querySelector(
+        '#telaCapturaColetivo .btn-success, #telaCapturaColetivo .btn-outline-primary'
+    );
+    if (btnConcluir) {
+        btnConcluir.innerHTML = '<i class="fas fa-check-circle"></i> Concluir Leitura';
+        btnConcluir.classList.remove('btn-outline-primary');
+        btnConcluir.classList.add('btn-success');
+        btnConcluir.onclick = concluirCapturaColetivo;
+    }
+
+    // Limpa a lista de alunos do coletivo e re-renderiza os chips
     __alunosColetivo = [];
     renderizarAlunosColetivo();
 
+    // Sincroniza o aviso "Nenhum aluno selecionado ainda"
+    const avisoColetivo = safeGet('avisoColetivoVazio');
+    if (avisoColetivo) avisoColetivo.style.display = 'block';
+
+    // ==========================================
+    // 3) Reset da sessão de assinatura do responsável
+    // ==========================================
     const sessaoId = estadoSessaoAssinatura.supervisao.sessaoId;
-    if (sessaoId) fetch(`/api/sessoes-assinatura/${sessaoId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }).catch(e => {});
+    if (sessaoId) {
+        fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        }).catch(e => console.warn(e));
+    }
     pararPollingAssinatura();
+
     estadoSessaoAssinatura.supervisao.sessaoId = null;
     estadoSessaoAssinatura.supervisao.assinaturaCapturada = null;
     estadoSessaoAssinatura.supervisao.qrCodeDataUrl = null;
-    
-    const check = safeGet('supervisaoNecessitaAssinatura');
-    if (check) check.checked = false;
-    
-    const bloco = safeGet('supervisaoBlocoAssinaturaInfo');
-    if (bloco) { bloco.style.display = 'none'; bloco.innerHTML = ''; }
-    
+
+    const checkAssinatura = safeGet('supervisaoNecessitaAssinatura');
+    if (checkAssinatura) checkAssinatura.checked = false;
+
+    const blocoAssinatura = safeGet('supervisaoBlocoAssinaturaInfo');
+    if (blocoAssinatura) {
+        blocoAssinatura.style.display = 'none';
+        blocoAssinatura.innerHTML = '';
+    }
+
+    // Fecha o modal de assinatura, se estiver aberto
+    const modalAssinaturaQR = safeGet('modalAssinaturaQR');
+    if (modalAssinaturaQR) {
+        const modal = bootstrap.Modal.getInstance(modalAssinaturaQR);
+        if (modal) modal.hide();
+        setTimeout(() => modalAssinaturaQR.remove(), 300);
+    }
+
+    // ==========================================
+    // 4) Reset dos participantes do atendimento
+    // ==========================================
     limparParticipantesCompleto();
 
-    // Restaura os textos do card manual
+    // ==========================================
+    // 5) Restaura os textos do modo manual
+    // ==========================================
     const tituloManual = safeGet('tituloModoManual');
     const subtituloManual = safeGet('subtituloModoManual');
-    if (tituloManual) tituloManual.innerHTML = '<i class="fas fa-users me-2"></i> Selecionar Aluno por Turma';
-    if (subtituloManual) subtituloManual.innerHTML = '<i class="fas fa-info-circle"></i> Selecione uma turma e clique no aluno para atendê-lo diretamente.';
+    if (tituloManual) {
+        tituloManual.innerHTML = '<i class="fas fa-users me-2"></i> Selecionar Aluno por Turma';
+    }
+    if (subtituloManual) {
+        subtituloManual.innerHTML = '<i class="fas fa-info-circle"></i> Selecione uma turma e clique no aluno para atendê-lo diretamente.';
+    }
 }
 
 function reiniciarScannerAutomatico() {
@@ -7387,37 +7441,60 @@ function toggleAtendimentoColetivo() {
     const telaCaptura = safeGet('telaCapturaColetivo');
     const formRegistro = safeGet('formRegistro');
     const alunoInfo = safeGet('alunoInfo');
-    
+
     if (!check) return;
 
+    // Sempre restaura o botão para o estado inicial
+    const btnConcluir = document.querySelector('#telaCapturaColetivo .btn-success, #telaCapturaColetivo .btn-outline-primary');
+    if (btnConcluir) {
+        btnConcluir.innerHTML = '<i class="fas fa-check-circle"></i> Concluir Leitura';
+        btnConcluir.classList.remove('btn-outline-primary');
+        btnConcluir.classList.add('btn-success');
+        btnConcluir.onclick = concluirCapturaColetivo;
+    }
+
     if (check.checked) {
-        // Esconde formulários de atendimento
+        // Esconde formulários individuais
         if (formRegistro) formRegistro.style.display = 'none';
         if (alunoInfo) alunoInfo.style.display = 'none';
         currentAluno = null;
-        
-        // Mostra a tela de captura
+
+        // MOSTRA a tela de captura (é ela quem exibe os chips)
         if (telaCaptura) telaCaptura.style.display = 'block';
-        
-        // Limpa lista e reseta
+
+        // Reset da lista
         __alunosColetivo = [];
         renderizarAlunosColetivo();
-        
-        // Atualiza textos se estiver no modo manual
+
+        const aviso = safeGet('avisoColetivoVazio');
+        if (aviso) aviso.style.display = 'block';
+
+        // Atualiza textos do modo manual
         const tituloManual = safeGet('tituloModoManual');
         const subtituloManual = safeGet('subtituloModoManual');
-        if (tituloManual) tituloManual.innerHTML = '<i class="fas fa-user-plus me-2"></i> Adicionar Alunos Manualmente';
-        if (subtituloManual) subtituloManual.innerHTML = '<i class="fas fa-info-circle"></i> Clique no botão "Add" ao lado do aluno para incluí-lo na lista de captura.';
-        
+        if (tituloManual) {
+            tituloManual.innerHTML = '<i class="fas fa-user-plus me-2"></i> Adicionar Alunos Manualmente';
+        }
+        if (subtituloManual) {
+            subtituloManual.innerHTML = '<i class="fas fa-info-circle"></i> Clique no botão "Add" ao lado do aluno para incluí-lo na lista de captura.';
+        }
+
     } else {
-        // Voltando ao normal
+        // Desmarcou: esconde tudo do coletivo e limpa
         if (telaCaptura) telaCaptura.style.display = 'none';
+        if (formRegistro) formRegistro.style.display = 'none';
         __alunosColetivo = [];
-        
+        renderizarAlunosColetivo();
+
+        // Restaura textos do modo manual
         const tituloManual = safeGet('tituloModoManual');
         const subtituloManual = safeGet('subtituloModoManual');
-        if (tituloManual) tituloManual.innerHTML = '<i class="fas fa-users me-2"></i> Selecionar Aluno por Turma';
-        if (subtituloManual) subtituloManual.innerHTML = '<i class="fas fa-info-circle"></i> Selecione uma turma e clique no aluno para atendê-lo diretamente.';
+        if (tituloManual) {
+            tituloManual.innerHTML = '<i class="fas fa-users me-2"></i> Selecionar Aluno por Turma';
+        }
+        if (subtituloManual) {
+            subtituloManual.innerHTML = '<i class="fas fa-info-circle"></i> Selecione uma turma e clique no aluno para atendê-lo diretamente.';
+        }
     }
 }
 
@@ -7426,42 +7503,91 @@ function concluirCapturaColetivo() {
         notificar('⚠️ Adicione ou escaneie pelo menos um aluno antes de concluir.', 'warning');
         return;
     }
-    
+
+    // ⚠️ NÃO esconde a telaCapturaColetivo — ela é o container dos chips.
+    // Apenas garante que ela está visível.
     const telaCaptura = safeGet('telaCapturaColetivo');
+    if (telaCaptura) telaCaptura.style.display = 'block';
+
+    // Mostra o formulário de registro (fica ABAIXO da tela de captura)
     const formRegistro = safeGet('formRegistro');
-    
-    if (telaCaptura) telaCaptura.style.display = 'none';
-    
     if (formRegistro) {
         formRegistro.style.display = 'block';
+    }
+
+    // Marca visualmente que a leitura foi concluída (o botão vira "Editar seleção")
+    const btnConcluir = document.querySelector('#telaCapturaColetivo .btn-success');
+    if (btnConcluir) {
+        btnConcluir.innerHTML = '<i class="fas fa-edit"></i> Editar Seleção';
+        btnConcluir.classList.remove('btn-success');
+        btnConcluir.classList.add('btn-outline-primary');
+        btnConcluir.onclick = reabrirCapturaColetivo;
+    }
+
+    // Atualiza a mensagem de aviso dentro da tela de captura
+    const aviso = safeGet('avisoColetivoVazio');
+    if (aviso) {
+        aviso.style.display = 'none';
+    }
+
+    // Scroll até o formulário, com a tela de captura logo acima
+    if (formRegistro) {
         setTimeout(() => {
             formRegistro.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 300);
     }
-    
-    notificar(`✅ ${__alunosColetivo.length} aluno(s) prontos para o atendimento.`, 'success');
+
+    notificar(
+        `✅ ${__alunosColetivo.length} aluno(s) prontos para o atendimento.`,
+        'success'
+    );
+}
+
+// Nova função auxiliar: permite reabrir/voltar o botão ao estado "Concluir Leitura"
+function reabrirCapturaColetivo() {
+    const btn = document.querySelector('#telaCapturaColetivo .btn-outline-primary');
+    if (btn) {
+        btn.innerHTML = '<i class="fas fa-check-circle"></i> Concluir Leitura';
+        btn.classList.remove('btn-outline-primary');
+        btn.classList.add('btn-success');
+        btn.onclick = concluirCapturaColetivo;
+    }
+
+    const formRegistro = safeGet('formRegistro');
+    if (formRegistro) formRegistro.style.display = 'none';
+
+    const telaCaptura = safeGet('telaCapturaColetivo');
+    if (telaCaptura) {
+        telaCaptura.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 }
 
 window.concluirCapturaColetivo = concluirCapturaColetivo;
 
 function adicionarAlunoColetivo(id, nome, turma, matricula, foto) {
     if (__alunosColetivo.some(a => String(a.id) === String(id))) {
-        notificar('⚠️ Este aluno já foi adicionado', 'warning'); 
+        notificar('⚠️ Este aluno já foi adicionado', 'warning');
         return;
     }
-    
+
     __alunosColetivo.push({
-        id: String(id), nome: nome, matricula: matricula,
-        turma: turma, fotoPerfil: foto
+        id: String(id),
+        nome: nome,
+        matricula: matricula,
+        turma: turma,
+        fotoPerfil: foto
     });
-    
+
     renderizarAlunosColetivo();
-    filtrarAlunosManual(); 
-    notificar(`✅ ${nome} adicionado!`, 'success');
-    
-    // Esconde o aviso de "vazio"
+    filtrarAlunosManual(); // atualiza o estado dos itens na lista manual (badge "Adicionado")
+
+    // Sincroniza o aviso com o estado real
     const aviso = safeGet('avisoColetivoVazio');
-    if (aviso) aviso.style.display = 'none';
+    if (aviso) {
+        aviso.style.display = __alunosColetivo.length > 0 ? 'none' : 'block';
+    }
+
+    notificar(`✅ ${nome} adicionado!`, 'success');
 }
 
 function renderizarAlunosColetivo() {
@@ -7495,13 +7621,11 @@ function renderizarAlunosColetivo() {
 function removerAlunoColetivo(alunoId) {
     __alunosColetivo = __alunosColetivo.filter(a => String(a.id) !== String(alunoId));
     renderizarAlunosColetivo();
-    filtrarAlunosManual(); 
-    
+    filtrarAlunosManual();
+
     const aviso = safeGet('avisoColetivoVazio');
-    if (aviso && __alunosColetivo.length > 0) {
-        aviso.style.display = 'none';
-    } else if (aviso) {
-        aviso.style.display = 'block';
+    if (aviso) {
+        aviso.style.display = __alunosColetivo.length === 0 ? 'block' : 'none';
     }
 }
 
@@ -7654,6 +7778,7 @@ window.toggleAtendimentoColetivo = toggleAtendimentoColetivo;
 window.registrarOcorrenciaColetivo = registrarOcorrenciaColetivo;
 window.adicionarAlunoColetivo = adicionarAlunoColetivo;
 window.removerAlunoColetivo = removerAlunoColetivo;
+window.reabrirCapturaColetivo = reabrirCapturaColetivo;
 
 // Toggle dos cards de tipo (chamado por onclick no HTML)
 window.toggleMaisParticipantes = toggleMaisParticipantes;
