@@ -235,6 +235,22 @@
                     <!-- ABA ATENDIMENTO -->
                     <div class="tab-pane fade show active" id="atendimento" role="tabpanel">
 
+                        <!-- 🆕 ATENDIMENTO COLETIVO — Checkbox no topo -->
+                        <div class="checkbox-atendimento-coletivo mb-3">
+                            <div class="form-check d-flex align-items-start">
+                                <input class="form-check-input" type="checkbox"
+                                    id="supervisaoAtendimentoColetivo"
+                                    onchange="toggleAtendimentoColetivo()">
+                                <label class="form-check-label fw-bold label-coletivo" for="supervisaoAtendimentoColetivo">
+                                    <i class="fas fa-users-cog"></i> Atendimento Coletivo (múltiplos alunos)
+                                </label>
+                            </div>
+                            <small class="text-muted d-block mt-2 ms-4">
+                                <i class="fas fa-info-circle"></i> Marque para registrar a mesma ocorrência para vários alunos de uma só vez.
+                            </small>
+                        </div>
+
+                        <!-- MODO AUTOMÁTICO -->
                         <div id="modoAutomatico">
                             <div class="card">
                                 <div class="card-body">
@@ -243,21 +259,23 @@
                                     </h5>
                                     <div id="qr-reader-auto" class="qr-scanner-container"></div>
                                     <div class="text-center mt-2">
-                                        <small class="text-muted">Aponte a câmera para o QR Code do aluno</small>
+                                        <small class="text-muted" id="textoScanner">
+                                            Aponte a câmera para o QR Code do aluno
+                                        </small>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
+                        <!-- MODO MANUAL -->
                         <div id="modoManual" style="display: none;">
                             <div class="card">
                                 <div class="card-body">
-                                    <h5 class="card-title">
+                                    <h5 class="card-title" id="tituloModoManual">
                                         <i class="fas fa-users me-2"></i> Selecionar Aluno por Turma
                                     </h5>
-                                    <p class="text-muted mb-3">
-                                        <i class="fas fa-info-circle"></i>
-                                        Selecione uma turma e clique no aluno para atendê-lo diretamente.
+                                    <p class="text-muted mb-3" id="subtituloModoManual">
+                                        <i class="fas fa-info-circle"></i> Selecione uma turma e clique no aluno para atendê-lo diretamente.
                                     </p>
 
                                     <div class="row g-3 mb-3">
@@ -269,8 +287,7 @@
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label">Buscar Aluno</label>
-                                            <input type="text" id="filtroBuscaManual" class="form-control"
-                                                   placeholder="Digite o nome do aluno...">
+                                            <input type="text" id="filtroBuscaManual" class="form-control" placeholder="Digite o nome do aluno...">
                                         </div>
                                     </div>
 
@@ -284,7 +301,30 @@
                             </div>
                         </div>
 
-                        <!-- Info do Aluno -->
+                        <!-- 🆕 TELA DE CAPTURA DO COLETIVO (Aparece quando marca o checkbox) -->
+                        <div id="telaCapturaColetivo" style="display: none;">
+                            <div class="card shadow-sm border-0 mb-4" style="background: #f8fafc;">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h5 class="card-title mb-0" style="color: #075985;">
+                                            <i class="fas fa-users-cog"></i> Alunos Capturados <span class="badge bg-primary ms-2" id="contadorAlunosColetivo">0</span>
+                                        </h5>
+                                        <button class="btn btn-success fw-bold" onclick="concluirCapturaColetivo()">
+                                            <i class="fas fa-check-circle"></i> Concluir Leitura
+                                        </button>
+                                    </div>
+                                    
+                                    <div id="listaAlunosColetivo" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                        <!-- Os chips dos alunos vão aparecer aqui -->
+                                    </div>
+                                    <p class="text-muted small mt-2 mb-0" id="avisoColetivoVazio">
+                                        <i class="fas fa-info-circle"></i> Escaneie os QR Codes ou adicione manualmente na aba "Manual".
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- INFO DO ALUNO (Individual) -->
                         <div id="alunoInfo" style="display: none;">
                             <div class="aluno-card">
                                 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
@@ -309,47 +349,39 @@
                             </div>
                         </div>
 
-                        <!-- Formulário -->
+                        <!-- FORMULÁRIO DE REGISTRO -->
                         <div id="formRegistro" class="form-container" style="display: none;">
                             <h5><i class="fas fa-plus-circle"></i> Registrar Ocorrência</h5>
 
                             <div class="mb-3">
                                 <label class="form-label">Tipo de Tarefa <span class="text-danger">*</span></label>
                                 <small class="text-muted d-block mb-2">
-                                    <i class="fas fa-info-circle"></i> Você pode marcar mais de um tipo. Os campos específicos de cada tipo aparecerão abaixo.
+                                    <i class="fas fa-info-circle"></i> Você pode marcar mais de um tipo. Os campos específicos aparecerão abaixo.
                                 </small>
                                 <div class="tipos-tarefa-grid">
                                     <div class="tipo-card" data-tipo="advertencia_verbal" onclick="toggleTipoTarefa('advertencia_verbal')">
-                                        <i class="fas fa-comment-dots"></i>
-                                        <span>Advertência Verbal</span>
+                                        <i class="fas fa-comment-dots"></i><span>Advertência Verbal</span>
                                     </div>
                                     <div class="tipo-card" data-tipo="advertencia_escrita" onclick="toggleTipoTarefa('advertencia_escrita')">
-                                        <i class="fas fa-file-signature"></i>
-                                        <span>Advertência Escrita</span>
+                                        <i class="fas fa-file-signature"></i><span>Advertência Escrita</span>
                                     </div>
                                     <div class="tipo-card" data-tipo="atendimento_aluno" onclick="toggleTipoTarefa('atendimento_aluno')">
-                                        <i class="fas fa-user-graduate"></i>
-                                        <span>Atendimento Aluno</span>
+                                        <i class="fas fa-user-graduate"></i><span>Atendimento Aluno</span>
                                     </div>
                                     <div class="tipo-card" data-tipo="atendimento_responsavel" onclick="toggleTipoTarefa('atendimento_responsavel')">
-                                        <i class="fas fa-users"></i>
-                                        <span>Atendimento Responsável</span>
+                                        <i class="fas fa-users"></i><span>Atendimento Responsável</span>
                                     </div>
                                     <div class="tipo-card" data-tipo="atendimento_professor" onclick="toggleTipoTarefa('atendimento_professor')">
-                                        <i class="fas fa-chalkboard-teacher"></i>
-                                        <span>Atendimento Professor</span>
+                                        <i class="fas fa-chalkboard-teacher"></i><span>Atendimento Professor</span>
                                     </div>
                                     <div class="tipo-card" data-tipo="suspensao" onclick="toggleTipoTarefa('suspensao')">
-                                        <i class="fas fa-ban"></i>
-                                        <span>Suspensão</span>
+                                        <i class="fas fa-ban"></i><span>Suspensão</span>
                                     </div>
                                     <div class="tipo-card" data-tipo="encaminhamento" onclick="toggleTipoTarefa('encaminhamento')">
-                                        <i class="fas fa-share"></i>
-                                        <span>Encaminhamento</span>
+                                        <i class="fas fa-share"></i><span>Encaminhamento</span>
                                     </div>
                                     <div class="tipo-card" data-tipo="outros" onclick="toggleTipoTarefa('outros')">
-                                        <i class="fas fa-ellipsis-h"></i>
-                                        <span>Outros</span>
+                                        <i class="fas fa-ellipsis-h"></i><span>Outros</span>
                                     </div>
                                 </div>
                                 <input type="hidden" id="tipoTarefaSelecionado">
@@ -357,8 +389,7 @@
 
                             <div class="mb-3">
                                 <label class="form-label">Descrição do Ocorrido <span class="text-danger">*</span></label>
-                                <textarea id="descricao" class="form-control" rows="3"
-                                          placeholder="Descreva detalhadamente o ocorrido..."></textarea>
+                                <textarea id="descricao" class="form-control" rows="3" placeholder="Descreva detalhadamente o ocorrido..."></textarea>
                             </div>
 
                             <div class="row">
@@ -386,40 +417,29 @@
 
                             <div class="mb-3">
                                 <label class="form-label">Observações Adicionais</label>
-                                <textarea id="observacoes" class="form-control" rows="2"
-                                          placeholder="Informações complementares..."></textarea>
+                                <textarea id="observacoes" class="form-control" rows="2" placeholder="Informações complementares..."></textarea>
                             </div>
 
                             <!-- Checkbox: Mais participantes -->
                             <div class="checkbox-assinatura-box checkbox-participantes mb-3">
                                 <div class="form-check d-flex align-items-start">
-                                    <input class="form-check-input" type="checkbox"
-                                        id="supervisaoMaisParticipantes"
-                                        onchange="toggleMaisParticipantes()">
+                                    <input class="form-check-input" type="checkbox" id="supervisaoMaisParticipantes" onchange="toggleMaisParticipantes()">
                                     <label class="form-check-label fw-bold label-participantes" for="supervisaoMaisParticipantes">
                                         <i class="fas fa-users"></i> Mais pessoas participaram do atendimento?
                                     </label>
                                 </div>
                                 <small class="text-muted d-block mt-2 ms-4">
-                                    <i class="fas fa-info-circle"></i>
-                                    Marque para adicionar outros profissionais, alunos ou responsáveis que participaram.
+                                    <i class="fas fa-info-circle"></i> Marque para adicionar outros profissionais, alunos ou responsáveis que participaram.
                                 </small>
                             </div>
 
                             <!-- Container de Participantes -->
                             <div id="containerParticipantes" style="display: none;">
                                 <div class="participantes-container">
-                                    <h6 class="titulo-participantes">
-                                        <i class="fas fa-user-plus"></i> Participantes do Atendimento
-                                    </h6>
-
+                                    <h6 class="titulo-participantes"><i class="fas fa-user-plus"></i> Participantes do Atendimento</h6>
                                     <div id="listaParticipantesAdicionados"></div>
-
                                     <div id="formNovoParticipante" class="form-novo-participante">
-                                        <h6 class="titulo-add-participante">
-                                            <i class="fas fa-plus-circle"></i> Adicionar Participante
-                                        </h6>
-
+                                        <h6 class="titulo-add-participante"><i class="fas fa-plus-circle"></i> Adicionar Participante</h6>
                                         <div class="row g-2 mb-2">
                                             <div class="col-md-6">
                                                 <label class="form-label label-participante">Perfil <span class="text-danger">*</span></label>
@@ -427,12 +447,7 @@
                                                     <select id="participantePerfil" class="form-select form-select-sm" onchange="carregarUsuariosPorPerfil()">
                                                         <option value="">Selecione o perfil...</option>
                                                     </select>
-                                                    <button type="button"
-                                                            class="btn btn-refresh-perfis"
-                                                            onclick="recarregarPerfisParticipantes(event)"
-                                                            title="Recarregar lista de perfis">
-                                                        <i class="fas fa-sync-alt"></i>
-                                                    </button>
+                                                    <button type="button" class="btn btn-refresh-perfis" onclick="recarregarPerfisParticipantes(event)" title="Recarregar lista de perfis"><i class="fas fa-sync-alt"></i></button>
                                                 </div>
                                             </div>
                                             <div class="col-md-6">
@@ -442,18 +457,13 @@
                                                 </select>
                                             </div>
                                         </div>
-
                                         <div class="row g-2 mb-2" id="rowParticipanteFiltro" style="display: none;">
                                             <div class="col-md-6">
                                                 <label class="form-label label-participante" id="labelParticipanteFiltro">Turma</label>
-                                                <select id="participanteFiltro" class="form-select form-select-sm">
-                                                    <option value="">Selecione...</option>
-                                                </select>
+                                                <select id="participanteFiltro" class="form-select form-select-sm"><option value="">Selecione...</option></select>
                                             </div>
                                             <div class="col-md-6 d-flex align-items-end">
-                                                <button type="button" class="btn btn-success btn-sm w-100 btn-add-participante" onclick="adicionarParticipante()">
-                                                    <i class="fas fa-plus"></i> Adicionar
-                                                </button>
+                                                <button type="button" class="btn btn-success btn-sm w-100 btn-add-participante" onclick="adicionarParticipante()"><i class="fas fa-plus"></i> Adicionar</button>
                                             </div>
                                         </div>
                                     </div>
@@ -463,8 +473,10 @@
                             <!-- Checkbox de assinatura via QR Code -->
                             <div class="checkbox-assinatura-box mb-3">
                                 <div class="form-check d-flex align-items-start">
-                                    <input class="form-check-input" type="checkbox"
+                                    <input class="form-check-input" 
+                                        type="checkbox"
                                         id="supervisaoNecessitaAssinatura"
+                                        onclick="if (document.getElementById('supervisaoAtendimentoColetivo')?.checked) { event.preventDefault(); mostrarToastConcluido('⚠️ A assinatura não está disponível no modo Coletivo. Cada aluno tem um responsável diferente.', 'warning'); }"
                                         onchange="toggleNecessitaAssinatura('supervisao')">
                                     <label class="form-check-label fw-bold" for="supervisaoNecessitaAssinatura">
                                         <i class="fas fa-signature"></i> Precisa de assinatura do responsável?
@@ -479,12 +491,8 @@
                             </div>
 
                             <div class="d-flex gap-2 mt-3">
-                                <button class="btn-primary-custom" onclick="registrarOcorrencia()">
-                                    <i class="fas fa-check-circle me-2"></i> Registrar
-                                </button>
-                                <button class="btn-secondary-custom" onclick="limparTela()">
-                                    <i class="fas fa-times me-2"></i> Cancelar
-                                </button>
+                                <button class="btn-primary-custom" onclick="registrarOcorrencia()"><i class="fas fa-check-circle me-2"></i> Registrar</button>
+                                <button class="btn-secondary-custom" onclick="limparTela()"><i class="fas fa-times me-2"></i> Cancelar</button>
                             </div>
                         </div>
                     </div>

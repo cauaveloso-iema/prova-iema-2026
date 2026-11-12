@@ -4407,14 +4407,36 @@ async function refazerAssinaturaSupervisao() {
 // ============================================
 // SCANNER AUTOMÁTICO
 // ============================================
+let __ultimoScaneamento = 0;
+
 async function iniciarScannerAutomatico() {
     const qrContainer = safeGet('qr-reader-auto');
     if (!qrContainer) return;
+    
     qrContainer.innerHTML = '<div id="qr-reader-auto-new" style="width: 100%;"></div>';
     scannerAuto = new Html5Qrcode("qr-reader-auto-new");
+    
     const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
+    
+    // Função de callback com proteção contra leitura dupla (cooldown de 3 segundos)
+    const onScan = (decodedText, decodedResult) => {
+        const agora = Date.now();
+        const isColetivo = safeGet('supervisaoAtendimentoColetivo')?.checked;
+        
+        if (isColetivo) {
+            // Se for coletivo, só aceita ler outro código depois de 3 segundos
+            if (agora - __ultimoScaneamento > 3000) {
+                __ultimoScaneamento = agora;
+                onScanSuccessAuto(decodedText);
+            }
+        } else {
+            // Se for individual, repassa direto (ele vai pausar a câmera dentro da função)
+            onScanSuccessAuto(decodedText);
+        }
+    };
+
     try {
-        await scannerAuto.start({ facingMode: "environment" }, config, onScanSuccessAuto, () => {});
+        await scannerAuto.start({ facingMode: "environment" }, config, onScan, () => {});
         scannerAutoAtivo = true;
     } catch (err) {
         qrContainer.innerHTML = `<div class="notificar notificar-warning m-3">Não foi possível acessar a câmera.</div>`;
@@ -4431,8 +4453,36 @@ async function pararScannerAutomatico() {
 async function onScanSuccessAuto(decodedText) {
     const alunoId = extrairAlunoId(decodedText);
     if (!alunoId) { notificar('QR Code inválido', 'error'); return; }
-    await pararScannerAutomatico();
-    await buscarAluno(alunoId);
+    
+    const isColetivo = safeGet('supervisaoAtendimentoColetivo')?.checked;
+    
+    if (isColetivo) {
+        // NO MODO COLETIVO: Busca, adiciona e MANTÉM A CÂMERA LIGADA
+        try {
+            const res = await fetch(`/api/supervisao/aluno/${alunoId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+            const data = await res.json();
+            
+            if (data.success && data.aluno) {
+                // Verifica se já não foi adicionado para não spammar a tela
+                if (!__alunosColetivo.some(a => String(a.id) === String(data.aluno.id))) {
+                    adicionarAlunoColetivo(data.aluno.id, data.aluno.nome, data.aluno.turma, data.aluno.matricula, data.aluno.fotoPerfil);
+                } else {
+                    // Opcional: avisar que já está na lista, mas sem travar a câmera
+                    notificar(`⚠️ ${data.aluno.nome} já está na lista!`, 'warning');
+                }
+            } else {
+                notificar('Aluno não encontrado', 'error');
+            }
+        } catch(e) {
+            notificar('Erro ao buscar aluno', 'error');
+        }
+        // O scanner continua ativo, não chamamos pararScannerAutomatico() aqui
+        
+    } else {
+        // MODO INDIVIDUAL: Pausa a câmera, busca o aluno e vai para a tela individual
+        await pararScannerAutomatico();
+        await buscarAluno(alunoId);
+    }
 }
 
 function extrairAlunoId(decodedText) {
@@ -4515,22 +4565,42 @@ async function carregarAlunosPorTurma() {
 function filtrarAlunosManual() {
     if (!Array.isArray(alunosPorTurma)) return;
     const busca = (safeGet('filtroBuscaManual')?.value || '').toLowerCase();
+    const isColetivo = safeGet('supervisaoAtendimentoColetivo')?.checked;
+    
     let filtrados = alunosPorTurma;
     if (busca) filtrados = filtrados.filter(a => (a.nome || '').toLowerCase().includes(busca));
     filtrados.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+    
     const container = safeGet('listaAlunosManual');
     if (filtrados.length === 0) { container.innerHTML = '<div class="text-center text-muted py-3">Nenhum aluno</div>'; return; }
     
-    container.innerHTML = '<div class="list-group">' + filtrados.map(a => `
-        <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" 
-             data-aluno-id="${a.id}" data-aluno-nome="${escapeHTML(a.nome)}" style="cursor: pointer;">
-            <div><strong>${escapeHTML(a.nome)}</strong><br><small class="text-muted">${escapeHTML(a.matricula || '')} • ${escapeHTML(a.curso || '')}</small></div>
-            <i class="fas fa-hand-pointer fa-2x" style="color: #0ea5e9;"></i>
-        </div>`).join('') + '</div>';
-    
-    container.querySelectorAll('.list-group-item').forEach(item => {
-        item.addEventListener('click', () => selecionarAluno(item.getAttribute('data-aluno-id'), item.getAttribute('data-aluno-nome'), item));
-    });
+    container.innerHTML = '<div class="list-group">' + filtrados.map(a => {
+        const jaAdicionado = __alunosColetivo.some(adt => String(adt.id) === String(a.id));
+        
+        if (isColetivo) {
+            return `
+                <div class="list-group-item d-flex justify-content-between align-items-center" style="${jaAdicionado ? 'opacity: 0.6; background: #f8fafc;' : ''}">
+                    <div>
+                        <strong>${escapeHTML(a.nome)}</strong><br>
+                        <small class="text-muted">${escapeHTML(a.matricula || '')} • ${escapeHTML(a.curso || '')}</small>
+                    </div>
+                    <div>
+                        ${jaAdicionado 
+                            ? '<span class="badge bg-success"><i class="fas fa-check"></i> Adicionado</span>' 
+                            : `<button class="btn btn-sm btn-primary" onclick="adicionarAlunoColetivo('${a.id}', '${escapeHTML(a.nome)}', '${escapeHTML(a.turma || '')}', '${escapeHTML(a.matricula || '')}', '${a.fotoPerfil || ''}')"><i class="fas fa-plus"></i> Add</button>`
+                        }
+                    </div>
+                </div>`;
+        } else {
+            return `
+                <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" 
+                     data-aluno-id="${a.id}" data-aluno-nome="${escapeHTML(a.nome)}" style="cursor: pointer;"
+                     onclick="selecionarAluno('${a.id}', '${escapeHTML(a.nome)}', this)">
+                    <div><strong>${escapeHTML(a.nome)}</strong><br><small class="text-muted">${escapeHTML(a.matricula || '')} • ${escapeHTML(a.curso || '')}</small></div>
+                    <i class="fas fa-hand-pointer fa-2x" style="color: #0ea5e9;"></i>
+                </div>`;
+        }
+    }).join('') + '</div>';
 }
 
 async function selecionarAluno(alunoId, alunoNome, itemEl) {
@@ -4658,10 +4728,12 @@ function mostrarFormRegistro() {
 // REGISTRAR (MÚLTIPLOS TIPOS)
 // ============================================
 async function registrarOcorrencia() {
-    if (__tiposSelecionados.length === 0) {
-        notificar('Selecione pelo menos um tipo de tarefa', 'error');
-        return;
+    const checkColetivo = safeGet('supervisaoAtendimentoColetivo');
+    if (checkColetivo?.checked) {
+        return registrarOcorrenciaColetivo();
     }
+
+    if (__tiposSelecionados.length === 0) { notificar('Selecione pelo menos um tipo de tarefa', 'error'); return; }
     const descricao = (safeGet('descricao')?.value || '').trim();
     if (!descricao) { notificar('Descreva o ocorrido', 'error'); return; }
     if (!currentAluno || !currentAluno.id) { notificar('Nenhum aluno selecionado', 'error'); return; }
@@ -4688,34 +4760,22 @@ async function registrarOcorrencia() {
     
     try {
         const participantesEnvio = __participantesAtendimento.map(p => ({
-            usuarioId: p.usuarioId,
-            usuarioNome: p.usuarioNome,
-            usuarioMatricula: p.usuarioMatricula,
-            usuarioFoto: p.usuarioFoto,
-            tipo: p.tipo,
-            tipoLabel: p.tipoLabel,
-            turma: p.usuarioTurma || null,
-            eixo: p.usuarioEixo || null,
-            filtroValor: p.filtroValor,
-            precisaAssinatura: p.precisaAssinatura,
-            assinaturaBase64: p.assinaturaCapturada || null,
-            sessaoId: p.sessaoId
+            usuarioId: p.usuarioId, usuarioNome: p.usuarioNome, usuarioMatricula: p.usuarioMatricula,
+            usuarioFoto: p.usuarioFoto, tipo: p.tipo, tipoLabel: p.tipoLabel,
+            turma: p.usuarioTurma || null, eixo: p.usuarioEixo || null, filtroValor: p.filtroValor,
+            precisaAssinatura: p.precisaAssinatura, assinaturaBase64: p.assinaturaCapturada || null, sessaoId: p.sessaoId
         }));
         
         const response = await fetch('/api/supervisao/registrar', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({
-                alunoId: currentAluno.id,
-                tiposTarefa: __tiposSelecionados,
-                descricao,
+                alunoId: currentAluno.id, tiposTarefa: __tiposSelecionados, descricao,
                 observacoes: safeGet('observacoes')?.value || '',
                 gravidade: safeGet('gravidade')?.value || 'media',
                 prioridade: safeGet('prioridade')?.value || 'normal',
-                detalhes: coletarDetalhes(),
-                precisaAssinatura: precisaAssinatura,
-                assinaturaBase64: assinaturaBase64,
-                participantes: participantesEnvio
+                detalhes: coletarDetalhes(), precisaAssinatura: precisaAssinatura,
+                assinaturaBase64: assinaturaBase64, participantes: participantesEnvio
             })
         });
         const data = await response.json();
@@ -4723,49 +4783,27 @@ async function registrarOcorrencia() {
         if (data.success) {
             if (assinaturaBase64 && data.atendimento?.id) {
                 try {
-                    const sessaoId = estadoSessaoAssinatura.supervisao.sessaoId;
                     await fetch('/api/supervisao/aplicar-assinatura', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`
-                        },
-                        body: JSON.stringify({
-                            atendimentoId: data.atendimento.id,
-                            sessaoId: sessaoId
-                        })
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify({ atendimentoId: data.atendimento.id, sessaoId: estadoSessaoAssinatura.supervisao.sessaoId })
                     });
-                } catch (e) {
-                    console.warn('Erro ao aplicar assinatura:', e);
-                }
+                } catch (e) {}
             }
             
             const sessaoId = estadoSessaoAssinatura.supervisao.sessaoId;
-            if (sessaoId) {
-                fetch(`/api/sessoes-assinatura/${sessaoId}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                }).catch(e => console.warn(e));
-            }
+            if (sessaoId) fetch(`/api/sessoes-assinatura/${sessaoId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }).catch(e => {});
             pararPollingAssinatura();
             fecharModalAssinaturaQR();
             estadoSessaoAssinatura.supervisao.sessaoId = null;
             estadoSessaoAssinatura.supervisao.assinaturaCapturada = null;
-            estadoSessaoAssinatura.supervisao.qrCodeDataUrl = null;
             
             const bloco = safeGet('supervisaoBlocoAssinaturaInfo');
             if (bloco) bloco.style.display = 'none';
             
             for (const p of __participantesAtendimento) {
-                if (p.sessaoId) {
-                    fetch(`/api/sessoes-assinatura/${p.sessaoId}`, {
-                        method: 'DELETE',
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    }).catch(e => console.warn(e));
-                }
-                if (p.monitoramentoInterval) {
-                    clearInterval(p.monitoramentoInterval);
-                }
+                if (p.sessaoId) fetch(`/api/sessoes-assinatura/${p.sessaoId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }).catch(e => {});
+                if (p.monitoramentoInterval) clearInterval(p.monitoramentoInterval);
             }
             
             mostrarToastConcluido(`✅ ${data.message}`, 'success');
@@ -4775,8 +4813,7 @@ async function registrarOcorrencia() {
         }
     } catch (error) {
         notificar('Erro: ' + error.message, 'error');
-    }
-    finally { if (btn) btn.disabled = false; }
+    } finally { if (btn) btn.disabled = false; }
 }
 
 function finalizarAposSucesso() {
@@ -4796,13 +4833,15 @@ function limparTela() {
     __tiposSelecionados = [];
     tipoTarefaSelecionado = null;
     
+    const checkColetivo = safeGet('supervisaoAtendimentoColetivo');
+    if (checkColetivo) checkColetivo.checked = false;
+    const containerColetivo = safeGet('containerAlunosColetivo');
+    if (containerColetivo) containerColetivo.style.display = 'none';
+    __alunosColetivo = [];
+    renderizarAlunosColetivo();
+
     const sessaoId = estadoSessaoAssinatura.supervisao.sessaoId;
-    if (sessaoId) {
-        fetch(`/api/sessoes-assinatura/${sessaoId}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
-        }).catch(e => console.warn(e));
-    }
+    if (sessaoId) fetch(`/api/sessoes-assinatura/${sessaoId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }).catch(e => {});
     pararPollingAssinatura();
     estadoSessaoAssinatura.supervisao.sessaoId = null;
     estadoSessaoAssinatura.supervisao.assinaturaCapturada = null;
@@ -4815,6 +4854,12 @@ function limparTela() {
     if (bloco) { bloco.style.display = 'none'; bloco.innerHTML = ''; }
     
     limparParticipantesCompleto();
+
+    // Restaura os textos do card manual
+    const tituloManual = safeGet('tituloModoManual');
+    const subtituloManual = safeGet('subtituloModoManual');
+    if (tituloManual) tituloManual.innerHTML = '<i class="fas fa-users me-2"></i> Selecionar Aluno por Turma';
+    if (subtituloManual) subtituloManual.innerHTML = '<i class="fas fa-info-circle"></i> Selecione uma turma e clique no aluno para atendê-lo diretamente.';
 }
 
 function reiniciarScannerAutomatico() {
@@ -7334,6 +7379,182 @@ async function confirmarExclusaoMassa() {
     }
 }
 
+// ============================================================================
+// 🆕 ATENDIMENTO COLETIVO
+// ============================================================================
+function toggleAtendimentoColetivo() {
+    const check = safeGet('supervisaoAtendimentoColetivo');
+    const telaCaptura = safeGet('telaCapturaColetivo');
+    const formRegistro = safeGet('formRegistro');
+    const alunoInfo = safeGet('alunoInfo');
+    
+    if (!check) return;
+
+    if (check.checked) {
+        // Esconde formulários de atendimento
+        if (formRegistro) formRegistro.style.display = 'none';
+        if (alunoInfo) alunoInfo.style.display = 'none';
+        currentAluno = null;
+        
+        // Mostra a tela de captura
+        if (telaCaptura) telaCaptura.style.display = 'block';
+        
+        // Limpa lista e reseta
+        __alunosColetivo = [];
+        renderizarAlunosColetivo();
+        
+        // Atualiza textos se estiver no modo manual
+        const tituloManual = safeGet('tituloModoManual');
+        const subtituloManual = safeGet('subtituloModoManual');
+        if (tituloManual) tituloManual.innerHTML = '<i class="fas fa-user-plus me-2"></i> Adicionar Alunos Manualmente';
+        if (subtituloManual) subtituloManual.innerHTML = '<i class="fas fa-info-circle"></i> Clique no botão "Add" ao lado do aluno para incluí-lo na lista de captura.';
+        
+    } else {
+        // Voltando ao normal
+        if (telaCaptura) telaCaptura.style.display = 'none';
+        __alunosColetivo = [];
+        
+        const tituloManual = safeGet('tituloModoManual');
+        const subtituloManual = safeGet('subtituloModoManual');
+        if (tituloManual) tituloManual.innerHTML = '<i class="fas fa-users me-2"></i> Selecionar Aluno por Turma';
+        if (subtituloManual) subtituloManual.innerHTML = '<i class="fas fa-info-circle"></i> Selecione uma turma e clique no aluno para atendê-lo diretamente.';
+    }
+}
+
+function concluirCapturaColetivo() {
+    if (__alunosColetivo.length === 0) {
+        notificar('⚠️ Adicione ou escaneie pelo menos um aluno antes de concluir.', 'warning');
+        return;
+    }
+    
+    const telaCaptura = safeGet('telaCapturaColetivo');
+    const formRegistro = safeGet('formRegistro');
+    
+    if (telaCaptura) telaCaptura.style.display = 'none';
+    
+    if (formRegistro) {
+        formRegistro.style.display = 'block';
+        setTimeout(() => {
+            formRegistro.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 300);
+    }
+    
+    notificar(`✅ ${__alunosColetivo.length} aluno(s) prontos para o atendimento.`, 'success');
+}
+
+window.concluirCapturaColetivo = concluirCapturaColetivo;
+
+function adicionarAlunoColetivo(id, nome, turma, matricula, foto) {
+    if (__alunosColetivo.some(a => String(a.id) === String(id))) {
+        notificar('⚠️ Este aluno já foi adicionado', 'warning'); 
+        return;
+    }
+    
+    __alunosColetivo.push({
+        id: String(id), nome: nome, matricula: matricula,
+        turma: turma, fotoPerfil: foto
+    });
+    
+    renderizarAlunosColetivo();
+    filtrarAlunosManual(); 
+    notificar(`✅ ${nome} adicionado!`, 'success');
+    
+    // Esconde o aviso de "vazio"
+    const aviso = safeGet('avisoColetivoVazio');
+    if (aviso) aviso.style.display = 'none';
+}
+
+function renderizarAlunosColetivo() {
+    const container = safeGet('listaAlunosColetivo');
+    const contador = safeGet('contadorAlunosColetivo');
+    if (contador) contador.textContent = __alunosColetivo.length;
+    if (!container) return;
+
+    if (__alunosColetivo.length === 0) {
+        container.innerHTML = `<div style="width: 100%; text-align: center; padding: 15px; color: #94a3b8; font-size: 13px; border: 1px dashed #cbd5e0; border-radius: 10px;">
+            <i class="fas fa-user-plus" style="font-size: 24px; display: block; margin-bottom: 5px; color: #cbd5e1;"></i>
+            Nenhum aluno selecionado ainda
+        </div>`;
+        return;
+    }
+
+    container.innerHTML = __alunosColetivo.map(a => `
+        <div class="aluno-coletivo-chip" style="display: inline-flex; align-items: center; gap: 8px; background: white; border: 1px solid #bae6fd; border-radius: 20px; padding: 6px 10px 6px 6px; font-size: 13px; color: #075985; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <img src="${a.fotoPerfil || gerarAvatarSVG(a.nome)}" style="width: 26px; height: 26px; border-radius: 50%; object-fit: cover;" onerror="this.onerror=null; this.src='${gerarAvatarSVG(a.nome)}'">
+            <div style="display: flex; flex-direction: column; line-height: 1.2;">
+                <span style="font-weight: 600; font-size: 12px;">${escapeHTML(a.nome)}</span>
+                <span style="font-size: 10px; color: #64748b;">${escapeHTML(a.turma || '-')}</span>
+            </div>
+            <button type="button" onclick="removerAlunoColetivo('${escapeHTML(a.id)}')" style="background: #fee2e2; border: none; width: 20px; height: 20px; border-radius: 50%; color: #dc2626; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 10px; margin-left: 4px;">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `).join('');
+}
+
+function removerAlunoColetivo(alunoId) {
+    __alunosColetivo = __alunosColetivo.filter(a => String(a.id) !== String(alunoId));
+    renderizarAlunosColetivo();
+    filtrarAlunosManual(); 
+    
+    const aviso = safeGet('avisoColetivoVazio');
+    if (aviso && __alunosColetivo.length > 0) {
+        aviso.style.display = 'none';
+    } else if (aviso) {
+        aviso.style.display = 'block';
+    }
+}
+
+async function registrarOcorrenciaColetivo() {
+    if (__alunosColetivo.length === 0) { notificar('Adicione pelo menos um aluno', 'error'); return; }
+    if (__tiposSelecionados.length === 0) { notificar('Selecione pelo menos um tipo de tarefa', 'error'); return; }
+    const descricao = (safeGet('descricao')?.value || '').trim();
+    if (!descricao) { notificar('Descreva o ocorrido', 'error'); return; }
+
+    const btn = document.querySelector('#formRegistro .btn-primary-custom');
+    if (btn) btn.disabled = true;
+
+    try {
+        const participantesEnvio = __participantesAtendimento.map(p => ({
+            usuarioId: p.usuarioId, usuarioNome: p.usuarioNome,
+            usuarioMatricula: p.usuarioMatricula, usuarioFoto: p.usuarioFoto,
+            tipo: p.tipo, tipoLabel: p.tipoLabel,
+            turma: p.usuarioTurma || null, eixo: p.usuarioEixo || null,
+            filtroValor: p.filtroValor, precisaAssinatura: p.precisaAssinatura,
+            assinaturaBase64: p.assinaturaCapturada || null, sessaoId: p.sessaoId
+        }));
+
+        const response = await fetch('/api/supervisao/registrar-coletivo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({
+                alunosIds: __alunosColetivo.map(a => a.id),
+                tiposTarefa: __tiposSelecionados,
+                descricao,
+                observacoes: safeGet('observacoes')?.value || '',
+                gravidade: safeGet('gravidade')?.value || 'media',
+                prioridade: safeGet('prioridade')?.value || 'normal',
+                detalhes: coletarDetalhes(),
+                precisaAssinatura: false,
+                participantes: participantesEnvio
+            })
+        });
+        const data = await response.json();
+        if (data.success) {
+            mostrarToastConcluido(`✅ ${data.total} atendimento(s) registrado(s)`, 'success');
+            limparTela();
+            carregarAtendimentosAtivos();
+            carregarDashboard();
+        } else {
+            notificar('❌ ' + (data.error || 'Erro ao registrar'));
+        }
+    } catch (error) {
+        notificar('Erro ao registrar coletivo', 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
 // ============================================
 // EXPORTAR FUNÇÕES GLOBAIS
 // ============================================
@@ -7428,6 +7649,11 @@ window.confirmarExclusaoMassa = confirmarExclusaoMassa;
 
 window.recarregarPerfisParticipantes = recarregarPerfisParticipantes;
 window.renderizarSelectPerfis = renderizarSelectPerfis;
+
+window.toggleAtendimentoColetivo = toggleAtendimentoColetivo;
+window.registrarOcorrenciaColetivo = registrarOcorrenciaColetivo;
+window.adicionarAlunoColetivo = adicionarAlunoColetivo;
+window.removerAlunoColetivo = removerAlunoColetivo;
 
 // Toggle dos cards de tipo (chamado por onclick no HTML)
 window.toggleMaisParticipantes = toggleMaisParticipantes;
