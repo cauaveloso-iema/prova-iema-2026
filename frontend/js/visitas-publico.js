@@ -35,8 +35,21 @@ class VisitasPublico {
         
         this.localizacao = null;
 
-        // 🆕 Número do WhatsApp da escola (com DDI)
         this.whatsappEscola = '5598983086504';
+    }
+
+    // ============================================
+    // 🎯 ALUNO-ALVO DO TERMO ATUAL
+    // ============================================
+    obterAlunoIdAlvo() {
+        return (
+            this.termoAtual?.alunoIdFoco ||
+            this.termoAtual?.alunos?.[0]?.alunoId ||
+            this.termoAtual?.alunos?.[0]?._id ||
+            this.alunoSelecionado?.id ||
+            this.alunoSelecionado?._id ||
+            null
+        );
     }
 
     // ============================================
@@ -150,7 +163,7 @@ class VisitasPublico {
         const buscaInput = document.getElementById('buscaAlunoPublico');
         if (buscaInput) {
             let timeout;
-            buscaInput.addEventListener('input', (e) => {
+            buscaInput.addEventListener('input', () => {
                 clearTimeout(timeout);
                 timeout = setTimeout(() => this.buscarAlunos(), 400);
             });
@@ -205,7 +218,6 @@ class VisitasPublico {
             });
         }
 
-        // 🆕 Máscara de telefone no modal de ajuda
         const ajudaTelInput = document.getElementById('ajudaTelefone');
         if (ajudaTelInput) {
             ajudaTelInput.addEventListener('input', (e) => {
@@ -217,7 +229,6 @@ class VisitasPublico {
             });
         }
 
-        // 🆕 Fecha o modal de ajuda ao clicar no overlay (fundo escuro)
         const modalAjuda = document.getElementById('modalAjuda');
         if (modalAjuda) {
             modalAjuda.addEventListener('click', (e) => {
@@ -638,7 +649,7 @@ class VisitasPublico {
     }
 
     // ============================================
-    // ETAPA 2: TOTP
+    // ETAPA 2: TOTP (POR RESPONSÁVEL)
     // ============================================
     async gerarQRCodeTOTP() {
         try {
@@ -648,11 +659,14 @@ class VisitasPublico {
             const secretBox = document.getElementById('totpSecretBox');
             if (secretBox) secretBox.style.display = 'none';
             
+            const alunoIdTOTP = this.obterAlunoIdAlvo();
+            
             const response = await fetch(`${this.apiBase}/gerar-qrcode-totp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    termoId: this.termoAtual.id
+                    termoId: this.termoAtual.id,
+                    alunoId: alunoIdTOTP ? String(alunoIdTOTP) : null
                 })
             });
             
@@ -662,7 +676,9 @@ class VisitasPublico {
                 throw new Error(data.error || 'Erro ao gerar QR Code');
             }
             
+            // ⚠️ Só pula se for o MESMO responsável que já autenticou
             if (data.jaVerificado) {
+                this.showToast('Este aluno já foi autenticado por você', 'info');
                 this.irParaEtapaDados();
                 return;
             }
@@ -674,7 +690,7 @@ class VisitasPublico {
             this.totpSecret = data.secret;
             this.mostrarSecretTOTP(data.secret);
             
-            console.log('✅ QR Code TOTP pronto');
+            console.log('✅ QR Code TOTP pronto para o aluno', data.alunoId);
             
             setTimeout(() => {
                 document.getElementById('totpCodigo')?.focus();
@@ -754,7 +770,7 @@ class VisitasPublico {
         }
     }
 
-    async verificarTOTP() {
+    async verificarTOTP(event) {
         const codigo = document.getElementById('totpCodigo')?.value;
         
         if (!codigo || codigo.length !== 6) {
@@ -769,12 +785,15 @@ class VisitasPublico {
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando...';
             }
             
+            const alunoIdTOTP = this.obterAlunoIdAlvo();
+            
             const response = await fetch(`${this.apiBase}/verificar-totp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     termoId: this.termoAtual.id,
-                    codigo
+                    codigo,
+                    alunoId: alunoIdTOTP ? String(alunoIdTOTP) : null
                 })
             });
             
@@ -964,10 +983,7 @@ class VisitasPublico {
             return this.showToast('Assine o documento antes de continuar', 'error');
         }
         
-        const alunoId = this.termoAtual.alunoIdFoco
-            || this.termoAtual.alunos?.[0]?.alunoId 
-            || this.termoAtual.alunos?.[0]?._id 
-            || this.alunoSelecionado?.id;
+        const alunoId = this.obterAlunoIdAlvo();
         
         if (!alunoId) {
             return this.showToast('Erro: aluno não identificado no termo', 'error');
@@ -1016,10 +1032,7 @@ class VisitasPublico {
         const confirmar = confirm('Tem certeza que deseja RECUSAR a participação?');
         if (!confirmar) return;
         
-        const alunoId = this.termoAtual.alunoIdFoco
-            || this.termoAtual.alunos?.[0]?.alunoId 
-            || this.termoAtual.alunos?.[0]?._id 
-            || this.alunoSelecionado?.id;
+        const alunoId = this.obterAlunoIdAlvo();
         
         try {
             const response = await fetch(`${this.apiBase}/recusar/${this.termoAtual.id}`, {
@@ -1111,12 +1124,7 @@ class VisitasPublico {
             this.showToast('📄 Gerando termo oficial...', 'info');
             
             if (!alunoId) {
-                alunoId = this.termoAtual?.alunoIdFoco
-                    || this.termoAtual?.alunos?.[0]?.alunoId 
-                    || this.termoAtual?.alunos?.[0]?._id 
-                    || this.alunoSelecionado?.id
-                    || this.alunoSelecionado?._id
-                    || null;
+                alunoId = this.obterAlunoIdAlvo();
             }
             
             if (alunoId && typeof alunoId === 'object') {
@@ -1168,7 +1176,6 @@ class VisitasPublico {
         modal.classList.add('ativo');
         document.body.style.overflow = 'hidden';
 
-        // Preenche o nome do aluno se já foi selecionado (conveniência)
         const ajudaNome = document.getElementById('ajudaNome');
         if (ajudaNome && !ajudaNome.value && this.alunoSelecionado?.nome) {
             ajudaNome.value = this.alunoSelecionado.nome;
@@ -1233,7 +1240,6 @@ class VisitasPublico {
 
             this.showToast('✅ WhatsApp aberto! Estaremos respondendo assim que possível.', 'success');
 
-            // Limpa e fecha após abrir o WhatsApp
             setTimeout(() => {
                 ['ajudaNome', 'ajudaTelefone', 'ajudaTurma', 'ajudaCurso', 'ajudaProblema'].forEach(id => {
                     const el = document.getElementById(id);
@@ -1306,4 +1312,4 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => visitasPublico.init());
 } else {
     visitasPublico.init();
-} 
+}

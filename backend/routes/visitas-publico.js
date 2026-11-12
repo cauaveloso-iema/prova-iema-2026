@@ -14,7 +14,6 @@ const ConfiguracaoVisita = require('../models/ConfiguracaoVisita');
 const NotificacaoVisita = require('../models/NotificacaoVisita');
 const ConsentimentoLGPD = require('../models/ConsentimentoLGPD');
 
-// 🔐 Criptografia explícita
 const { encrypt, decrypt, hash, mascararCPF } = require('../utils/crypto-utils');
 
 // ============================================
@@ -42,8 +41,43 @@ const paraObjectId = (id) => {
 };
 
 // ============================================
-// 🔔 NOTIFICAR: PROFESSOR ASSOCIADO + CRIADOR DO TERMO
-//   Dispara SOMENTE quando TODAS as assinaturas forem coletadas.
+// 🎯 LOCALIZA O RESPONSÁVEL-ALVO DENTRO DO TERMO
+//   Estratégia (em ordem):
+//   1. Por alunoId (se informado)
+//   2. Por responsável pendente (sem nome ou status pendente)
+//   3. Por responsável já autenticado cujo alunoId bate
+//   4. Fallback: índice 0
+// ============================================
+function localizarResponsavelIndex(termo, alunoId = null, { exigirPendente = true } = {}) {
+  if (!termo || !Array.isArray(termo.responsaveis) || termo.responsaveis.length === 0) {
+    return -1;
+  }
+
+  const alunoIdNorm = normalizarId(alunoId);
+
+  // 1) Pelo alunoId exato
+  if (alunoIdNorm) {
+    const idx = termo.responsaveis.findIndex(
+      r => normalizarId(r.alunoId) === alunoIdNorm
+    );
+    if (idx !== -1) return idx;
+  }
+
+  // 2) Primeiro pendente
+  const idxPendente = termo.responsaveis.findIndex(
+    r => !r.status || r.status === 'pendente' || (!r.nome && r.status !== 'autorizado' && r.status !== 'recusado')
+  );
+  if (idxPendente !== -1) return idxPendente;
+
+  // 3) Se não exigir pendente, cai no primeiro
+  if (!exigirPendente) return 0;
+
+  // 4) Fallback (não deveria chegar aqui em fluxo normal)
+  return 0;
+}
+
+// ============================================
+// 🔔 NOTIFICAR: PROFESSOR + CRIADOR
 // ============================================
 async function notificarTermoCompleto(termo) {
   try {
@@ -55,22 +89,13 @@ async function notificarTermoCompleto(termo) {
       return { notificado: false, motivo: 'Termo sem responsáveis' };
     }
     if (totalAutorizados < totalResponsaveis) {
-      console.log(
-        `⏳ Termo ${termo.codigo}: ${totalAutorizados}/${totalResponsaveis} assinaturas — aguardando`
-      );
+      console.log(`⏳ Termo ${termo.codigo}: ${totalAutorizados}/${totalResponsaveis} assinaturas — aguardando`);
       return { notificado: false, motivo: 'Ainda faltam assinaturas' };
     }
 
-    // ============================================
-    // 🎯 MONTAR LISTA ÚNICA DE DESTINATÁRIOS
-    //   - Quem criou o termo (criadoPor)
-    //   - Todos os professores vinculados (professores[].professorId)
-    // ============================================
     const destinatariosSet = new Set();
 
-    if (termo.criadoPor) {
-      destinatariosSet.add(normalizarId(termo.criadoPor));
-    }
+    if (termo.criadoPor) destinatariosSet.add(normalizarId(termo.criadoPor));
 
     (termo.professores || []).forEach(p => {
       const pid = normalizarId(p.professorId) || normalizarId(p._id);
@@ -84,21 +109,12 @@ async function notificarTermoCompleto(termo) {
       return { notificado: false, motivo: 'Sem destinatários' };
     }
 
-    console.log(
-      `🎉 Termo ${termo.codigo} 100% autorizado — notificando ${destinatarios.length} destinatário(s) ` +
-      `(${totalAlunos} aluno(s), ${totalResponsaveis} assinatura(s))`
-    );
+    console.log(`🎉 Termo ${termo.codigo} 100% autorizado — notificando ${destinatarios.length} destinatário(s)`);
 
-    // ============================================
-    // 📨 TÍTULO E MENSAGEM
-    // ============================================
     const titulo = '✅ Termo Totalmente Autorizado';
     const mensagem = `Todas as ${totalResponsaveis} assinatura(s) foram coletadas. ` +
                      `${totalAlunos} aluno(s) confirmado(s) para "${termo.atividade}" (${termo.codigo}).`;
 
-    // ============================================
-    // 💾 1) NOTIFICAÇÃO NO BANCO (para cada destinatário)
-    // ============================================
     const notificacoesCriadas = [];
     for (const usuarioId of destinatarios) {
       try {
@@ -116,9 +132,6 @@ async function notificarTermoCompleto(termo) {
       }
     }
 
-    // ============================================
-    // 📱 2) PUSH ONESIGNAL (para cada destinatário)
-    // ============================================
     const pushesEnviados = [];
     try {
       const OneSignalService = require('../services/onesignal-service');
@@ -134,12 +147,7 @@ async function notificarTermoCompleto(termo) {
 
       for (const usuarioId of destinatarios) {
         try {
-          const ok = await oneSignal.enviarPush(
-            usuarioId,
-            titulo,
-            mensagem,
-            dadosPush
-          );
+          const ok = await oneSignal.enviarPush(usuarioId, titulo, mensagem, dadosPush);
           if (ok) {
             pushesEnviados.push(usuarioId);
             console.log(`📱 Push enviado para ${usuarioId}`);
@@ -165,7 +173,7 @@ async function notificarTermoCompleto(termo) {
 }
 
 // ============================================
-// 🔥 ASSINATURA PADRÃO DO GESTOR (FALLBACK)
+// 🔥 ASSINATURA PADRÃO DO GESTOR
 // ============================================
 let ASSINATURA_GESTOR_PADRAO_BASE64 = '';
 try {
@@ -374,7 +382,7 @@ router.get('/alunos', async (req, res) => {
 });
 
 // ============================================
-// BUSCAR TERMOS DO ALUNO (TODOS OS STATUS)
+// BUSCAR TERMOS DO ALUNO
 // ============================================
 router.get('/termos/:alunoId', async (req, res) => {
   try {
@@ -493,10 +501,7 @@ router.get('/termos-por-codigo/:codigo', async (req, res) => {
     const { codigo } = req.params;
     
     if (!codigo || codigo.trim().length < 4) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Digite pelo menos 4 caracteres do código' 
-      });
+      return res.status(400).json({ success: false, error: 'Digite pelo menos 4 caracteres do código' });
     }
     
     const codigoBusca = codigo.trim().toUpperCase();
@@ -511,12 +516,7 @@ router.get('/termos-por-codigo/:codigo', async (req, res) => {
     .lean();
     
     if (termos.length === 0) {
-      return res.json({
-        success: true,
-        termos: [],
-        total: 0,
-        mensagem: 'Nenhum termo encontrado com este código'
-      });
+      return res.json({ success: true, termos: [], total: 0, mensagem: 'Nenhum termo encontrado com este código' });
     }
     
     const termosFormatados = termos.map(t => {
@@ -552,11 +552,7 @@ router.get('/termos-por-codigo/:codigo', async (req, res) => {
       };
     });
     
-    res.json({
-      success: true,
-      termos: termosFormatados,
-      total: termosFormatados.length
-    });
+    res.json({ success: true, termos: termosFormatados, total: termosFormatados.length });
     
   } catch (error) {
     console.error('❌ Erro ao buscar termos por código:', error);
@@ -570,7 +566,7 @@ router.get('/termos-por-codigo/:codigo', async (req, res) => {
 router.get('/termo/:id', async (req, res) => {
   try {
     const termo = await TermoVisita.findById(req.params.id)
-      .select('-responsaveis.assinaturaBase64 -responsaveis.codigoTemp -assinaturaGestor.base64')
+      .select('-responsaveis.assinaturaBase64 -responsaveis.codigoTemp -responsaveis.totpSecret -assinaturaGestor.base64')
       .lean();
     
     if (!termo) {
@@ -634,11 +630,11 @@ router.get('/termo/:id', async (req, res) => {
 });
 
 // ============================================
-// 🔐 TOTP - GERAR QR CODE
+// 🔐 TOTP - GERAR QR CODE (POR RESPONSÁVEL)
 // ============================================
 router.post('/gerar-qrcode-totp', rateLimit(10, 5), async (req, res) => {
   try {
-    const { termoId } = req.body;
+    const { termoId, alunoId } = req.body;
     
     if (!termoId) {
       return res.status(400).json({ success: false, error: 'Termo ID é obrigatório' });
@@ -649,34 +645,51 @@ router.post('/gerar-qrcode-totp', rateLimit(10, 5), async (req, res) => {
       return res.status(404).json({ success: false, error: 'Termo não encontrado' });
     }
     
-    if (termo.totpSecret && termo.totpVerified) {
+    // ============================================
+    // 🎯 LOCALIZAR O RESPONSÁVEL ALVO
+    // ============================================
+    const respIndex = localizarResponsavelIndex(termo, alunoId);
+    
+    if (respIndex === -1) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Nenhum responsável encontrado para este termo' 
+      });
+    }
+    
+    const responsavel = termo.responsaveis[respIndex];
+    
+    // 🆕 Verifica o estado TOTP DAQUELE responsável, não do termo
+    if (responsavel.totpSecret && responsavel.totpVerified) {
       return res.json({
         success: true,
         jaVerificado: true,
-        message: 'Este termo já foi autenticado'
+        message: 'Este responsável já foi autenticado',
+        alunoId: normalizarId(responsavel.alunoId)
       });
     }
     
     const speakeasy = require('speakeasy');
     
-    let secret = termo.totpSecret;
+    let secret = responsavel.totpSecret;
     if (!secret) {
       const generated = speakeasy.generateSecret({
-        name: `EducaPleno:${termo.codigo}`,
+        name: `EducaPleno:${termo.codigo}:${normalizarId(responsavel.alunoId) || respIndex}`,
         issuer: 'EducaPleno Visitas',
         length: 32
       });
       secret = generated.base32;
-      
-      termo.totpSecret = secret;
-      termo.totpCreatedAt = new Date();
-      termo.totpVerified = false;
-      await termo.save();
     }
+    
+    // 🆕 Salva no responsável, NÃO no termo
+    termo.responsaveis[respIndex].totpSecret = secret;
+    termo.responsaveis[respIndex].totpCreatedAt = new Date();
+    termo.responsaveis[respIndex].totpVerified = false;
+    await termo.save();
     
     const otpauth = speakeasy.otpauthURL({
       secret: secret,
-      label: `Visita ${termo.codigo}`,
+      label: `Visita ${termo.codigo} - ${responsavel.alunoNome || responsavel.nome || normalizarId(responsavel.alunoId)}`,
       issuer: 'EducaPleno Visitas',
       encoding: 'base32'
     });
@@ -692,9 +705,10 @@ router.post('/gerar-qrcode-totp', rateLimit(10, 5), async (req, res) => {
       success: true,
       qrCode: qrCodeDataUrl,
       secret: secret,
+      alunoId: normalizarId(responsavel.alunoId),
       termo: {
         codigo: termo.codigo,
-        alunoNome: termo.alunos?.[0]?.nome || 'Aluno'
+        alunoNome: responsavel.alunoNome || termo.alunos?.[0]?.nome || 'Aluno'
       },
       message: 'Escaneie o QR Code com o Google Authenticator'
     });
@@ -706,11 +720,11 @@ router.post('/gerar-qrcode-totp', rateLimit(10, 5), async (req, res) => {
 });
 
 // ============================================
-// 🔐 TOTP - VERIFICAR CÓDIGO
+// 🔐 TOTP - VERIFICAR CÓDIGO (POR RESPONSÁVEL)
 // ============================================
 router.post('/verificar-totp', rateLimit(10, 5), async (req, res) => {
   try {
-    const { termoId, codigo } = req.body;
+    const { termoId, codigo, alunoId } = req.body;
     
     if (!termoId || !codigo) {
       return res.status(400).json({ 
@@ -724,7 +738,15 @@ router.post('/verificar-totp', rateLimit(10, 5), async (req, res) => {
       return res.status(404).json({ success: false, error: 'Termo não encontrado' });
     }
     
-    if (!termo.totpSecret) {
+    const respIndex = localizarResponsavelIndex(termo, alunoId);
+    
+    if (respIndex === -1) {
+      return res.status(400).json({ success: false, error: 'Responsável não encontrado no termo' });
+    }
+    
+    const responsavel = termo.responsaveis[respIndex];
+    
+    if (!responsavel.totpSecret) {
       return res.status(400).json({ 
         success: false, 
         error: 'Nenhum QR Code gerado. Solicite um novo.' 
@@ -734,7 +756,7 @@ router.post('/verificar-totp', rateLimit(10, 5), async (req, res) => {
     const speakeasy = require('speakeasy');
     
     const verified = speakeasy.totp.verify({
-      secret: termo.totpSecret,
+      secret: responsavel.totpSecret,
       encoding: 'base32',
       token: codigo.toString().trim(),
       window: 1
@@ -747,16 +769,18 @@ router.post('/verificar-totp', rateLimit(10, 5), async (req, res) => {
       });
     }
     
-    termo.totpVerified = true;
-    termo.totpVerifiedAt = new Date();
+    // 🆕 Marca verificado SÓ naquele responsável
+    termo.responsaveis[respIndex].totpVerified = true;
+    termo.responsaveis[respIndex].totpVerifiedAt = new Date();
     await termo.save();
     
     res.json({
       success: true,
       message: 'Código verificado com sucesso!',
+      alunoId: normalizarId(responsavel.alunoId),
       termo: {
         codigo: termo.codigo,
-        alunoNome: termo.alunos?.[0]?.nome || 'Aluno'
+        alunoNome: responsavel.alunoNome || termo.alunos?.[0]?.nome || 'Aluno'
       }
     });
     
@@ -767,7 +791,7 @@ router.post('/verificar-totp', rateLimit(10, 5), async (req, res) => {
 });
 
 // ============================================
-// ✅ AUTORIZAR VISITA
+// ✅ AUTORIZAR VISITA (TOTP POR RESPONSÁVEL)
 // ============================================
 router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
   try {
@@ -793,10 +817,40 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
     const termo = await TermoVisita.findById(termoId);
     if (!termo) return res.status(404).json({ success: false, error: 'Termo não encontrado' });
     
-    if (!termo.totpVerified) {
+    // ============================================
+    // 🎯 LOCALIZAR O RESPONSÁVEL-ALVO
+    // ============================================
+    const respIndex = localizarResponsavelIndex(termo, alunoId);
+    
+    if (respIndex === -1) {
+      return res.status(400).json({ success: false, error: 'Responsável não encontrado no termo' });
+    }
+    
+    const responsavelAlvo = termo.responsaveis[respIndex];
+    
+    // ============================================
+    // 🔐 VALIDAR TOTP DO RESPONSÁVEL (não do termo)
+    // ============================================
+    if (!responsavelAlvo.totpVerified) {
       return res.status(400).json({ 
         success: false, 
         error: 'Você precisa autenticar com o Google Authenticator primeiro' 
+      });
+    }
+    
+    // ============================================
+    // 🔁 VALIDAR STATUS ATUAL (não permite reautorizar / autorizar recusado)
+    // ============================================
+    if (responsavelAlvo.status === 'autorizado') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Este aluno já foi autorizado por você' 
+      });
+    }
+    if (responsavelAlvo.status === 'recusado') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Este aluno já foi recusado por você' 
       });
     }
     
@@ -805,32 +859,18 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
       return res.status(400).json({ success: false, error: 'CPF inválido' });
     }
     
-    let responsavelIndex = -1;
-    const alunoIdNorm = normalizarId(alunoId);
-    
-    if (alunoIdNorm) {
-      responsavelIndex = termo.responsaveis.findIndex(r => 
-        normalizarId(r.alunoId) === alunoIdNorm
-      );
-    }
-    
-    if (responsavelIndex === -1) {
-      responsavelIndex = termo.responsaveis.findIndex(r => 
-        !r.nome || r.status === 'pendente'
-      );
-    }
-    
-    if (responsavelIndex === -1) responsavelIndex = 0;
-    
-    let alunoIdParaSalvar = paraObjectId(alunoIdNorm);
+    // ============================================
+    // 👤 IDENTIFICAR ALUNO PARA SALVAR
+    // ============================================
+    let alunoIdParaSalvar = paraObjectId(normalizarId(alunoId));
     
     if (!alunoIdParaSalvar) {
-      const alunoCorrespondente = termo.alunos?.[responsavelIndex] || termo.alunos?.[0];
+      alunoIdParaSalvar = paraObjectId(responsavelAlvo.alunoId);
+    }
+    
+    if (!alunoIdParaSalvar) {
+      const alunoCorrespondente = termo.alunos?.[respIndex] || termo.alunos?.[0];
       alunoIdParaSalvar = paraObjectId(alunoCorrespondente?.alunoId || alunoCorrespondente?._id);
-    }
-    
-    if (!alunoIdParaSalvar) {
-      alunoIdParaSalvar = paraObjectId(termo.responsaveis[responsavelIndex]?.alunoId);
     }
     
     if (!alunoIdParaSalvar && termo.alunos?.[0]) {
@@ -846,12 +886,15 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
     
     const alunoCorrespondente = termo.alunos?.find(a => 
       normalizarId(a.alunoId) === alunoIdParaSalvar.toString()
-    ) || termo.alunos?.[responsavelIndex] || termo.alunos?.[0];
+    ) || termo.alunos?.[respIndex] || termo.alunos?.[0];
     
-    const alunoNomeParaSalvar = alunoCorrespondente?.nome || '';
+    const alunoNomeParaSalvar = alunoCorrespondente?.nome || responsavelAlvo.alunoNome || '';
     
-    termo.responsaveis[responsavelIndex] = {
-      ...termo.responsaveis[responsavelIndex],
+    // ============================================
+    // 💾 SALVAR AUTORIZAÇÃO
+    // ============================================
+    termo.responsaveis[respIndex] = {
+      ...termo.responsaveis[respIndex],
       alunoId: alunoIdParaSalvar,
       alunoNome: alunoNomeParaSalvar,
       nome: nome.trim(),
@@ -892,7 +935,7 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
     termo.atualizarStatusGeral();
     await termo.save();
     
-    console.log(`✅ Termo ${termo.codigo} autorizado por ${nome}`);
+    console.log(`✅ Termo ${termo.codigo} autorizado por ${nome} (aluno ${alunoNomeParaSalvar})`);
     
     // ============================================
     // 💾 LGPD
@@ -926,8 +969,7 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
     }
     
     // ============================================
-    // 🔔 NOTIFICAÇÃO — PROFESSOR(ES) + CRIADOR
-    //    Somente quando TODAS as assinaturas forem coletadas
+    // 🔔 NOTIFICAÇÃO
     // ============================================
     let resultadoNotificacao = { notificado: false };
     try {
@@ -959,9 +1001,9 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
         cidade: termo.cidade,
         status: termo.status,
         responsavel: {
-          nome: termo.responsaveis[responsavelIndex].nome,
+          nome: termo.responsaveis[respIndex].nome,
           cpf: mascararCPF(cpfLimpo),
-          assinaturaData: termo.responsaveis[responsavelIndex].assinaturaData
+          assinaturaData: termo.responsaveis[respIndex].assinaturaData
         },
         assinaturaGestor: termo.assinaturaGestor
       }
@@ -983,49 +1025,36 @@ router.post('/recusar/:termoId', rateLimit(5, 10), async (req, res) => {
     const termo = await TermoVisita.findById(req.params.termoId);
     if (!termo) return res.status(404).json({ success: false, error: 'Termo não encontrado' });
     
-    let responsavelIndex = -1;
-    const alunoIdNorm = normalizarId(alunoId);
+    const respIndex = localizarResponsavelIndex(termo, alunoId);
     
-    if (alunoIdNorm) {
-      responsavelIndex = termo.responsaveis.findIndex(r => 
-        normalizarId(r.alunoId) === alunoIdNorm
-      );
+    if (respIndex === -1) {
+      return res.status(400).json({ success: false, error: 'Responsável não encontrado no termo' });
     }
     
-    if (responsavelIndex === -1) {
-      responsavelIndex = termo.responsaveis.findIndex(r => 
-        !r.nome || r.status === 'pendente'
-      );
-    }
+    const responsavelAlvo = termo.responsaveis[respIndex];
     
-    if (responsavelIndex === -1) responsavelIndex = 0;
-    
-    let alunoIdParaSalvar = paraObjectId(alunoIdNorm);
+    let alunoIdParaSalvar = paraObjectId(normalizarId(alunoId)) || paraObjectId(responsavelAlvo.alunoId);
     
     if (!alunoIdParaSalvar) {
-      const alunoCorrespondente = termo.alunos?.[responsavelIndex] || termo.alunos?.[0];
+      const alunoCorrespondente = termo.alunos?.[respIndex] || termo.alunos?.[0];
       alunoIdParaSalvar = paraObjectId(alunoCorrespondente?.alunoId || alunoCorrespondente?._id);
-    }
-    
-    if (!alunoIdParaSalvar) {
-      alunoIdParaSalvar = paraObjectId(termo.responsaveis[responsavelIndex]?.alunoId);
     }
     
     const alunoCorrespondente = termo.alunos?.find(a => 
       normalizarId(a.alunoId) === normalizarId(alunoIdParaSalvar)
-    ) || termo.alunos?.[responsavelIndex] || termo.alunos?.[0];
+    ) || termo.alunos?.[respIndex] || termo.alunos?.[0];
     
-    termo.responsaveis[responsavelIndex].alunoId = alunoIdParaSalvar;
-    termo.responsaveis[responsavelIndex].alunoNome = alunoCorrespondente?.nome || termo.responsaveis[responsavelIndex].alunoNome || '';
-    termo.responsaveis[responsavelIndex].status = 'recusado';
-    termo.responsaveis[responsavelIndex].recusaData = new Date();
-    termo.responsaveis[responsavelIndex].motivoRecusa = motivo || 'Não informado';
-    termo.responsaveis[responsavelIndex].nome = nome || 'Responsável';
+    termo.responsaveis[respIndex].alunoId = alunoIdParaSalvar;
+    termo.responsaveis[respIndex].alunoNome = alunoCorrespondente?.nome || termo.responsaveis[respIndex].alunoNome || '';
+    termo.responsaveis[respIndex].status = 'recusado';
+    termo.responsaveis[respIndex].recusaData = new Date();
+    termo.responsaveis[respIndex].motivoRecusa = motivo || 'Não informado';
+    termo.responsaveis[respIndex].nome = nome || 'Responsável';
     
     termo.atualizarStatusGeral();
     await termo.save();
     
-    // Notificar recusa (criador + professores do termo)
+    // Notificar recusa
     try {
       const destinatariosSet = new Set();
       if (termo.criadoPor) destinatariosSet.add(normalizarId(termo.criadoPor));
@@ -1085,7 +1114,7 @@ async function gerarQRCodeAlunoBase64(alunoId) {
 }
 
 // ============================================
-// 📄 GERAR TERMO OFICIAL (com filtro opcional por aluno)
+// 📄 GERAR TERMO OFICIAL
 // ============================================
 router.get('/termo-oficial/:id', async (req, res) => {
   try {
@@ -1274,7 +1303,7 @@ router.post('/termos-oficiais-lote', async (req, res) => {
 });
 
 // ============================================
-// 🎨 GERAR HTML DO TERMO OFICIAL (1 PÁGINA POR ALUNO)
+// 🎨 GERAR HTML DO TERMO OFICIAL
 // ============================================
 async function gerarHTMLTermoOficial(termo) {
   const alunos = termo.alunos || [];
@@ -1295,7 +1324,7 @@ async function gerarHTMLTermoOficial(termo) {
 }
 
 // ============================================
-// 📄 GERAR UMA PÁGINA PARA UM ALUNO ESPECÍFICO (COM QR CODE)
+// 📄 GERAR UMA PÁGINA PARA UM ALUNO
 // ============================================
 async function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas) {
   const dataVisita = new Date(termo.dataVisita).toLocaleDateString('pt-BR', {
@@ -1719,7 +1748,7 @@ async function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas)
 }
 
 // ============================================
-// 🎨 COMBINAR MÚLTIPLAS PÁGINAS DE UM MESMO TERMO
+// 🎨 COMBINAR MÚLTIPLAS PÁGINAS
 // ============================================
 function combinarPaginasTermo(paginas, termo) {
   if (paginas.length === 0) {
@@ -1770,7 +1799,7 @@ function combinarPaginasTermo(paginas, termo) {
 }
 
 // ============================================
-// 🎨 COMBINAR HTMLs DE MÚLTIPLOS TERMOS (IMPRESSÃO EM LOTE)
+// 🎨 COMBINAR HTMLs DE MÚLTIPLOS TERMOS
 // ============================================
 function combinarHTMLsTermos(htmls) {
   if (!htmls || htmls.length === 0) {

@@ -27,7 +27,6 @@ const TermoVisitaSchema = new mongoose.Schema({
   totalAlunos: { type: Number, default: 1 },
   
   // 🆕 MÚLTIPLAS TURMAS
-  // Mantém turmaPrincipal para retrocompatibilidade
   turmaPrincipal: String,
   turmas: {
     type: [String],
@@ -47,7 +46,6 @@ const TermoVisitaSchema = new mongoose.Schema({
     required: true
   },
   
-  // 🆕 DESCRIÇÃO DA ATIVIDADE
   descricaoAtividade: {
     type: String,
     default: ''
@@ -84,7 +82,8 @@ const TermoVisitaSchema = new mongoose.Schema({
   dataVisita: { type: Date, required: true },
   cidade: { type: String, default: 'São Luís' },
   
-  // ============ TOTP ============
+  // ============ TOTP (legado — mantido para retrocompatibilidade) ============
+  // ⚠️ NÃO USE MAIS. O TOTP agora é POR RESPONSÁVEL (dentro de responsaveis[]).
   totpSecret: { type: String, default: null },
   totpVerified: { type: Boolean, default: false },
   totpVerifiedAt: { type: Date, default: null },
@@ -97,8 +96,6 @@ const TermoVisitaSchema = new mongoose.Schema({
   smsVerifiedAt: { type: Date, default: null },
   
   // ============ RESPONSÁVEIS ============
-  // Dados já chegam aqui CRIPTOGRAFADOS do backend.
-  // Não há set/get automático — quem criptografa é a rota.
   responsaveis: [{
     alunoId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -108,14 +105,21 @@ const TermoVisitaSchema = new mongoose.Schema({
     
     nome: String,
     
-    // 🔐 Já chegam criptografados aqui
+    // 🔐 Já chegam criptografados
     rg: String,
     cpf: String,
     telefone: String,
     email: String,
     
-    // 🔍 Hash para busca
     cpfHash: { type: String, index: true },
+    
+    // ============================================
+    // 🔐 TOTP — AGORA POR RESPONSÁVEL
+    // ============================================
+    totpSecret: { type: String, default: null },
+    totpVerified: { type: Boolean, default: false },
+    totpVerifiedAt: { type: Date, default: null },
+    totpCreatedAt: { type: Date, default: null },
     
     autenticado: { type: Boolean, default: false },
     autenticacaoData: Date,
@@ -130,18 +134,16 @@ const TermoVisitaSchema = new mongoose.Schema({
     autenticacaoSMS: { type: Boolean, default: false },
     autenticacaoSMSData: Date,
     
-    // 🔐 Já chega criptografado
     assinaturaBase64: String,
     assinaturaData: Date,
     
-    // LGPD - Consentimento
+    // LGPD
     lgpdAceito: { type: Boolean, default: false },
     lgpdAceitoData: Date,
     lgpdVersao: { type: String, default: '1.0' },
     lgpdIp: String,
     lgpdUserAgent: String,
     
-    // Geolocalização minimizada
     localizacaoAssinatura: {
       latitude: Number,
       longitude: Number,
@@ -172,7 +174,7 @@ const TermoVisitaSchema = new mongoose.Schema({
   
   // ============ ASSINATURA DO GESTOR ============
   assinaturaGestor: {
-    base64: String,     // 🔐 Já criptografado
+    base64: String,
     nome: String,
     cargo: String,
     data: Date
@@ -211,11 +213,7 @@ TermoVisitaSchema.index({ status: 1, createdAt: -1 });
 TermoVisitaSchema.index({ codigo: 1 });
 TermoVisitaSchema.index({ 'responsaveis.cpfHash': 1 });
 TermoVisitaSchema.index({ expiraEm: 1, anonimizado: 1 });
-TermoVisitaSchema.index({ turmas: 1 }); // 🆕 índice multi-turma
-
-// 🆕 ÍNDICE COMPOSTO OTIMIZADO PARA O AGENDADOR DE LEMBRETES
-// Usado por services/visita-lembretes-service.js:
-//   TermoVisita.find({ ativo: true, dataVisita: { $gte, $lt } })
+TermoVisitaSchema.index({ turmas: 1 });
 TermoVisitaSchema.index({ ativo: 1, dataVisita: 1 });
 
 // ============================================
@@ -267,7 +265,6 @@ TermoVisitaSchema.methods.atualizarStatusGeral = function() {
   this.statusData = new Date();
 };
 
-// 🆕 Recalcula turmas/cursos a partir dos alunos
 TermoVisitaSchema.methods.recalcularTurmasCursos = function() {
   const turmas = [...new Set((this.alunos || []).map(a => a.turma).filter(Boolean))];
   const cursos = [...new Set((this.alunos || []).map(a => a.curso).filter(Boolean))];
@@ -290,6 +287,8 @@ TermoVisitaSchema.methods.anonimizar = function() {
     r.localizacaoAssinatura = null;
     r.lgpdIp = null;
     r.lgpdUserAgent = null;
+    r.totpSecret = null;
+    r.totpVerified = false;
   });
   
   this.assinaturaGestor = null;
