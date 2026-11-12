@@ -329,7 +329,7 @@ router.get('/buscar-localizacao', authenticateToken, verificarPermissaoVisitas, 
 // CRUD TERMOS
 // ============================================
 
-// Listar todos os termos
+// Listar todos os termos (🚀 OTIMIZADO)
 router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, res) => {
   try {
     const { status, turma, search, page = 1, limit = 20 } = req.query;
@@ -369,14 +369,38 @@ router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, 
     
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
-    const [termosRaw, total] = await Promise.all([
+    // ============================================
+    // 🚀 OTIMIZAÇÃO: Busca + Contagem + Agregação em paralelo
+    // ============================================
+    const [termosRaw, total, aggStats] = await Promise.all([
       TermoVisita.find(query)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit))
         .lean(),
-      TermoVisita.countDocuments(query)
+      
+      TermoVisita.countDocuments(query),
+      
+      // Substitui os 5 countDocuments por uma única agregação rápida
+      TermoVisita.aggregate([
+        { $match: { ativo: true } },
+        { $group: { _id: '$status', count: { $sum: 1 } } }
+      ])
     ]);
+    
+    // Processa a agregação para montar as estatísticas
+    const statsMap = aggStats.reduce((acc, curr) => {
+      acc[curr._id] = curr.count;
+      return acc;
+    }, {});
+    
+    const estatisticas = {
+      total: Object.values(statsMap).reduce((a, b) => a + b, 0),
+      pendentes: statsMap['pendente'] || 0,
+      autorizados: statsMap['autorizado'] || 0,
+      parcialmente_autorizado: statsMap['parcialmente_autorizado'] || 0,
+      recusados: statsMap['recusado'] || 0
+    };
     
     const termos = termosRaw.map(t => {
       const primeiroAluno = t.alunos?.[0];
@@ -441,14 +465,6 @@ router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, 
         updatedAt: t.updatedAt
       };
     });
-    
-    const estatisticas = {
-      total: await TermoVisita.countDocuments({ ativo: true }),
-      pendentes: await TermoVisita.countDocuments({ status: 'pendente', ativo: true }),
-      autorizados: await TermoVisita.countDocuments({ status: 'autorizado', ativo: true }),
-      parcialmente_autorizado: await TermoVisita.countDocuments({ status: 'parcialmente_autorizado', ativo: true }),
-      recusados: await TermoVisita.countDocuments({ status: 'recusado', ativo: true })
-    };
     
     res.json({
       success: true,
