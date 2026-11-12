@@ -11,7 +11,7 @@
 
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="/eventos/css/inscricao.css?v=10">
+    <link rel="stylesheet" href="/eventos/css/inscricao.css?v=11">
 </head>
 <body class="ev-body ev-body-inscricao">
 
@@ -171,7 +171,6 @@
 
                 <div id="campos-inscricao"></div>
 
-                <!-- BLOCO DE COTAS -->
                 <div id="bloco-cotas-inscricao" class="ev-card" hidden
                      style="margin-top:24px;padding:20px;background:#f0f9ff;border:2px solid #bae6fd;border-radius:12px;">
                     <h4 style="margin:0 0 12px;color:#0369a1;font-size:16px;font-weight:700;">
@@ -204,7 +203,6 @@
                     </div>
                 </div>
 
-                <!-- LGPD -->
                 <label class="insc-check-lgpd ev-lgpd-group">
                     <input type="checkbox" id="insc-lgpd-confirmo">
                     <span>Confirmo meus dados e aceito os <a href="#" class="ev-lgpd-link">termos de privacidade (LGPD)</a> *</span>
@@ -238,7 +236,84 @@
     </div>
 </div>
 
+<!-- ============================================ -->
+<!-- 🆕 BOTÃO FLUTUANTE DE AJUDA -->
+<!-- ============================================ -->
+<button class="btn-ajuda-flutuante" onclick="abrirAjuda()" title="Preciso de Ajuda">
+    <i class="fas fa-headset"></i>
+    <span>Preciso de Ajuda</span>
+</button>
+
+<!-- ============================================ -->
+<!-- 🆕 MODAL DE AJUDA (Eventos) -->
+<!-- ============================================ -->
+<div class="modal-ajuda-overlay" id="modalAjudaInscricao">
+    <div class="modal-ajuda-content" role="dialog" aria-labelledby="modalAjudaInscricaoTitulo" aria-modal="true">
+        <button class="modal-ajuda-close" onclick="fecharAjuda()" title="Fechar">
+            <i class="fas fa-times"></i>
+        </button>
+
+        <div class="modal-ajuda-header">
+            <div class="modal-ajuda-icon">
+                <i class="fas fa-headset"></i>
+            </div>
+            <div>
+                <h3 id="modalAjudaInscricaoTitulo">Preciso de Ajuda</h3>
+                <p>Preencha os dados e fale conosco pelo WhatsApp</p>
+            </div>
+        </div>
+
+        <div class="modal-ajuda-body">
+            <div class="modal-ajuda-info">
+                <i class="fas fa-info-circle"></i>
+                Seus dados serão enviados para o WhatsApp da escola. Responderemos assim que possível.
+            </div>
+
+            <div class="form-row-2">
+                <div class="form-group">
+                    <label>Nome <span class="req">*</span></label>
+                    <input type="text" id="ajudaNome" placeholder="Seu nome completo" autocomplete="name">
+                </div>
+                <div class="form-group">
+                    <label>Telefone <span class="req">*</span></label>
+                    <input type="tel" id="ajudaTelefone" placeholder="(00) 00000-0000" maxlength="15" autocomplete="tel">
+                </div>
+            </div>
+
+            <div class="form-row-2">
+                <div class="form-group">
+                    <label>E-mail <span class="req">*</span></label>
+                    <input type="email" id="ajudaEmail" placeholder="seu@email.com" autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <label>Evento Cadastrado <span class="req">*</span></label>
+                    <input type="text" id="ajudaEvento" placeholder="Ex: Feira de Ciências 2026" autocomplete="off">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Problema Enfrentado <span class="req">*</span></label>
+                <textarea id="ajudaProblema" placeholder="Descreva o que está acontecendo..." maxlength="800"></textarea>
+            </div>
+
+            <div class="modal-ajuda-aviso-resposta">
+                <i class="fas fa-clock"></i>
+                Estaremos respondendo <strong>assim que possível</strong>.
+            </div>
+
+            <div class="modal-ajuda-actions">
+                <button type="button" class="btn-cancelar" onclick="fecharAjuda()">
+                    Cancelar
+                </button>
+                <button type="button" class="btn-enviar-whats" id="btnEnviarWhats" onclick="enviarAjudaWhatsApp()">
+                    <i class="fab fa-whatsapp"></i> Enviar pelo WhatsApp
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/eventos/js/inscricao.js?v=10"></script>
+<script src="/eventos/js/inscricao.js?v=11"></script>
 </body>
 </html>

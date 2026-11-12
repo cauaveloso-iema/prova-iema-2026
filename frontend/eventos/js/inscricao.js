@@ -2036,6 +2036,144 @@ function juntarCamposResponsavel(anexo, alunoIdx) {
 }
 
 // ============================================================
+// 🆕 AJUDA VIA WHATSAPP - EVENTOS
+// ============================================================
+
+const WHATSAPP_ESCOLA_EVENTOS = '5598983086504';
+let __ajudaEventosBound = false;
+
+function configurarAjuda() {
+    if (__ajudaEventosBound) return;
+    __ajudaEventosBound = true;
+
+    // Máscara do telefone
+    const tel = document.getElementById('ajudaTelefone');
+    if (tel) {
+        tel.addEventListener('input', (e) => {
+            let v = e.target.value.replace(/\D/g, '').slice(0, 11);
+            if (v.length > 10) v = v.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+            else if (v.length > 6) v = v.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
+            else if (v.length > 2) v = v.replace(/(\d{2})(\d{0,5})/, '($1) $2');
+            e.target.value = v;
+        });
+    }
+
+    // Fecha ao clicar no overlay
+    const overlay = document.getElementById('modalAjudaInscricao');
+    if (overlay) {
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) fecharAjuda();
+        });
+    }
+}
+
+function preencherAjudaAutomatica() {
+    // Nome e e-mail do participante logado
+    try {
+        const user = JSON.parse(localStorage.getItem('participante_eventos_user') || '{}');
+        const nomeEl = document.getElementById('ajudaNome');
+        const emailEl = document.getElementById('ajudaEmail');
+        if (nomeEl && !nomeEl.value && user.nomeCompleto) nomeEl.value = user.nomeCompleto;
+        if (emailEl && !emailEl.value && user.email) emailEl.value = user.email;
+    } catch (e) { /* ignora */ }
+
+    // Nome do evento (se já carregou)
+    const eventoEl = document.getElementById('ajudaEvento');
+    if (eventoEl && !eventoEl.value && typeof eventoAtual !== 'undefined' && eventoAtual?.titulo) {
+        eventoEl.value = eventoAtual.titulo;
+    }
+}
+
+function abrirAjuda() {
+    const modal = document.getElementById('modalAjudaInscricao');
+    if (!modal) return;
+
+    configurarAjuda();
+    preencherAjudaAutomatica();
+
+    modal.classList.add('ativo');
+    document.body.style.overflow = 'hidden';
+
+    setTimeout(() => {
+        document.getElementById('ajudaNome')?.focus();
+    }, 250);
+}
+
+function fecharAjuda() {
+    const modal = document.getElementById('modalAjudaInscricao');
+    if (!modal) return;
+    modal.classList.remove('ativo');
+    document.body.style.overflow = '';
+}
+
+function enviarAjudaWhatsApp() {
+    const nome = document.getElementById('ajudaNome')?.value?.trim();
+    const telefone = document.getElementById('ajudaTelefone')?.value?.trim();
+    const email = document.getElementById('ajudaEmail')?.value?.trim();
+    const evento = document.getElementById('ajudaEvento')?.value?.trim();
+    const problema = document.getElementById('ajudaProblema')?.value?.trim();
+
+    if (!nome || nome.length < 3) return alert('Informe seu nome.');
+    if (!telefone || telefone.replace(/\D/g, '').length < 10) return alert('Informe um telefone válido.');
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) return alert('Informe um e-mail válido.');
+    if (!evento) return alert('Informe o evento cadastrado.');
+    if (!problema || problema.length < 10) return alert('Descreva o problema (mínimo 10 caracteres).');
+
+    const btn = document.getElementById('btnEnviarWhats');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Abrindo...';
+    }
+
+    try {
+        const dataHora = new Date().toLocaleString('pt-BR');
+
+        const mensagem =
+            `*🆘 Preciso de Ajuda - Inscrição em Eventos*\n\n` +
+            `*Nome:* ${nome}\n` +
+            `*Telefone:* ${telefone}\n` +
+            `*E-mail:* ${email}\n` +
+            `*Evento cadastrado:* ${evento}\n\n` +
+            `*Problema Enfrentado:*\n${problema}\n\n` +
+            `_Enviado em: ${dataHora}_`;
+
+        const url = `https://wa.me/${WHATSAPP_ESCOLA_EVENTOS}?text=${encodeURIComponent(mensagem)}`;
+        window.open(url, '_blank');
+
+        // Reaproveita o toast que já existe no seu script
+        if (typeof mostrarToastGlobal === 'function') {
+            mostrarToastGlobal('WhatsApp aberto! Estaremos respondendo assim que possível.', 'success');
+        }
+
+        setTimeout(() => {
+            ['ajudaNome', 'ajudaTelefone', 'ajudaEmail', 'ajudaEvento', 'ajudaProblema'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
+            fecharAjuda();
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fab fa-whatsapp"></i> Enviar pelo WhatsApp';
+            }
+        }, 800);
+
+    } catch (err) {
+        console.error('❌ Erro ao abrir WhatsApp:', err);
+        alert('Não foi possível abrir o WhatsApp. Tente novamente.');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fab fa-whatsapp"></i> Enviar pelo WhatsApp';
+        }
+    }
+}
+
+// Expõe no window (para os onclick do HTML funcionarem)
+window.abrirAjuda = abrirAjuda;
+window.fecharAjuda = fecharAjuda;
+window.enviarAjudaWhatsApp = enviarAjudaWhatsApp;
+window.preencherAjudaAutomatica = preencherAjudaAutomatica;
+
+// ============================================================
 // LOGIN / CADASTRO / SUBMIT
 // ============================================================
 document.querySelectorAll('.insc-auth-tab').forEach(t => {

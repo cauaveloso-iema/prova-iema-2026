@@ -1077,3 +1077,305 @@ body {
         font-size: 11px;
     }
 }
+
+/* ============================================================
+   🆕 BOTÃO DE AJUDA FLUTUANTE
+   ============================================================ */
+.btn-ajuda-flutuante {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 9998;
+    background: linear-gradient(135deg, #25d366, #128c7e);
+    color: white;
+    border: none;
+    border-radius: 50px;
+    padding: 14px 22px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 8px 24px rgba(37, 211, 102, 0.45);
+    transition: all 0.3s;
+    font-family: inherit;
+    animation: ajudaFloat 2.5s ease-in-out infinite;
+}
+
+.btn-ajuda-flutuante:hover {
+    transform: translateY(-3px) scale(1.03);
+    box-shadow: 0 12px 32px rgba(37, 211, 102, 0.6);
+}
+
+.btn-ajuda-flutuante i {
+    font-size: 20px;
+}
+
+@keyframes ajudaFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
+
+@media (max-width: 600px) {
+    .btn-ajuda-flutuante {
+        bottom: 16px;
+        right: 16px;
+        padding: 12px 18px;
+        font-size: 14px;
+    }
+    .btn-ajuda-flutuante span {
+        display: none;
+    }
+    .btn-ajuda-flutuante i {
+        font-size: 22px;
+    }
+}
+
+/* ============================================================
+   🆕 MODAL DE AJUDA
+   ============================================================ */
+.modal-ajuda-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(4px);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.modal-ajuda-overlay.ativo {
+    display: flex;
+    animation: fadeInOverlay 0.25s ease;
+}
+
+@keyframes fadeInOverlay {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.modal-ajuda-content {
+    background: white;
+    border-radius: 20px;
+    max-width: 520px;
+    width: 100%;
+    max-height: 92vh;
+    overflow-y: auto;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.35);
+    animation: slideUpModal 0.3s ease;
+    position: relative;
+}
+
+@keyframes slideUpModal {
+    from { transform: translateY(30px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.modal-ajuda-header {
+    background: linear-gradient(135deg, #25d366, #128c7e);
+    color: white;
+    padding: 22px 24px;
+    border-radius: 20px 20px 0 0;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    position: relative;
+}
+
+.modal-ajuda-header .modal-ajuda-icon {
+    width: 50px;
+    height: 50px;
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.modal-ajuda-header h3 {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+}
+
+.modal-ajuda-header p {
+    margin: 3px 0 0;
+    font-size: 0.82rem;
+    opacity: 0.92;
+}
+
+.modal-ajuda-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    background: rgba(255, 255, 255, 0.25);
+    border: none;
+    color: white;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.modal-ajuda-close:hover {
+    background: rgba(255, 255, 255, 0.4);
+    transform: rotate(90deg);
+}
+
+.modal-ajuda-body {
+    padding: 24px;
+}
+
+.modal-ajuda-body .form-group {
+    margin-bottom: 16px;
+}
+
+.modal-ajuda-body label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #334155;
+    margin-bottom: 6px;
+}
+
+.modal-ajuda-body label .req {
+    color: #ef4444;
+    margin-left: 2px;
+}
+
+.modal-ajuda-body input,
+.modal-ajuda-body textarea {
+    width: 100%;
+    padding: 12px 14px;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 14px;
+    font-family: inherit;
+    transition: all 0.2s;
+    background: #f8fafc;
+    box-sizing: border-box;
+}
+
+.modal-ajuda-body input:focus,
+.modal-ajuda-body textarea:focus {
+    outline: none;
+    border-color: #25d366;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.15);
+}
+
+.modal-ajuda-body textarea {
+    resize: vertical;
+    min-height: 90px;
+    line-height: 1.5;
+}
+
+.modal-ajuda-body .form-row-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+@media (max-width: 480px) {
+    .modal-ajuda-body .form-row-2 {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+}
+
+.modal-ajuda-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 22px;
+}
+
+.modal-ajuda-actions .btn-cancelar {
+    flex: 0 0 auto;
+    padding: 13px 20px;
+    background: #f1f5f9;
+    color: #475569;
+    border: none;
+    border-radius: 50px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.modal-ajuda-actions .btn-cancelar:hover {
+    background: #e2e8f0;
+}
+
+.modal-ajuda-actions .btn-enviar-whats {
+    flex: 1;
+    padding: 13px 20px;
+    background: linear-gradient(135deg, #25d366, #128c7e);
+    color: white;
+    border: none;
+    border-radius: 50px;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s;
+    box-shadow: 0 4px 14px rgba(37, 211, 102, 0.35);
+    font-family: inherit;
+}
+
+.modal-ajuda-actions .btn-enviar-whats:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(37, 211, 102, 0.5);
+}
+
+.modal-ajuda-actions .btn-enviar-whats:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.modal-ajuda-info {
+    background: #eff6ff;
+    border-left: 4px solid #3b82f6;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    color: #1e40af;
+    margin-bottom: 18px;
+    line-height: 1.5;
+}
+
+.modal-ajuda-info i {
+    color: #3b82f6;
+    margin-right: 6px;
+}
+
+.modal-ajuda-aviso-resposta {
+    background: #f0fdf4;
+    border-left: 4px solid #10b981;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    color: #065f46;
+    margin-bottom: 18px;
+    line-height: 1.5;
+}
+
+.modal-ajuda-aviso-resposta i {
+    color: #10b981;
+    margin-right: 6px;
+}

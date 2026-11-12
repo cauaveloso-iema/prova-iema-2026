@@ -516,6 +516,83 @@
         </div>
     </div>
 
+    <!-- ============================================ -->
+    <!-- 🆕 BOTÃO FLUTUANTE DE AJUDA -->
+    <!-- ============================================ -->
+    <button class="btn-ajuda-flutuante" onclick="abrirAjuda()" title="Preciso de Ajuda">
+        <i class="fas fa-headset"></i>
+        <span>Preciso de Ajuda</span>
+    </button>
+
+    <!-- ============================================ -->
+    <!-- 🆕 MODAL DE AJUDA -->
+    <!-- ============================================ -->
+    <div class="modal-ajuda-overlay" id="modalAjudaProtagonismo">
+        <div class="modal-ajuda-content" role="dialog" aria-labelledby="modalAjudaProtagonismoTitulo" aria-modal="true">
+            <button class="modal-ajuda-close" onclick="fecharAjuda()" title="Fechar">
+                <i class="fas fa-times"></i>
+            </button>
+
+            <div class="modal-ajuda-header">
+                <div class="modal-ajuda-icon">
+                    <i class="fas fa-headset"></i>
+                </div>
+                <div>
+                    <h3 id="modalAjudaProtagonismoTitulo">Preciso de Ajuda</h3>
+                    <p>Preencha os dados e fale conosco pelo WhatsApp</p>
+                </div>
+            </div>
+
+            <div class="modal-ajuda-body">
+                <div class="modal-ajuda-info">
+                    <i class="fas fa-info-circle"></i>
+                    Seus dados serão enviados para o WhatsApp da escola. Responderemos assim que possível.
+                </div>
+
+                <div class="form-row-2">
+                    <div class="form-group">
+                        <label>Nome <span class="req">*</span></label>
+                        <input type="text" id="ajudaNome" placeholder="Seu nome completo" autocomplete="name">
+                    </div>
+                    <div class="form-group">
+                        <label>Telefone <span class="req">*</span></label>
+                        <input type="tel" id="ajudaTelefone" placeholder="(00) 00000-0000" maxlength="15" autocomplete="tel">
+                    </div>
+                </div>
+
+                <div class="form-row-2">
+                    <div class="form-group">
+                        <label>Turma <span class="req">*</span></label>
+                        <input type="text" id="ajudaTurma" placeholder="Ex: 1º Ano A" autocomplete="off">
+                    </div>
+                    <div class="form-group">
+                        <label>Curso <span class="req">*</span></label>
+                        <input type="text" id="ajudaCurso" placeholder="Ex: Informática" autocomplete="off">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Problema Enfrentado <span class="req">*</span></label>
+                    <textarea id="ajudaProblema" placeholder="Descreva o que está acontecendo..." maxlength="800"></textarea>
+                </div>
+
+                <div class="modal-ajuda-aviso-resposta">
+                    <i class="fas fa-clock"></i>
+                    Estaremos respondendo <strong>assim que possível</strong>.
+                </div>
+
+                <div class="modal-ajuda-actions">
+                    <button type="button" class="btn-cancelar" onclick="fecharAjuda()">
+                        Cancelar
+                    </button>
+                    <button type="button" class="btn-enviar-whats" id="btnEnviarWhats" onclick="enviarAjudaWhatsApp()">
+                        <i class="fab fa-whatsapp"></i> Enviar pelo WhatsApp
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Escalonamento Mobile -->
     <script>
         (function() {

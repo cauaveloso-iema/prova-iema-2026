@@ -13,6 +13,9 @@ let candidatoLiderSelecionado = null;
 let candidatoViceSelecionado = null;
 let votacaoData = null;
 
+// 🆕 WhatsApp da escola (DDI + DDD + número)
+const WHATSAPP_ESCOLA_PROTAGONISMO = '5598983086504';
+
 // ============================================
 // HELPERS
 // ============================================
@@ -67,6 +70,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             el.max = maxDate.toISOString().split('T')[0];
         }
     });
+
+    // 🆕 Configura máscara de telefone e fechar-clique-fora no modal de ajuda
+    configurarAjuda();
 });
 
 // ============================================
@@ -813,6 +819,129 @@ function fecharModalErro() {
 }
 
 // ============================================
+// 🆕 AJUDA VIA WHATSAPP
+// ============================================
+function configurarAjuda() {
+    // Máscara de telefone no modal de ajuda
+    const tel = safeGet('ajudaTelefone');
+    if (tel && !tel.dataset.maskApplied) {
+        tel.dataset.maskApplied = 'true';
+        tel.addEventListener('input', (e) => {
+            let v = e.target.value.replace(/\D/g, '').slice(0, 11);
+            if (v.length > 10) v = v.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+            else if (v.length > 6) v = v.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
+            else if (v.length > 2) v = v.replace(/(\d{2})(\d{0,5})/, '($1) $2');
+            e.target.value = v;
+        });
+    }
+
+    // Fecha o modal ao clicar no fundo escuro
+    const overlay = safeGet('modalAjudaProtagonismo');
+    if (overlay && !overlay.dataset.clickBound) {
+        overlay.dataset.clickBound = 'true';
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) fecharAjuda();
+        });
+    }
+}
+
+function abrirAjuda() {
+    const modal = safeGet('modalAjudaProtagonismo');
+    if (!modal) return;
+    modal.classList.add('ativo');
+    document.body.style.overflow = 'hidden';
+
+    setTimeout(() => {
+        safeGet('ajudaNome')?.focus();
+    }, 250);
+}
+
+function fecharAjuda() {
+    const modal = safeGet('modalAjudaProtagonismo');
+    if (!modal) return;
+    modal.classList.remove('ativo');
+    document.body.style.overflow = '';
+}
+
+function showToast(mensagem, tipo = 'info') {
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+        position: fixed; top: 20px; right: 20px;
+        padding: 14px 20px; border-radius: 12px;
+        background: ${tipo === 'success' ? '#10b981' : tipo === 'error' ? '#ef4444' : '#3b82f6'};
+        color: white; font-size: 14px; font-weight: 500;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+        z-index: 99999; max-width: 340px;
+    `;
+    toast.textContent = mensagem;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.3s';
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
+}
+
+function enviarAjudaWhatsApp() {
+    const nome = safeGet('ajudaNome')?.value?.trim();
+    const telefone = safeGet('ajudaTelefone')?.value?.trim();
+    const turma = safeGet('ajudaTurma')?.value?.trim();
+    const curso = safeGet('ajudaCurso')?.value?.trim();
+    const problema = safeGet('ajudaProblema')?.value?.trim();
+
+    if (!nome || nome.length < 3) return showToast('Informe seu nome', 'error');
+    if (!telefone || telefone.replace(/\D/g, '').length < 10) return showToast('Informe um telefone válido', 'error');
+    if (!turma) return showToast('Informe a turma', 'error');
+    if (!curso) return showToast('Informe o curso', 'error');
+    if (!problema || problema.length < 10) return showToast('Descreva o problema (mínimo 10 caracteres)', 'error');
+
+    const btn = safeGet('btnEnviarWhats');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Abrindo...';
+    }
+
+    try {
+        const dataHora = new Date().toLocaleString('pt-BR');
+
+        const mensagem =
+            `*🆘 Preciso de Ajuda - Protagonismo Estudantil*\n\n` +
+            `*Nome:* ${nome}\n` +
+            `*Telefone:* ${telefone}\n` +
+            `*Turma:* ${turma}\n` +
+            `*Curso:* ${curso}\n\n` +
+            `*Problema Enfrentado:*\n${problema}\n\n` +
+            `_Enviado em: ${dataHora}_`;
+
+        const url = `https://wa.me/${WHATSAPP_ESCOLA_PROTAGONISMO}?text=${encodeURIComponent(mensagem)}`;
+
+        window.open(url, '_blank');
+
+        showToast('✅ WhatsApp aberto! Estaremos respondendo assim que possível.', 'success');
+
+        setTimeout(() => {
+            ['ajudaNome', 'ajudaTelefone', 'ajudaTurma', 'ajudaCurso', 'ajudaProblema'].forEach(id => {
+                const el = safeGet(id);
+                if (el) el.value = '';
+            });
+            fecharAjuda();
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fab fa-whatsapp"></i> Enviar pelo WhatsApp';
+            }
+        }, 800);
+
+    } catch (error) {
+        console.error('❌ Erro ao abrir WhatsApp:', error);
+        showToast('❌ Não foi possível abrir o WhatsApp. Tente novamente.', 'error');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fab fa-whatsapp"></i> Enviar pelo WhatsApp';
+        }
+    }
+}
+
+// ============================================
 // EXPORTAR FUNÇÕES GLOBAIS
 // ============================================
 window.mostrarSecao = mostrarSecao;
@@ -826,3 +955,8 @@ window.confirmarVoto = confirmarVoto;
 window.verificarInscricao = verificarInscricao;
 window.fecharModalSucesso = fecharModalSucesso;
 window.fecharModalErro = fecharModalErro;
+
+// 🆕 Ajuda via WhatsApp
+window.abrirAjuda = abrirAjuda;
+window.fecharAjuda = fecharAjuda;
+window.enviarAjudaWhatsApp = enviarAjudaWhatsApp;

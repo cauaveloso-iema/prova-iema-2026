@@ -34,6 +34,9 @@ class VisitasPublico {
         };
         
         this.localizacao = null;
+
+        // 🆕 Número do WhatsApp da escola (com DDI)
+        this.whatsappEscola = '5598983086504';
     }
 
     // ============================================
@@ -198,6 +201,28 @@ class VisitasPublico {
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     this.verificarTOTP();
+                }
+            });
+        }
+
+        // 🆕 Máscara de telefone no modal de ajuda
+        const ajudaTelInput = document.getElementById('ajudaTelefone');
+        if (ajudaTelInput) {
+            ajudaTelInput.addEventListener('input', (e) => {
+                let v = e.target.value.replace(/\D/g, '').slice(0, 11);
+                if (v.length > 10) v = v.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+                else if (v.length > 6) v = v.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
+                else if (v.length > 2) v = v.replace(/(\d{2})(\d{0,5})/, '($1) $2');
+                e.target.value = v;
+            });
+        }
+
+        // 🆕 Fecha o modal de ajuda ao clicar no overlay (fundo escuro)
+        const modalAjuda = document.getElementById('modalAjuda');
+        if (modalAjuda) {
+            modalAjuda.addEventListener('click', (e) => {
+                if (e.target === modalAjuda) {
+                    this.fecharAjuda();
                 }
             });
         }
@@ -1131,6 +1156,103 @@ class VisitasPublico {
         } catch (error) {
             console.error('❌ Erro:', error);
             this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============================================
+    // 🆕 AJUDA VIA WHATSAPP
+    // ============================================
+    abrirAjuda() {
+        const modal = document.getElementById('modalAjuda');
+        if (!modal) return;
+        modal.classList.add('ativo');
+        document.body.style.overflow = 'hidden';
+
+        // Preenche o nome do aluno se já foi selecionado (conveniência)
+        const ajudaNome = document.getElementById('ajudaNome');
+        if (ajudaNome && !ajudaNome.value && this.alunoSelecionado?.nome) {
+            ajudaNome.value = this.alunoSelecionado.nome;
+        }
+
+        setTimeout(() => {
+            document.getElementById('ajudaNome')?.focus();
+        }, 250);
+    }
+
+    fecharAjuda() {
+        const modal = document.getElementById('modalAjuda');
+        if (!modal) return;
+        modal.classList.remove('ativo');
+        document.body.style.overflow = '';
+    }
+
+    enviarAjudaWhatsApp() {
+        const nome = document.getElementById('ajudaNome')?.value?.trim();
+        const telefone = document.getElementById('ajudaTelefone')?.value?.trim();
+        const turma = document.getElementById('ajudaTurma')?.value?.trim();
+        const curso = document.getElementById('ajudaCurso')?.value?.trim();
+        const problema = document.getElementById('ajudaProblema')?.value?.trim();
+
+        if (!nome || nome.length < 3) {
+            return this.showToast('Informe seu nome', 'error');
+        }
+        if (!telefone || telefone.replace(/\D/g, '').length < 10) {
+            return this.showToast('Informe um telefone válido', 'error');
+        }
+        if (!turma) {
+            return this.showToast('Informe a turma', 'error');
+        }
+        if (!curso) {
+            return this.showToast('Informe o curso', 'error');
+        }
+        if (!problema || problema.length < 10) {
+            return this.showToast('Descreva o problema (mínimo 10 caracteres)', 'error');
+        }
+
+        const btn = document.getElementById('btnEnviarWhats');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Abrindo...';
+        }
+
+        try {
+            const dataHora = new Date().toLocaleString('pt-BR');
+
+            const mensagem =
+                `*🆘 Preciso de Ajuda - Autorização de Visitas*\n\n` +
+                `*Nome:* ${nome}\n` +
+                `*Telefone:* ${telefone}\n` +
+                `*Turma:* ${turma}\n` +
+                `*Curso:* ${curso}\n\n` +
+                `*Problema Enfrentado:*\n${problema}\n\n` +
+                `_Enviado em: ${dataHora}_`;
+
+            const url = `https://wa.me/${this.whatsappEscola}?text=${encodeURIComponent(mensagem)}`;
+
+            window.open(url, '_blank');
+
+            this.showToast('✅ WhatsApp aberto! Estaremos respondendo assim que possível.', 'success');
+
+            // Limpa e fecha após abrir o WhatsApp
+            setTimeout(() => {
+                ['ajudaNome', 'ajudaTelefone', 'ajudaTurma', 'ajudaCurso', 'ajudaProblema'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.value = '';
+                });
+                this.fecharAjuda();
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fab fa-whatsapp"></i> Enviar pelo WhatsApp';
+                }
+            }, 800);
+
+        } catch (error) {
+            console.error('❌ Erro ao abrir WhatsApp:', error);
+            this.showToast('❌ Não foi possível abrir o WhatsApp. Tente novamente.', 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fab fa-whatsapp"></i> Enviar pelo WhatsApp';
+            }
         }
     }
 
