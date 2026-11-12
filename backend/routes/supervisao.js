@@ -70,21 +70,18 @@ function mascararItem(item, req) {
     obj.criadoPor
   )?.toString();
   
-  // Se NÃO é super_admin, NUNCA mascara
   if (!ROLES_MASCARADOS.includes(req.userRole)) {
     obj._mascarado = false;
     obj._criadoPorMim = criadorId === adminId;
     return obj;
   }
   
-  // super_admin que criou: NÃO mascara
   if (criadorId && adminId && criadorId === adminId) {
     obj._mascarado = false;
     obj._criadoPorMim = true;
     return obj;
   }
   
-  // super_admin que NÃO criou: mascara
   obj._mascarado = true;
   obj._criadoPorMim = false;
   
@@ -283,9 +280,6 @@ function labelTiposTarefa(tipos) {
   return tipos.map(t => AtendimentoSupervisao.getTipoTarefaLabel(t)).join(' + ');
 }
 
-// ============================================
-// HELPER: LÊ detalhes com getters aplicados (descriptografado)
-// ============================================
 function lerDetalhesLimpos(atendimento) {
   if (!atendimento || !atendimento.detalhes) return {};
   try {
@@ -317,7 +311,7 @@ router.get('/health', (req, res) => {
     success: true,
     status: 'online',
     service: 'Supervisão',
-    versao: '4.3-fuso-br',
+    versao: '4.4-coletivo',
     _debug: {
       hojeBR: getDataHojeBR(),
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -420,20 +414,13 @@ router.delete('/admin/perfis/:id/permanente', authenticateToken, apenasSuperAdmi
 router.post('/admin/perfis/seed', authenticateToken, apenasSuperAdmin, async (req, res) => {
   try {
     const { force } = req.body;
-    
     if (force) {
       await PerfilParticipante.deleteMany({});
       console.log('🗑️  [SEED FORCE] Perfis antigos removidos');
     }
-    
     await PerfilParticipante.seedInicial();
     const total = await PerfilParticipante.countDocuments();
-    
-    res.json({
-      success: true,
-      message: `${total} perfis cadastrados`,
-      total
-    });
+    res.json({ success: true, message: `${total} perfis cadastrados`, total });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -445,9 +432,7 @@ router.post('/admin/perfis/seed', authenticateToken, apenasSuperAdmin, async (re
 router.get('/eixos', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const eixos = await User.distinct('eixo', { 
-      role: 'professor', 
-      ativo: true, 
-      eixo: { $nin: [null, '', 'Não informado'] } 
+      role: 'professor', ativo: true, eixo: { $nin: [null, '', 'Não informado'] } 
     });
     res.json({ success: true, eixos: eixos.filter(Boolean).sort() });
   } catch (error) {
@@ -464,20 +449,15 @@ router.get('/professores-por-eixo', authenticateToken, verificarSupervisao, asyn
     if (!eixo) return res.status(400).json({ success: false, error: 'Eixo é obrigatório' });
     
     const professores = await User.find({ 
-      role: 'professor', 
-      ativo: true, 
-      eixo: eixo 
+      role: 'professor', ativo: true, eixo: eixo 
     }).select('nome matricula eixo fotoPerfil').sort({ nome: 1 });
     
     res.json({
       success: true,
       total: professores.length,
       usuarios: professores.map(u => ({
-        id: u._id,
-        nome: u.nome,
-        matricula: u.matricula || '',
-        eixo: u.eixo || '',
-        fotoPerfil: u.fotoPerfil || null
+        id: u._id, nome: u.nome, matricula: u.matricula || '',
+        eixo: u.eixo || '', fotoPerfil: u.fotoPerfil || null
       }))
     });
   } catch (error) {
@@ -517,10 +497,8 @@ router.get('/alunos-por-turma', authenticateToken, verificarSupervisao, async (r
     }));
     
     res.json({
-      success: true, 
-      total: alunos.length,
-      usuarios: lista,
-      alunos: lista
+      success: true, total: alunos.length,
+      usuarios: lista, alunos: lista
     });
   } catch (error) { 
     res.status(500).json({ success: false, error: error.message }); 
@@ -538,10 +516,8 @@ router.get('/usuarios-por-perfil', authenticateToken, verificarSupervisao, async
     }
     
     const perfilLower = perfil.toLowerCase().trim();
-    
     const perfilConfig = await PerfilParticipante.buscarPorValor(perfilLower);
     if (!perfilConfig) {
-      console.warn(`[USUARIOS-PERFIL] Perfil não cadastrado: "${perfilLower}"`);
       return res.status(400).json({ 
         success: false, 
         error: `Perfil "${perfilLower}" não cadastrado. Cadastre em /admin/perfis` 
@@ -556,18 +532,14 @@ router.get('/usuarios-por-perfil', authenticateToken, verificarSupervisao, async
     }
     
     const usuarios = await User.find({ 
-      role: perfilLower, 
-      ativo: true 
+      role: perfilLower, ativo: true 
     }).select('nome matricula fotoPerfil').sort({ nome: 1 }).lean();
-    
-    console.log(`[USUARIOS-PERFIL] role="${perfilLower}" → ${usuarios.length} usuário(s)`);
     
     res.json({
       success: true,
       total: usuarios.length,
       usuarios: usuarios.map(u => ({
-        id: u._id,
-        nome: u.nome,
+        id: u._id, nome: u.nome,
         matricula: u.matricula || '',
         fotoPerfil: u.fotoPerfil || null
       }))
@@ -604,24 +576,18 @@ router.get('/aluno/:id', authenticateToken, verificarSupervisao, async (req, res
       atendimentosAtivos: atendimentosAtivos.map(a => {
         const tipos = extrairTiposTarefa(a);
         return {
-          id: a._id, 
-          tipoTarefa: a.tipoTarefa,
-          tiposTarefa: tipos,
-          tipoTarefaLabel: labelTiposTarefa(tipos),
-          descricao: a.entrada.descricao, 
-          dataHoraEntrada: a.entrada.dataHora, 
+          id: a._id, tipoTarefa: a.tipoTarefa,
+          tiposTarefa: tipos, tipoTarefaLabel: labelTiposTarefa(tipos),
+          descricao: a.entrada.descricao, dataHoraEntrada: a.entrada.dataHora,
           prioridade: a.prioridade
         };
       }),
       historicoRecente: historicoRecente.map(a => {
         const tipos = extrairTiposTarefa(a);
         return {
-          id: a._id, 
-          tipoTarefa: a.tipoTarefa,
-          tiposTarefa: tipos,
-          tipoTarefaLabel: labelTiposTarefa(tipos),
-          descricao: a.entrada.descricao, 
-          dataHora: a.entrada.dataHora, 
+          id: a._id, tipoTarefa: a.tipoTarefa,
+          tiposTarefa: tipos, tipoTarefaLabel: labelTiposTarefa(tipos),
+          descricao: a.entrada.descricao, dataHora: a.entrada.dataHora,
           resultado: a.saida?.resultado
         };
       })
@@ -656,7 +622,178 @@ router.get('/buscar-aluno', authenticateToken, verificarSupervisao, async (req, 
 });
 
 // ============================================
-// REGISTRAR ATENDIMENTO (MÚLTIPLOS TIPOS)
+// 🆕 REGISTRAR ATENDIMENTO COLETIVO
+// Cria N atendimentos (um por aluno), compartilhando todos os dados
+// ============================================
+router.post('/registrar-coletivo', authenticateToken, verificarSupervisao, async (req, res) => {
+  try {
+    const { 
+      alunosIds = [],
+      tiposTarefa = [],
+      tipoTarefa,
+      descricao, observacoes, gravidade, prioridade, 
+      detalhes, assinaturaBase64, precisaAssinatura = false,
+      participantes = []
+    } = req.body;
+    
+    // Validação básica
+    if (!Array.isArray(alunosIds) || alunosIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'Selecione pelo menos um aluno' });
+    }
+    if (alunosIds.length > 50) {
+      return res.status(400).json({ success: false, error: 'Máximo de 50 alunos por atendimento coletivo' });
+    }
+    
+    let tiposFinal = Array.isArray(tiposTarefa) && tiposTarefa.length > 0
+      ? tiposTarefa
+      : (tipoTarefa ? [tipoTarefa] : []);
+    tiposFinal = [...new Set(tiposFinal.filter(Boolean))];
+    
+    if (tiposFinal.length === 0) {
+      return res.status(400).json({ success: false, error: 'Selecione pelo menos um tipo de tarefa' });
+    }
+    if (!descricao || descricao.trim() === '') {
+      return res.status(400).json({ success: false, error: 'A descrição é obrigatória' });
+    }
+    
+    const tiposValidos = [
+      'advertencia_verbal', 'advertencia_escrita', 'atendimento_aluno',
+      'atendimento_responsavel', 'atendimento_professor', 'suspensao', 'encaminhamento', 'outros'
+    ];
+    for (const t of tiposFinal) {
+      if (!tiposValidos.includes(t)) {
+        return res.status(400).json({ success: false, error: `Tipo de tarefa inválido: ${t}` });
+      }
+    }
+    
+    // Buscar todos os alunos
+    const alunos = await User.find({ _id: { $in: alunosIds }, role: 'aluno', ativo: true });
+    if (alunos.length !== alunosIds.length) {
+      return res.status(404).json({ 
+        success: false, 
+        error: `Alguns alunos não foram encontrados (${alunosIds.length - alunos.length} ausentes)` 
+      });
+    }
+    
+    const supervisor = await User.findById(req.userId).select('nome');
+    const nomeSupervisor = supervisor?.nome || req.userNome || 'Supervisor';
+    
+    let assinaturaValida = '';
+    if (assinaturaBase64 && typeof assinaturaBase64 === 'string') {
+      if (assinaturaBase64.startsWith('data:image/') && assinaturaBase64.length < 500000) {
+        assinaturaValida = assinaturaBase64;
+      }
+    }
+    
+    const statusAssinatura = precisaAssinatura && !assinaturaValida
+      ? 'pendente'
+      : (assinaturaValida.length > 100 ? 'assinada' : 'nao_necessaria');
+    
+    // Processar participantes UMA VEZ (compartilhado)
+    const participantesProcessados = (Array.isArray(participantes) ? participantes : [])
+      .filter(p => p && p.usuarioId && p.usuarioNome)
+      .map(p => {
+        let assinaturaPartValida = '';
+        if (p.assinaturaBase64 && typeof p.assinaturaBase64 === 'string') {
+          if (p.assinaturaBase64.startsWith('data:image/') && p.assinaturaBase64.length < 500000) {
+            assinaturaPartValida = p.assinaturaBase64;
+          }
+        }
+        return {
+          usuarioId: p.usuarioId,
+          usuarioNome: p.usuarioNome,
+          usuarioMatricula: p.usuarioMatricula || null,
+          usuarioFoto: p.usuarioFoto || null,
+          tipo: p.tipo || 'outros',
+          tipoLabel: p.tipoLabel || p.tipo || 'Outros',
+          turma: p.turma || null,
+          eixo: p.eixo || null,
+          filtroValor: p.filtroValor || '',
+          precisaAssinatura: !!p.precisaAssinatura,
+          assinaturaBase64: assinaturaPartValida,
+          temAssinatura: assinaturaPartValida.length > 100,
+          assinadaEm: assinaturaPartValida.length > 100 ? new Date() : null,
+          assinadaPorNome: assinaturaPartValida.length > 100 ? p.usuarioNome : null,
+          sessaoAssinaturaId: p.sessaoId || null
+        };
+      });
+    
+    const tipoPrincipal = tiposFinal[0];
+    const detalhesFinal = { ...(detalhes || {}) };
+    if (tiposFinal.length > 1) {
+      detalhesFinal.tiposTarefaAdicionais = tiposFinal.slice(1);
+    }
+    
+    // Criar N atendimentos
+    const criados = [];
+    const falhas = [];
+    
+    for (const aluno of alunos) {
+      try {
+        const atendimento = new AtendimentoSupervisao({
+          alunoId: aluno._id,
+          alunoNome: aluno.nome,
+          alunoMatricula: aluno.matricula,
+          alunoTurma: aluno.turma || 'Não informada',
+          alunoCurso: aluno.curso || 'Não informado',
+          alunoFoto: aluno.fotoPerfil,
+          tipoTarefa: tipoPrincipal,
+          entrada: {
+            dataHora: new Date(),
+            descricao: descricao.trim(),
+            observacoes: observacoes || '',
+            gravidade: gravidade || 'media',
+            registradoPor: req.userId,
+            registradoPorNome: nomeSupervisor,
+            assinaturaBase64: assinaturaValida,
+            temAssinatura: assinaturaValida.length > 100,
+            statusAssinatura: statusAssinatura,
+            assinadaEm: assinaturaValida.length > 100 ? new Date() : null,
+            assinadaPor: assinaturaValida.length > 100 ? req.userId : null,
+            assinadaPorNome: assinaturaValida.length > 100 ? nomeSupervisor : null,
+            participantes: participantesProcessados
+          },
+          detalhes: detalhesFinal,
+          prioridade: prioridade || 'normal',
+          status: 'em_andamento',
+          ultimoAlerta24h: null,
+          alerta24hReconhecido: false,
+          totalAlertas24h: 0
+        });
+        
+        await atendimento.save();
+        criados.push({
+          id: atendimento._id,
+          alunoId: aluno._id,
+          alunoNome: aluno.nome
+        });
+      } catch (err) {
+        console.error(`[REGISTRAR-COLETIVO] Falha ao salvar aluno ${aluno.nome}:`, err.message);
+        falhas.push({ alunoId: aluno._id, alunoNome: aluno.nome, error: err.message });
+      }
+    }
+    
+    const labelTiposStr = labelTiposTarefa(tiposFinal);
+    
+    res.json({
+      success: criados.length > 0,
+      message: `${criados.length} atendimento(s) registrado(s)${falhas.length > 0 ? ` (${falhas.length} falha(s))` : ''}`,
+      total: criados.length,
+      falhas: falhas.length,
+      criados,
+      tiposTarefa: tiposFinal,
+      tiposTarefaLabel: labelTiposStr,
+      detalhesFalhas: falhas.length > 0 ? falhas : undefined
+    });
+    
+  } catch (error) {
+    console.error('[REGISTRAR-COLETIVO] Erro:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// REGISTRAR ATENDIMENTO (INDIVIDUAL — MANTIDO)
 // ============================================
 router.post('/registrar', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -672,13 +809,11 @@ router.post('/registrar', authenticateToken, verificarSupervisao, async (req, re
     let tiposFinal = Array.isArray(tiposTarefa) && tiposTarefa.length > 0
       ? tiposTarefa
       : (tipoTarefa ? [tipoTarefa] : []);
-    
     tiposFinal = [...new Set(tiposFinal.filter(Boolean))];
     
     if (tiposFinal.length === 0) {
       return res.status(400).json({ success: false, error: 'Selecione pelo menos um tipo de tarefa' });
     }
-    
     if (!descricao || descricao.trim() === '') {
       return res.status(400).json({ success: false, error: 'A descrição é obrigatória' });
     }
@@ -747,8 +882,7 @@ router.post('/registrar', authenticateToken, verificarSupervisao, async (req, re
     const atendimento = new AtendimentoSupervisao({
       alunoId: aluno._id, alunoNome: aluno.nome, alunoMatricula: aluno.matricula,
       alunoTurma: aluno.turma || 'Não informada', alunoCurso: aluno.curso || 'Não informado',
-      alunoFoto: aluno.fotoPerfil, 
-      tipoTarefa: tipoPrincipal,
+      alunoFoto: aluno.fotoPerfil, tipoTarefa: tipoPrincipal,
       entrada: {
         dataHora: new Date(),
         descricao: descricao.trim(),
@@ -780,12 +914,9 @@ router.post('/registrar', authenticateToken, verificarSupervisao, async (req, re
       success: true,
       message: `${labelTiposStr} registrado para ${aluno.nome}`,
       atendimento: {
-        id: atendimento._id,
-        tipoTarefa: atendimento.tipoTarefa,
-        tiposTarefa: tiposFinal,
-        tiposTarefaLabel: labelTiposStr,
-        tipoTarefaLabel: labelTiposStr,
-        status: atendimento.status,
+        id: atendimento._id, tipoTarefa: atendimento.tipoTarefa,
+        tiposTarefa: tiposFinal, tiposTarefaLabel: labelTiposStr,
+        tipoTarefaLabel: labelTiposStr, status: atendimento.status,
         dataHora: atendimento.entrada.dataHora,
         temAssinatura: atendimento.entrada.temAssinatura,
         statusAssinatura: atendimento.entrada.statusAssinatura,
@@ -829,11 +960,7 @@ router.post('/aplicar-assinatura', authenticateToken, verificarSupervisao, async
     res.json({
       success: true,
       message: 'Assinatura aplicada com sucesso!',
-      atendimento: {
-        id: atendimento._id,
-        temAssinatura: true,
-        statusAssinatura: 'assinada'
-      }
+      atendimento: { id: atendimento._id, temAssinatura: true, statusAssinatura: 'assinada' }
     });
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
@@ -869,11 +996,7 @@ router.post('/aplicar-assinatura-participante', authenticateToken, verificarSupe
     res.json({
       success: true,
       message: 'Assinatura do participante aplicada com sucesso!',
-      participante: {
-        id: participante._id,
-        usuarioNome: participante.usuarioNome,
-        temAssinatura: true
-      }
+      participante: { id: participante._id, usuarioNome: participante.usuarioNome, temAssinatura: true }
     });
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
@@ -902,8 +1025,7 @@ router.post('/finalizar', authenticateToken, verificarSupervisao, async (req, re
     
     const supervisor = await User.findById(req.userId).select('nome');
     atendimento.saida = {
-      dataHora: new Date(),
-      resultado,
+      dataHora: new Date(), resultado,
       resultadoTexto: resultadoTexto || '',
       observacoesFinais: observacoesFinais || '',
       registradoPor: req.userId,
@@ -917,16 +1039,13 @@ router.post('/finalizar', authenticateToken, verificarSupervisao, async (req, re
     res.json({
       success: true,
       message: `Atendimento finalizado`,
-      atendimento: {
-        id: atendimento._id, status: atendimento.status,
-        resultado, dataHoraSaida: atendimento.saida.dataHora
-      }
+      atendimento: { id: atendimento._id, status: atendimento.status, resultado, dataHoraSaida: atendimento.saida.dataHora }
     });
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
 // ============================================
-// REMARCAR (🆕 validação de data em BRT)
+// REMARCAR
 // ============================================
 router.post('/remarcar', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -943,7 +1062,6 @@ router.post('/remarcar', authenticateToken, verificarSupervisao, async (req, res
       return res.status(403).json({ success: false, error: check.motivo, code: 'ADMIN_NAO_CRIADOR' });
     }
     
-    // 🆕 Compara com hoje em BRT
     const hojeBR = getDataHojeBR();
     if (dataRemarcacao < hojeBR) {
       return res.status(400).json({ success: false, error: 'A data deve ser hoje ou futura' });
@@ -974,15 +1092,14 @@ router.post('/remarcar', authenticateToken, verificarSupervisao, async (req, res
       remarcacao: {
         id: remarcacao.id, atendimentoId: atendimento._id,
         dataRemarcacao, horarioRemarcacao, motivoRemarcacao,
-        observacoesRemarcacao: remarcacao.observacoesRemarcacao,
-        status: 'pendente'
+        observacoesRemarcacao: remarcacao.observacoesRemarcacao, status: 'pendente'
       }
     });
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
 // ============================================
-// 🆕 REMARCAÇÕES PENDENTES (CORRIGIDO — BRT)
+// REMARCAÇÕES PENDENTES
 // ============================================
 router.get('/remarcacoes/pendentes', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -990,7 +1107,6 @@ router.get('/remarcacoes/pendentes', authenticateToken, verificarSupervisao, asy
       'remarcacoes.status': 'pendente', status: { $ne: 'cancelado' }
     }).sort({ 'remarcacoes.dataRemarcacao': 1 });
     
-    // 🆕 Data hoje em BRT
     const hojeBR = getDataHojeBR();
     const remarcacoes = [];
     
@@ -1002,8 +1118,7 @@ router.get('/remarcacoes/pendentes', authenticateToken, verificarSupervisao, asy
           id: rem.id.toString(), atendimentoId: atendimento._id,
           alunoId: atendimento.alunoId, alunoNome: atendimento.alunoNome,
           alunoTurma: atendimento.alunoTurma, alunoFoto: atendimento.alunoFoto,
-          tipoTarefa: atendimento.tipoTarefa,
-          tiposTarefa: tipos,
+          tipoTarefa: atendimento.tipoTarefa, tiposTarefa: tipos,
           tipoTarefaLabel: labelTiposTarefa(tipos),
           dataRemarcacao: rem.dataRemarcacao, horarioRemarcacao: rem.horarioRemarcacao,
           motivoRemarcacao: rem.motivoRemarcacao,
@@ -1119,33 +1234,19 @@ router.get('/atendimentos-antigos', authenticateToken, verificarSupervisao, asyn
       const tempo = formatarTempoAtendimento(a.entrada.dataHora);
       const tipos = extrairTiposTarefa(a);
       return {
-        id: a._id,
-        alunoId: a.alunoId,
-        alunoNome: a.alunoNome,
-        alunoMatricula: a.alunoMatricula,
-        alunoTurma: a.alunoTurma,
-        alunoFoto: a.alunoFoto,
-        tipoTarefa: a.tipoTarefa,
-        tiposTarefa: tipos,
-        tipoTarefaLabel: labelTiposTarefa(tipos),
-        descricao: a.entrada.descricao,
-        gravidade: a.entrada.gravidade,
-        prioridade: a.prioridade,
-        dataHoraEntrada: a.entrada.dataHora,
-        tempoTexto: tempo.texto,
-        minutosEmAndamento: tempo.minutos,
-        nivelAlerta: tempo.nivel,
+        id: a._id, alunoId: a.alunoId, alunoNome: a.alunoNome,
+        alunoMatricula: a.alunoMatricula, alunoTurma: a.alunoTurma, alunoFoto: a.alunoFoto,
+        tipoTarefa: a.tipoTarefa, tiposTarefa: tipos, tipoTarefaLabel: labelTiposTarefa(tipos),
+        descricao: a.entrada.descricao, gravidade: a.entrada.gravidade, prioridade: a.prioridade,
+        dataHoraEntrada: a.entrada.dataHora, tempoTexto: tempo.texto,
+        minutosEmAndamento: tempo.minutos, nivelAlerta: tempo.nivel,
         registradoPorNome: a.entrada.registradoPorNome,
         registradoPor: a.entrada.registradoPor,
         ultimoAlerta24h: a.ultimoAlerta24h,
         totalAlertas24h: a.totalAlertas24h || 0,
         alerta24hReconhecido: a.alerta24hReconhecido || false,
         _criadorNome: a.entrada?.registradoPorNome || 'Desconhecido',
-        entrada: {
-          descricao: a.entrada.descricao,
-          observacoes: a.entrada.observacoes,
-          registradoPor: a.entrada.registradoPor
-        }
+        entrada: { descricao: a.entrada.descricao, observacoes: a.entrada.observacoes, registradoPor: a.entrada.registradoPor }
       };
     });
     
@@ -1185,8 +1286,7 @@ router.post('/atendimento/:id/verificar-24h', authenticateToken, verificarSuperv
       const resultadoFinal = resultadosValidos.includes(resultado) ? resultado : 'resolvido';
       
       atendimento.saida = {
-        dataHora: new Date(),
-        resultado: resultadoFinal,
+        dataHora: new Date(), resultado: resultadoFinal,
         resultadoTexto: 'Encerrado após verificação de ocorrência antiga (>24h)',
         observacoesFinais: observacoes || `Verificado e encerrado por ${nomeResponsavel} em ${new Date().toLocaleString('pt-BR')}`,
         registradoPor: req.userId, registradoPorNome: nomeResponsavel
@@ -1198,10 +1298,7 @@ router.post('/atendimento/:id/verificar-24h', authenticateToken, verificarSuperv
       
       return res.json({
         success: true, message: 'Atendimento encerrado com sucesso!',
-        atendimento: {
-          id: atendimento._id, status: 'finalizado',
-          resultado: resultadoFinal, dataHoraSaida: atendimento.saida.dataHora
-        }
+        atendimento: { id: atendimento._id, status: 'finalizado', resultado: resultadoFinal, dataHoraSaida: atendimento.saida.dataHora }
       });
     }
     
@@ -1227,11 +1324,10 @@ router.post('/processar-alertas-24h', async (req, res) => {
 });
 
 // ============================================
-// 🆕 DASHBOARD (CORRIGIDO — FUSO BRT)
+// DASHBOARD
 // ============================================
 router.get('/dashboard', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
-    // 🆕 Datas em BRT
     const hojeStr = getDataHojeBR();
     const inicioSemanaStr = getInicioSemanaBR();
     const inicioMesStr = getInicioMesBR();
@@ -1245,9 +1341,7 @@ router.get('/dashboard', authenticateToken, verificarSupervisao, async (req, res
     ultimos30Dias.setDate(ultimos30Dias.getDate() - 30);
     
     const [atendimentosHoje, atendimentosSemana, atendimentosMes, total] = await Promise.all([
-      AtendimentoSupervisao.countDocuments({
-        'entrada.dataHora': { $gte: inicioHoje, $lte: fimHoje }
-      }),
+      AtendimentoSupervisao.countDocuments({ 'entrada.dataHora': { $gte: inicioHoje, $lte: fimHoje } }),
       AtendimentoSupervisao.countDocuments({ 'entrada.dataHora': { $gte: inicioSemana } }),
       AtendimentoSupervisao.countDocuments({ 'entrada.dataHora': { $gte: inicioMes } }),
       AtendimentoSupervisao.countDocuments()
@@ -1255,8 +1349,7 @@ router.get('/dashboard', authenticateToken, verificarSupervisao, async (req, res
     
     const emAndamento = await AtendimentoSupervisao.countDocuments({ status: 'em_andamento' });
     const finalizadosHoje = await AtendimentoSupervisao.countDocuments({
-      status: 'finalizado',
-      'saida.dataHora': { $gte: inicioHoje, $lte: fimHoje }
+      status: 'finalizado', 'saida.dataHora': { $gte: inicioHoje, $lte: fimHoje }
     });
     
     const limite24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -1283,23 +1376,16 @@ router.get('/dashboard', authenticateToken, verificarSupervisao, async (req, res
       { $sort: { count: -1 } }
     ]);
     
-    // 🆕 Últimos 7 dias em BRT
     const ultimos7Dias = [];
     for (let i = 6; i >= 0; i--) {
       const dataStr = getDataNDiasBR(i);
       const count = await AtendimentoSupervisao.countDocuments({
-        'entrada.dataHora': {
-          $gte: inicioDoDiaBrasil(dataStr),
-          $lte: fimDoDiaBrasil(dataStr)
-        }
+        'entrada.dataHora': { $gte: inicioDoDiaBrasil(dataStr), $lte: fimDoDiaBrasil(dataStr) }
       });
       const dataObj = new Date(dataStr + 'T12:00:00.000-03:00');
       ultimos7Dias.push({
         data: dataStr,
-        dia: dataObj.toLocaleDateString('pt-BR', { 
-          weekday: 'short',
-          timeZone: 'America/Sao_Paulo'
-        }),
+        dia: dataObj.toLocaleDateString('pt-BR', { weekday: 'short', timeZone: 'America/Sao_Paulo' }),
         atendimentos: count
       });
     }
@@ -1312,12 +1398,7 @@ router.get('/dashboard', authenticateToken, verificarSupervisao, async (req, res
     
     const alunosReincidentes = await AtendimentoSupervisao.aggregate([
       { $match: { 'entrada.dataHora': { $gte: ultimos30Dias } } },
-      { $group: {
-        _id: '$alunoId',
-        alunoNome: { $first: '$alunoNome' },
-        alunoTurma: { $first: '$alunoTurma' },
-        count: { $sum: 1 }
-      }},
+      { $group: { _id: '$alunoId', alunoNome: { $first: '$alunoNome' }, alunoTurma: { $first: '$alunoTurma' }, count: { $sum: 1 } } },
       { $match: { count: { $gte: 2 } } },
       { $sort: { count: -1 } }, { $limit: 10 }
     ]);
@@ -1333,23 +1414,13 @@ router.get('/dashboard', authenticateToken, verificarSupervisao, async (req, res
     
     res.json({
       success: true,
-      _debug: {
-        hojeBR: hojeStr,
-        inicioSemanaBR: inicioSemanaStr,
-        inicioMesBR: inicioMesStr,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
+      _debug: { hojeBR: hojeStr, inicioSemanaBR: inicioSemanaStr, inicioMesBR: inicioMesStr, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
       metricas: { hoje: atendimentosHoje, semana: atendimentosSemana, mes: atendimentosMes, total, emAndamento, finalizadosHoje, atendimentosAntigos },
-      porTipo: porTipo.map(t => ({
-        tipo: t._id, label: AtendimentoSupervisao.getTipoTarefaLabel(t._id), count: t.count
-      })),
+      porTipo: porTipo.map(t => ({ tipo: t._id, label: AtendimentoSupervisao.getTipoTarefaLabel(t._id), count: t.count })),
       porGravidade: porGravidade.map(g => ({ gravidade: g._id, count: g.count })),
       resultados: resultados.map(r => ({
         resultado: r._id,
-        label: {
-          'resolvido': 'Resolvido', 'em_acompanhamento': 'Em Acompanhamento',
-          'reincidente': 'Reincidente', 'encaminhado': 'Encaminhado', 'pendente': 'Pendente'
-        }[r._id] || r._id,
+        label: { 'resolvido': 'Resolvido', 'em_acompanhamento': 'Em Acompanhamento', 'reincidente': 'Reincidente', 'encaminhado': 'Encaminhado', 'pendente': 'Pendente' }[r._id] || r._id,
         count: r.count
       })),
       tendencias: {
@@ -1376,9 +1447,7 @@ router.get('/atendimentos-ativos', authenticateToken, verificarSupervisao, async
       return {
         id: a._id, alunoId: a.alunoId, alunoNome: a.alunoNome,
         alunoTurma: a.alunoTurma, alunoFoto: a.alunoFoto,
-        tipoTarefa: a.tipoTarefa,
-        tiposTarefa: tipos,
-        tipoTarefaLabel: labelTiposTarefa(tipos),
+        tipoTarefa: a.tipoTarefa, tiposTarefa: tipos, tipoTarefaLabel: labelTiposTarefa(tipos),
         descricao: a.entrada.descricao, gravidade: a.entrada.gravidade, prioridade: a.prioridade,
         dataHoraEntrada: a.entrada.dataHora,
         tempoAtendimento: tempo.minutos, tempoTexto: tempo.texto, nivelTempo: tempo.nivel,
@@ -1391,8 +1460,7 @@ router.get('/atendimentos-ativos', authenticateToken, verificarSupervisao, async
         participantesComAssinatura: (a.entrada?.participantes || []).filter(p => p.temAssinatura).length,
         entrada: {
           descricao: a.entrada.descricao, observacoes: a.entrada.observacoes,
-          registradoPor: a.entrada.registradoPor,
-          registradoPorNome: a.entrada.registradoPorNome
+          registradoPor: a.entrada.registradoPor, registradoPorNome: a.entrada.registradoPorNome
         },
         _criadorNome: a.entrada?.registradoPorNome || 'Desconhecido'
       };
@@ -1440,13 +1508,8 @@ router.get('/atendimentos', authenticateToken, verificarSupervisao, async (req, 
     ]);
     
     const turmasAtendimento = await AtendimentoSupervisao.distinct('alunoTurma');
-    const turmasAlunos = await User.distinct('turma', { 
-      role: 'aluno', ativo: true, turma: { $nin: [null, '', 'Não informada'] } 
-    });
-    const turmasDisponiveis = [...new Set([
-      ...turmasAtendimento.filter(t => t && t !== 'Não informada'),
-      ...turmasAlunos
-    ])].sort();
+    const turmasAlunos = await User.distinct('turma', { role: 'aluno', ativo: true, turma: { $nin: [null, '', 'Não informada'] } });
+    const turmasDisponiveis = [...new Set([...turmasAtendimento.filter(t => t && t !== 'Não informada'), ...turmasAlunos])].sort();
     
     const lista = atendimentos.map(a => {
       const tempo = formatarTempoAtendimento(a.entrada.dataHora);
@@ -1454,9 +1517,7 @@ router.get('/atendimentos', authenticateToken, verificarSupervisao, async (req, 
       return {
         id: a._id, alunoId: a.alunoId, alunoNome: a.alunoNome,
         alunoMatricula: a.alunoMatricula, alunoTurma: a.alunoTurma, alunoCurso: a.alunoCurso,
-        tipoTarefa: a.tipoTarefa,
-        tiposTarefa: tipos,
-        tipoTarefaLabel: labelTiposTarefa(tipos),
+        tipoTarefa: a.tipoTarefa, tiposTarefa: tipos, tipoTarefaLabel: labelTiposTarefa(tipos),
         descricao: a.entrada.descricao, gravidade: a.entrada.gravidade, prioridade: a.prioridade,
         status: a.status, dataEntrada: a.entrada.dataHora,
         dataEntradaFormatada: new Date(a.entrada.dataHora).toLocaleString('pt-BR'),
@@ -1477,10 +1538,7 @@ router.get('/atendimentos', authenticateToken, verificarSupervisao, async (req, 
           registradoPor: a.saida.registradoPorNome
         } : null,
         createdAt: a.createdAt,
-        entrada: {
-          descricao: a.entrada.descricao, observacoes: a.entrada.observacoes,
-          registradoPor: a.entrada.registradoPor
-        },
+        entrada: { descricao: a.entrada.descricao, observacoes: a.entrada.observacoes, registradoPor: a.entrada.registradoPor },
         _criadorNome: a.entrada?.registradoPorNome || 'Desconhecido'
       };
     });
@@ -1512,9 +1570,7 @@ router.get('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
       id: atendimento._id, alunoId: atendimento.alunoId, alunoNome: atendimento.alunoNome,
       alunoMatricula: atendimento.alunoMatricula, alunoTurma: atendimento.alunoTurma,
       alunoCurso: atendimento.alunoCurso,
-      tipoTarefa: atendimento.tipoTarefa,
-      tiposTarefa: tipos,
-      tipoTarefaLabel: labelTiposTarefa(tipos),
+      tipoTarefa: atendimento.tipoTarefa, tiposTarefa: tipos, tipoTarefaLabel: labelTiposTarefa(tipos),
       entrada: {
         dataHora: atendimento.entrada.dataHora,
         dataHoraFormatada: new Date(atendimento.entrada.dataHora).toLocaleString('pt-BR'),
@@ -1530,21 +1586,12 @@ router.get('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
         assinadaPorNome: atendimento.entrada?.assinadaPorNome || null,
         sessaoAssinaturaId: atendimento.entrada?.sessaoAssinaturaId || null,
         participantes: (atendimento.entrada?.participantes || []).map(p => ({
-          id: p._id,
-          usuarioId: p.usuarioId,
-          usuarioNome: p.usuarioNome,
-          usuarioMatricula: p.usuarioMatricula,
-          usuarioFoto: p.usuarioFoto,
-          tipo: p.tipo,
-          tipoLabel: p.tipoLabel,
-          turma: p.turma,
-          eixo: p.eixo,
-          filtroValor: p.filtroValor,
-          precisaAssinatura: p.precisaAssinatura,
-          temAssinatura: p.temAssinatura,
-          assinaturaBase64: p.assinaturaBase64 || null,
-          assinadaEm: p.assinadaEm,
-          assinadaPorNome: p.assinadaPorNome
+          id: p._id, usuarioId: p.usuarioId, usuarioNome: p.usuarioNome,
+          usuarioMatricula: p.usuarioMatricula, usuarioFoto: p.usuarioFoto,
+          tipo: p.tipo, tipoLabel: p.tipoLabel, turma: p.turma, eixo: p.eixo,
+          filtroValor: p.filtroValor, precisaAssinatura: p.precisaAssinatura,
+          temAssinatura: p.temAssinatura, assinaturaBase64: p.assinaturaBase64 || null,
+          assinadaEm: p.assinadaEm, assinadaPorNome: p.assinadaPorNome
         }))
       },
       detalhes: detalhesLimpos,
@@ -1585,10 +1632,7 @@ router.put('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
       return res.status(403).json({ success: false, error: check.motivo, code: 'ADMIN_NAO_CRIADOR' });
     }
     
-    const { 
-      tiposTarefa, tipoTarefa, descricao, observacoes, gravidade, prioridade, 
-      detalhes, status, saida, participantes
-    } = req.body;
+    const { tiposTarefa, tipoTarefa, descricao, observacoes, gravidade, prioridade, detalhes, status, saida, participantes } = req.body;
     
     let tiposFinal = null;
     if (Array.isArray(tiposTarefa) && tiposTarefa.length > 0) {
@@ -1599,8 +1643,7 @@ router.put('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
     
     const detalhesAtuaisLimpos = lerDetalhesLimpos(atendimento);
     const tiposAdicionaisAtuais = atendimento.detalhes?.tiposTarefaAdicionais 
-      ? [...atendimento.detalhes.tiposTarefaAdicionais]
-      : [];
+      ? [...atendimento.detalhes.tiposTarefaAdicionais] : [];
     
     let tiposAdicionaisFinal = tiposAdicionaisAtuais;
     if (tiposFinal && tiposFinal.length > 0) {
@@ -1625,28 +1668,22 @@ router.put('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
     
     detalhesParaSalvar.tiposTarefaAdicionais = tiposAdicionaisFinal;
     
-    if (!atendimento.detalhes) {
-      atendimento.detalhes = {};
-    }
+    if (!atendimento.detalhes) atendimento.detalhes = {};
     
     Object.entries(detalhesParaSalvar).forEach(([k, v]) => {
       if (v === undefined) return;
-      
       if (k === 'testemunhas' && Array.isArray(v)) {
         atendimento.detalhes.set('testemunhas', v.map(x => x || ''));
         return;
       }
-      
       if (k === 'tiposTarefaAdicionais') {
         atendimento.detalhes.set('tiposTarefaAdicionais', v);
         return;
       }
-      
       if (v instanceof Date || typeof v === 'boolean' || typeof v === 'number') {
         atendimento.detalhes.set(k, v);
         return;
       }
-      
       atendimento.detalhes.set(k, v);
     });
     
@@ -1666,14 +1703,11 @@ router.put('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
           }
           return {
             _id: p._id || undefined,
-            usuarioId: p.usuarioId,
-            usuarioNome: p.usuarioNome,
+            usuarioId: p.usuarioId, usuarioNome: p.usuarioNome,
             usuarioMatricula: p.usuarioMatricula || null,
             usuarioFoto: p.usuarioFoto || null,
-            tipo: p.tipo || 'outros',
-            tipoLabel: p.tipoLabel || p.tipo || 'Outros',
-            turma: p.turma || null,
-            eixo: p.eixo || null,
+            tipo: p.tipo || 'outros', tipoLabel: p.tipoLabel || p.tipo || 'Outros',
+            turma: p.turma || null, eixo: p.eixo || null,
             filtroValor: p.filtroValor || '',
             precisaAssinatura: !!p.precisaAssinatura,
             assinaturaBase64: assinaturaPartValida,
@@ -1683,7 +1717,6 @@ router.put('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
             sessaoAssinaturaId: p.sessaoId || p.sessaoAssinaturaId || null
           };
         });
-      
       atendimento.entrada.participantes = participantesProcessados;
     }
     
@@ -1703,11 +1736,9 @@ router.put('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
     const tiposFinais = extrairTiposTarefa(atendimento);
     
     res.json({ 
-      success: true, 
-      message: 'Atualizado', 
+      success: true, message: 'Atualizado', 
       atendimento: { 
-        id: atendimento._id,
-        tiposTarefa: tiposFinais,
+        id: atendimento._id, tiposTarefa: tiposFinais,
         totalParticipantes: (atendimento.entrada.participantes || []).length
       } 
     });
@@ -1754,9 +1785,7 @@ router.post('/atendimentos/exclusao-massa', authenticateToken, verificarSupervis
     
     const filtro = { status, 'saida.dataHora': { $lt: dataObj } };
     const totalAntes = await AtendimentoSupervisao.countDocuments(filtro);
-    if (totalAntes === 0) {
-      return res.json({ success: true, message: 'Nenhum', excluidos: 0 });
-    }
+    if (totalAntes === 0) return res.json({ success: true, message: 'Nenhum', excluidos: 0 });
     const resultado = await AtendimentoSupervisao.deleteMany(filtro);
     res.json({ success: true, message: `${resultado.deletedCount} excluído(s)`, excluidos: resultado.deletedCount, dataCorte, status });
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
@@ -1776,8 +1805,7 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarSupervisao, 
     }
     const atendimentos = await AtendimentoSupervisao.find(query).sort({ 'entrada.dataHora': -1 });
     const aluno = await User.findById(req.params.alunoId).select('nome matricula turma curso');
-    const porTipo = {};
-    const porGravidade = {};
+    const porTipo = {}, porGravidade = {};
     
     atendimentos.forEach(a => {
       porTipo[a.tipoTarefa] = (porTipo[a.tipoTarefa] || 0) + 1;
@@ -1790,9 +1818,7 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarSupervisao, 
       periodo: { dataInicio, dataFim },
       estatisticas: {
         totalAtendimentos: atendimentos.length,
-        porTipo: Object.entries(porTipo).map(([tipo, count]) => ({
-          tipo, label: AtendimentoSupervisao.getTipoTarefaLabel(tipo), count
-        })),
+        porTipo: Object.entries(porTipo).map(([tipo, count]) => ({ tipo, label: AtendimentoSupervisao.getTipoTarefaLabel(tipo), count })),
         porGravidade,
         emAndamento: atendimentos.filter(a => a.status === 'em_andamento').length,
         finalizados: atendimentos.filter(a => a.status === 'finalizado').length
@@ -1801,9 +1827,7 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarSupervisao, 
         const tempo = formatarTempoAtendimento(a.entrada.dataHora);
         const tipos = extrairTiposTarefa(a);
         return {
-          id: a._id, tipoTarefa: a.tipoTarefa,
-          tiposTarefa: tipos,
-          tipoTarefaLabel: labelTiposTarefa(tipos),
+          id: a._id, tipoTarefa: a.tipoTarefa, tiposTarefa: tipos, tipoTarefaLabel: labelTiposTarefa(tipos),
           dataEntrada: a.entrada.dataHora, descricao: a.entrada.descricao,
           gravidade: a.entrada.gravidade, status: a.status,
           dataSaida: a.saida?.dataHora || null, resultado: a.saida?.resultado || null,
@@ -1830,16 +1854,12 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarSupervisao, as
       if (dataFim) query['entrada.dataHora'].$lte = fimDoDiaBrasil(dataFim);
     }
     const atendimentos = await AtendimentoSupervisao.find(query).sort({ 'entrada.dataHora': -1 });
-    const porAluno = {};
-    const porTipo = {};
+    const porAluno = {}, porTipo = {};
     
     atendimentos.forEach(a => {
       const key = a.alunoId.toString();
       if (!porAluno[key]) {
-        porAluno[key] = { 
-          alunoId: a.alunoId, alunoNome: a.alunoNome,
-          alunoMatricula: a.alunoMatricula, total: 0, tipos: {} 
-        };
+        porAluno[key] = { alunoId: a.alunoId, alunoNome: a.alunoNome, alunoMatricula: a.alunoMatricula, total: 0, tipos: {} };
       }
       porAluno[key].total++;
       porAluno[key].tipos[a.tipoTarefa] = (porAluno[key].tipos[a.tipoTarefa] || 0) + 1;
@@ -1852,9 +1872,7 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarSupervisao, as
       estatisticas: {
         totalAtendimentos: atendimentos.length,
         totalAlunosAtendidos: Object.keys(porAluno).length,
-        porTipo: Object.entries(porTipo).map(([tipo, count]) => ({
-          tipo, label: AtendimentoSupervisao.getTipoTarefaLabel(tipo), count
-        }))
+        porTipo: Object.entries(porTipo).map(([tipo, count]) => ({ tipo, label: AtendimentoSupervisao.getTipoTarefaLabel(tipo), count }))
       },
       porAluno: Object.values(porAluno).sort((a, b) => b.total - a.total),
       atendimentos: atendimentos.map(a => {
@@ -1862,12 +1880,9 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarSupervisao, as
         const tipos = extrairTiposTarefa(a);
         return {
           id: a._id, alunoNome: a.alunoNome,
-          tipoTarefa: a.tipoTarefa,
-          tiposTarefa: tipos,
-          tipoTarefaLabel: labelTiposTarefa(tipos),
+          tipoTarefa: a.tipoTarefa, tiposTarefa: tipos, tipoTarefaLabel: labelTiposTarefa(tipos),
           dataEntrada: a.entrada.dataHora, descricao: a.entrada.descricao,
-          gravidade: a.entrada.gravidade, status: a.status,
-          tempoTexto: tempo.texto
+          gravidade: a.entrada.gravidade, status: a.status, tempoTexto: tempo.texto
         };
       })
     });
@@ -1896,9 +1911,7 @@ router.get('/relatorio/geral', authenticateToken, verificarSupervisao, async (re
       AtendimentoSupervisao.countDocuments({ ...query, 'entrada.temAssinatura': true })
     ]);
     
-    const porTurma = {};
-    const porTipo = {};
-    const porGravidade = {};
+    const porTurma = {}, porTipo = {}, porGravidade = {};
     
     atendimentos.forEach(a => {
       if (!porTurma[a.alunoTurma]) {
@@ -1916,13 +1929,8 @@ router.get('/relatorio/geral', authenticateToken, verificarSupervisao, async (re
     });
     
     const turmasAtendimento = await AtendimentoSupervisao.distinct('alunoTurma');
-    const turmasAlunos = await User.distinct('turma', { 
-      role: 'aluno', ativo: true, turma: { $nin: [null, '', 'Não informada'] } 
-    });
-    const turmas = [...new Set([
-      ...turmasAtendimento.filter(t => t && t !== 'Não informada'),
-      ...turmasAlunos
-    ])].sort();
+    const turmasAlunos = await User.distinct('turma', { role: 'aluno', ativo: true, turma: { $nin: [null, '', 'Não informada'] } });
+    const turmas = [...new Set([...turmasAtendimento.filter(t => t && t !== 'Não informada'), ...turmasAlunos])].sort();
     
     res.json({
       success: true,
@@ -1931,23 +1939,18 @@ router.get('/relatorio/geral', authenticateToken, verificarSupervisao, async (re
       totalAtendimentos: total,
       comAssinatura,
       porTurma: Object.values(porTurma).sort((a, b) => b.total - a.total),
-      porTipo: Object.entries(porTipo).map(([t, count]) => ({
-        tipo: t, label: AtendimentoSupervisao.getTipoTarefaLabel(t), count
-      })).sort((a, b) => b.count - a.count),
+      porTipo: Object.entries(porTipo).map(([t, count]) => ({ tipo: t, label: AtendimentoSupervisao.getTipoTarefaLabel(t), count })).sort((a, b) => b.count - a.count),
       porGravidade,
       registros: atendimentos.map(a => {
         const tempo = formatarTempoAtendimento(a.entrada.dataHora);
         const tipos = extrairTiposTarefa(a);
         return {
           id: a._id, alunoNome: a.alunoNome, alunoMatricula: a.alunoMatricula,
-          alunoTurma: a.alunoTurma, tipoTarefa: a.tipoTarefa,
-          tiposTarefa: tipos,
-          tipoTarefaLabel: labelTiposTarefa(tipos),
+          alunoTurma: a.alunoTurma, tipoTarefa: a.tipoTarefa, tiposTarefa: tipos, tipoTarefaLabel: labelTiposTarefa(tipos),
           dataEntrada: a.entrada.dataHora,
           dataFormatada: new Date(a.entrada.dataHora).toLocaleDateString('pt-BR'),
           descricao: a.entrada.descricao, gravidade: a.entrada.gravidade,
-          prioridade: a.prioridade, status: a.status,
-          tempoTexto: tempo.texto,
+          prioridade: a.prioridade, status: a.status, tempoTexto: tempo.texto,
           temAssinatura: !!(a.entrada?.assinaturaBase64),
           assinaturaBase64: a.entrada?.assinaturaBase64 || null,
           registradoPorNome: a.entrada?.registradoPorNome,
@@ -1959,13 +1962,10 @@ router.get('/relatorio/geral', authenticateToken, verificarSupervisao, async (re
         const tipos = extrairTiposTarefa(a);
         return {
           id: a._id, alunoNome: a.alunoNome, alunoTurma: a.alunoTurma,
-          tipoTarefa: a.tipoTarefa,
-          tiposTarefa: tipos,
-          tipoTarefaLabel: labelTiposTarefa(tipos),
+          tipoTarefa: a.tipoTarefa, tiposTarefa: tipos, tipoTarefaLabel: labelTiposTarefa(tipos),
           dataEntrada: a.entrada.dataHora,
           descricao: a.entrada.descricao.substring(0, 100),
-          gravidade: a.entrada.gravidade, status: a.status,
-          tempoTexto: tempo.texto,
+          gravidade: a.entrada.gravidade, status: a.status, tempoTexto: tempo.texto,
           temAssinatura: !!(a.entrada?.assinaturaBase64),
           assinaturaBase64: a.entrada?.assinaturaBase64 || null
         };

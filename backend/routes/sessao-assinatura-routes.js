@@ -55,9 +55,13 @@ const verificarGestaoGeral = (req, res, next) => {
 const TIPOS_VALIDOS = [
     'autorizacao', 'justificativa', 'segunda_chamada', 'atraso', 'atraso_aluno',
     'uniforme', 'atendimento', 'atendimento_aluno',
-    'psicologia', 'assistente_social', 'supervisao', 'supervisao_participante', 'biblioteca',
+    'psicologia', 
+    'psicologia_participante',
+    'assistente_social', 
+    'supervisao', 'supervisao_participante', 
+    'biblioteca',
     'tablet',
-    'protocolo_prova'  // 🆕 NOVO TIPO ADICIONADO AQUI
+    'protocolo_prova'
 ];
 
 // ============================================
