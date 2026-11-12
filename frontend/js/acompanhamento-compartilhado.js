@@ -32,7 +32,7 @@
     // 🆕 ESTADO DA PAGINAÇÃO
     window.__acompanhamentoPaginacao = {
         paginaAtual: 1,
-        porPagina: 10,
+        porPagina: 12,
         totalRegistros: 0,
         totalPaginas: 0,
         alunosFiltrados: []
