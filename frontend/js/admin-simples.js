@@ -1638,13 +1638,31 @@ class AdminSimples {
         if (typeof this.updateBottomNav === 'function') this.updateBottomNav(aba);
     }
 
-    async carregarDashboard() {
+    // ============================================================================
+    // ✅ CARREGAR DASHBOARD (com cache de 60s + invalidação manual)
+    // ============================================================================
+    async carregarDashboard(forcar = false) {
         const content = document.getElementById('contentArea');
         if (!content) return;
+
+        // ============ CACHE ============
+        const AGORA = Date.now();
+        const TTL = 60 * 1000; // 60 segundos
+        if (!forcar && this._dashboardCache && (AGORA - this._dashboardCache.ts < TTL)) {
+            console.log('📦 [Cache] Dashboard usando dados em cache');
+            this._renderDashboard(this._dashboardCache.stats, this._dashboardCache.eixos, this._dashboardCache.cursos);
+            return;
+        }
+
+        // Spinner só na primeira carga (se cache vazio)
+        if (!this._dashboardCache) {
+            content.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p>Carregando dashboard...</p></div>';
+        }
 
         try {
             const token = localStorage.getItem('auth_token');
 
+            // ============ 3 CHAMADAS EM PARALELO ============
             const [response, eixosRes, cursosRes] = await Promise.all([
                 fetch('/api/admin/dashboard', { headers: { 'Authorization': `Bearer ${token}` } }),
                 fetch('/api/admin/eixos', { headers: { 'Authorization': `Bearer ${token}` } }),
@@ -1656,219 +1674,15 @@ class AdminSimples {
             const cursosData = await cursosRes.json();
 
             const stats = data.success ? data.data : this.getDadosExemplo();
-
             this.eixos = eixosData.success ? (eixosData.eixos || []) : [];
             this.cursos = cursosData.success ? (cursosData.cursos || []) : [];
 
-            const hora = new Date().getHours();
-            let saudacao = 'Bom dia';
-            if (hora >= 12 && hora < 18) saudacao = 'Boa tarde';
-            else if (hora >= 18 || hora < 6) saudacao = 'Boa noite';
+            // ============ SALVAR CACHE ============
+            this._dashboardCache = { ts: AGORA, stats, eixos: this.eixos, cursos: this.cursos };
 
-            const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-            const primeiroNome = (userData.nome || 'Admin').split(' ')[0];
+            // ============ RENDERIZAR ============
+            this._renderDashboard(stats, this.eixos, this.cursos);
 
-            const hoje = new Date();
-            const dataFormatada = hoje.toLocaleDateString('pt-BR', {
-                weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-            });
-            const horaFormatada = hoje.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-
-            const totalUsuarios = stats.totalUsuarios || 0;
-            const totalTurmas = stats.totalTurmas || 0;
-            const totalProvas = stats.totalProvas || 0;
-            const totalResultados = stats.totalResultados || 0;
-            const turmasAtivas = stats.turmasAtivas || 0;
-            const provasAtivas = stats.provasPorStatus?.ativa || 0;
-            const totalAlunos = stats.totalAlunos || 0;
-            const totalProfessores = stats.totalProfessores || 0;
-
-            content.innerHTML = `
-                <div class="dashboard-welcome-simples">
-                    <div class="welcome-simples-left">
-                        <h1>👋 Olá, ${primeiroNome}!</h1>
-                        <p>Aqui está o resumo do EducaPleno.</p>
-                    </div>
-                    <div class="welcome-simples-right">
-                        <div class="welcome-simples-date">${dataFormatada}</div>
-                        <div class="welcome-simples-time">${horaFormatada}</div>
-                    </div>
-                </div>
-
-                <div class="dashboard-cards-simples">
-                    <div class="card-simples usuarios" onclick="adminSimples.mudarAba('usuarios')">
-                        <div class="card-simples-icon"><i class="fas fa-users"></i></div>
-                        <div class="card-simples-content">
-                            <div class="card-simples-label">Usuários</div>
-                            <div class="card-simples-value">${totalUsuarios}</div>
-                            <div class="card-simples-detail">
-                                <i class="fas fa-user-graduate"></i> ${totalAlunos} alunos •
-                                <i class="fas fa-chalkboard-teacher"></i> ${totalProfessores} prof.
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card-simples turmas" onclick="adminSimples.mudarAba('turmas')">
-                        <div class="card-simples-icon"><i class="fas fa-school"></i></div>
-                        <div class="card-simples-content">
-                            <div class="card-simples-label">Turmas</div>
-                            <div class="card-simples-value">${totalTurmas}</div>
-                            <div class="card-simples-detail"><i class="fas fa-check-circle"></i> ${turmasAtivas} ativas</div>
-                        </div>
-                    </div>
-                    <div class="card-simples provas" onclick="adminSimples.mudarAba('provas')">
-                        <div class="card-simples-icon"><i class="fas fa-file-alt"></i></div>
-                        <div class="card-simples-content">
-                            <div class="card-simples-label">Provas</div>
-                            <div class="card-simples-value">${totalProvas}</div>
-                            <div class="card-simples-detail"><i class="fas fa-fire"></i> ${provasAtivas} ativas</div>
-                        </div>
-                    </div>
-                    <div class="card-simples resultados" onclick="adminSimples.mudarAba('resultados')">
-                        <div class="card-simples-icon"><i class="fas fa-chart-bar"></i></div>
-                        <div class="card-simples-content">
-                            <div class="card-simples-label">Resultados</div>
-                            <div class="card-simples-value">${totalResultados}</div>
-                            <div class="card-simples-detail"><i class="fas fa-check-double"></i> correções</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="dashboard-simples-layout">
-                    <div class="dashboard-simples-main">
-                        <div class="painel-simples-card">
-                            <div class="painel-simples-header">
-                                <div class="painel-simples-title">
-                                    <i class="fas fa-history"></i><h3>Atividades Recentes</h3>
-                                </div>
-                                <a href="#" class="painel-simples-link" onclick="event.preventDefault(); adminSimples.verHistorico();">
-                                    Ver histórico <i class="fas fa-arrow-right"></i>
-                                </a>
-                            </div>
-                            <div class="painel-simples-list" id="atividadesRecentes">
-                                ${this.gerarAtividades(stats.atividadesRecentes)}
-                            </div>
-                        </div>
-
-                        <div class="painel-simples-card">
-                            <div class="painel-simples-header">
-                                <div class="painel-simples-title"><i class="fas fa-chart-pie"></i><h3>Estatísticas Rápidas</h3></div>
-                            </div>
-                            <div style="padding:8px;">
-                                <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
-                                    <div style="background:#f0f9ff;padding:15px;border-radius:10px;border-left:3px solid #0891b2;">
-                                        <div style="font-size:11px;color:#0891b2;font-weight:600;margin-bottom:5px;">
-                                            <i class="fas fa-users"></i> ALUNOS ATIVOS
-                                        </div>
-                                        <div style="font-size:22px;font-weight:700;color:#1f2937;">${stats.totalAlunos || 0}</div>
-                                    </div>
-                                    <div style="background:#f0fdf4;padding:15px;border-radius:10px;border-left:3px solid #10b981;">
-                                        <div style="font-size:11px;color:#059669;font-weight:600;margin-bottom:5px;">
-                                            <i class="fas fa-user-graduate"></i> ACESSIBILIDADE
-                                        </div>
-                                        <div style="font-size:22px;font-weight:700;color:#1f2937;">${stats.alunosComAcessibilidade || 0}</div>
-                                    </div>
-                                    <div style="background:#fef3c7;padding:15px;border-radius:10px;border-left:3px solid #f59e0b;">
-                                        <div style="font-size:11px;color:#d97706;font-weight:600;margin-bottom:5px;">
-                                            <i class="fas fa-question-circle"></i> QUESTÕES
-                                        </div>
-                                        <div style="font-size:22px;font-weight:700;color:#1f2937;">${stats.totalQuestoes || 0}</div>
-                                    </div>
-                                    <div style="background:#f3e8ff;padding:15px;border-radius:10px;border-left:3px solid #8b5cf6;">
-                                        <div style="font-size:11px;color:#7c3aed;font-weight:600;margin-bottom:5px;">
-                                            <i class="fas fa-graduation-cap"></i> CURSOS/EIXOS
-                                        </div>
-                                        <div style="font-size:22px;font-weight:700;color:#1f2937;">
-                                            ${(this.cursos?.length || 0)} / ${(this.eixos?.length || 0)}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="dashboard-simples-sidebar">
-                        <div class="painel-simples-card">
-                            <div class="painel-simples-header">
-                                <div class="painel-simples-title"><i class="fas fa-bolt"></i><h3>Ações Rápidas</h3></div>
-                            </div>
-                            <div class="acoes-rapidas-simples">
-                                <a class="acao-rapida-simples-item" onclick="adminSimples.mudarAba('usuarios')">
-                                    <div class="acao-rapida-simples-icon"><i class="fas fa-users"></i></div>
-                                    <span>Gerenciar usuários</span><i class="fas fa-chevron-right"></i>
-                                </a>
-                                <a class="acao-rapida-simples-item" onclick="adminSimples.mudarAba('turmas')">
-                                    <div class="acao-rapida-simples-icon"><i class="fas fa-school"></i></div>
-                                    <span>Gerenciar turmas</span><i class="fas fa-chevron-right"></i>
-                                </a>
-                                <a class="acao-rapida-simples-item" onclick="adminSimples.mudarAba('provas')">
-                                    <div class="acao-rapida-simples-icon"><i class="fas fa-file-alt"></i></div>
-                                    <span>Criar prova</span><i class="fas fa-chevron-right"></i>
-                                </a>
-                                <a class="acao-rapida-simples-item" onclick="adminSimples.abrirModalEnvioNotificacao()">
-                                    <div class="acao-rapida-simples-icon"><i class="fas fa-bullhorn"></i></div>
-                                    <span>Enviar notificação</span><i class="fas fa-chevron-right"></i>
-                                </a>
-                                <a class="acao-rapida-simples-item" onclick="adminSimples.mudarAba('resultados')">
-                                    <div class="acao-rapida-simples-icon"><i class="fas fa-chart-line"></i></div>
-                                    <span>Ver resultados</span><i class="fas fa-chevron-right"></i>
-                                </a>
-                            </div>
-                        </div>
-
-                        <div class="painel-simples-card">
-                            <div class="painel-simples-header">
-                                <div class="painel-simples-title"><i class="fas fa-th-large"></i><h3>Atalhos</h3></div>
-                            </div>
-                            <div class="atalhos-simples">
-                                <a class="atalho-simples-item" onclick="adminSimples.mudarAba('eixos')">
-                                    <div class="atalho-simples-icon"><i class="fas fa-sitemap"></i></div>
-                                    <div class="atalho-simples-label">Eixos</div>
-                                </a>
-                                <a class="atalho-simples-item" onclick="adminSimples.mudarAba('cursos')">
-                                    <div class="atalho-simples-icon"><i class="fas fa-graduation-cap"></i></div>
-                                    <div class="atalho-simples-label">Cursos</div>
-                                </a>
-                                <a class="atalho-simples-item" onclick="adminSimples.abrirModalUploadAdaptarDocumento()">
-                                    <div class="atalho-simples-icon"><i class="fas fa-universal-access"></i></div>
-                                    <div class="atalho-simples-label">Adaptar</div>
-                                </a>
-                                <a class="atalho-simples-item" onclick="window.location.href='editar-perfil.html'">
-                                    <div class="atalho-simples-icon"><i class="fas fa-user-edit"></i></div>
-                                    <div class="atalho-simples-label">Meu Perfil</div>
-                                </a>
-                            </div>
-                        </div>
-
-                        <div class="painel-simples-card">
-                            <div class="painel-simples-header">
-                                <div class="painel-simples-title"><i class="fas fa-info-circle"></i><h3>Info do Sistema</h3></div>
-                            </div>
-                            <div class="info-sistema-simples">
-                                <div class="info-sistema-item">
-                                    <div class="info-sistema-label"><i class="fas fa-code-branch"></i> Versão</div>
-                                    <div class="info-sistema-valor">2.0.0</div>
-                                </div>
-                                <div class="info-sistema-item">
-                                    <div class="info-sistema-label"><i class="fas fa-circle"></i> Status</div>
-                                    <div class="info-sistema-valor ok"><i class="fas fa-circle" style="font-size:6px;"></i> Online</div>
-                                </div>
-                                <div class="info-sistema-item">
-                                    <div class="info-sistema-label"><i class="fas fa-user-shield"></i> Perfil</div>
-                                    <div class="info-sistema-valor">${userData.role === 'super_admin' ? 'Super Admin' : 'Admin'}</div>
-                                </div>
-                                <div class="info-sistema-item">
-                                    <div class="info-sistema-label"><i class="fas fa-clock"></i> Última sync</div>
-                                    <div class="info-sistema-valor">${horaFormatada}</div>
-                                </div>
-                                <div class="info-sistema-item">
-                                    <div class="info-sistema-label"><i class="fas fa-database"></i> Último backup</div>
-                                    <div class="info-sistema-valor warning"><i class="fas fa-exclamation-triangle"></i> Pendente</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
         } catch (error) {
             console.error('❌ Erro ao carregar dashboard:', error);
             content.innerHTML = `
@@ -1876,11 +1690,229 @@ class AdminSimples {
                     <i class="fas fa-exclamation-triangle" style="font-size:48px;color:#dc3545;margin-bottom:15px;"></i>
                     <h3 style="color:#721c24;margin-bottom:8px;">Erro ao carregar dashboard</h3>
                     <p style="color:#6c757d;margin-bottom:20px;">${error.message}</p>
-                    <button onclick="adminSimples.carregarDashboard()" class="btn-primary">
+                    <button onclick="adminSimples.carregarDashboard(true)" class="btn-primary">
                         <i class="fas fa-sync-alt"></i> Tentar novamente
                     </button>
                 </div>`;
         }
+    }
+
+    // ============================================================================
+    // ✅ RENDERIZAR DASHBOARD (separado para reuso com cache)
+    // ============================================================================
+    _renderDashboard(stats, eixos, cursos) {
+        const content = document.getElementById('contentArea');
+        if (!content) return;
+
+        const hora = new Date().getHours();
+        let saudacao = 'Bom dia';
+        if (hora >= 12 && hora < 18) saudacao = 'Boa tarde';
+        else if (hora >= 18 || hora < 6) saudacao = 'Boa noite';
+
+        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+        const primeiroNome = (userData.nome || 'Admin').split(' ')[0];
+
+        const hoje = new Date();
+        const dataFormatada = hoje.toLocaleDateString('pt-BR', {
+            weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+        });
+        const horaFormatada = hoje.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+        const totalUsuarios = stats.totalUsuarios || 0;
+        const totalTurmas = stats.totalTurmas || 0;
+        const totalProvas = stats.totalProvas || 0;
+        const totalResultados = stats.totalResultados || 0;
+        const turmasAtivas = stats.turmasAtivas || 0;
+        const provasAtivas = stats.provasPorStatus?.ativa || 0;
+        const totalAlunos = stats.totalAlunos || 0;
+        const totalProfessores = stats.totalProfessores || 0;
+
+        content.innerHTML = `
+            <div class="dashboard-welcome-simples">
+                <div class="welcome-simples-left">
+                    <h1>👋 Olá, ${primeiroNome}!</h1>
+                    <p>Aqui está o resumo do EducaPleno.</p>
+                </div>
+                <div class="welcome-simples-right">
+                    <div class="welcome-simples-date">${dataFormatada}</div>
+                    <div class="welcome-simples-time">${horaFormatada}</div>
+                </div>
+            </div>
+
+            <div class="dashboard-cards-simples">
+                <div class="card-simples usuarios" onclick="adminSimples.mudarAba('usuarios')">
+                    <div class="card-simples-icon"><i class="fas fa-users"></i></div>
+                    <div class="card-simples-content">
+                        <div class="card-simples-label">Usuários</div>
+                        <div class="card-simples-value">${totalUsuarios}</div>
+                        <div class="card-simples-detail">
+                            <i class="fas fa-user-graduate"></i> ${totalAlunos} alunos •
+                            <i class="fas fa-chalkboard-teacher"></i> ${totalProfessores} prof.
+                        </div>
+                    </div>
+                </div>
+                <div class="card-simples turmas" onclick="adminSimples.mudarAba('turmas')">
+                    <div class="card-simples-icon"><i class="fas fa-school"></i></div>
+                    <div class="card-simples-content">
+                        <div class="card-simples-label">Turmas</div>
+                        <div class="card-simples-value">${totalTurmas}</div>
+                        <div class="card-simples-detail"><i class="fas fa-check-circle"></i> ${turmasAtivas} ativas</div>
+                    </div>
+                </div>
+                <div class="card-simples provas" onclick="adminSimples.mudarAba('provas')">
+                    <div class="card-simples-icon"><i class="fas fa-file-alt"></i></div>
+                    <div class="card-simples-content">
+                        <div class="card-simples-label">Provas</div>
+                        <div class="card-simples-value">${totalProvas}</div>
+                        <div class="card-simples-detail"><i class="fas fa-fire"></i> ${provasAtivas} ativas</div>
+                    </div>
+                </div>
+                <div class="card-simples resultados" onclick="adminSimples.mudarAba('resultados')">
+                    <div class="card-simples-icon"><i class="fas fa-chart-bar"></i></div>
+                    <div class="card-simples-content">
+                        <div class="card-simples-label">Resultados</div>
+                        <div class="card-simples-value">${totalResultados}</div>
+                        <div class="card-simples-detail"><i class="fas fa-check-double"></i> correções</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-simples-layout">
+                <div class="dashboard-simples-main">
+                    <div class="painel-simples-card">
+                        <div class="painel-simples-header">
+                            <div class="painel-simples-title">
+                                <i class="fas fa-history"></i><h3>Atividades Recentes</h3>
+                            </div>
+                            <a href="#" class="painel-simples-link" onclick="event.preventDefault(); adminSimples.verHistorico();">
+                                Ver histórico <i class="fas fa-arrow-right"></i>
+                            </a>
+                        </div>
+                        <div class="painel-simples-list" id="atividadesRecentes">
+                            ${this.gerarAtividades(stats.atividadesRecentes)}
+                        </div>
+                    </div>
+
+                    <div class="painel-simples-card">
+                        <div class="painel-simples-header">
+                            <div class="painel-simples-title"><i class="fas fa-chart-pie"></i><h3>Estatísticas Rápidas</h3></div>
+                        </div>
+                        <div style="padding:8px;">
+                            <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
+                                <div style="background:#f0f9ff;padding:15px;border-radius:10px;border-left:3px solid #0891b2;">
+                                    <div style="font-size:11px;color:#0891b2;font-weight:600;margin-bottom:5px;">
+                                        <i class="fas fa-users"></i> ALUNOS ATIVOS
+                                    </div>
+                                    <div style="font-size:22px;font-weight:700;color:#1f2937;">${stats.totalAlunos || 0}</div>
+                                </div>
+                                <div style="background:#f0fdf4;padding:15px;border-radius:10px;border-left:3px solid #10b981;">
+                                    <div style="font-size:11px;color:#059669;font-weight:600;margin-bottom:5px;">
+                                        <i class="fas fa-user-graduate"></i> ACESSIBILIDADE
+                                    </div>
+                                    <div style="font-size:22px;font-weight:700;color:#1f2937;">${stats.alunosComAcessibilidade || 0}</div>
+                                </div>
+                                <div style="background:#fef3c7;padding:15px;border-radius:10px;border-left:3px solid #f59e0b;">
+                                    <div style="font-size:11px;color:#d97706;font-weight:600;margin-bottom:5px;">
+                                        <i class="fas fa-question-circle"></i> QUESTÕES
+                                    </div>
+                                    <div style="font-size:22px;font-weight:700;color:#1f2937;">${stats.totalQuestoes || 0}</div>
+                                </div>
+                                <div style="background:#f3e8ff;padding:15px;border-radius:10px;border-left:3px solid #8b5cf6;">
+                                    <div style="font-size:11px;color:#7c3aed;font-weight:600;margin-bottom:5px;">
+                                        <i class="fas fa-graduation-cap"></i> CURSOS/EIXOS
+                                    </div>
+                                    <div style="font-size:22px;font-weight:700;color:#1f2937;">
+                                        ${(cursos?.length || 0)} / ${(eixos?.length || 0)}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-simples-sidebar">
+                    <div class="painel-simples-card">
+                        <div class="painel-simples-header">
+                            <div class="painel-simples-title"><i class="fas fa-bolt"></i><h3>Ações Rápidas</h3></div>
+                        </div>
+                        <div class="acoes-rapidas-simples">
+                            <a class="acao-rapida-simples-item" onclick="adminSimples.mudarAba('usuarios')">
+                                <div class="acao-rapida-simples-icon"><i class="fas fa-users"></i></div>
+                                <span>Gerenciar usuários</span><i class="fas fa-chevron-right"></i>
+                            </a>
+                            <a class="acao-rapida-simples-item" onclick="adminSimples.mudarAba('turmas')">
+                                <div class="acao-rapida-simples-icon"><i class="fas fa-school"></i></div>
+                                <span>Gerenciar turmas</span><i class="fas fa-chevron-right"></i>
+                            </a>
+                            <a class="acao-rapida-simples-item" onclick="adminSimples.mudarAba('provas')">
+                                <div class="acao-rapida-simples-icon"><i class="fas fa-file-alt"></i></div>
+                                <span>Criar prova</span><i class="fas fa-chevron-right"></i>
+                            </a>
+                            <a class="acao-rapida-simples-item" onclick="adminSimples.abrirModalEnvioNotificacao()">
+                                <div class="acao-rapida-simples-icon"><i class="fas fa-bullhorn"></i></div>
+                                <span>Enviar notificação</span><i class="fas fa-chevron-right"></i>
+                            </a>
+                            <a class="acao-rapida-simples-item" onclick="adminSimples.mudarAba('resultados')">
+                                <div class="acao-rapida-simples-icon"><i class="fas fa-chart-line"></i></div>
+                                <span>Ver resultados</span><i class="fas fa-chevron-right"></i>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="painel-simples-card">
+                        <div class="painel-simples-header">
+                            <div class="painel-simples-title"><i class="fas fa-th-large"></i><h3>Atalhos</h3></div>
+                        </div>
+                        <div class="atalhos-simples">
+                            <a class="atalho-simples-item" onclick="adminSimples.mudarAba('eixos')">
+                                <div class="atalho-simples-icon"><i class="fas fa-sitemap"></i></div>
+                                <div class="atalho-simples-label">Eixos</div>
+                            </a>
+                            <a class="atalho-simples-item" onclick="adminSimples.mudarAba('cursos')">
+                                <div class="atalho-simples-icon"><i class="fas fa-graduation-cap"></i></div>
+                                <div class="atalho-simples-label">Cursos</div>
+                            </a>
+                            <a class="atalho-simples-item" onclick="adminSimples.abrirModalUploadAdaptarDocumento()">
+                                <div class="atalho-simples-icon"><i class="fas fa-universal-access"></i></div>
+                                <div class="atalho-simples-label">Adaptar</div>
+                            </a>
+                            <a class="atalho-simples-item" onclick="window.location.href='editar-perfil.html'">
+                                <div class="atalho-simples-icon"><i class="fas fa-user-edit"></i></div>
+                                <div class="atalho-simples-label">Meu Perfil</div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="painel-simples-card">
+                        <div class="painel-simples-header">
+                            <div class="painel-simples-title"><i class="fas fa-info-circle"></i><h3>Info do Sistema</h3></div>
+                        </div>
+                        <div class="info-sistema-simples">
+                            <div class="info-sistema-item">
+                                <div class="info-sistema-label"><i class="fas fa-code-branch"></i> Versão</div>
+                                <div class="info-sistema-valor">2.0.0</div>
+                            </div>
+                            <div class="info-sistema-item">
+                                <div class="info-sistema-label"><i class="fas fa-circle"></i> Status</div>
+                                <div class="info-sistema-valor ok"><i class="fas fa-circle" style="font-size:6px;"></i> Online</div>
+                            </div>
+                            <div class="info-sistema-item">
+                                <div class="info-sistema-label"><i class="fas fa-user-shield"></i> Perfil</div>
+                                <div class="info-sistema-valor">${userData.role === 'super_admin' ? 'Super Admin' : 'Admin'}</div>
+                            </div>
+                            <div class="info-sistema-item">
+                                <div class="info-sistema-label"><i class="fas fa-clock"></i> Última sync</div>
+                                <div class="info-sistema-valor">${horaFormatada}</div>
+                            </div>
+                            <div class="info-sistema-item">
+                                <div class="info-sistema-label"><i class="fas fa-database"></i> Último backup</div>
+                                <div class="info-sistema-valor warning"><i class="fas fa-exclamation-triangle"></i> Pendente</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
     }
 
     getDadosExemplo() {
@@ -1939,44 +1971,156 @@ class AdminSimples {
     }
 
     // ============================================================================
+    // ✅ Helpers de paginação no servidor
+    // ============================================================================
+    debounceBuscaUsuario() {
+        clearTimeout(this._debounceBuscaUsuario);
+        this._debounceBuscaUsuario = setTimeout(() => {
+            this.filtrarUsuariosServidor();
+        }, 400);
+    }
+
+    filtrarUsuariosServidor() {
+        this.carregarUsuarios(1); // sempre volta à página 1 ao filtrar
+    }
+
+    paginaAnteriorServidor() {
+        if (this.paginaAtualUsuario > 1) {
+            this.carregarUsuarios(this.paginaAtualUsuario - 1);
+        }
+    }
+
+    proximaPaginaServidor() {
+        if (this.paginaAtualUsuario < this.pagination.pages) {
+            this.carregarUsuarios(this.paginaAtualUsuario + 1);
+        }
+    }
+
+    invalidarCacheUsuarios() {
+        this._statsCache = null;
+        this._dashboardCache = null; 
+        console.log('🔄 Cache de estatísticas invalidado');
+    }
+
+    // ============================================================================
     // USUÁRIOS
     // ============================================================================
-    async carregarUsuarios() {
-        console.log('📢 CARREGANDO USUÁRIOS...');
+    async carregarUsuarios(pagina = 1) {
+        console.log('📢 CARREGANDO USUÁRIOS (paginado)...');
         const content = document.getElementById('contentArea');
         if (!content) return;
 
-        content.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p>Carregando usuários...</p></div>';
+        // Só mostra spinner na primeira carga
+        if (!this.usuarios || this.usuarios.length === 0) {
+            content.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p>Carregando usuários...</p></div>';
+        }
 
         try {
             const token = localStorage.getItem('auth_token');
             const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
             const isAdminNormal = userData.role === 'admin';
 
-            // Busca usuários e turmas em paralelo para popular o filtro
-            const [response, turmasRes] = await Promise.all([
-                fetch('/api/admin/usuarios?limit=1000', { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch('/api/admin/turmas?limit=1000', { headers: { 'Authorization': `Bearer ${token}` } })
-            ]);
+            // ============ 1) PÁGINA DE USUÁRIOS (10 por vez) ============
+            const qsUsuarios = new URLSearchParams({
+                page: String(pagina),
+                limit: String(this.itensPorPagina || 10),
+                role: document.getElementById('filtroRole')?.value || 'todos',
+                status: document.getElementById('filtroStatus')?.value || 'todos',
+                turma: document.getElementById('filtroTurma')?.value || 'todas',
+                search: document.getElementById('buscaUsuario')?.value || ''
+            });
+
+            // ============ 2) TURMAS (só 1x → cache) ============
+            // ============ 3) DASHBOARD (só 1x → cache) ============
+            const precisaTurmas = !this._turmasCache;
+            const precisaStats = !this._statsCache;
+
+            const promises = [
+                fetch(`/api/admin/usuarios?${qsUsuarios}`, { headers: { 'Authorization': `Bearer ${token}` } })
+            ];
+            if (precisaTurmas) {
+                promises.push(fetch('/api/admin/turmas', { headers: { 'Authorization': `Bearer ${token}` } }));
+            }
+            if (precisaStats) {
+                promises.push(fetch('/api/admin/dashboard', { headers: { 'Authorization': `Bearer ${token}` } }));
+            }
+
+            const results = await Promise.all(promises);
+            let idx = 0;
+            const response = results[idx++];
+            const turmasRes = precisaTurmas ? results[idx++] : null;
+            const statsRes = precisaStats ? results[idx++] : null;
 
             if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
-            
             const data = await response.json();
-            const turmasData = await turmasRes.json().catch(() => ({ success: false }));
-
             if (!data.success) throw new Error(data.error || 'Erro ao carregar usuários');
 
+            // ============ TURMAS (cache) ============
+            if (turmasRes) {
+                const turmasData = await turmasRes.json().catch(() => ({ success: false }));
+                this._turmasCache = (turmasData.success ? (turmasData.turmas || []) : [])
+                    .map(t => t.nome)
+                    .filter(Boolean)
+                    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+                console.log(`✅ [Cache] ${this._turmasCache.length} turmas carregadas`);
+            }
+            const todasTurmas = this._turmasCache || [];
+
+            // ============ ESTATÍSTICAS (cache via /dashboard) ============
+            if (statsRes) {
+                const statsData = await statsRes.json().catch(() => ({ success: false }));
+                if (statsData.success) {
+                    const d = statsData.data;
+                    this._statsCache = {
+                        total: d.totalUsuarios || 0,
+                        ativos: (d.totalUsuarios || 0) - (d.totalInativos || 0),
+                        inativos: d.totalInativos || 0,
+                        acessibilidade: d.alunosComAcessibilidade || 0,
+                        contagemPorRole: {
+                            aluno: d.totalAlunos || 0,
+                            professor: d.totalProfessores || 0,
+                            admin: d.totalAdmins || 0,
+                            super_admin: d.totalSuperAdmins || 0,
+                            setor_pedagogico: d.totalSetorPedagogico || 0,
+                            coordenacao_patio: d.totalCoordenacaoPatio || 0,
+                            cozinha: d.totalCozinha || 0,
+                            gestao_geral: d.totalGestaoGeral || 0,
+                            enfermaria: d.totalEnfermaria || 0,
+                            supervisao: d.totalSupervisao || 0,
+                            psicologia: d.totalPsicologia || 0,
+                            'assistente-social': d.totalAssistenteSocial || 0,
+                            protagonismo: d.totalProtagonismo || 0,
+                            biblioteca: d.totalBiblioteca || 0,
+                            secretaria: d.totalSecretaria || 0,
+                            'gestao-adm': d.totalGestaoAdm || 0,
+                            recepcao: d.totalRecepcao || 0
+                        }
+                    };
+                    console.log(`✅ [Cache] Estatísticas carregadas`);
+                }
+            }
+            const estatisticas = this._statsCache || { total: 0, contagemPorRole: {} };
+
+            // ============ FILTRAR super_admin (se admin normal) ============
             let usuarios = data.usuarios || [];
             if (isAdminNormal) {
                 usuarios = usuarios.filter(u => u.role !== 'super_admin');
             }
 
+            // ============ ARMAZENAR ============
             this.usuarios = usuarios;
-            const turmas = turmasData.success ? (turmasData.turmas || []) : [];
+            this.usuariosFiltrados = [...usuarios];
+            this.pagination = data.pagination || { page: 1, total: 0, pages: 1 };
+            this.paginaAtualUsuario = this.pagination.page;
+            this.turmas = todasTurmas; // para compatibilidade
 
-            // Gerar opções do select de turmas
-            const opcoesTurmas = turmas.map(t => `<option value="${t.nome}">${t.nome}</option>`).join('');
+            // ============ SELECT DE TURMAS ============
+            const turmaSelecionada = document.getElementById('filtroTurma')?.value || 'todos';
+            const opcoesTurmas = todasTurmas
+                .map(nome => `<option value="${nome.replace(/"/g, '&quot;')}">${nome}</option>`)
+                .join('');
 
+            // ============ RENDERIZAR ============
             content.innerHTML = `
                 <div class="section-header">
                     <h2><i class="fas fa-users"></i> Usuários</h2>
@@ -1989,11 +2133,12 @@ class AdminSimples {
                     <div class="filter-group" style="flex: 2;">
                         <label><i class="fas fa-search"></i> Buscar</label>
                         <input type="text" id="buscaUsuario" placeholder="Nome, email, CPF ou matrícula..."
-                            class="form-control" onkeyup="adminSimples.filtrarUsuarios()" autocomplete="off">
+                            class="form-control" value="${document.getElementById('buscaUsuario')?.value || ''}"
+                            onkeyup="adminSimples.debounceBuscaUsuario()" autocomplete="off">
                     </div>
                     <div class="filter-group">
                         <label><i class="fas fa-user-tag"></i> Perfil</label>
-                        <select id="filtroRole" class="form-control" onchange="adminSimples.filtrarUsuarios()">
+                        <select id="filtroRole" class="form-control" onchange="adminSimples.filtrarUsuariosServidor()">
                             <option value="todos">Todos</option>
                             <option value="aluno">Alunos</option>
                             <option value="professor">Professores</option>
@@ -2015,15 +2160,15 @@ class AdminSimples {
                     </div>
                     <div class="filter-group">
                         <label><i class="fas fa-circle"></i> Status</label>
-                        <select id="filtroStatus" class="form-control" onchange="adminSimples.filtrarUsuarios()">
+                        <select id="filtroStatus" class="form-control" onchange="adminSimples.filtrarUsuariosServidor()">
                             <option value="todos">Todos</option>
                             <option value="ativo">Ativos</option>
                             <option value="inativo">Inativos</option>
                         </select>
                     </div>
                     <div class="filter-group">
-                        <label><i class="fas fa-school"></i> Turma</label>
-                        <select id="filtroTurma" class="form-control" onchange="adminSimples.filtrarUsuarios()">
+                        <label><i class="fas fa-school"></i> Turma (${todasTurmas.length})</label>
+                        <select id="filtroTurma" class="form-control" onchange="adminSimples.filtrarUsuariosServidor()">
                             <option value="todos">Todas</option>
                             ${opcoesTurmas}
                         </select>
@@ -2050,20 +2195,27 @@ class AdminSimples {
                 </div>
 
                 <div class="pagination">
-                    <button class="btn-pagination" onclick="adminSimples.paginaAnterior('usuarios')" id="btnAnteriorUsuario" disabled>
+                    <button class="btn-pagination" onclick="adminSimples.paginaAnteriorServidor()"
+                        id="btnAnteriorUsuario" ${this.paginaAtualUsuario <= 1 ? 'disabled' : ''}>
                         <i class="fas fa-chevron-left"></i> Anterior
                     </button>
-                    <span id="pageInfoUsuario">Página 1 de 1</span>
-                    <button class="btn-pagination" onclick="adminSimples.proximaPagina('usuarios')" id="btnProximaUsuario" disabled>
+                    <span id="pageInfoUsuario">
+                        Página ${this.paginaAtualUsuario} de ${this.pagination.pages} (${this.pagination.total} usuários)
+                    </span>
+                    <button class="btn-pagination" onclick="adminSimples.proximaPaginaServidor()"
+                        id="btnProximaUsuario" ${this.paginaAtualUsuario >= this.pagination.pages ? 'disabled' : ''}>
                         Próxima <i class="fas fa-chevron-right"></i>
                     </button>
                 </div>
             `;
 
-            this.paginaAtualUsuario = 1;
-            this.usuariosFiltrados = [...this.usuarios];
-            this.itensPorPagina = 10;
-            this.atualizarTabelaUsuarios();
+            // Restaura filtros selecionados
+            if (turmaSelecionada !== 'todos') {
+                const sel = document.getElementById('filtroTurma');
+                if (sel) sel.value = turmaSelecionada;
+            }
+
+            console.log(`✅ Usuários carregados: ${this.usuarios.length} de ${this.pagination.total}`);
 
         } catch (error) {
             console.error('❌ Erro ao carregar usuários:', error);
@@ -2176,6 +2328,7 @@ class AdminSimples {
             const data = await response.json();
             if (data.success) {
                 this.showToast(`✅ Usuário ${acaoTexto}!`, 'success');
+                this.invalidarCacheUsuarios(); 
                 usuario.ativo = novoStatus;
                 this.atualizarTabelaUsuarios();
                 this.carregarDashboard();
@@ -2213,6 +2366,7 @@ class AdminSimples {
                 this.showToast('✅ Usuário excluído!', 'success');
                 this.usuarios = this.usuarios.filter(u => u._id !== id);
                 this.usuariosFiltrados = this.usuariosFiltrados.filter(u => u._id !== id);
+                this.invalidarCacheUsuarios(); 
                 this.atualizarTabelaUsuarios();
                 this.carregarDashboard();
             } else {
@@ -2365,22 +2519,19 @@ class AdminSimples {
         this.atualizarTabelaUsuarios();
     }
 
+    // ============================================================================
+    // ✅ LIMPAR FILTROS
+    // ============================================================================
     limparFiltrosUsuarios() {
-        const buscaInput = document.getElementById('buscaUsuario');
-        if (buscaInput) buscaInput.value = '';
-        
-        const selectRole = document.getElementById('filtroRole');
-        if (selectRole) selectRole.value = 'todos';
-
-        const selectStatus = document.getElementById('filtroStatus');
-        if (selectStatus) selectStatus.value = 'todos';
-
-        const selectTurma = document.getElementById('filtroTurma');
-        if (selectTurma) selectTurma.value = 'todos';
-
-        this.usuariosFiltrados = [...this.usuarios];
-        this.paginaAtualUsuario = 1;
-        this.atualizarTabelaUsuarios();
+        const busca = document.getElementById('buscaUsuario');
+        const role = document.getElementById('filtroRole');
+        const status = document.getElementById('filtroStatus');
+        const turma = document.getElementById('filtroTurma');
+        if (busca) busca.value = '';
+        if (role) role.value = 'todos';
+        if (status) status.value = 'todos';
+        if (turma) turma.value = 'todos';
+        this.carregarUsuarios(1);
         this.showToast('✅ Filtros limpos', 'success');
     }
 
@@ -3024,6 +3175,7 @@ class AdminSimples {
 
             if (data.success) {
                 this.showToast(id ? '✅ Usuário atualizado!' : '✅ Usuário criado!', 'success');
+                this.invalidarCacheUsuarios(); 
                 this.fecharModal();
                 await this.carregarUsuarios();
             } else {

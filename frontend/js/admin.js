@@ -5282,14 +5282,24 @@ class AdminPanel {
 
     // ============ USUÁRIOS ============
 
-    // ============ LOAD USUÁRIOS (BUSCA GLOBAL NO SERVIDOR) ============
+    // ============================================================================
+    // ✅ Helper: invalida cache de estatísticas (turmas NÃO são invalidadas — mudam raramente)
+    // Use depois de criar/editar/excluir usuário
+    // ============================================================================
+    invalidarCacheUsuarios() {
+        this._statsCache = null;
+        console.log('🔄 Cache de estatísticas invalidado');
+    }
+
+    // ============================================================================
+    // ✅ LOAD USUÁRIOS (OTIMIZADO: paginação no servidor, turmas via endpoint, stats cacheadas)
+    // ============================================================================
     async loadUsuarios() {
         const contentArea = document.getElementById('contentArea');
-        
-        try {
-            const { role, search, status, turma, page, limit } = this.filtros.usuarios;
-            
-            // MOSTRAR LOADING
+        if (!contentArea) return;
+
+        // Só mostra spinner na primeira carga (evita piscar em cada filtro)
+        if (!this.usuarios || this.usuarios.length === 0) {
             contentArea.innerHTML = `
                 <div style="text-align: center; padding: 60px; background: white; border-radius: 12px;">
                     <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #1e3a8a; border-radius: 50%; margin: 0 auto 20px; animation: spin 1s linear infinite;"></div>
@@ -5297,131 +5307,112 @@ class AdminPanel {
                 </div>
                 <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
             `;
+        }
 
+        try {
             const token = localStorage.getItem('auth_token');
-            
-            // 🔥 CONSTRUIR URL COM TODOS OS PARÂMETROS
-            let url = `${this.apiBase}/usuarios?page=${page}&limit=${limit}`;
-            
-            if (search && search.trim() !== '') {
-                url += `&search=${encodeURIComponent(search.trim())}`;
-                console.log('🔍 Filtro de busca aplicado:', search);
-            }
-            
-            if (role && role !== 'todos') {
-                url += `&role=${role}`;
-            }
-            
-            if (status && status !== 'todos') {
-                url += `&status=${status}`;
-            }
-            
-            if (turma && turma !== 'todas' && turma !== '') {
-                url += `&turma=${encodeURIComponent(turma)}`;
-            }
-            
-            console.log('🔗 URL final:', url);
-            
-            // 🔥 BUSCAR EM PARALELO
-            const [responseUsuarios, responseTodosAlunos, responseTodosUsuarios] = await Promise.all([
-                fetch(url, {
-                    headers: { 
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                }),
-                fetch(`${this.apiBase}/usuarios?role=aluno&limit=5000`, {
-                    headers: { 
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                }),
-                fetch(`${this.apiBase}/usuarios?limit=5000`, {
-                    headers: { 
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                })
-            ]);
-            
-            if (!responseUsuarios.ok) {
-                throw new Error(`Erro HTTP: ${responseUsuarios.status}`);
-            }
-            
-            const data = await responseUsuarios.json();
-            console.log('📦 Dados recebidos:', data);
+            const { role, search, status, turma, page, limit } = this.filtros.usuarios;
 
+            // ============ 1) PÁGINA DE USUÁRIOS (10 por vez) ============
+            let url = `${this.apiBase}/usuarios?page=${page}&limit=${limit}`;
+            if (search && search.trim() !== '') url += `&search=${encodeURIComponent(search.trim())}`;
+            if (role && role !== 'todos') url += `&role=${role}`;
+            if (status && status !== 'todos') url += `&status=${status}`;
+            if (turma && turma !== 'todas' && turma !== '') url += `&turma=${encodeURIComponent(turma)}`;
+
+            // ============ 2) TURMAS (só 1x → cache) ============
+            // ============ 3) DASHBOARD (só 1x → cache) ============
+            const precisaTurmas = !this._turmasCache;
+            const precisaStats = !this._statsCache;
+
+            const promises = [
+                fetch(url, { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } })
+            ];
+            if (precisaTurmas) {
+                promises.push(fetch(`${this.apiBase}/turmas`, { headers: { 'Authorization': `Bearer ${token}` } }));
+            }
+            if (precisaStats) {
+                promises.push(fetch(`${this.apiBase}/dashboard`, { headers: { 'Authorization': `Bearer ${token}` } }));
+            }
+
+            const results = await Promise.all(promises);
+            let idx = 0;
+            const responseUsuarios = results[idx++];
+            const responseTurmas = precisaTurmas ? results[idx++] : null;
+            const responseStats = precisaStats ? results[idx++] : null;
+
+            if (!responseUsuarios.ok) throw new Error(`Erro HTTP: ${responseUsuarios.status}`);
+            const data = await responseUsuarios.json();
             if (!data.success) throw new Error(data.error || 'Erro ao carregar usuários');
 
-            // Processar todos usuários (estatísticas)
-            let todosUsuariosParaStats = [];
-            try {
-                const todosUsuariosData = await responseTodosUsuarios.json();
-                if (todosUsuariosData.success && todosUsuariosData.usuarios) {
-                    todosUsuariosParaStats = todosUsuariosData.usuarios;
-                }
-            } catch (e) {}
-            
-            this.todosUsuariosStats = todosUsuariosParaStats;
+            // ============ TURMAS (cache) ============
+            if (responseTurmas) {
+                const turmasData = await responseTurmas.json().catch(() => ({ success: false }));
+                this._turmasCache = (turmasData.success ? (turmasData.turmas || []) : [])
+                    .map(t => t.nome)
+                    .filter(Boolean)
+                    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+                console.log(`✅ [Cache] ${this._turmasCache.length} turmas carregadas`);
+            }
+            const todasTurmas = this._turmasCache || [];
 
-            // Extrair turmas
-            let todasTurmas = [];
-            try {
-                const todosAlunosData = await responseTodosAlunos.json();
-                if (todosAlunosData.success && todosAlunosData.usuarios) {
-                    const turmasSet = new Set();
-                    todosAlunosData.usuarios.forEach(aluno => {
-                        if (aluno.turma && aluno.turma.trim() !== '') {
-                            turmasSet.add(aluno.turma.trim());
+            // ============ ESTATÍSTICAS (cache, via /dashboard) ============
+            if (responseStats) {
+                const statsData = await responseStats.json().catch(() => ({ success: false }));
+                if (statsData.success) {
+                    const d = statsData.data;
+                    this._statsCache = {
+                        total: d.totalUsuarios || 0,
+                        ativos: (d.totalUsuarios || 0) - (d.totalInativos || 0),
+                        inativos: d.totalInativos || 0,
+                        acessibilidade: d.alunosComAcessibilidade || 0,
+                        contagemPorRole: {
+                            aluno: d.totalAlunos || 0,
+                            professor: d.totalProfessores || 0,
+                            admin: d.totalAdmins || 0,
+                            super_admin: d.totalSuperAdmins || 0,
+                            setor_pedagogico: d.totalSetorPedagogico || 0,
+                            coordenacao_patio: d.totalCoordenacaoPatio || 0,
+                            cozinha: d.totalCozinha || 0,
+                            gestao_geral: d.totalGestaoGeral || 0,
+                            enfermaria: d.totalEnfermaria || 0,
+                            supervisao: d.totalSupervisao || 0,
+                            psicologia: d.totalPsicologia || 0,
+                            'assistente-social': d.totalAssistenteSocial || 0,
+                            protagonismo: d.totalProtagonismo || 0,
+                            biblioteca: d.totalBiblioteca || 0,
+                            secretaria: d.totalSecretaria || 0,
+                            'gestao-adm': d.totalGestaoAdm || 0,
+                            recepcao: d.totalRecepcao || 0
                         }
-                    });
-                    todasTurmas = Array.from(turmasSet).sort();
+                    };
+                    console.log(`✅ [Cache] Estatísticas carregadas`);
                 }
-            } catch (e) {}
+            }
 
-            this.usuarios = data.usuarios || [];
-            this.todasTurmasUsuarios = todasTurmas;
-
-            // 🔥 ESTATÍSTICAS GLOBAIS
-            const usuariosParaStats = todosUsuariosParaStats.length > 0 ? todosUsuariosParaStats : this.usuarios;
-            const totalUsuarios = usuariosParaStats.length;
-            const usuariosAtivos = usuariosParaStats.filter(u => u.ativo === true).length;
-            const usuariosInativos = usuariosParaStats.filter(u => u.ativo === false).length;
-            const comAcessibilidade = usuariosParaStats.filter(u => u.precisaAcessibilidade === true).length;
-
-            const contagemPorRole = {
-                aluno: 0, professor: 0, admin: 0, super_admin: 0,
-                setor_pedagogico: 0, coordenacao_patio: 0, cozinha: 0,
-                gestao_geral: 0, enfermaria: 0, supervisao: 0,
-                psicologia: 0, 'assistente-social': 0, protagonismo: 0,
-                biblioteca: 0, secretaria: 0, recepcao: 0, 'gestao-adm': 0
+            const estatisticas = this._statsCache || {
+                total: 0, ativos: 0, inativos: 0, acessibilidade: 0,
+                contagemPorRole: {}
             };
 
-            usuariosParaStats.forEach(u => {
-                if (contagemPorRole.hasOwnProperty(u.role)) {
-                    contagemPorRole[u.role]++;
-                }
-            });
+            // ============ ARMAZENAR ============
+            this.usuarios = data.usuarios || [];
+            this.todosUsuariosStats = this.usuarios; // compatibilidade (mas agora tem só os 10 da página)
+            this.todasTurmasUsuarios = todasTurmas;
 
-            // RENDERIZAR
+            // ============ RENDERIZAR ============
             contentArea.innerHTML = this.renderUsuariosProfissional({
                 role, search, page, limit, status, turma,
                 usuarios: this.usuarios,
                 pagination: data.pagination,
-                total: data.pagination?.total || totalUsuarios,
+                total: data.pagination?.total || estatisticas.total,
                 todasTurmas: todasTurmas,
-                estatisticas: {
-                    total: totalUsuarios,
-                    ativos: usuariosAtivos,
-                    inativos: usuariosInativos,
-                    acessibilidade: comAcessibilidade,
-                    contagemPorRole: contagemPorRole
-                }
+                estatisticas
             });
 
             this.configurarEventosFiltrosUsuarios();
 
-            console.log('✅ Usuários carregados:', this.usuarios.length, 'de', data.pagination?.total || 0);
+            console.log(`✅ Usuários carregados: ${this.usuarios.length} de ${data.pagination?.total || 0}`);
 
         } catch (error) {
             console.error('❌ Erro:', error);
@@ -10133,78 +10124,81 @@ class AdminPanel {
     }
 
     // ============ MÉTODOS AUXILIARES PARA USUÁRIOS ============
-    // ============ CONFIGURAR EVENTOS DOS FILTROS (BUSCA EM TEMPO REAL) ============
+    // ============================================================================
+    // ✅ CONFIGURAR EVENTOS DOS FILTROS (busca com debounce + select)
+    // ============================================================================
     configurarEventosFiltrosUsuarios() {
-        console.log('🔧 Configurando eventos dos filtros (busca em tempo real)...');
-        
-        // 🔍 Busca em tempo real (SEM recarregar do servidor)
+        console.log('🔧 Configurando eventos dos filtros...');
+
+        // 🔍 Busca com debounce (só dispara depois de 400ms sem digitar)
         const searchInput = document.getElementById('searchUsuarios');
         if (searchInput) {
             const novoSearch = searchInput.cloneNode(true);
             searchInput.parentNode.replaceChild(novoSearch, searchInput);
-            
-            // 🔥 Busca instantânea - filtra localmente a cada tecla
+
+            let timeout;
             novoSearch.addEventListener('input', (e) => {
                 const valor = e.target.value;
-                
+
                 // Mostrar/ocultar botão de limpar
                 const clearBtn = novoSearch.parentElement.querySelector('.input-clear');
-                if (clearBtn) {
-                    clearBtn.style.display = valor ? 'flex' : 'none';
-                }
-                
-                // Atualizar o filtro
+                if (clearBtn) clearBtn.style.display = valor ? 'flex' : 'none';
+
                 this.filtros.usuarios.search = valor;
-                
-                // 🔥 FILTRAR LOCALMENTE (SEM RECARREGAR)
-                this.filtrarTabelaUsuariosLocal();
+
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    this.filtros.usuarios.page = 1;
+                    this.loadUsuarios();
+                }, 400);
             });
-            
-            // Manter o foco após renderização
+
             novoSearch.addEventListener('keydown', (e) => {
-                // Prevenir comportamento padrão do Enter se necessário
                 if (e.key === 'Enter') {
                     e.preventDefault();
+                    clearTimeout(timeout);
+                    this.filtros.usuarios.page = 1;
+                    this.loadUsuarios();
                 }
             });
         }
-        
+
         // 👤 Select de Perfil
         const roleSelect = document.getElementById('filterRole');
         if (roleSelect) {
             const novoRoleSelect = roleSelect.cloneNode(true);
             roleSelect.parentNode.replaceChild(novoRoleSelect, roleSelect);
-            
+
             novoRoleSelect.addEventListener('change', (e) => {
                 this.filtros.usuarios.role = e.target.value;
                 this.filtros.usuarios.page = 1;
-                this.filtrarTabelaUsuariosLocal(); // 🔥 Local, não recarrega
+                this.loadUsuarios();
             });
         }
-        
+
         // 🔘 Select de Status
         const statusSelect = document.getElementById('filterStatus');
         if (statusSelect) {
             const novoStatusSelect = statusSelect.cloneNode(true);
             statusSelect.parentNode.replaceChild(novoStatusSelect, statusSelect);
-            
+
             novoStatusSelect.addEventListener('change', (e) => {
                 this.filtros.usuarios.status = e.target.value;
                 this.filtros.usuarios.page = 1;
-                this.filtrarTabelaUsuariosLocal(); // 🔥 Local
+                this.loadUsuarios();
             });
         }
-        
+
         // 🏫 Select de Turma
         const turmaSelect = document.getElementById('filterTurma');
         if (turmaSelect) {
             const novoTurmaSelect = turmaSelect.cloneNode(true);
             turmaSelect.parentNode.replaceChild(novoTurmaSelect, turmaSelect);
-            
+
             novoTurmaSelect.addEventListener('change', (e) => {
                 this.filtros.usuarios.turma = e.target.value;
                 this.filtros.usuarios.page = 1;
-                this.filtrarTabelaUsuariosLocal(); // 🔥 Local
+                this.loadUsuarios();
             });
         }
     }
@@ -10534,52 +10528,45 @@ class AdminPanel {
     }
 
     // ============ APLICAR FILTROS ============
-    // ============ APLICAR FILTROS (VERSÃO COM FILTRO LOCAL) ============
     aplicarFiltrosUsuarios() {
         console.log('🔍 Aplicando filtros...');
-        
-        // Apenas atualizar os valores nos filtros
+
         this.filtros.usuarios.search = document.getElementById('searchUsuarios')?.value || '';
-        this.filtros.usuarios.role = document.getElementById('filterRole')?.value || 'todos';
+        this.filtros.usuarios.role   = document.getElementById('filterRole')?.value || 'todos';
         this.filtros.usuarios.status = document.getElementById('filterStatus')?.value || 'todos';
-        this.filtros.usuarios.turma = document.getElementById('filterTurma')?.value || 'todas';
-        this.filtros.usuarios.page = 1;
-        
+        this.filtros.usuarios.turma  = document.getElementById('filterTurma')?.value || 'todas';
+        this.filtros.usuarios.page   = 1;
+
         console.log('📋 Filtros aplicados:', this.filtros.usuarios);
-        
-        // Usar filtro local em vez de recarregar
-        this.filtrarTabelaUsuariosLocal();
+        this.loadUsuarios();
     }
 
     // ============ LIMPAR FILTROS ============
     limparFiltrosUsuarios() {
         console.log('🧹 Limpando todos os filtros...');
-        
-        this.filtros.usuarios = { 
-            role: 'todos', 
-            status: 'todos', 
-            turma: 'todas', 
-            search: '', 
-            page: 1, 
-            limit: 10 
+
+        this.filtros.usuarios = {
+            role: 'todos',
+            status: 'todos',
+            turma: 'todas',
+            search: '',
+            page: 1,
+            limit: 10
         };
-        
-        // Resetar campos visuais
+
         const searchInput = document.getElementById('searchUsuarios');
-        const roleSelect = document.getElementById('filterRole');
+        const roleSelect  = document.getElementById('filterRole');
         const statusSelect = document.getElementById('filterStatus');
-        const turmaSelect = document.getElementById('filterTurma');
-        
-        if (searchInput) searchInput.value = '';
-        if (roleSelect) roleSelect.value = 'todos';
+        const turmaSelect  = document.getElementById('filterTurma');
+
+        if (searchInput)  searchInput.value = '';
+        if (roleSelect)   roleSelect.value = 'todos';
         if (statusSelect) statusSelect.value = 'todos';
-        if (turmaSelect) turmaSelect.value = 'todas';
-        
-        // Esconder botão de limpar busca
+        if (turmaSelect)  turmaSelect.value = 'todas';
+
         const clearBtn = document.querySelector('.input-clear');
         if (clearBtn) clearBtn.style.display = 'none';
-        
-        // 🔥 RECARREGAR DO SERVIDOR sem filtros
+
         this.loadUsuarios();
     }
 
@@ -10598,31 +10585,23 @@ class AdminPanel {
     // ============ FILTRAR USUÁRIOS POR ROLE (RECARREGA DO SERVIDOR) ============
     filtrarUsuariosPorRole(role) {
         console.log(`🔍 Filtrando usuários por role: ${role}`);
-        
-        // Atualizar o filtro
+
         if (role === 'ativo' || role === 'inativo') {
-            // Esses são filtros de STATUS, não de role
+            // É filtro de STATUS, não de role
             this.filtros.usuarios.status = role;
             this.filtros.usuarios.role = 'todos';
-            
-            // Atualizar os selects visuais
+
             const statusSelect = document.getElementById('filterStatus');
             const roleSelect = document.getElementById('filterRole');
             if (statusSelect) statusSelect.value = role;
             if (roleSelect) roleSelect.value = 'todos';
         } else {
-            // Filtro de ROLE normal
             this.filtros.usuarios.role = role;
-            
-            // Atualizar select visual
             const roleSelect = document.getElementById('filterRole');
             if (roleSelect) roleSelect.value = role;
         }
-        
-        // Resetar para a primeira página
+
         this.filtros.usuarios.page = 1;
-        
-        // 🔥 RECARREGAR DO SERVIDOR com o filtro aplicado
         this.loadUsuarios();
     }
 
@@ -12408,6 +12387,7 @@ class AdminPanel {
                 usuario.ativo = novoStatus;
                 
                 // Recarregar a lista para atualizar a interface
+                this.invalidarCacheUsuarios();
                 this.loadUsuarios();
                 
             } else {
@@ -12538,6 +12518,7 @@ class AdminPanel {
             if (data.success) {
                 this.showToast(id ? 'Usuário atualizado com sucesso!' : 'Usuário criado com sucesso!', 'success');
                 this.closeModal();
+                this.invalidarCacheUsuarios();
                 this.loadUsuarios();
                 this.carregarDadosReais();
             } else {
@@ -12625,6 +12606,7 @@ class AdminPanel {
 
             if (data.success) {
                 this.showToast('✅ Usuário excluído com sucesso!', 'success');
+                this.invalidarCacheUsuarios();
                 this.loadUsuarios(); // Recarregar a lista
                 this.carregarDadosReais(); // Atualizar dashboard
             } else {
