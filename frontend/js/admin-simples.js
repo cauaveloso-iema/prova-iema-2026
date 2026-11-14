@@ -2227,122 +2227,60 @@ class AdminSimples {
             return `<option value="${valor}" ${selected}>${nome}</option>`;
         }).join('');
 
-        // ============ PAGINAÇÃO NUMÉRICA ============
+        // ============ CÁLCULO DA PAGINAÇÃO ============
         const paginaAtual = pagination?.page || 1;
         const totalPaginas = pagination?.pages || 1;
         const totalRegistros = pagination?.total || 0;
+        const itensPorPagina = pagination?.limit || 10;
+        
+        const inicioExibicao = (paginaAtual - 1) * itensPorPagina + 1;
+        const fimExibicao = Math.min(paginaAtual * itensPorPagina, totalRegistros);
 
-        // Gera botões de página (mostra no máximo 7)
+        // ============ GERAR BOTÕES NUMÉRICOS ============
         const botoesPagina = [];
-        const maxBotoes = 7;
+        const maxBotoes = 5;
         let inicio = Math.max(1, paginaAtual - Math.floor(maxBotoes / 2));
         let fim = Math.min(totalPaginas, inicio + maxBotoes - 1);
         if (fim - inicio < maxBotoes - 1) {
             inicio = Math.max(1, fim - maxBotoes + 1);
         }
 
-        // Primeira página + "..." se necessário
-        if (inicio > 1) {
-            botoesPagina.push(`
-                <button class="btn-page" onclick="adminSimples.carregarUsuarios(1)" title="Primeira">1</button>
-            `);
-            if (inicio > 2) {
-                botoesPagina.push(`<span style="padding: 0 8px; color: #6b7280;">...</span>`);
-            }
-        }
-
-        // Botões do meio
         for (let i = inicio; i <= fim; i++) {
+            const isActive = i === paginaAtual;
             botoesPagina.push(`
-                <button class="btn-page ${i === paginaAtual ? 'active' : ''}"
-                    onclick="adminSimples.carregarUsuarios(${i})"
-                    ${i === paginaAtual ? 'disabled' : ''}>
+                <button class="btn-page" 
+                    onclick="${isActive ? '' : `adminSimples.carregarUsuarios(${i})`}"
+                    ${isActive ? 'disabled' : ''}
+                    style="
+                        min-width: 36px; height: 36px; padding: 0 10px;
+                        border: 1px solid ${isActive ? '#7b93c4' : '#e5e7eb'};
+                        background: ${isActive ? '#7b93c4' : 'white'};
+                        color: ${isActive ? 'white' : '#4b5563'};
+                        border-radius: 8px; font-size: 13px; font-weight: 500;
+                        cursor: ${isActive ? 'default' : 'pointer'};
+                        margin: 0 2px; transition: all 0.2s;
+                    "
+                    onmouseover="${isActive ? '' : "this.style.background='#f3f4f6'; this.style.borderColor='#7b93c4'; this.style.color='#1e3a8a';"}"
+                    onmouseout="${isActive ? '' : "this.style.background='white'; this.style.borderColor='#e5e7eb'; this.style.color='#4b5563';"}">
                     ${i}
                 </button>
             `);
         }
 
-        // Última página + "..." se necessário
-        if (fim < totalPaginas) {
-            if (fim < totalPaginas - 1) {
-                botoesPagina.push(`<span style="padding: 0 8px; color: #6b7280;">...</span>`);
-            }
+        // Botão "Próximo" (seta)
+        if (paginaAtual < totalPaginas) {
             botoesPagina.push(`
-                <button class="btn-page" onclick="adminSimples.carregarUsuarios(${totalPaginas})" title="Última">${totalPaginas}</button>
+                <button class="btn-page" onclick="adminSimples.carregarUsuarios(${paginaAtual + 1})"
+                    style="min-width: 36px; height: 36px; padding: 0 10px; border: 1px solid #e5e7eb; background: white; border-radius: 8px; font-size: 13px; color: #4b5563; cursor: pointer; margin: 0 2px; transition: all 0.2s;"
+                    onmouseover="this.style.background='#f3f4f6'; this.style.borderColor='#7b93c4'; this.style.color='#1e3a8a';"
+                    onmouseout="this.style.background='white'; this.style.borderColor='#e5e7eb'; this.style.color='#4b5563';">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
             `);
         }
 
         // ============ HTML ============
         return `
-            <style>
-                .pagination .btn-page {
-                    min-width: 36px;
-                    height: 36px;
-                    padding: 0 10px;
-                    border: 1px solid #e5e7eb;
-                    background: white;
-                    border-radius: 8px;
-                    cursor: pointer;
-                    font-size: 13px;
-                    font-weight: 500;
-                    color: #4b5563;
-                    transition: all 0.2s;
-                    margin: 0 2px;
-                }
-                .pagination .btn-page:hover:not(:disabled):not(.active) {
-                    background: #f3f4f6;
-                    border-color: #1e3a8a;
-                    color: #1e3a8a;
-                }
-                .pagination .btn-page.active {
-                    background: #1e3a8a;
-                    border-color: #1e3a8a;
-                    color: white;
-                    cursor: default;
-                }
-                .pagination .btn-page:disabled {
-                    opacity: 0.5;
-                    cursor: not-allowed;
-                }
-                .pagination .btn-pagination {
-                    padding: 8px 16px;
-                    border: 1px solid #e5e7eb;
-                    background: white;
-                    border-radius: 8px;
-                    cursor: pointer;
-                    font-size: 13px;
-                    font-weight: 500;
-                    color: #4b5563;
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 5px;
-                    transition: all 0.2s;
-                }
-                .pagination .btn-pagination:hover:not(:disabled) {
-                    background: #f3f4f6;
-                    border-color: #1e3a8a;
-                    color: #1e3a8a;
-                }
-                .pagination .btn-pagination:disabled {
-                    opacity: 0.5;
-                    cursor: not-allowed;
-                }
-                .pagination {
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    gap: 8px;
-                    flex-wrap: wrap;
-                    margin-top: 20px;
-                    padding: 15px;
-                }
-                .pagination #pageInfoUsuario {
-                    color: #6b7280;
-                    font-size: 13px;
-                    margin: 0 10px;
-                }
-            </style>
-
             <div class="section-header">
                 <h2><i class="fas fa-users"></i> Usuários</h2>
                 <button class="btn-primary" onclick="adminSimples.novoUsuario()">
@@ -2400,23 +2338,42 @@ class AdminSimples {
                 </table>
             </div>
 
-            <div class="pagination" id="paginacaoUsuarios">
-                <button class="btn-pagination" onclick="adminSimples.paginaAnteriorServidor()"
-                    ${paginaAtual <= 1 ? 'disabled' : ''}>
-                    <i class="fas fa-chevron-left"></i> Anterior
-                </button>
+            <!-- PAGINAÇÃO LIMPA (igual à imagem) -->
+            ${totalPaginas > 1 ? `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding: 15px 0; flex-wrap: wrap; gap: 15px;">
+                
+                <!-- Contador de registros (esquerda) -->
+                <div style="font-size: 13px; color: #4b5563; font-weight: 500;">
+                    Mostrando <strong>${inicioExibicao}</strong> a <strong>${fimExibicao}</strong> de <strong>${totalRegistros}</strong> registros
+                </div>
+
+                <!-- Botões centrais -->
                 <div style="display: flex; align-items: center; gap: 4px;">
                     ${botoesPagina.join('')}
                 </div>
-                <button class="btn-pagination" onclick="adminSimples.proximaPaginaServidor()"
-                    ${paginaAtual >= totalPaginas ? 'disabled' : ''}>
-                    Próxima <i class="fas fa-chevron-right"></i>
-                </button>
-                <span id="pageInfoUsuario">
-                    (${totalRegistros} usuários)
-                </span>
+
+                <!-- Ir para página (direita) -->
+                <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #4b5563;">
+                    <span>Ir para:</span>
+                    <input type="number" min="1" max="${totalPaginas}" value="${paginaAtual}"
+                        onchange="adminSimples.irParaPagina(parseInt(this.value))"
+                        style="width: 60px; padding: 6px 8px; border: 1px solid #e5e7eb; border-radius: 6px; text-align: center; font-size: 13px; outline: none;">
+                    <span>de ${totalPaginas}</span>
+                </div>
             </div>
+            ` : `
+            <div style="margin-top: 20px; padding: 15px 0; font-size: 13px; color: #4b5563; font-weight: 500;">
+                Mostrando <strong>${totalRegistros}</strong> registro${totalRegistros === 1 ? '' : 's'}
+            </div>
+            `}
         `;
+    }
+
+    irParaPagina(pagina) {
+        if (isNaN(pagina) || pagina < 1) return;
+        if (pagina > this.pagination.pages) return;
+        if (pagina === this.paginaAtualUsuario) return;
+        this.carregarUsuarios(pagina);
     }
 
     gerarLinhasUsuarios(usuarios) {
