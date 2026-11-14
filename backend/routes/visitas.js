@@ -237,7 +237,10 @@ router.get('/turmas', authenticateToken, verificarPermissaoVisitas, async (req, 
     };
 
     _cacheSet('visitas:turmas', response);
-    console.log(`✅ ${todasTurmas.length} turmas em cache`);
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`✅ ${todasTurmas.length} turmas em cache`);
+    }
 
     res.json(response);
   } catch (error) {
@@ -262,7 +265,10 @@ router.get('/cursos', authenticateToken, verificarPermissaoVisitas, async (req, 
     const response = { success: true, cursos: cursos.sort() };
     _cacheSet('visitas:cursos', response);
 
-    console.log(`✅ ${cursos.length} cursos em cache`);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`✅ ${cursos.length} cursos em cache`);
+    }
+
     res.json(response);
   } catch (error) {
     console.error('❌ Erro ao buscar cursos:', error);
@@ -353,8 +359,11 @@ router.get('/professores', authenticateToken, verificarPermissaoVisitas, async (
     };
 
     _cacheSet('visitas:professores', response);
-    console.log(`✅ ${professores.length} professores em cache`);
-    
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`✅ ${professores.length} professores em cache`);
+    }
+
     res.json(response);
   } catch (error) {
     console.error('❌ Erro ao buscar professores:', error);
