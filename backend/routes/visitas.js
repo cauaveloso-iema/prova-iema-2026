@@ -44,6 +44,16 @@ function _cacheClear() {
 }
 
 // ============================================
+// 🆕 HELPER — invalida TODO o cache de /termos
+// ============================================
+function _invalidateTermosCache() {
+    const keys = [..._cache.keys()];
+    keys.forEach(k => {
+        if (k.startsWith('visitas:termos:')) _cache.delete(k);
+    });
+}
+
+// ============================================
 // 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
 // ============================================
 function getDataHojeBR() {
@@ -174,7 +184,7 @@ router.get('/health', (req, res) => {
     success: true,
     status: 'online',
     service: 'Autorizacao de Visitas',
-    versao: '3.1-cache-otimizado',
+    versao: '3.2-cache-select-otimizado',
     cacheSize: _cache.size,
     _debug: {
       hojeBR: getDataHojeBR(),
@@ -406,7 +416,7 @@ router.get('/buscar-localizacao', authenticateToken, verificarPermissaoVisitas, 
 // CRUD TERMOS
 // ============================================
 
-// Listar todos os termos (🚀 OTIMIZADO COM $facet + CACHE)
+// Listar todos os termos (🚀 OTIMIZADO COM $facet + CACHE + SELECT ENXUTO)
 router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, res) => {
   try {
     const t0 = Date.now();
@@ -461,6 +471,7 @@ router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, 
     // ============================================
     // 🚀 OTIMIZAÇÃO CRÍTICA: 1 única pipeline com $facet
     //    Retorna dados + total + estatísticas em 1 ida ao banco
+    //    E com SELECT ENXUTO (sem fotoPerfil base64, sem arrays inteiros)
     // ============================================
     const [resultado] = await TermoVisita.aggregate([
       { $match: query },
@@ -476,11 +487,9 @@ router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, 
                 codigo: 1,
                 atividade: 1,
                 descricaoAtividade: 1,
-                alunos: 1,
                 turmas: 1,
                 turmaPrincipal: 1,
                 cursoPrincipal: 1,
-                professores: 1,
                 periodo: 1,
                 horario: 1,
                 local: 1,
@@ -492,7 +501,21 @@ router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, 
                 criadoPor: 1,
                 createdAt: 1,
                 updatedAt: 1,
-                // ✅ Só o essencial dos responsáveis (sem base64/CPF/RG/telefone)
+
+                // ✅ ALUNOS: só o essencial (SEM fotoPerfil base64)
+                'alunos.alunoId': 1,
+                'alunos.nome': 1,
+                'alunos.matricula': 1,
+                'alunos.turma': 1,
+                'alunos.curso': 1,
+
+                // ✅ PROFESSORES: só o essencial
+                'professores.professorId': 1,
+                'professores.nome': 1,
+                'professores.matricula': 1,
+                'professores.eixo': 1,
+
+                // ✅ RESPONSÁVEIS: só o essencial (sem base64/CPF/RG/telefone)
                 'responsaveis.alunoId': 1,
                 'responsaveis.alunoNome': 1,
                 'responsaveis.nome': 1,
@@ -614,7 +637,7 @@ router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, 
   }
 });
 
-// Buscar termo por ID (🚀 OTIMIZADO COM SELECT)
+// Buscar termo por ID (🚀 OTIMIZADO COM SELECT — mantém fotoPerfil)
 router.get('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (req, res) => {
   try {
     const termo = await TermoVisita.findById(req.params.id)
@@ -1080,15 +1103,5 @@ router.get('/estatisticas', authenticateToken, verificarPermissaoVisitas, async 
     res.status(500).json({ success: false, error: error.message });
   }
 });
-
-// ============================================
-// 🆕 HELPER — invalida TODO o cache de /termos
-// ============================================
-function _invalidateTermosCache() {
-  const keys = [..._cache.keys()];
-  keys.forEach(k => {
-    if (k.startsWith('visitas:termos:')) _cache.delete(k);
-  });
-}
 
 module.exports = router;
