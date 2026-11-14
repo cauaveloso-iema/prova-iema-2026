@@ -1,5 +1,5 @@
 // frontend/js/visitas-admin.js
-// Módulo de Autorização de Visitas Técnicas - ADMIN (v6.0 - OTIMIZADO E RÁPIDO)
+// Módulo de Autorização de Visitas Técnicas - ADMIN (v7.0 - OTIMIZADO COM CACHE FRONTEND)
 
 class VisitasAdmin {
     constructor() {
@@ -43,18 +43,23 @@ class VisitasAdmin {
         };
 
         // ============================================
-        // 🚀 CACHE INTERNO (OTIMIZAÇÃO)
+        // 🚀 CACHE INTERNO (OTIMIZAÇÃO FRONTEND)
         // ============================================
         this._cache = {
             configuracao: null,
+            configuracaoTs: 0,
             turmas: null,
+            turmasTs: 0,
             cursos: null,
+            cursosTs: 0,
             professores: null,
+            professoresTs: 0,
             termos: null,
+            termosTs: 0,
             estatisticas: null,
-            timestamp: 0,
-            ttl: 60 * 1000,            // 1 min para termos
-            ttlEstatico: 5 * 60 * 1000 // 5 min para turmas/cursos/professores
+            // TTLs diferentes por tipo
+            ttlTermos: 30 * 1000,        // 30s (dados dinâmicos)
+            ttlEstatico: 5 * 60 * 1000   // 5min (turmas/cursos/professores/config)
         };
 
         // 🚀 Cache de alunos por turma (Map<turma, alunos[]>)
@@ -102,20 +107,27 @@ class VisitasAdmin {
     // ============================================
     // 🚀 CACHE HELPERS
     // ============================================
-    _cacheValido(key, ttl = null) {
-        if (!this._cache[key]) return false;
-        const limite = ttl || this._cache.ttl;
-        return (Date.now() - this._cache.timestamp) < limite;
+    _cacheValido(key, ttl) {
+        const tsKey = `${key}Ts`;
+        if (!this._cache[key] || !this._cache[tsKey]) return false;
+        return (Date.now() - this._cache[tsKey]) < (ttl || this._cache.ttlEstatico);
     }
 
-    _marcarCacheAtualizado() {
-        this._cache.timestamp = Date.now();
+    _setCache(key, data, tsKey = null) {
+        this._cache[key] = data;
+        this._cache[tsKey || `${key}Ts`] = Date.now();
     }
 
-    _invalidarCache() {
-        this._cache.timestamp = 0;
-        this._cache.termos = null;
-        this._cache.estatisticas = null;
+    _invalidarCache(key = null) {
+        if (key) {
+            this._cache[key] = null;
+            this._cache[`${key}Ts`] = 0;
+        } else {
+            // Invalida só os dinâmicos (termos + estatísticas)
+            this._cache.termos = null;
+            this._cache.termosTs = 0;
+            this._cache.estatisticas = null;
+        }
     }
 
     _limparCacheAlunos() {
@@ -149,7 +161,7 @@ class VisitasAdmin {
     }
 
     // ============================================
-    // INICIALIZAÇÃO
+    // INICIALIZAÇÃO (com cache)
     // ============================================
     async init() {
         return this._comLock('init', async () => {
@@ -164,15 +176,44 @@ class VisitasAdmin {
                 const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
                 this.currentUser = userData;
 
-                // 🔥 1) Renderiza IMEDIATAMENTE (com estado de carregamento)
+                // 🔥 1) Renderiza IMEDIATAMENTE (skeleton)
                 this.renderizar();
                 this._mostrarLoadingTermos(true);
 
-                // 🔥 2) Carrega tudo em paralelo (não bloqueia a renderização)
-                Promise.all([
-                    this.carregarConfiguracao().catch(e => console.warn('Config:', e)),
-                    this.carregarDados().catch(e => console.warn('Dados:', e))
-                ]).then(() => {
+                // 🔥 2) Verifica cache antes de fazer fetch
+                const configCacheValido = this._cacheValido('configuracao', this._cache.ttlEstatico);
+                const dadosCacheValidos = 
+                    this._cacheValido('turmas', this._cache.ttlEstatico) &&
+                    this._cacheValido('cursos', this._cache.ttlEstatico) &&
+                    this._cacheValido('professores', this._cache.ttlEstatico);
+
+                if (configCacheValido) {
+                    console.log('⚡ Configuração do cache (frontend)');
+                }
+
+                if (dadosCacheValidos) {
+                    console.log('⚡ Dados estáticos do cache (frontend)');
+                    // Restaura do cache
+                    this.turmas = this._cache.turmas || [];
+                    this.cursos = this._cache.cursos || [];
+                    this.professores = this._cache.professores || [];
+                }
+
+                // 🔥 3) Carrega em paralelo (só o que falta)
+                const promises = [];
+
+                if (!configCacheValido) {
+                    promises.push(this.carregarConfiguracao().catch(e => console.warn('Config:', e)));
+                }
+
+                if (!dadosCacheValidos) {
+                    promises.push(this.carregarDadosEstaticos().catch(e => console.warn('Estáticos:', e)));
+                }
+
+                // Sempre carrega termos (são dinâmicos)
+                promises.push(this.carregarTermosComCache().catch(e => console.warn('Termos:', e)));
+
+                Promise.all(promises).then(() => {
                     this._mostrarLoadingTermos(false);
                     this.renderizar();
                     console.log('✅ Módulo de Visitas inicializado');
@@ -236,59 +277,83 @@ class VisitasAdmin {
     }
 
     // ============================================
-    // CARREGAR DADOS (TUDO EM PARALELO)
+    // CARREGAR DADOS ESTÁTICOS (turmas, cursos, professores) — 3 em paralelo
     // ============================================
-    async carregarDados() {
-        return this._comLock('carregarDados', async () => {
-            try {
-                // Dispara TODAS as 4 chamadas em paralelo
-                const [turmasRes, cursosRes, professoresRes, termosRes] = await Promise.all([
-                    this.apiRequest('/api/setor-pedagogico/visitas/turmas').catch(() => null),
-                    this.apiRequest('/api/setor-pedagogico/visitas/cursos').catch(() => null),
-                    this.apiRequest('/api/setor-pedagogico/visitas/professores').catch(() => null),
-                    this.apiRequest(
-                        `/api/setor-pedagogico/visitas/termos?page=${this.paginaAtual}&limit=${this.itensPorPagina}&status=${this.filtros.status}&turma=${this.filtros.turma}&search=${this.filtros.search}`
-                    ).catch(() => null)
-                ]);
+    async carregarDadosEstaticos() {
+        try {
+            // Verifica cache individual por endpoint
+            const precisaTurmas = !this._cacheValido('turmas', this._cache.ttlEstatico);
+            const precisaCursos = !this._cacheValido('cursos', this._cache.ttlEstatico);
+            const precisaProfessores = !this._cacheValido('professores', this._cache.ttlEstatico);
 
-                if (turmasRes?.success) {
-                    this.turmas = (turmasRes.turmas || []).map(t =>
+            const promises = [];
+            const nomes = [];
+
+            if (precisaTurmas) {
+                promises.push(this.apiRequest('/api/setor-pedagogico/visitas/turmas').catch(() => null));
+                nomes.push('turmas');
+            }
+            if (precisaCursos) {
+                promises.push(this.apiRequest('/api/setor-pedagogico/visitas/cursos').catch(() => null));
+                nomes.push('cursos');
+            }
+            if (precisaProfessores) {
+                promises.push(this.apiRequest('/api/setor-pedagogico/visitas/professores').catch(() => null));
+                nomes.push('professores');
+            }
+
+            if (promises.length === 0) {
+                console.log('⚡ Todos os estáticos já estão em cache (frontend)');
+                return;
+            }
+
+            const responses = await Promise.all(promises);
+
+            responses.forEach((res, i) => {
+                const nome = nomes[i];
+                if (!res?.success) return;
+
+                if (nome === 'turmas') {
+                    this.turmas = (res.turmas || []).map(t => 
                         typeof t === 'string' ? { id: t, nome: t } : t
                     );
-                    this._cache.turmas = this.turmas;
+                    this._setCache('turmas', this.turmas);
+                } else if (nome === 'cursos') {
+                    this.cursos = res.cursos || [];
+                    this._setCache('cursos', this.cursos);
+                } else if (nome === 'professores') {
+                    this.professores = res.professores || [];
+                    this._setCache('professores', this.professores);
                 }
+            });
 
-                if (cursosRes?.success) {
-                    this.cursos = cursosRes.cursos || [];
-                    this._cache.cursos = this.cursos;
-                }
-
-                if (professoresRes?.success) {
-                    this.professores = professoresRes.professores || [];
-                    this._cache.professores = this.professores;
-                }
-
-                if (termosRes?.success) {
-                    this.termos = termosRes.termos || [];
-                    this.termosFiltrados = [...this.termos];
-                    this.paginacao = termosRes.paginacao;
-                    this.estatisticas = termosRes.estatisticas;
-                    this._cache.termos = this.termos;
-                    this._cache.estatisticas = this.estatisticas;
-                }
-
-                this._marcarCacheAtualizado();
-                console.log(`✅ Dados carregados: ${this.turmas.length} turmas, ${this.cursos.length} cursos, ${this.professores.length} professores, ${this.termos.length} termos`);
-
-            } catch (error) {
-                console.error('❌ Erro ao carregar dados:', error);
-                throw error;
-            }
-        });
+            console.log(`✅ Estáticos carregados: ${this.turmas.length} turmas, ${this.cursos.length} cursos, ${this.professores.length} professores`);
+        } catch (error) {
+            console.error('❌ Erro ao carregar estáticos:', error);
+            throw error;
+        }
     }
 
-    async carregarTermos() {
+    // ============================================
+    // CARREGAR TERMOS (com cache frontend de 30s)
+    // ============================================
+    async carregarTermosComCache(forceRefresh = false) {
         return this._comLock('carregarTermos', async () => {
+            // 🔥 Verifica cache (30s)
+            const cacheValido = !forceRefresh && 
+                this._cacheValido('termos', this._cache.ttlTermos) &&
+                this._cache.termos &&
+                this._cache.termosKey === this._termosKeyAtual();
+
+            if (cacheValido) {
+                console.log('⚡ Termos do cache (frontend, 30s)');
+                this.termos = this._cache.termos;
+                this.termosFiltrados = [...this.termos];
+                this.paginacao = this._cache.paginacao || null;
+                this.estatisticas = this._cache.estatisticas;
+                return;
+            }
+
             try {
                 const params = new URLSearchParams({
                     page: this.paginaAtual,
@@ -306,13 +371,37 @@ class VisitasAdmin {
                     this.paginacao = response.paginacao;
                     this.estatisticas = response.estatisticas;
 
+                    // Salva no cache com a chave de filtros atual
                     this._cache.termos = this.termos;
+                    this._cache.paginacao = this.paginacao;
                     this._cache.estatisticas = this.estatisticas;
-                    this._marcarCacheAtualizado();
+                    this._cache.termosTs = Date.now();
+                    this._cache.termosKey = this._termosKeyAtual();
                 }
             } catch (error) {
                 console.error('❌ Erro ao carregar termos:', error);
+                throw error;
             }
+        });
+    }
+
+    // Chave para invalidar cache quando filtros mudam
+    _termosKeyAtual() {
+        return `${this.filtros.status}|${this.filtros.turma}|${this.filtros.search}|${this.paginaAtual}`;
+    }
+
+    // Compatibilidade com chamadas antigas
+    async carregarTermos() {
+        return this.carregarTermosComCache(false);
+    }
+
+    // Compatibilidade com chamadas antigas
+    async carregarDados() {
+        return this._comLock('carregarDados', async () => {
+            await Promise.all([
+                this.carregarDadosEstaticos(),
+                this.carregarTermosComCache(true) // força refresh ao chamar carregarDados()
+            ]);
         });
     }
 
@@ -570,7 +659,7 @@ class VisitasAdmin {
                 timeout = setTimeout(() => {
                     this.filtros.search = e.target.value;
                     this.paginaAtual = 1;
-                    this.carregarTermos().then(() => this.renderizar());
+                    this.carregarTermosComCache(false).then(() => this.renderizar());
                 }, 500);
             });
         }
@@ -863,38 +952,51 @@ class VisitasAdmin {
 
     irParaPagina(pagina) {
         this.paginaAtual = pagina;
-        this.carregarTermos().then(() => this.renderizar());
+        this.carregarTermosComCache(false).then(() => this.renderizar());
     }
 
     // ============================================
-    // FILTROS
+    // FILTROS (com cache — não refetch em cliques repetidos)
     // ============================================
     filtrarPorStatus(status) {
         this.filtros.status = status;
         this.paginaAtual = 1;
-        this.carregarTermos().then(() => this.renderizar());
+        this._invalidarCache('termos'); // força refetch pois filtro mudou
+        this.carregarTermosComCache(false).then(() => this.renderizar());
     }
 
     filtrarPorTurma(turma) {
         this.filtros.turma = turma;
         this.paginaAtual = 1;
-        this.carregarTermos().then(() => this.renderizar());
+        this._invalidarCache('termos');
+        this.carregarTermosComCache(false).then(() => this.renderizar());
     }
 
     aplicarFiltros() {
         this.paginaAtual = 1;
-        this.carregarTermos().then(() => this.renderizar());
+        this._invalidarCache('termos');
+        this.carregarTermosComCache(false).then(() => this.renderizar());
     }
 
     limparFiltros() {
         this.filtros = { status: 'todos', turma: 'todas', search: '', ordenacao: 'data_desc' };
         this.paginaAtual = 1;
-        this.carregarTermos().then(() => this.renderizar());
+        this._invalidarCache('termos');
+        this.carregarTermosComCache(false).then(() => this.renderizar());
     }
 
     async atualizar() {
         this.showToast('🔄 Atualizando...', 'info');
+        // Força refetch de tudo (usuário pediu explicitamente)
         this._invalidarCache();
+        this._cache.configuracao = null;
+        this._cache.configuracaoTs = 0;
+        this._cache.turmas = null;
+        this._cache.turmasTs = 0;
+        this._cache.cursos = null;
+        this._cache.cursosTs = 0;
+        this._cache.professores = null;
+        this._cache.professoresTs = 0;
         this._limparCacheAlunos();
         await this.carregarDados();
         this.renderizar();
@@ -1921,11 +2023,11 @@ class VisitasAdmin {
                         localizacao: null
                     };
 
-                    // 🧹 Limpa cache (dados podem ter mudado)
+                    // 🧹 Limpa cache (dados mudaram)
                     this._invalidarCache();
                     this._limparCacheAlunos();
 
-                    await this.carregarTermos();
+                    await this.carregarTermosComCache(true); // force refresh
                     this.renderizar();
                 } else {
                     throw new Error(response.error || 'Erro ao salvar');
@@ -2142,7 +2244,7 @@ class VisitasAdmin {
             if (response.success) {
                 this.showToast('✅ Termo excluído!', 'success');
                 this._invalidarCache();
-                await this.carregarTermos();
+                await this.carregarTermosComCache(true);
                 this.renderizar();
             } else {
                 throw new Error(response.error);
@@ -2653,6 +2755,7 @@ class VisitasAdmin {
             if (response.success) {
                 this.configuracao = response.configuracao;
                 this._cache.configuracao = response.configuracao;
+                this._cache.configuracaoTs = Date.now();
                 this.showToast(
                     abertas ? '✅ Autorizações ABERTAS para os responsáveis' : '🔒 Autorizações FECHADAS',
                     'success'
@@ -2671,11 +2774,18 @@ class VisitasAdmin {
     }
 
     async carregarConfiguracao() {
+        // Verifica cache antes de ir ao backend
+        if (this._cacheValido('configuracao', this._cache.ttlEstatico)) {
+            console.log('⚡ Configuração do cache (frontend)');
+            this.configuracao = this._cache.configuracao;
+            return;
+        }
+
         try {
             const response = await this.apiRequest('/api/setor-pedagogico/visitas/configuracao');
             if (response.success) {
                 this.configuracao = response.configuracao;
-                this._cache.configuracao = response.configuracao;
+                this._setCache('configuracao', response.configuracao);
             }
         } catch (error) {
             console.error('Erro ao carregar config:', error);
@@ -2733,4 +2843,4 @@ class VisitasAdmin {
 const visitasAdmin = new VisitasAdmin();
 window.visitasAdmin = visitasAdmin;
 
-console.log('✅ visitas-admin.js carregado (v6.0 - otimizado, sem prefetch pesado)');
+console.log('✅ visitas-admin.js carregado (v7.0 - cache frontend)');
