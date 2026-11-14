@@ -1,6 +1,7 @@
 // ============================================================================
 // ROTA: /api/acompanhamento-compartilhado
 // Agrega dados de TODOS os setores (incluindo BIBLIOTECA)
+// v2.0 - OTIMIZADO: Aggregations no MongoDB, sem loops pesados em memória
 // ============================================================================
 
 const express = require('express');
@@ -38,14 +39,10 @@ const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
-  if (!token) {
-    return res.status(401).json({ success: false, error: 'Token não fornecido' });
-  }
+  if (!token) return res.status(401).json({ success: false, error: 'Token não fornecido' });
 
   jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-    if (err) {
-      return res.status(403).json({ success: false, error: 'Token inválido ou expirado' });
-    }
+    if (err) return res.status(403).json({ success: false, error: 'Token inválido ou expirado' });
     req.userId = decoded.id;
     req.userRole = decoded.role;
     req.userNome = decoded.nome;
@@ -59,10 +56,7 @@ const verificarAcesso = (req, res, next) => {
     'biblioteca', 'professor', 'super_admin', 'admin'
   ];
   if (!allowedRoles.includes(req.userRole)) {
-    return res.status(403).json({
-      success: false,
-      error: 'Acesso restrito a setores de acompanhamento'
-    });
+    return res.status(403).json({ success: false, error: 'Acesso restrito a setores de acompanhamento' });
   }
   next();
 };
@@ -77,9 +71,6 @@ function fimDoDiaBrasil(dataStr) {
   return new Date(dataStr + 'T23:59:59.999-03:00');
 }
 
-// ============================================================================
-// HELPER: Label do motivo da biblioteca
-// ============================================================================
 function getMotivoBibliotecaLabel(motivo, motivoOutros) {
   const labels = {
     'ler_livro': 'Ler um Livro',
@@ -92,7 +83,7 @@ function getMotivoBibliotecaLabel(motivo, motivoOutros) {
 }
 
 // ============================================================================
-// HELPER: Resumo do dia atual (COM BIBLIOTECA)
+// HELPER: Resumo do dia atual (COM BIBLIOTECA) - Rápido pois busca só do dia
 // ============================================================================
 async function getResumoDia() {
   const hojeStr = new Date().toISOString().split('T')[0];
@@ -104,7 +95,7 @@ async function getResumoDia() {
     assistente_social: { total: 0, tipos: [] },
     psicologia: { total: 0, tipos: [] },
     supervisao: { total: 0, motivos: [] },
-    biblioteca: { total: 0, motivos: [] },  // 🔥 NOVO
+    biblioteca: { total: 0, motivos: [] },
     alunosUnicos: 0
   };
 
@@ -113,82 +104,51 @@ async function getResumoDia() {
   const tiposAS = {};
   const tiposPsico = {};
   const motivosSupervisao = {};
-  const motivosBiblioteca = {};  // 🔥 NOVO
+  const motivosBiblioteca = {};
 
-  // ===== GESTÃO (Atrasos) =====
-  if (Atraso) {
-    try {
-      const atrasos = await Atraso.find({ dataHora: { $gte: inicio, $lte: fim } }).lean();
-      resumo.gestao.total = atrasos.length;
-      atrasos.forEach(a => {
-        const label = Atraso.getMotivoLabel(a.motivo);
-        motivosGestao[label] = (motivosGestao[label] || 0) + 1;
-        if (a.alunoId) alunosSet.add(a.alunoId.toString());
-      });
-    } catch (e) { console.error('Erro gestão:', e.message); }
-  }
+  // Busca tudo em paralelo
+  const [atrasos, atendsAS, atendsPsi, atendsSup, visitasBib] = await Promise.all([
+    Atraso ? Atraso.find({ dataHora: { $gte: inicio, $lte: fim } }).lean() : [],
+    AtendimentoAssistenteSocial ? AtendimentoAssistenteSocial.find({ 'entrada.dataHora': { $gte: inicio, $lte: fim } }).lean() : [],
+    AtendimentoPsicologia ? AtendimentoPsicologia.find({ 'entrada.dataHora': { $gte: inicio, $lte: fim } }).lean() : [],
+    AtendimentoSupervisao ? AtendimentoSupervisao.find({ 'entrada.dataHora': { $gte: inicio, $lte: fim } }).lean() : [],
+    AtendimentoBiblioteca ? AtendimentoBiblioteca.find({ 'entrada.dataHora': { $gte: inicio, $lte: fim } }).lean() : []
+  ]);
 
-  // ===== ASSISTENTE SOCIAL =====
-  if (AtendimentoAssistenteSocial) {
-    try {
-      const atends = await AtendimentoAssistenteSocial.find({
-        'entrada.dataHora': { $gte: inicio, $lte: fim }
-      }).lean();
-      resumo.assistente_social.total = atends.length;
-      atends.forEach(a => {
-        const label = AtendimentoAssistenteSocial.getTipoTarefaLabel(a.tipoTarefa);
-        tiposAS[label] = (tiposAS[label] || 0) + 1;
-        if (a.alunoId) alunosSet.add(a.alunoId.toString());
-      });
-    } catch (e) { console.error('Erro AS:', e.message); }
-  }
+  atrasos.forEach(a => {
+    const label = Atraso.getMotivoLabel(a.motivo);
+    motivosGestao[label] = (motivosGestao[label] || 0) + 1;
+    if (a.alunoId) alunosSet.add(a.alunoId.toString());
+  });
+  resumo.gestao.total = atrasos.length;
 
-  // ===== PSICOLOGIA =====
-  if (AtendimentoPsicologia) {
-    try {
-      const atends = await AtendimentoPsicologia.find({
-        'entrada.dataHora': { $gte: inicio, $lte: fim }
-      }).lean();
-      resumo.psicologia.total = atends.length;
-      atends.forEach(a => {
-        const label = AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa);
-        tiposPsico[label] = (tiposPsico[label] || 0) + 1;
-        if (a.alunoId) alunosSet.add(a.alunoId.toString());
-      });
-    } catch (e) { console.error('Erro Psico:', e.message); }
-  }
+  atendsAS.forEach(a => {
+    const label = AtendimentoAssistenteSocial.getTipoTarefaLabel(a.tipoTarefa);
+    tiposAS[label] = (tiposAS[label] || 0) + 1;
+    if (a.alunoId) alunosSet.add(a.alunoId.toString());
+  });
+  resumo.assistente_social.total = atendsAS.length;
 
-  // ===== SUPERVISÃO =====
-  if (AtendimentoSupervisao) {
-    try {
-      const atends = await AtendimentoSupervisao.find({
-        'entrada.dataHora': { $gte: inicio, $lte: fim }
-      }).lean();
-      resumo.supervisao.total = atends.length;
-      atends.forEach(a => {
-        const label = AtendimentoSupervisao.getTipoTarefaLabel(a.tipoTarefa);
-        motivosSupervisao[label] = (motivosSupervisao[label] || 0) + 1;
-        if (a.alunoId) alunosSet.add(a.alunoId.toString());
-      });
-    } catch (e) { console.error('Erro Supervisão:', e.message); }
-  }
+  atendsPsi.forEach(a => {
+    const label = AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa);
+    tiposPsico[label] = (tiposPsico[label] || 0) + 1;
+    if (a.alunoId) alunosSet.add(a.alunoId.toString());
+  });
+  resumo.psicologia.total = atendsPsi.length;
 
-  // ===== 🔥 BIBLIOTECA =====
-  if (AtendimentoBiblioteca) {
-    try {
-      const visitas = await AtendimentoBiblioteca.find({
-        'entrada.dataHora': { $gte: inicio, $lte: fim }
-      }).lean();
+  atendsSup.forEach(a => {
+    const label = AtendimentoSupervisao.getTipoTarefaLabel(a.tipoTarefa);
+    motivosSupervisao[label] = (motivosSupervisao[label] || 0) + 1;
+    if (a.alunoId) alunosSet.add(a.alunoId.toString());
+  });
+  resumo.supervisao.total = atendsSup.length;
 
-      resumo.biblioteca.total = visitas.length;
-      visitas.forEach(v => {
-        const label = getMotivoBibliotecaLabel(v.motivoVisita, v.motivoOutros);
-        motivosBiblioteca[label] = (motivosBiblioteca[label] || 0) + 1;
-        if (v.alunoId) alunosSet.add(v.alunoId.toString());
-      });
-
-    } catch (e) { console.error('Erro Biblioteca:', e.message); }
-  }
+  visitasBib.forEach(v => {
+    const label = getMotivoBibliotecaLabel(v.motivoVisita, v.motivoOutros);
+    motivosBiblioteca[label] = (motivosBiblioteca[label] || 0) + 1;
+    if (v.alunoId) alunosSet.add(v.alunoId.toString());
+  });
+  resumo.biblioteca.total = visitasBib.length;
 
   const toArray = (obj) => Object.entries(obj)
     .map(([label, count]) => ({ label, count }))
@@ -199,23 +159,23 @@ async function getResumoDia() {
   resumo.assistente_social.tipos = toArray(tiposAS);
   resumo.psicologia.tipos = toArray(tiposPsico);
   resumo.supervisao.motivos = toArray(motivosSupervisao);
-  resumo.biblioteca.motivos = toArray(motivosBiblioteca);  // 🔥 NOVO
+  resumo.biblioteca.motivos = toArray(motivosBiblioteca);
   resumo.alunosUnicos = alunosSet.size;
 
   return resumo;
 }
 
 // ============================================================================
-// HELPER: Agrega dados por aluno (COM BIBLIOTECA)
+// HELPER: Agrega dados por aluno — OTIMIZADO PARA O MONGO
 // ============================================================================
 async function agregarPorAluno(filtros = {}) {
   const { turma, dataInicio, dataFim, alunoId } = filtros;
 
-  const matchAluno = {};
+  const matchBase = {};
   if (alunoId && mongoose.Types.ObjectId.isValid(alunoId)) {
-    matchAluno.alunoId = new mongoose.Types.ObjectId(alunoId);
+    matchBase.alunoId = new mongoose.Types.ObjectId(alunoId);
   }
-  if (turma) matchAluno.alunoTurma = turma;
+  if (turma) matchBase.alunoTurma = turma;
 
   const matchData = {};
   const temFiltroData = dataInicio || dataFim;
@@ -224,22 +184,54 @@ async function agregarPorAluno(filtros = {}) {
     if (dataFim) matchData.$lte = fimDoDiaBrasil(dataFim);
   }
 
+  // Função auxiliar para rodar aggregations em paralelo
+  const runAgg = async (Model, dateField, typeField, labelFn) => {
+    if (!Model) return [];
+    const match = { ...matchBase };
+    if (temFiltroData) match[dateField] = matchData;
+
+    const pipeline = [
+      { $match: match },
+      { $sort: { [dateField]: -1 } },
+      { $group: {
+          _id: '$alunoId',
+          alunoNome: { $first: '$alunoNome' },
+          alunoTurma: { $first: '$alunoTurma' },
+          alunoCurso: { $first: '$alunoCurso' },
+          alunoMatricula: { $first: '$alunoMatricula' },
+          total: { $sum: 1 },
+          ultimaAtualizacao: { $max: `$${dateField}` },
+          registros: { $push: '$$ROOT' }
+      }}
+    ];
+    return await Model.aggregate(pipeline);
+  };
+
+  // Executa todos os aggregates em paralelo
+  const [aggGestao, aggAS, aggPsi, aggSup, aggBib] = await Promise.all([
+    runAgg(Atraso, 'dataHora', 'motivo'),
+    runAgg(AtendimentoAssistenteSocial, 'entrada.dataHora', 'tipoTarefa'),
+    runAgg(AtendimentoPsicologia, 'entrada.dataHora', 'tipoTarefa'),
+    runAgg(AtendimentoSupervisao, 'entrada.dataHora', 'tipoTarefa'),
+    runAgg(AtendimentoBiblioteca, 'entrada.dataHora', 'motivoVisita')
+  ]);
+
   const alunosMap = new Map();
 
-  function getOrCreate(alunoId, alunoNome, alunoTurma, alunoCurso, alunoMatricula) {
-    const key = alunoId.toString();
+  function getOrCreate(id, nome, turma, curso, matricula) {
+    const key = id.toString();
     if (!alunosMap.has(key)) {
       alunosMap.set(key, {
         alunoId: key,
-        alunoNome: alunoNome || 'Aluno',
-        alunoTurma: alunoTurma || 'Sem turma',
-        alunoCurso: alunoCurso || 'Não informado',
-        alunoMatricula: alunoMatricula || '',
+        alunoNome: nome || 'Aluno',
+        alunoTurma: turma || 'Sem turma',
+        alunoCurso: curso || 'Não informado',
+        alunoMatricula: matricula || '',
         gestao: { total: 0, motivos: {}, registros: [] },
         assistente_social: { total: 0, tipos: {}, registros: [] },
         psicologia: { total: 0, tipos: {}, registros: [] },
         supervisao: { total: 0, motivos: {}, registros: [] },
-        biblioteca: { total: 0, motivos: {}, registros: [] },  // 🔥 NOVO
+        biblioteca: { total: 0, motivos: {}, registros: [] },
         totalGeral: 0,
         ultimaAtualizacao: null
       });
@@ -247,148 +239,100 @@ async function agregarPorAluno(filtros = {}) {
     return alunosMap.get(key);
   }
 
-  // ===== GESTÃO =====
-  if (Atraso) {
-    try {
-      const query = { ...matchAluno };
-      if (temFiltroData) query.dataHora = matchData;
-      const atrasos = await Atraso.find(query).sort({ dataHora: -1 }).lean();
-
-      atrasos.forEach(a => {
-        const aluno = getOrCreate(a.alunoId, a.alunoNome, a.alunoTurma, a.alunoCurso, a.alunoMatricula);
-        const motivoLabel = Atraso.getMotivoLabel(a.motivo);
-        aluno.gestao.total++;
-        aluno.gestao.motivos[motivoLabel] = (aluno.gestao.motivos[motivoLabel] || 0) + 1;
-        aluno.gestao.registros.push({
-          id: a._id, data: a.dataHora, motivo: a.motivo, motivoLabel,
-          descricao: a.descricao, registradoPor: a.registradoPorNome
-        });
-        aluno.totalGeral++;
-        if (a.dataHora && (!aluno.ultimaAtualizacao || new Date(a.dataHora) > new Date(aluno.ultimaAtualizacao))) {
-          aluno.ultimaAtualizacao = a.dataHora;
-        }
-      });
-    } catch (e) { console.error('Erro agregar gestão:', e.message); }
+  function updateUltima(aluno, data) {
+    if (data && (!aluno.ultimaAtualizacao || new Date(data) > new Date(aluno.ultimaAtualizacao))) {
+      aluno.ultimaAtualizacao = data;
+    }
   }
 
-  // ===== ASSISTENTE SOCIAL =====
-  if (AtendimentoAssistenteSocial) {
-    try {
-      const query = { ...matchAluno };
-      if (temFiltroData) query['entrada.dataHora'] = matchData;
-      const atends = await AtendimentoAssistenteSocial.find(query).sort({ 'entrada.dataHora': -1 }).lean();
-
-      atends.forEach(a => {
-        const aluno = getOrCreate(a.alunoId, a.alunoNome, a.alunoTurma, a.alunoCurso, a.alunoMatricula);
-        const tipoLabel = AtendimentoAssistenteSocial.getTipoTarefaLabel(a.tipoTarefa);
-        aluno.assistente_social.total++;
-        aluno.assistente_social.tipos[tipoLabel] = (aluno.assistente_social.tipos[tipoLabel] || 0) + 1;
-        aluno.assistente_social.registros.push({
-          id: a._id, data: a.entrada?.dataHora, tipoTarefa: a.tipoTarefa, tipoTarefaLabel: tipoLabel,
-          descricao: a.entrada?.descricao, status: a.status, gravidade: a.entrada?.gravidade,
-          temAssinatura: !!(a.entrada?.assinaturaBase64), temRemarcacao: !!a.temRemarcacaoPendente
-        });
-        aluno.totalGeral++;
-        if (a.entrada?.dataHora && (!aluno.ultimaAtualizacao || new Date(a.entrada.dataHora) > new Date(aluno.ultimaAtualizacao))) {
-          aluno.ultimaAtualizacao = a.entrada.dataHora;
-        }
+  // Processa Gestão
+  aggGestao.forEach(g => {
+    const aluno = getOrCreate(g._id, g.alunoNome, g.alunoTurma, g.alunoCurso, g.alunoMatricula);
+    aluno.gestao.total = g.total;
+    g.registros.forEach(r => {
+      const label = Atraso.getMotivoLabel(r.motivo);
+      aluno.gestao.motivos[label] = (aluno.gestao.motivos[label] || 0) + 1;
+      aluno.gestao.registros.push({
+        id: r._id, data: r.dataHora, motivo: r.motivo, motivoLabel: label,
+        descricao: r.descricao, registradoPor: r.registradoPorNome
       });
-    } catch (e) { console.error('Erro agregar AS:', e.message); }
-  }
+    });
+    aluno.totalGeral += g.total;
+    updateUltima(aluno, g.ultimaAtualizacao);
+  });
 
-  // ===== PSICOLOGIA =====
-  if (AtendimentoPsicologia) {
-    try {
-      const query = { ...matchAluno };
-      if (temFiltroData) query['entrada.dataHora'] = matchData;
-      const atends = await AtendimentoPsicologia.find(query).sort({ 'entrada.dataHora': -1 }).lean();
-
-      atends.forEach(a => {
-        const aluno = getOrCreate(a.alunoId, a.alunoNome, a.alunoTurma, a.alunoCurso, a.alunoMatricula);
-        const tipoLabel = AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa);
-        aluno.psicologia.total++;
-        aluno.psicologia.tipos[tipoLabel] = (aluno.psicologia.tipos[tipoLabel] || 0) + 1;
-        aluno.psicologia.registros.push({
-          id: a._id, data: a.entrada?.dataHora, tipoTarefa: a.tipoTarefa, tipoTarefaLabel: tipoLabel,
-          descricao: a.entrada?.descricao, status: a.status, gravidade: a.entrada?.gravidade,
-          temAssinatura: !!(a.entrada?.assinaturaBase64), temRemarcacao: !!a.temRemarcacaoPendente
-        });
-        aluno.totalGeral++;
-        if (a.entrada?.dataHora && (!aluno.ultimaAtualizacao || new Date(a.entrada.dataHora) > new Date(aluno.ultimaAtualizacao))) {
-          aluno.ultimaAtualizacao = a.entrada.dataHora;
-        }
+  // Processa AS
+  aggAS.forEach(g => {
+    const aluno = getOrCreate(g._id, g.alunoNome, g.alunoTurma, g.alunoCurso, g.alunoMatricula);
+    aluno.assistente_social.total = g.total;
+    g.registros.forEach(r => {
+      const label = AtendimentoAssistenteSocial.getTipoTarefaLabel(r.tipoTarefa);
+      aluno.assistente_social.tipos[label] = (aluno.assistente_social.tipos[label] || 0) + 1;
+      aluno.assistente_social.registros.push({
+        id: r._id, data: r.entrada?.dataHora, tipoTarefa: r.tipoTarefa, tipoTarefaLabel: label,
+        descricao: r.entrada?.descricao, status: r.status, gravidade: r.entrada?.gravidade,
+        temAssinatura: !!(r.entrada?.assinaturaBase64), temRemarcacao: !!r.temRemarcacaoPendente
       });
-    } catch (e) { console.error('Erro agregar Psico:', e.message); }
-  }
+    });
+    aluno.totalGeral += g.total;
+    updateUltima(aluno, g.ultimaAtualizacao);
+  });
 
-  // ===== SUPERVISÃO =====
-  if (AtendimentoSupervisao) {
-    try {
-      const query = { ...matchAluno };
-      if (temFiltroData) query['entrada.dataHora'] = matchData;
-      const atends = await AtendimentoSupervisao.find(query).sort({ 'entrada.dataHora': -1 }).lean();
-
-      atends.forEach(a => {
-        const aluno = getOrCreate(a.alunoId, a.alunoNome, a.alunoTurma, a.alunoCurso, a.alunoMatricula);
-        const tipoLabel = AtendimentoSupervisao.getTipoTarefaLabel(a.tipoTarefa);
-        aluno.supervisao.total++;
-        aluno.supervisao.motivos[tipoLabel] = (aluno.supervisao.motivos[tipoLabel] || 0) + 1;
-        aluno.supervisao.registros.push({
-          id: a._id, data: a.entrada?.dataHora, tipoTarefa: a.tipoTarefa, tipoTarefaLabel: tipoLabel,
-          descricao: a.entrada?.descricao, status: a.status, gravidade: a.entrada?.gravidade,
-          temAssinatura: !!(a.entrada?.assinaturaBase64), temRemarcacao: !!a.temRemarcacaoPendente
-        });
-        aluno.totalGeral++;
-        if (a.entrada?.dataHora && (!aluno.ultimaAtualizacao || new Date(a.entrada.dataHora) > new Date(aluno.ultimaAtualizacao))) {
-          aluno.ultimaAtualizacao = a.entrada.dataHora;
-        }
+  // Processa Psi
+  aggPsi.forEach(g => {
+    const aluno = getOrCreate(g._id, g.alunoNome, g.alunoTurma, g.alunoCurso, g.alunoMatricula);
+    aluno.psicologia.total = g.total;
+    g.registros.forEach(r => {
+      const label = AtendimentoPsicologia.getTipoTarefaLabel(r.tipoTarefa);
+      aluno.psicologia.tipos[label] = (aluno.psicologia.tipos[label] || 0) + 1;
+      aluno.psicologia.registros.push({
+        id: r._id, data: r.entrada?.dataHora, tipoTarefa: r.tipoTarefa, tipoTarefaLabel: label,
+        descricao: r.entrada?.descricao, status: r.status, gravidade: r.entrada?.gravidade,
+        temAssinatura: !!(r.entrada?.assinaturaBase64), temRemarcacao: !!r.temRemarcacaoPendente
       });
-    } catch (e) { console.error('Erro agregar Supervisão:', e.message); }
-  }
+    });
+    aluno.totalGeral += g.total;
+    updateUltima(aluno, g.ultimaAtualizacao);
+  });
 
-  // ============================================================================
-  // 🔥 BIBLIOTECA - NOVO
-  // ============================================================================
-  if (AtendimentoBiblioteca) {
-    try {
-      const query = { ...matchAluno };
-      if (temFiltroData) query['entrada.dataHora'] = matchData;
-
-      const visitas = await AtendimentoBiblioteca.find(query).sort({ 'entrada.dataHora': -1 }).lean();
-
-      visitas.forEach(v => {
-        const aluno = getOrCreate(v.alunoId, v.alunoNome, v.alunoTurma, v.alunoCurso, v.alunoMatricula);
-        const motivoLabel = getMotivoBibliotecaLabel(v.motivoVisita, v.motivoOutros);
-
-        // Calcular duração
-        let duracao = 0;
-        if (v.entrada?.dataHora && v.saida?.dataHora) {
-          duracao = Math.round((new Date(v.saida.dataHora) - new Date(v.entrada.dataHora)) / 60000);
-        } else if (v.duracaoMinutos) {
-          duracao = v.duracaoMinutos;
-        }
-
-        aluno.biblioteca.total++;
-        aluno.biblioteca.motivos[motivoLabel] = (aluno.biblioteca.motivos[motivoLabel] || 0) + 1;
-        aluno.biblioteca.registros.push({
-          id: v._id,
-          data: v.entrada?.dataHora,
-          dataSaida: v.saida?.dataHora || null,
-          motivo: v.motivoVisita,
-          motivoLabel,
-          atividades: v.atividades || [],
-          duracao,
-          status: v.status,
-          observacoes: v.entrada?.observacoes || ''
-        });
-        aluno.totalGeral++;
-        if (v.entrada?.dataHora && (!aluno.ultimaAtualizacao || new Date(v.entrada.dataHora) > new Date(aluno.ultimaAtualizacao))) {
-          aluno.ultimaAtualizacao = v.entrada.dataHora;
-        }
+  // Processa Sup
+  aggSup.forEach(g => {
+    const aluno = getOrCreate(g._id, g.alunoNome, g.alunoTurma, g.alunoCurso, g.alunoMatricula);
+    aluno.supervisao.total = g.total;
+    g.registros.forEach(r => {
+      const label = AtendimentoSupervisao.getTipoTarefaLabel(r.tipoTarefa);
+      aluno.supervisao.motivos[label] = (aluno.supervisao.motivos[label] || 0) + 1;
+      aluno.supervisao.registros.push({
+        id: r._id, data: r.entrada?.dataHora, tipoTarefa: r.tipoTarefa, tipoTarefaLabel: label,
+        descricao: r.entrada?.descricao, status: r.status, gravidade: r.entrada?.gravidade,
+        temAssinatura: !!(r.entrada?.assinaturaBase64), temRemarcacao: !!r.temRemarcacaoPendente
       });
+    });
+    aluno.totalGeral += g.total;
+    updateUltima(aluno, g.ultimaAtualizacao);
+  });
 
-    } catch (e) { console.error('Erro agregar Biblioteca:', e.message); }
-  }
+  // Processa Bib
+  aggBib.forEach(g => {
+    const aluno = getOrCreate(g._id, g.alunoNome, g.alunoTurma, g.alunoCurso, g.alunoMatricula);
+    aluno.biblioteca.total = g.total;
+    g.registros.forEach(r => {
+      const label = getMotivoBibliotecaLabel(r.motivoVisita, r.motivoOutros);
+      aluno.biblioteca.motivos[label] = (aluno.biblioteca.motivos[label] || 0) + 1;
+      let duracao = 0;
+      if (r.entrada?.dataHora && r.saida?.dataHora) {
+        duracao = Math.round((new Date(r.saida.dataHora) - new Date(r.entrada.dataHora)) / 60000);
+      } else if (r.duracaoMinutos) duracao = r.duracaoMinutos;
+
+      aluno.biblioteca.registros.push({
+        id: r._id, data: r.entrada?.dataHora, dataSaida: r.saida?.dataHora || null,
+        motivo: r.motivoVisita, motivoLabel: label, atividades: r.atividades || [],
+        duracao, status: r.status, observacoes: r.entrada?.observacoes || ''
+      });
+    });
+    aluno.totalGeral += g.total;
+    updateUltima(aluno, g.ultimaAtualizacao);
+  });
 
   const alunos = Array.from(alunosMap.values());
   alunos.sort((a, b) => b.totalGeral - a.totalGeral);
@@ -396,26 +340,21 @@ async function agregarPorAluno(filtros = {}) {
 }
 
 // ============================================================================
-// ROTA: HEALTH
+// ROTAS
 // ============================================================================
 router.get('/health', (req, res) => {
   res.json({
     success: true,
     service: 'Acompanhamento Compartilhado',
     modelos: {
-      atraso: !!Atraso,
-      assistenteSocial: !!AtendimentoAssistenteSocial,
-      psicologia: !!AtendimentoPsicologia,
-      supervisao: !!AtendimentoSupervisao,
+      atraso: !!Atraso, assistenteSocial: !!AtendimentoAssistenteSocial,
+      psicologia: !!AtendimentoPsicologia, supervisao: !!AtendimentoSupervisao,
       biblioteca: !!AtendimentoBiblioteca
     },
     timestamp: new Date().toISOString()
   });
 });
 
-// ============================================================================
-// ROTA: RESUMO DO DIA
-// ============================================================================
 router.get('/resumo-dia', authenticateToken, verificarAcesso, async (req, res) => {
   try {
     const resumo = await getResumoDia();
@@ -426,13 +365,9 @@ router.get('/resumo-dia', authenticateToken, verificarAcesso, async (req, res) =
   }
 });
 
-// ============================================================================
-// ROTA: LISTA DE ALUNOS AGREGADOS
-// ============================================================================
 router.get('/alunos', authenticateToken, verificarAcesso, async (req, res) => {
   try {
     const { turma, dataInicio, dataFim, alunoId, busca, limit = 100 } = req.query;
-
     let alunos = await agregarPorAluno({ turma, dataInicio, dataFim, alunoId });
 
     if (busca) {
@@ -455,7 +390,7 @@ router.get('/alunos', authenticateToken, verificarAcesso, async (req, res) => {
         assistente_social: alunos.reduce((s, a) => s + a.assistente_social.total, 0),
         psicologia: alunos.reduce((s, a) => s + a.psicologia.total, 0),
         supervisao: alunos.reduce((s, a) => s + a.supervisao.total, 0),
-        biblioteca: alunos.reduce((s, a) => s + a.biblioteca.total, 0)  // 🔥 NOVO
+        biblioteca: alunos.reduce((s, a) => s + a.biblioteca.total, 0)
       }
     };
 
@@ -466,24 +401,17 @@ router.get('/alunos', authenticateToken, verificarAcesso, async (req, res) => {
   }
 });
 
-// ============================================================================
-// ROTA: DETALHE DE UM ALUNO
-// ============================================================================
 router.get('/aluno/:alunoId', authenticateToken, verificarAcesso, async (req, res) => {
   try {
     const { alunoId } = req.params;
     const { dataInicio, dataFim } = req.query;
-
     if (!mongoose.Types.ObjectId.isValid(alunoId)) {
       return res.status(400).json({ success: false, error: 'ID inválido' });
     }
-
     const alunos = await agregarPorAluno({ alunoId, dataInicio, dataFim });
-
     if (alunos.length === 0) {
       return res.status(404).json({ success: false, error: 'Aluno não encontrado' });
     }
-
     res.json({ success: true, aluno: alunos[0], timestamp: new Date().toISOString() });
   } catch (error) {
     console.error('❌ Erro /aluno/:id:', error);
@@ -491,124 +419,78 @@ router.get('/aluno/:alunoId', authenticateToken, verificarAcesso, async (req, re
   }
 });
 
-// ============================================================================
-// ROTA: TURMAS DISPONÍVEIS (COM BIBLIOTECA)
-// ============================================================================
 router.get('/turmas', authenticateToken, verificarAcesso, async (req, res) => {
   try {
     const turmasSet = new Set();
-
-    try {
-      const turmasAlunos = await User.distinct('turma', {
-        role: 'aluno', ativo: true,
-        turma: { $nin: [null, '', 'Não informada'] }
-      });
-      turmasAlunos.forEach(t => turmasSet.add(t));
-    } catch (e) {}
+    const turmasAlunos = await User.distinct('turma', {
+      role: 'aluno', ativo: true, turma: { $nin: [null, '', 'Não informada'] }
+    });
+    turmasAlunos.forEach(t => turmasSet.add(t));
 
     const models = [
-      { m: Atraso, campo: 'alunoTurma' },
-      { m: AtendimentoAssistenteSocial, campo: 'alunoTurma' },
-      { m: AtendimentoPsicologia, campo: 'alunoTurma' },
-      { m: AtendimentoSupervisao, campo: 'alunoTurma' },
-      { m: AtendimentoBiblioteca, campo: 'alunoTurma' }  // 🔥 NOVO
+      { m: Atraso, campo: 'alunoTurma' }, { m: AtendimentoAssistenteSocial, campo: 'alunoTurma' },
+      { m: AtendimentoPsicologia, campo: 'alunoTurma' }, { m: AtendimentoSupervisao, campo: 'alunoTurma' },
+      { m: AtendimentoBiblioteca, campo: 'alunoTurma' }
     ];
-
     for (const { m, campo } of models) {
       if (!m) continue;
-      try {
-        const turmas = await m.distinct(campo);
-        turmas.filter(t => t && t !== 'Não informada').forEach(t => turmasSet.add(t));
-      } catch (e) {}
+      const turmas = await m.distinct(campo);
+      turmas.filter(t => t && t !== 'Não informada').forEach(t => turmasSet.add(t));
     }
 
-    const turmas = Array.from(turmasSet).sort();
-    res.json({ success: true, turmas });
+    res.json({ success: true, turmas: Array.from(turmasSet).sort() });
   } catch (error) {
-    console.error('❌ Erro /turmas:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// ============================================================================
-// ROTA: RANKING DE ALUNOS (COM BIBLIOTECA)
-// ============================================================================
 router.get('/ranking', authenticateToken, verificarAcesso, async (req, res) => {
   try {
     const { limit = 10, dataInicio, dataFim } = req.query;
     const alunos = await agregarPorAluno({ dataInicio, dataFim });
     const top = alunos.slice(0, parseInt(limit));
-
     res.json({
-      success: true,
-      total: alunos.length,
+      success: true, total: alunos.length,
       ranking: top.map((a, i) => ({
-        posicao: i + 1,
-        alunoId: a.alunoId,
-        alunoNome: a.alunoNome,
-        alunoTurma: a.alunoTurma,
-        alunoCurso: a.alunoCurso,
-        totalGeral: a.totalGeral,
+        posicao: i + 1, alunoId: a.alunoId, alunoNome: a.alunoNome, alunoTurma: a.alunoTurma,
+        alunoCurso: a.alunoCurso, totalGeral: a.totalGeral,
         porSetor: {
-          gestao: a.gestao.total,
-          assistente_social: a.assistente_social.total,
-          psicologia: a.psicologia.total,
-          supervisao: a.supervisao.total,
-          biblioteca: a.biblioteca.total  // 🔥 NOVO
+          gestao: a.gestao.total, assistente_social: a.assistente_social.total,
+          psicologia: a.psicologia.total, supervisao: a.supervisao.total, biblioteca: a.biblioteca.total
         }
       }))
     });
-  } catch (error) {
-    console.error('❌ Erro /ranking:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ============================================================================
-// ROTA: ESTATÍSTICAS POR SETOR (COM BIBLIOTECA)
-// ============================================================================
 router.get('/estatisticas', authenticateToken, verificarAcesso, async (req, res) => {
   try {
     const { dataInicio, dataFim } = req.query;
     const alunos = await agregarPorAluno({ dataInicio, dataFim });
-
-    const motivosGestao = {};
-    const tiposAS = {};
-    const tiposPsico = {};
-    const motivosSupervisao = {};
-    const motivosBiblioteca = {};  // 🔥 NOVO
-    const porTurma = {};
+    const motivosGestao = {}, tiposAS = {}, tiposPsico = {}, motivosSupervisao = {}, motivosBiblioteca = {}, porTurma = {};
 
     alunos.forEach(a => {
       Object.entries(a.gestao.motivos).forEach(([k, v]) => { motivosGestao[k] = (motivosGestao[k] || 0) + v; });
       Object.entries(a.assistente_social.tipos).forEach(([k, v]) => { tiposAS[k] = (tiposAS[k] || 0) + v; });
       Object.entries(a.psicologia.tipos).forEach(([k, v]) => { tiposPsico[k] = (tiposPsico[k] || 0) + v; });
       Object.entries(a.supervisao.motivos).forEach(([k, v]) => { motivosSupervisao[k] = (motivosSupervisao[k] || 0) + v; });
-      Object.entries(a.biblioteca.motivos).forEach(([k, v]) => { motivosBiblioteca[k] = (motivosBiblioteca[k] || 0) + v; });  // 🔥 NOVO
+      Object.entries(a.biblioteca.motivos).forEach(([k, v]) => { motivosBiblioteca[k] = (motivosBiblioteca[k] || 0) + v; });
       const t = a.alunoTurma || 'Sem turma';
       porTurma[t] = (porTurma[t] || 0) + a.totalGeral;
     });
 
-    const toArray = (obj) => Object.entries(obj)
-      .map(([label, count]) => ({ label, count }))
-      .sort((a, b) => b.count - a.count);
+    const toArray = (obj) => Object.entries(obj).map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count);
 
     res.json({
       success: true,
       estatisticas: {
-        gestao: { motivos: toArray(motivosGestao) },
-        assistente_social: { tipos: toArray(tiposAS) },
-        psicologia: { tipos: toArray(tiposPsico) },
-        supervisao: { motivos: toArray(motivosSupervisao) },
-        biblioteca: { motivos: toArray(motivosBiblioteca) },  // 🔥 NOVO
-        porTurma: toArray(porTurma)
+        gestao: { motivos: toArray(motivosGestao) }, assistente_social: { tipos: toArray(tiposAS) },
+        psicologia: { tipos: toArray(tiposPsico) }, supervisao: { motivos: toArray(motivosSupervisao) },
+        biblioteca: { motivos: toArray(motivosBiblioteca) }, porTurma: toArray(porTurma)
       },
       timestamp: new Date().toISOString()
     });
-  } catch (error) {
-    console.error('❌ Erro /estatisticas:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
 module.exports = router;

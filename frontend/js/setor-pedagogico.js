@@ -170,8 +170,6 @@ class SetorPedagogico {
         const modoAssinatura = new URLSearchParams(window.location.search).get('assinatura');
         if (modoAssinatura) {
             console.log('📱 Modo assinatura detectado:', modoAssinatura);
-
-            // Tenta carregar os dados do usuário se o token existir, mas NÃO obriga.
             try {
                 const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
                 if (userData.nome) this.currentUser = userData;
@@ -186,8 +184,6 @@ class SetorPedagogico {
             } catch (e) {
                 console.warn('Erro ao carregar usuário no modo assinatura:', e);
             }
-
-            // Carrega a tela de assinatura e PARA a execução aqui.
             await this.mostrarTelaAssinatura(modoAssinatura);
             return;
         }
@@ -200,17 +196,37 @@ class SetorPedagogico {
             return;
         }
 
-        await this.loadUser();
-        await this.carregarFotoPerfil();
-        await this.carregarNotificacoes();
-        await this.verificarPermissoesEspeciais();
-        if (this.temPermissaoVisitas) {
-            this._preaquecerModuloVisitas();
-        }
+        // 🚀 1) Usuário local (síncrono) — já mostra nome na hora
+        try {
+            const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+            if (userData.nome) {
+                this.currentUser = userData;
+                const el = document.getElementById('userName');
+                if (el) el.textContent = userData.nome;
+            }
+        } catch (e) {}
 
-        this.loadBoasVindas();
+        // 🚀 2) Renderiza a home IMEDIATAMENTE (sem esperar rede)
         this.setupNavigation();
+        this.loadBoasVindas();
 
+        // 🚀 3) Tudo em paralelo (não bloqueia a tela)
+        Promise.allSettled([
+            this.loadUser(),
+            this.carregarFotoPerfil(),
+            this.carregarNotificacoes(),
+            this.verificarPermissoesEspeciais()
+        ]).then(() => {
+            // Re-renderiza a home quando as permissões chegarem (pra mostrar módulos corretos)
+            this.loadBoasVindas();
+        });
+
+        // 🚀 4) Preaquece visitas em background (NÃO bloqueia)
+        setTimeout(() => {
+            if (this.temPermissaoVisitas) this._preaquecerModuloVisitas();
+        }, 1500);
+
+        // 🚀 5) Notificações com lock interno (a própria função já controla)
         setInterval(() => this.carregarNotificacoes(), 30000);
 
         // ============================================
@@ -220,40 +236,14 @@ class SetorPedagogico {
         const moduloForcado = urlParams.get('modulo');
 
         if (moduloForcado) {
-            console.log('🎯 Módulo forçado via URL:', moduloForcado);
-
             setTimeout(async () => {
                 const modulosValidos = {
-                    'gestao-professores': {
-                        metodo: () => this.loadGestaoProfessores(),
-                        permissao: () => this.temPermissaoGestaoProfessores,
-                        nome: 'Gestão de Professores'
-                    },
-                    'substituicao-professores': {
-                        metodo: () => this.loadSubstituicaoProfessores(),
-                        permissao: () => this.temPermissaoSubstituicao,
-                        nome: 'Substituição de Professores'
-                    },
-                    'segunda-chamada': {
-                        metodo: () => this.loadSegundaChamada(),
-                        permissao: () => this.temPermissao2Chamada,
-                        nome: '2ª Chamada'
-                    },
-                    'visitas': {
-                        metodo: () => this.loadVisitas(),
-                        permissao: () => this.temPermissaoVisitas,
-                        nome: 'Autorização de Visitas'
-                    },
-                    'aee': {
-                        metodo: () => this.loadAEE(),
-                        permissao: () => this.temPermissaoAEE,
-                        nome: 'AEE'
-                    },
-                    'protocolo-provas': {
-                        metodo: () => this.loadProtocoloProvas(),
-                        permissao: () => this.temPermissaoProtocoloProvas,
-                        nome: 'Protocolo de Provas'
-                    }
+                    'gestao-professores': { metodo: () => this.loadGestaoProfessores(), permissao: () => this.temPermissaoGestaoProfessores, nome: 'Gestão de Professores' },
+                    'substituicao-professores': { metodo: () => this.loadSubstituicaoProfessores(), permissao: () => this.temPermissaoSubstituicao, nome: 'Substituição de Professores' },
+                    'segunda-chamada': { metodo: () => this.loadSegundaChamada(), permissao: () => this.temPermissao2Chamada, nome: '2ª Chamada' },
+                    'visitas': { metodo: () => this.loadVisitas(), permissao: () => this.temPermissaoVisitas, nome: 'Autorização de Visitas' },
+                    'aee': { metodo: () => this.loadAEE(), permissao: () => this.temPermissaoAEE, nome: 'AEE' },
+                    'protocolo-provas': { metodo: () => this.loadProtocoloProvas(), permissao: () => this.temPermissaoProtocoloProvas, nome: 'Protocolo de Provas' }
                 };
 
                 if (modulosValidos[moduloForcado]) {
@@ -270,7 +260,6 @@ class SetorPedagogico {
                             if (moduloForcado === 'aee') this.temPermissaoAEE = true;
                             if (moduloForcado === 'protocolo-provas') this.temPermissaoProtocoloProvas = true;
                         }
-
                         console.log(`✅ Abrindo módulo: ${modulo.nome}`);
                         await modulo.metodo();
                         this.navigateTo(moduloForcado);
@@ -310,146 +299,90 @@ class SetorPedagogico {
     }
 
     async verificarPermissoesEspeciais() {
+        if (!this.token) return;
+
+        const CACHE_KEY = '_permissoesSetorPedagogico';
+        const CACHE_TTL = 5 * 60 * 1000; // 5 min
+
+        // 🔥 1) Cache em sessionStorage
         try {
-            if (!this.token) return;
-
-            // 1. 2ª CHAMADA
-            try {
-                const response = await fetch('/api/admin/permissoes-modulos/verificar/segunda_chamada_setor_pedagogico', {
-                    headers: { 'Authorization': `Bearer ${this.token}` }
-                });
-                const data = await response.json();
-
-                if (data.success && data.temPermissao) {
-                    const navItem = document.getElementById('navSegundaChamada');
-                    if (navItem) navItem.style.display = 'flex';
-                    const menuMobile = document.getElementById('menuItemSegundaChamada');
-                    if (menuMobile) menuMobile.style.display = 'flex';
-                    this.temPermissao2Chamada = true;
-                    console.log('✅ Permissão 2ª Chamada concedida');
-                } else {
-                    this.temPermissao2Chamada = false;
+            const cached = sessionStorage.getItem(CACHE_KEY);
+            if (cached) {
+                const { data, ts } = JSON.parse(cached);
+                if (Date.now() - ts < CACHE_TTL) {
+                    console.log('⚡ Permissões do cache (sessionStorage)');
+                    this._aplicarPermissoes(data);
+                    return;
                 }
-            } catch (error) {
-                console.error('❌ Erro ao verificar permissão 2ª Chamada:', error);
-                this.temPermissao2Chamada = false;
             }
+        } catch (e) {}
 
-            // 2. SUBSTITUIÇÃO
-            try {
-                const responseSub = await fetch('/api/admin/permissoes-modulos/verificar/substituicao_professores_setor_pedagogico', {
+        const modulos = [
+            { key: 'segunda_chamada_setor_pedagogico', prop: 'temPermissao2Chamada', nav: 'navSegundaChamada', menu: 'menuItemSegundaChamada' },
+            { key: 'substituicao_professores_setor_pedagogico', prop: 'temPermissaoSubstituicao', nav: 'navSubstituicaoProfessores', menu: 'menuItemSubstituicaoProfessores' },
+            { key: 'autorizacao_visitas', prop: 'temPermissaoVisitas', nav: 'navVisitas', menu: 'menuItemVisitas' },
+            { key: 'gestao_professores_setor_pedagogico', prop: 'temPermissaoGestaoProfessores', nav: 'navGestaoProfessores', menu: 'menuItemGestaoProfessores' },
+            { key: 'aee_setor_pedagogico', prop: 'temPermissaoAEE', nav: 'navAEE', menu: 'menuItemAEE' },
+            { key: 'protocolo_provas_setor_pedagogico', prop: 'temPermissaoProtocoloProvas', nav: 'navProtocoloProvas', menu: null }
+        ];
+
+        // 🚀 2) TUDO EM PARALELO
+        const resultados = await Promise.allSettled(
+            modulos.map(m =>
+                fetch(`/api/admin/permissoes-modulos/verificar/${m.key}`, {
                     headers: { 'Authorization': `Bearer ${this.token}` }
-                });
-                const dataSub = await responseSub.json();
+                }).then(r => r.json()).then(d => ({ ...m, temPermissao: !!(d.success && d.temPermissao) }))
+                .catch(err => ({ ...m, temPermissao: false, erro: err.message }))
+            )
+        );
 
-                if (dataSub.success && dataSub.temPermissao) {
-                    const navItem = document.getElementById('navSubstituicaoProfessores');
-                    if (navItem) navItem.style.display = 'flex';
-                    const menuMobile = document.getElementById('menuItemSubstituicaoProfessores');
-                    if (menuMobile) menuMobile.style.display = 'flex';
-                    this.temPermissaoSubstituicao = true;
-                    console.log('✅ Permissão Substituição de Professores concedida');
-                } else {
-                    this.temPermissaoSubstituicao = false;
-                }
-            } catch (error) {
-                console.error('❌ Erro ao verificar permissão Substituição:', error);
-                this.temPermissaoSubstituicao = false;
+        const permissoes = {};
+        resultados.forEach(r => {
+            if (r.status === 'fulfilled') {
+                const { prop, temPermissao } = r.value;
+                permissoes[prop] = temPermissao;
             }
+        });
 
-            // 3. VISITAS
-            try {
-                const responseVisitas = await fetch('/api/admin/permissoes-modulos/verificar/autorizacao_visitas', {
-                    headers: { 'Authorization': `Bearer ${this.token}` }
-                });
-                const dataVisitas = await responseVisitas.json();
+        // 🚀 3) Aplica
+        this._aplicarPermissoes(permissoes);
 
-                if (dataVisitas.success && dataVisitas.temPermissao) {
-                    const navItem = document.getElementById('navVisitas');
-                    if (navItem) navItem.style.display = 'flex';
-                    const menuMobile = document.getElementById('menuItemVisitas');
-                    if (menuMobile) menuMobile.style.display = 'flex';
-                    this.temPermissaoVisitas = true;
-                    console.log('✅ Permissão Autorização de Visitas concedida');
-                } else {
-                    this.temPermissaoVisitas = false;
+        // 🚀 4) Salva cache
+        try {
+            sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data: permissoes, ts: Date.now() }));
+        } catch (e) {}
+    }
+
+    _aplicarPermissoes(permissoes) {
+        const map = {
+            temPermissao2Chamada: { nav: 'navSegundaChamada', menu: 'menuItemSegundaChamada', label: '2ª Chamada' },
+            temPermissaoSubstituicao: { nav: 'navSubstituicaoProfessores', menu: 'menuItemSubstituicaoProfessores', label: 'Substituição' },
+            temPermissaoVisitas: { nav: 'navVisitas', menu: 'menuItemVisitas', label: 'Visitas' },
+            temPermissaoGestaoProfessores: { nav: 'navGestaoProfessores', menu: 'menuItemGestaoProfessores', label: 'Gestão de Professores' },
+            temPermissaoAEE: { nav: 'navAEE', menu: 'menuItemAEE', label: 'AEE' },
+            temPermissaoProtocoloProvas: { nav: 'navProtocoloProvas', menu: null, label: 'Protocolo de Provas' }
+        };
+
+        Object.entries(map).forEach(([prop, cfg]) => {
+            const tem = permissoes[prop] === true;
+            this[prop] = tem;
+            if (tem) {
+                const navEl = document.getElementById(cfg.nav);
+                if (navEl) navEl.style.display = 'flex';
+                if (cfg.menu) {
+                    const menuEl = document.getElementById(cfg.menu);
+                    if (menuEl) menuEl.style.display = 'flex';
                 }
-            } catch (error) {
-                console.error('❌ Erro ao verificar permissão Visitas:', error);
-                this.temPermissaoVisitas = false;
-            }
-
-            // 4. GESTÃO DE PROFESSORES
-            try {
-                const responseGP = await fetch('/api/admin/permissoes-modulos/verificar/gestao_professores_setor_pedagogico', {
-                    headers: { 'Authorization': `Bearer ${this.token}` }
-                });
-                const dataGP = await responseGP.json();
-
-                if (dataGP.success && dataGP.temPermissao) {
-                    const navItem = document.getElementById('navGestaoProfessores');
-                    if (navItem) navItem.style.display = 'flex';
-                    const menuMobile = document.getElementById('menuItemGestaoProfessores');
-                    if (menuMobile) menuMobile.style.display = 'flex';
-                    this.temPermissaoGestaoProfessores = true;
-                    console.log('✅ Permissão Gestão de Professores concedida');
-                } else {
-                    this.temPermissaoGestaoProfessores = false;
+                console.log(`✅ Permissão ${cfg.label} concedida`);
+            } else {
+                const navEl = document.getElementById(cfg.nav);
+                if (navEl) navEl.style.display = 'none';
+                if (cfg.menu) {
+                    const menuEl = document.getElementById(cfg.menu);
+                    if (menuEl) menuEl.style.display = 'none';
                 }
-            } catch (error) {
-                console.error('❌ Erro ao verificar permissão Gestão de Professores:', error);
-                this.temPermissaoGestaoProfessores = false;
             }
-
-            // 5. 🆕 AEE
-            try {
-                const responseAEE = await fetch('/api/admin/permissoes-modulos/verificar/aee_setor_pedagogico', {
-                    headers: { 'Authorization': `Bearer ${this.token}` }
-                });
-                const dataAEE = await responseAEE.json();
-
-                if (dataAEE.success && dataAEE.temPermissao) {
-                    const navItem = document.getElementById('navAEE');
-                    if (navItem) navItem.style.display = 'flex';
-                    const menuMobile = document.getElementById('menuItemAEE');
-                    if (menuMobile) menuMobile.style.display = 'flex';
-                    this.temPermissaoAEE = true;
-                    console.log('✅ Permissão AEE concedida');
-                } else {
-                    this.temPermissaoAEE = false;
-                }
-            } catch (error) {
-                console.error('❌ Erro ao verificar permissão AEE:', error);
-                this.temPermissaoAEE = false;
-            }
-            // 6. 🆕 PROTOCOLO DE PROVAS
-            try {
-                const responseProt = await fetch('/api/admin/permissoes-modulos/verificar/protocolo_provas_setor_pedagogico', {
-                    headers: { 'Authorization': `Bearer ${this.token}` }
-                });
-                const dataProt = await responseProt.json();
-
-                if (dataProt.success && dataProt.temPermissao) {
-                    const navItem = document.getElementById('navProtocoloProvas');
-                    if (navItem) navItem.style.display = 'flex';
-                    this.temPermissaoProtocoloProvas = true;
-                    console.log('✅ Permissão Protocolo de Provas concedida');
-                } else {
-                    this.temPermissaoProtocoloProvas = false;
-                }
-            } catch (error) {
-                console.error('❌ Erro ao verificar permissão Protocolo de Provas:', error);
-                this.temPermissaoProtocoloProvas = false;
-            }
-
-        } catch (error) {
-            console.error('❌ Erro geral ao verificar permissões:', error);
-            this.temPermissao2Chamada = false;
-            this.temPermissaoSubstituicao = false;
-            this.temPermissaoVisitas = false;
-            this.temPermissaoGestaoProfessores = false;
-            this.temPermissaoAEE = false;
-        }
+        });
     }
 
     async carregarFotoPerfil() {
@@ -919,10 +852,27 @@ class SetorPedagogico {
     // ============================================================================
     async loadProvas() {
         const content = document.getElementById('content');
-        content.innerHTML = '<div class="text-center py-5"><div class="loading"></div><p class="mt-3 text-muted">Carregando provas...</p></div>';
+        if (!content) return;
+
+        // 🔥 Cache de 60s
+        const agora = Date.now();
+        const cacheValido = this._provasCache && (agora - this._provasCache.ts) < 60000;
+
+        if (!cacheValido) {
+            content.innerHTML = '<div class="text-center py-5"><div class="loading"></div><p class="mt-3 text-muted">Carregando provas...</p></div>';
+        }
 
         try {
-            const data = await this.apiRequest('/api/setor-pedagogico/provas');
+            let data;
+            if (cacheValido) {
+                data = this._provasCache.data;
+                console.log('⚡ Provas do cache');
+            } else {
+                // 🚀 limita no servidor (o backend já aceita ?limit)
+                data = await this.apiRequest('/api/setor-pedagogico/provas?limit=200');
+                this._provasCache = { data, ts: agora };
+            }
+
             if (data.success) {
                 content.innerHTML = `
                     <div class="filtros-card">
@@ -1677,13 +1627,14 @@ class SetorPedagogico {
     async _preaquecerModuloVisitas() {
         try {
             console.log('🔥 Prequecendo módulo de visitas...');
-            await this._aguardarModuloVisitas(5000);
+            // 🚀 Timeout curto (2s) — não bloqueia nada
+            await this._aguardarModuloVisitas(2000);
             if (window.visitasAdmin && typeof window.visitasAdmin.preaquecer === 'function') {
                 await window.visitasAdmin.preaquecer();
                 console.log('✅ Módulo de visitas preaquecido');
             }
         } catch (e) {
-            console.warn('⚠️ Prequecimento do módulo de visitas falhou:', e.message);
+            console.warn('⚠️ Prequecimento do módulo de visitas falhou (ok, não bloqueia):', e.message);
         }
     }
 
@@ -6615,10 +6566,16 @@ class SetorPedagogico {
         return mapa[modulo] || modulo;
     }
 
-        // ============================================================================
+    // ============================================================================
     // 🔥 SUBSTITUIÇÃO DE PROFESSORES
     // ============================================================================
     async loadSubstituicaoProfessores() {
+        // 🔥 Limpa intervalos anteriores (evita vazamento)
+        if (this._intervaloHorarioSubstituicao) {
+            clearInterval(this._intervaloHorarioSubstituicao);
+            this._intervaloHorarioSubstituicao = null;
+        }
+
         const content = document.getElementById('content');
 
         if (!this.temPermissaoSubstituicao) {
@@ -7119,10 +7076,13 @@ class SetorPedagogico {
                 if (el) el.value = mesAtual;
             });
 
-            await this.carregarProfessoresSubstituicao();
-            await this.carregarTurmasSubstituicao();
-            await this.carregarListaSubstituicoes();
-            await this.carregarDashboardSubstituicoes();
+            // 🚀 TUDO EM PARALELO (não em cascata)
+            await Promise.allSettled([
+                this.carregarProfessoresSubstituicao(),
+                this.carregarTurmasSubstituicao(),
+                this.carregarListaSubstituicoes(),
+                this.carregarDashboardSubstituicoes()
+            ]);
 
             const buscaAusente = document.getElementById('buscaProfessorAusente');
             if (buscaAusente) {
@@ -7174,7 +7134,12 @@ class SetorPedagogico {
             }
 
             this.atualizarHorarioPreenchimentoSubstituicao();
-            setInterval(() => this.atualizarHorarioPreenchimentoSubstituicao(), 1000);
+
+            // 🔥 CORREÇÃO CRÍTICA: limpa interval anterior antes de criar novo
+            if (this._intervaloHorarioSubstituicao) {
+                clearInterval(this._intervaloHorarioSubstituicao);
+            }
+            this._intervaloHorarioSubstituicao = setInterval(() => this.atualizarHorarioPreenchimentoSubstituicao(), 1000);
 
             document.getElementById('sp-dashboard-tab')?.addEventListener('shown.bs.tab', () => {
                 this.carregarDashboardSubstituicoes();
@@ -10045,6 +10010,12 @@ class SetorPedagogico {
     // 🔥 MÓDULO DE ATRASOS
     // ============================================================================
     async carregarConteudoAtrasos() {
+        // 🔥 Limpa intervalo anterior (evita vazamento)
+        if (this._intervaloHorarioAtraso) {
+            clearInterval(this._intervaloHorarioAtraso);
+            this._intervaloHorarioAtraso = null;
+        }
+
         const container = document.querySelector('#sp-atrasos');
         if (!container) return;
 
@@ -10056,26 +10027,24 @@ class SetorPedagogico {
         `;
 
         try {
-            const [professoresRes, turmasRes] = await Promise.all([
+            // 🚀 Em paralelo
+            const [professoresRes, turmasRes] = await Promise.allSettled([
                 fetch('/api/atraso-professor/professores', {
                     headers: { 'Authorization': `Bearer ${this.token}` }
-                }),
+                }).then(r => r.json()),
                 fetch('/api/atraso-professor/turmas', {
                     headers: { 'Authorization': `Bearer ${this.token}` }
-                })
+                }).then(r => r.json())
             ]);
 
-            const professoresData = await professoresRes.json();
-            const turmasData = await turmasRes.json();
-
-            if (professoresData.success) {
+            if (professoresRes.status === 'fulfilled' && professoresRes.value.success) {
                 this.atrasosState = this.atrasosState || {};
-                this.atrasosState.professores = professoresData.professores;
+                this.atrasosState.professores = professoresRes.value.professores;
             }
 
-            if (turmasData.success) {
+            if (turmasRes.status === 'fulfilled' && turmasRes.value.success) {
                 this.atrasosState = this.atrasosState || {};
-                this.atrasosState.turmas = turmasData.turmas;
+                this.atrasosState.turmas = turmasRes.value.turmas;
             }
 
             container.innerHTML = this.getHTMLAtrasos();
@@ -10472,9 +10441,12 @@ class SetorPedagogico {
             if (el) el.value = mesAtual;
         });
 
-        this.carregarProfessoresAtraso();
-        this.carregarTurmasAtraso();
-        this.carregarListaAtrasos();
+        // 🚀 Em paralelo
+        Promise.allSettled([
+            this.carregarProfessoresAtraso(),
+            this.carregarTurmasAtraso(),
+            this.carregarListaAtrasos()
+        ]);
 
         const busca = document.getElementById('buscaProfessorAtraso');
         if (busca) {
@@ -10608,7 +10580,12 @@ class SetorPedagogico {
         }
 
         this.atualizarHorarioPreenchimentoAtraso();
-        setInterval(() => this.atualizarHorarioPreenchimentoAtraso(), 1000);
+
+        // 🔥 CORREÇÃO CRÍTICA: limpa interval anterior antes de criar novo
+        if (this._intervaloHorarioAtraso) {
+            clearInterval(this._intervaloHorarioAtraso);
+        }
+        this._intervaloHorarioAtraso = setInterval(() => this.atualizarHorarioPreenchimentoAtraso(), 1000);
     }
 
     limparProfessorAtraso() {
@@ -11789,25 +11766,49 @@ class SetorPedagogico {
     // 📢 NOTIFICAÇÕES
     // ============================================================================
     async carregarNotificacoes() {
+        // 🔒 Lock: evita chamadas empilhadas
+        if (this._carregandoNotif) {
+            console.log('⏭️ Notificações já em andamento — skip');
+            return;
+        }
+
+        // 🔥 Cache 60s
+        const agora = Date.now();
+        if (this._notifCache && (agora - this._notifCache.ts) < 60000) {
+            return;
+        }
+
+        this._carregandoNotif = true;
+
         try {
-            const countResponse = await fetch('/api/notificacoes/nao-lidas/contador', {
-                headers: { 'Authorization': `Bearer ${this.token}` }
-            });
-            if (countResponse.ok) {
-                const countData = await countResponse.json();
+            // 🚀 As duas chamadas em paralelo
+            const [countRes, listRes] = await Promise.allSettled([
+                fetch('/api/notificacoes/nao-lidas/contador', {
+                    headers: { 'Authorization': `Bearer ${this.token}` }
+                }),
+                fetch('/api/notificacoes?limite=20', {
+                    headers: { 'Authorization': `Bearer ${this.token}` }
+                })
+            ]);
+
+            if (countRes.status === 'fulfilled' && countRes.value.ok) {
+                const countData = await countRes.value.json();
                 this.atualizarBadgesNotificacoes(countData.count || 0);
             }
 
-            const response = await fetch('/api/notificacoes?limite=20', {
-                headers: { 'Authorization': `Bearer ${this.token}` }
-            });
-            const data = await response.json();
-            if (data.success) {
-                this.notificacoes = data.notificacoes || [];
-                this.renderizarNotificacoes();
+            if (listRes.status === 'fulfilled') {
+                const data = await listRes.value.json();
+                if (data.success) {
+                    this.notificacoes = data.notificacoes || [];
+                    this.renderizarNotificacoes();
+                }
             }
+
+            this._notifCache = { ts: agora };
         } catch (error) {
             console.error('Erro ao carregar notificações:', error);
+        } finally {
+            this._carregandoNotif = false;
         }
     }
 

@@ -1,5 +1,5 @@
 // frontend/js/visitas-admin.js
-// Módulo de Autorização de Visitas Técnicas - ADMIN (v5.0 - OTIMIZADO)
+// Módulo de Autorização de Visitas Técnicas - ADMIN (v6.0 - OTIMIZADO E RÁPIDO)
 
 class VisitasAdmin {
     constructor() {
@@ -59,17 +59,13 @@ class VisitasAdmin {
 
         // 🚀 Cache de alunos por turma (Map<turma, alunos[]>)
         this._cacheAlunosPorTurma = new Map();
-        this._ultimoFiltroAlunos = '';
         this._debounceBuscarAlunos = null;
-        this._precarregandoAlunos = false;
-        this._precarregamentoIniciado = false;
 
         // 🔒 Locks anti-clique-duplo
         this._locks = {
             init: false,
             carregarDados: false,
             carregarTermos: false,
-            preaquecer: false,
             salvarTermo: false,
             imprimir: false,
             imprimirLote: false,
@@ -124,7 +120,6 @@ class VisitasAdmin {
 
     _limparCacheAlunos() {
         this._cacheAlunosPorTurma.clear();
-        this._ultimoFiltroAlunos = '';
         console.log('🧹 Cache de alunos limpo');
     }
 
@@ -154,47 +149,6 @@ class VisitasAdmin {
     }
 
     // ============================================
-    // 🚀 PREAQUECIMENTO
-    // ============================================
-    async preaquecer() {
-        return this._comLock('preaquecer', async () => {
-            if (!this.token) return;
-
-            console.log('🔥 [VisitasAdmin] Prequecendo...');
-
-            try {
-                const [turmasRes, cursosRes, professoresRes] = await Promise.all([
-                    this.apiRequest('/api/setor-pedagogico/visitas/turmas').catch(() => null),
-                    this.apiRequest('/api/setor-pedagogico/visitas/cursos').catch(() => null),
-                    this.apiRequest('/api/setor-pedagogico/visitas/professores').catch(() => null)
-                ]);
-
-                if (turmasRes?.success) {
-                    this.turmas = (turmasRes.turmas || []).map(t =>
-                        typeof t === 'string' ? { id: t, nome: t } : t
-                    );
-                    this._cache.turmas = this.turmas;
-                }
-
-                if (cursosRes?.success) {
-                    this.cursos = cursosRes.cursos || [];
-                    this._cache.cursos = this.cursos;
-                }
-
-                if (professoresRes?.success) {
-                    this.professores = professoresRes.professores || [];
-                    this._cache.professores = this.professores;
-                }
-
-                this._marcarCacheAtualizado();
-                console.log(`🔥 [VisitasAdmin] Preaquecido: ${this.turmas.length} turmas, ${this.cursos.length} cursos, ${this.professores.length} professores`);
-            } catch (e) {
-                console.warn('⚠️ [VisitasAdmin] Falha no preaquecimento:', e);
-            }
-        });
-    }
-
-    // ============================================
     // INICIALIZAÇÃO
     // ============================================
     async init() {
@@ -210,22 +164,24 @@ class VisitasAdmin {
                 const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
                 this.currentUser = userData;
 
-                // ⚡ Se tem cache válido, renderiza imediatamente
-                const temCacheValido = this._cacheValido('termos') && this.termos.length > 0;
-
-                if (temCacheValido) {
-                    console.log('⚡ [VisitasAdmin] Usando cache (init rápido)');
-                    this.renderizar();
-                    this._revalidarEmBackground();
-                    return;
-                }
-
-                // Sem cache: carrega tudo
-                await this.carregarConfiguracao();
-                await this.carregarDados();
+                // 🔥 1) Renderiza IMEDIATAMENTE (com estado de carregamento)
                 this.renderizar();
+                this._mostrarLoadingTermos(true);
 
-                console.log('✅ Módulo de Visitas inicializado');
+                // 🔥 2) Carrega tudo em paralelo (não bloqueia a renderização)
+                Promise.all([
+                    this.carregarConfiguracao().catch(e => console.warn('Config:', e)),
+                    this.carregarDados().catch(e => console.warn('Dados:', e))
+                ]).then(() => {
+                    this._mostrarLoadingTermos(false);
+                    this.renderizar();
+                    console.log('✅ Módulo de Visitas inicializado');
+                }).catch(err => {
+                    console.error('❌ Erro ao inicializar:', err);
+                    this._mostrarLoadingTermos(false);
+                    this.showToast('Erro ao carregar módulo', 'error');
+                });
+
             } catch (error) {
                 console.error('❌ Erro ao inicializar:', error);
                 this.showToast('Erro ao carregar módulo de visitas', 'error');
@@ -233,36 +189,24 @@ class VisitasAdmin {
         });
     }
 
-    async _revalidarEmBackground() {
-        try {
-            const [configRes, termosRes] = await Promise.all([
-                this.apiRequest('/api/setor-pedagogico/visitas/configuracao').catch(() => null),
-                this.apiRequest(
-                    `/api/setor-pedagogico/visitas/termos?page=${this.paginaAtual}&limit=${this.itensPorPagina}&status=${this.filtros.status}&turma=${this.filtros.turma}&search=${this.filtros.search}`
-                ).catch(() => null)
-            ]);
+    _mostrarLoadingTermos(mostrar) {
+        const container = document.getElementById('listaTermos');
+        if (!container) return;
 
-            if (configRes?.success) {
-                this.configuracao = configRes.configuracao;
-                this._cache.configuracao = configRes.configuracao;
-            }
-
-            if (termosRes?.success) {
-                const mudou = JSON.stringify(termosRes.termos) !== JSON.stringify(this.termos);
-
-                this.termos = termosRes.termos || [];
-                this.termosFiltrados = [...this.termos];
-                this.paginacao = termosRes.paginacao;
-                this.estatisticas = termosRes.estatisticas;
-
-                this._cache.termos = this.termos;
-                this._cache.estatisticas = this.estatisticas;
-                this._marcarCacheAtualizado();
-
-                if (mudou) this.renderizar();
-            }
-        } catch (e) {
-            console.warn('⚠️ Revalidação em background falhou:', e);
+        if (mostrar) {
+            if (document.getElementById('loadingTermosOverlay')) return;
+            const div = document.createElement('div');
+            div.id = 'loadingTermosOverlay';
+            div.style.cssText = 'text-align:center;padding:60px;';
+            div.innerHTML = `
+                <div style="width:50px;height:50px;border:5px solid #f3f3f3;border-top:5px solid #667eea;border-radius:50%;margin:0 auto 20px;animation:spin 1s linear infinite;"></div>
+                <p style="color:#6b7280;">Carregando termos...</p>
+                <style>@keyframes spin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}</style>
+            `;
+            container.innerHTML = '';
+            container.appendChild(div);
+        } else {
+            document.getElementById('loadingTermosOverlay')?.remove();
         }
     }
 
@@ -292,49 +236,50 @@ class VisitasAdmin {
     }
 
     // ============================================
-    // CARREGAR DADOS (com cache)
+    // CARREGAR DADOS (TUDO EM PARALELO)
     // ============================================
     async carregarDados() {
         return this._comLock('carregarDados', async () => {
             try {
-                const precisaCarregar =
-                    !this._cacheValido('turmas', this._cache.ttlEstatico) ||
-                    !this._cacheValido('cursos', this._cache.ttlEstatico) ||
-                    !this._cacheValido('professores', this._cache.ttlEstatico) ||
-                    this.turmas.length === 0 ||
-                    this.cursos.length === 0 ||
-                    this.professores.length === 0;
+                // Dispara TODAS as 4 chamadas em paralelo
+                const [turmasRes, cursosRes, professoresRes, termosRes] = await Promise.all([
+                    this.apiRequest('/api/setor-pedagogico/visitas/turmas').catch(() => null),
+                    this.apiRequest('/api/setor-pedagogico/visitas/cursos').catch(() => null),
+                    this.apiRequest('/api/setor-pedagogico/visitas/professores').catch(() => null),
+                    this.apiRequest(
+                        `/api/setor-pedagogico/visitas/termos?page=${this.paginaAtual}&limit=${this.itensPorPagina}&status=${this.filtros.status}&turma=${this.filtros.turma}&search=${this.filtros.search}`
+                    ).catch(() => null)
+                ]);
 
-                if (precisaCarregar) {
-                    const [turmasRes, cursosRes, professoresRes] = await Promise.all([
-                        this.apiRequest('/api/setor-pedagogico/visitas/turmas').catch(() => null),
-                        this.apiRequest('/api/setor-pedagogico/visitas/cursos').catch(() => null),
-                        this.apiRequest('/api/setor-pedagogico/visitas/professores').catch(() => null)
-                    ]);
-
-                    if (turmasRes?.success) {
-                        this.turmas = (turmasRes.turmas || []).map(t =>
-                            typeof t === 'string' ? { id: t, nome: t } : t
-                        );
-                        this._cache.turmas = this.turmas;
-                    }
-
-                    if (cursosRes?.success) {
-                        this.cursos = cursosRes.cursos || [];
-                        this._cache.cursos = this.cursos;
-                    }
-
-                    if (professoresRes?.success) {
-                        this.professores = professoresRes.professores || [];
-                        this._cache.professores = this.professores;
-                    }
-
-                    this._marcarCacheAtualizado();
+                if (turmasRes?.success) {
+                    this.turmas = (turmasRes.turmas || []).map(t =>
+                        typeof t === 'string' ? { id: t, nome: t } : t
+                    );
+                    this._cache.turmas = this.turmas;
                 }
 
-                console.log(`✅ Dados carregados: ${this.turmas.length} turmas, ${this.cursos.length} cursos, ${this.professores.length} professores`);
+                if (cursosRes?.success) {
+                    this.cursos = cursosRes.cursos || [];
+                    this._cache.cursos = this.cursos;
+                }
 
-                await this.carregarTermos();
+                if (professoresRes?.success) {
+                    this.professores = professoresRes.professores || [];
+                    this._cache.professores = this.professores;
+                }
+
+                if (termosRes?.success) {
+                    this.termos = termosRes.termos || [];
+                    this.termosFiltrados = [...this.termos];
+                    this.paginacao = termosRes.paginacao;
+                    this.estatisticas = termosRes.estatisticas;
+                    this._cache.termos = this.termos;
+                    this._cache.estatisticas = this.estatisticas;
+                }
+
+                this._marcarCacheAtualizado();
+                console.log(`✅ Dados carregados: ${this.turmas.length} turmas, ${this.cursos.length} cursos, ${this.professores.length} professores, ${this.termos.length} termos`);
+
             } catch (error) {
                 console.error('❌ Erro ao carregar dados:', error);
                 throw error;
@@ -381,7 +326,7 @@ class VisitasAdmin {
             return;
         }
 
-        const stats = this.estatisticas || { total: 0, pendentes: 0, autorizados: 0, recusados: 0 };
+        const stats = this.estatisticas || { total: 0, pendentes: 0, autorizados: 0, recusados: 0, parcialmente_autorizado: 0 };
 
         container.innerHTML = `
             <div class="visitas-container">
@@ -985,9 +930,6 @@ class VisitasAdmin {
         modalSaveBtn.style.display = 'inline-block';
 
         this.openModal();
-
-        // 🚀 Prefetch em background: pré-carrega alunos de TODAS as turmas
-        setTimeout(() => this._precarregarAlunosTodasTurmas(), 500);
     }
 
     renderizarFormularioTermo(termo = null) {
@@ -1329,7 +1271,6 @@ class VisitasAdmin {
         `;
     }
 
-    // 🚀 ADICIONAR TURMA (com debounce)
     adicionarTurma() {
         const select = document.getElementById('formTurmaSelect');
         if (!select) return;
@@ -1349,13 +1290,11 @@ class VisitasAdmin {
         select.value = '';
         this.atualizarChipsTurmas();
 
-        // 🚀 Debounce: se adicionar várias turmas rápido, busca 1x só
         this._buscarAlunosDebounced();
 
         this.showToast(`✅ Turma "${turma}" adicionada`, 'success');
     }
 
-    // 🚀 REMOVER TURMA (com debounce)
     removerTurma(turma) {
         const idx = this.formData.turmasSelecionadas.indexOf(turma);
         if (idx >= 0) {
@@ -1373,8 +1312,8 @@ class VisitasAdmin {
         this.atualizarListaAlunosSelecao();
     }
 
-    // 🚀 Debounce wrapper
-    _buscarAlunosDebounced(delay = 250) {
+    // 🚀 Debounce wrapper (500ms para não sobrecarregar)
+    _buscarAlunosDebounced(delay = 500) {
         if (this._debounceBuscarAlunos) {
             clearTimeout(this._debounceBuscarAlunos);
         }
@@ -1653,7 +1592,6 @@ class VisitasAdmin {
 
         setTimeout(() => this.inicializarAssinaturaGestor(), 200);
 
-        // 🚀 Se já tem turmas selecionadas (edição), busca alunos
         if (this.formData.turmasSelecionadas.length > 0) {
             setTimeout(() => this.buscarAlunos(), 300);
         }
@@ -1787,60 +1725,6 @@ class VisitasAdmin {
                 console.error('❌ Erro ao buscar alunos:', error);
             }
         });
-    }
-
-    // ============================================
-    // 🚀 PREFETCH EM BACKGROUND
-    // ============================================
-    async _precarregarAlunosTodasTurmas() {
-        if (this._precarregandoAlunos || this._precarregamentoIniciado) return;
-        this._precarregandoAlunos = true;
-
-        try {
-            const turmasNaoCache = this.turmas
-                .map(t => typeof t === 'string' ? t : t.nome)
-                .filter(t => !this._cacheAlunosPorTurma.has(t));
-
-            if (turmasNaoCache.length === 0) {
-                console.log('⚡ Todas as turmas já estão em cache');
-                this._precarregandoAlunos = false;
-                return;
-            }
-
-            console.log(`🚀 Pré-carregando alunos de ${turmasNaoCache.length} turma(s)...`);
-
-            // Busca em lotes de 5 turmas por vez
-            for (let i = 0; i < turmasNaoCache.length; i += 5) {
-                const lote = turmasNaoCache.slice(i, i + 5);
-                try {
-                    const params = new URLSearchParams();
-                    params.append('turmas', lote.join(','));
-
-                    const response = await this.apiRequest(
-                        `/api/setor-pedagogico/visitas/alunos-por-turma?${params}`
-                    );
-
-                    if (response.success) {
-                        const porTurma = {};
-                        for (const aluno of (response.alunos || [])) {
-                            const t = aluno.turma || 'Sem turma';
-                            if (!porTurma[t]) porTurma[t] = [];
-                            porTurma[t].push(aluno);
-                        }
-                        for (const [turma, lista] of Object.entries(porTurma)) {
-                            this._cacheAlunosPorTurma.set(turma, lista);
-                        }
-                    }
-                } catch (e) {
-                    console.warn('⚠️ Falha ao pré-carregar lote:', e);
-                }
-            }
-
-            this._precarregamentoIniciado = true;
-            console.log(`✅ Pré-carregamento concluído: ${this._cacheAlunosPorTurma.size} turma(s) em cache`);
-        } finally {
-            this._precarregandoAlunos = false;
-        }
     }
 
     inicializarAssinaturaGestor() {
@@ -2849,4 +2733,4 @@ class VisitasAdmin {
 const visitasAdmin = new VisitasAdmin();
 window.visitasAdmin = visitasAdmin;
 
-console.log('✅ visitas-admin.js carregado (v5.0 - otimizado com cache de alunos, debounce e prefetch)');
+console.log('✅ visitas-admin.js carregado (v6.0 - otimizado, sem prefetch pesado)');

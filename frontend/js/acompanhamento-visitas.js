@@ -1,6 +1,6 @@
 // ============================================
 // frontend/js/acompanhamento-visitas.js
-// Acompanhamento de Autorizações de Visitas
+// Acompanhamento de Autorizações de Visitas (v2.0 - OTIMIZADO)
 // ============================================
 
 (function() {
@@ -9,7 +9,7 @@
     // ============================================
     // ESTADO
     // ============================================
-    const estadoAcompanhamento = {
+    const estado = {
         termos: [],
         filtrados: [],
         turmas: [],
@@ -21,10 +21,31 @@
             periodo: 'todos',
             busca: ''
         },
-        carregando: false
+        carregando: false,
+        turmasCarregadas: false,
+        termosCacheTime: 0,
+        TTL_TERMOS: 60 * 1000,
+        TTL_TURMAS: 5 * 60 * 1000
     };
 
     let debounceTimeout = null;
+
+    // ============================================
+    // HELPER: FETCH COM TIMEOUT
+    // ============================================
+    async function fetchComTimeout(url, options = {}, timeoutMs = 30000) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+            const response = await fetch(url, { ...options, signal: controller.signal });
+            clearTimeout(timeoutId);
+            return response;
+        } catch (error) {
+            clearTimeout(timeoutId);
+            if (error.name === 'AbortError') throw new Error(`Timeout (${timeoutMs / 1000}s)`);
+            throw error;
+        }
+    }
 
     // ============================================
     // ABRIR MODAL
@@ -45,11 +66,20 @@
     };
 
     // ============================================
-    // CARREGAR DADOS
+    // CARREGAR DADOS (COM CACHE + PAGINAÇÃO LEVE)
     // ============================================
-    window.carregarAcompanhamentoVisitas = async function() {
-        if (estadoAcompanhamento.carregando) return;
-        estadoAcompanhamento.carregando = true;
+    window.carregarAcompanhamentoVisitas = async function(forcar = false) {
+        if (estado.carregando) return;
+
+        // Cache de 60s
+        const agora = Date.now();
+        if (!forcar && estado.termos.length > 0 && (agora - estado.termosCacheTime) < estado.TTL_TERMOS) {
+            console.log('📦 Usando cache de termos');
+            aplicarFiltrosVisitas();
+            return;
+        }
+
+        estado.carregando = true;
 
         const container = document.getElementById('listaAcompanhamentoVisitas');
         if (container) {
@@ -62,56 +92,106 @@
 
         try {
             const token = localStorage.getItem('auth_token');
-            const response = await fetch('/api/setor-pedagogico/visitas/termos?limit=100', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            if (!token) throw new Error('Sem token');
+
+            // 🔥 LIMITE REDUZIDO: 50 em vez de 100
+            // O backend é rápido se trouxer menos registros
+            const response = await fetchComTimeout(
+                '/api/setor-pedagogico/visitas/termos?limit=50',
+                { headers: { 'Authorization': `Bearer ${token}` } },
+                30000
+            );
+
+            if (!response.ok) throw new Error(`Erro ${response.status}`);
 
             const data = await response.json();
 
-            if (data.success) {
-                estadoAcompanhamento.termos = data.termos || [];
-                await carregarTurmasVisitas();
-                aplicarFiltrosVisitas();
-                console.log(`✅ ${estadoAcompanhamento.termos.length} termos carregados`);
-            } else {
-                throw new Error(data.error || 'Erro ao carregar');
-            }
+            if (!data.success) throw new Error(data.error || 'Erro ao carregar');
+
+            estado.termos = data.termos || [];
+            estado.termosCacheTime = Date.now();
+            console.log(`✅ ${estado.termos.length} termos carregados`);
+
+            // Carrega turmas (só 1x, com cache)
+            await carregarTurmasVisitas();
+
+            aplicarFiltrosVisitas();
+
         } catch (error) {
             console.error('❌ Erro:', error);
             if (container) {
                 container.innerHTML = `
-                    <div class="alert alert-danger">
+                    <div class="alert alert-danger" style="border-radius: 12px;">
                         <i class="fas fa-exclamation-triangle"></i>
-                        Erro ao carregar: ${error.message}
-                        <button class="btn btn-sm btn-outline-danger mt-2" onclick="carregarAcompanhamentoVisitas()">
+                        <strong>Erro ao carregar:</strong> ${error.message}
+                        <br>
+                        <button class="btn btn-sm btn-outline-danger mt-2" onclick="carregarAcompanhamentoVisitas(true)">
                             <i class="fas fa-sync-alt"></i> Tentar novamente
                         </button>
                     </div>`;
             }
         } finally {
-            estadoAcompanhamento.carregando = false;
+            estado.carregando = false;
         }
     };
 
     // ============================================
-    // CARREGAR TURMAS
+    // CARREGAR TURMAS (COM CACHE)
     // ============================================
     async function carregarTurmasVisitas() {
+        // Se já carregou há menos de 5min, não busca de novo
+        if (estado.turmasCarregadas && estado.turmas.length > 0) {
+            const agora = Date.now();
+            if ((agora - estado.termosCacheTime) < estado.TTL_TURMAS) {
+                atualizarSelectTurmas();
+                return;
+            }
+        }
+
+        // Tenta endpoint dedicado (se existir)
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetchComTimeout(
+                '/api/setor-pedagogico/visitas/turmas',
+                { headers: { 'Authorization': `Bearer ${token}` } },
+                10000
+            );
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && Array.isArray(data.turmas) && data.turmas.length > 0) {
+                    estado.turmas = data.turmas.map(t => typeof t === 'string' ? t : t.nome);
+                    estado.turmasCarregadas = true;
+                    atualizarSelectTurmas();
+                    console.log(`✅ ${estado.turmas.length} turmas carregadas (endpoint)`);
+                    return;
+                }
+            }
+        } catch (e) {
+            console.warn('⚠️ Endpoint de turmas falhou, usando fallback:', e.message);
+        }
+
+        // Fallback: deriva dos termos
         const turmasSet = new Set();
-        estadoAcompanhamento.termos.forEach(t => {
-            if (t.alunoTurma && t.alunoTurma !== 'N/A') {
+        estado.termos.forEach(t => {
+            if (t.alunoTurma && t.alunoTurma !== 'N/A' && t.alunoTurma.trim() !== '') {
                 turmasSet.add(t.alunoTurma);
             }
         });
 
-        estadoAcompanhamento.turmas = Array.from(turmasSet).sort();
+        estado.turmas = Array.from(turmasSet).sort();
+        estado.turmasCarregadas = true;
+        atualizarSelectTurmas();
+        console.log(`✅ ${estado.turmas.length} turmas carregadas (fallback)`);
+    }
 
+    function atualizarSelectTurmas() {
         const select = document.getElementById('filtroVisitasTurma');
         if (!select) return;
 
-        const valorAtual = select.value;
+        const valorAtual = select.value || 'todas';
         select.innerHTML = '<option value="todas">Todas as turmas</option>';
-        estadoAcompanhamento.turmas.forEach(turma => {
+        estado.turmas.forEach(turma => {
             select.innerHTML += `<option value="${escapeHtml(turma)}">${escapeHtml(turma)}</option>`;
         });
 
@@ -121,15 +201,15 @@
     }
 
     // ============================================
-    // APLICAR FILTROS
+    // APLICAR FILTROS (LOCAL, SEM HTTP)
     // ============================================
     function aplicarFiltrosVisitas() {
-        const f = estadoAcompanhamento.filtros;
+        const f = estado.filtros;
         const agora = new Date();
         const em7Dias = new Date(agora.getTime() + 7 * 24 * 60 * 60 * 1000);
         const em30Dias = new Date(agora.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-        estadoAcompanhamento.filtrados = estadoAcompanhamento.termos.filter(t => {
+        estado.filtrados = estado.termos.filter(t => {
             if (f.status !== 'todos' && t.status !== f.status) return false;
             if (f.turma !== 'todas' && t.alunoTurma !== f.turma) return false;
 
@@ -154,11 +234,8 @@
             return true;
         });
 
-        estadoAcompanhamento.filtrados.sort((a, b) => {
-            return new Date(a.dataVisita || 0) - new Date(b.dataVisita || 0);
-        });
-
-        estadoAcompanhamento.paginaAtual = 1;
+        estado.filtrados.sort((a, b) => new Date(a.dataVisita || 0) - new Date(b.dataVisita || 0));
+        estado.paginaAtual = 1;
 
         renderizarStatsVisitas();
         renderizarListaVisitas();
@@ -182,7 +259,7 @@
         const container = document.getElementById('statsAcompanhamentoVisitas');
         if (!container) return;
 
-        const termos = estadoAcompanhamento.filtrados;
+        const termos = estado.filtrados;
         
         const stats = {
             total: termos.length,
@@ -222,7 +299,7 @@
         const container = document.getElementById('listaAcompanhamentoVisitas');
         if (!container) return;
 
-        const f = estadoAcompanhamento.filtrados;
+        const f = estado.filtrados;
 
         if (f.length === 0) {
             container.innerHTML = `
@@ -234,8 +311,8 @@
             return;
         }
 
-        const inicio = (estadoAcompanhamento.paginaAtual - 1) * estadoAcompanhamento.itensPorPagina;
-        const fim = inicio + estadoAcompanhamento.itensPorPagina;
+        const inicio = (estado.paginaAtual - 1) * estado.itensPorPagina;
+        const fim = inicio + estado.itensPorPagina;
         const pagina = f.slice(inicio, fim);
 
         const statusConfig = {
@@ -339,8 +416,8 @@
         const container = document.getElementById('paginacaoAcompanhamentoVisitas');
         if (!container) return;
 
-        const total = estadoAcompanhamento.filtrados.length;
-        const pages = Math.ceil(total / estadoAcompanhamento.itensPorPagina);
+        const total = estado.filtrados.length;
+        const pages = Math.ceil(total / estado.itensPorPagina);
 
         if (pages <= 1) {
             container.innerHTML = `
@@ -350,7 +427,7 @@
             return;
         }
 
-        const atual = estadoAcompanhamento.paginaAtual;
+        const atual = estado.paginaAtual;
         let botoes = '';
 
         if (atual > 1) {
@@ -391,7 +468,7 @@
     }
 
     window.irParaPaginaVisitas = function(pagina) {
-        estadoAcompanhamento.paginaAtual = pagina;
+        estado.paginaAtual = pagina;
         renderizarListaVisitas();
         renderizarPaginacaoVisitas();
         
@@ -405,10 +482,10 @@
     // FILTROS
     // ============================================
     window.filtrarAcompanhamentoVisitas = function() {
-        estadoAcompanhamento.filtros.status = document.getElementById('filtroVisitasStatus')?.value || 'todos';
-        estadoAcompanhamento.filtros.turma = document.getElementById('filtroVisitasTurma')?.value || 'todas';
-        estadoAcompanhamento.filtros.periodo = document.getElementById('filtroVisitasPeriodo')?.value || 'todos';
-        estadoAcompanhamento.filtros.busca = document.getElementById('filtroVisitasBusca')?.value?.trim() || '';
+        estado.filtros.status = document.getElementById('filtroVisitasStatus')?.value || 'todos';
+        estado.filtros.turma = document.getElementById('filtroVisitasTurma')?.value || 'todas';
+        estado.filtros.periodo = document.getElementById('filtroVisitasPeriodo')?.value || 'todos';
+        estado.filtros.busca = document.getElementById('filtroVisitasBusca')?.value?.trim() || '';
         
         aplicarFiltrosVisitas();
     };
@@ -417,7 +494,7 @@
         if (debounceTimeout) clearTimeout(debounceTimeout);
         debounceTimeout = setTimeout(() => {
             filtrarAcompanhamentoVisitas();
-        }, 400);
+        }, 300);
     };
 
     window.limparFiltrosVisitas = function() {
@@ -426,7 +503,7 @@
         document.getElementById('filtroVisitasPeriodo').value = 'todos';
         document.getElementById('filtroVisitasBusca').value = '';
         
-        estadoAcompanhamento.filtros = {
+        estado.filtros = {
             status: 'todos',
             turma: 'todas',
             periodo: 'todos',
@@ -444,9 +521,11 @@
 
         try {
             const token = localStorage.getItem('auth_token');
-            const response = await fetch(`/api/setor-pedagogico/visitas/termos/${termoId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await fetchComTimeout(
+                `/api/setor-pedagogico/visitas/termos/${termoId}`,
+                { headers: { 'Authorization': `Bearer ${token}` } },
+                15000
+            );
             const data = await response.json();
 
             if (!data.success || !data.termo) {
@@ -549,35 +628,35 @@
             new bootstrap.Modal(document.getElementById('modalDetalhesVisitaAcompanhamento')).show();
         } catch (error) {
             console.error('Erro:', error);
-            alert('Erro ao carregar detalhes');
+            alert('Erro ao carregar detalhes: ' + error.message);
         }
     };
 
     // ============================================
-    // IMPRIMIR TERMO (INDIVIDUAL)
+    // IMPRIMIR TERMO
     // ============================================
     window.imprimirTermoAcompanhamentoVisita = async function(termoId) {
         if (!termoId) return;
         
         try {
-            const response = await fetch(`/api/visitas-publico/termo-oficial/${termoId}`);
+            const response = await fetchComTimeout(
+                `/api/visitas-publico/termo-oficial/${termoId}`,
+                {},
+                20000
+            );
             const data = await response.json();
             
-            if (!data.success) {
-                throw new Error(data.error || 'Erro ao gerar termo');
-            }
+            if (!data.success) throw new Error(data.error || 'Erro ao gerar termo');
             
             const win = window.open('', '_blank');
             win.document.open();
             win.document.write(data.html);
             win.document.close();
             
-            // Garante que a impressão só ocorra após o carregamento completo de imagens e CSS
             win.onload = () => {
                 setTimeout(() => {
                     win.focus();
                     win.print();
-                    // win.close(); // Opcional: fecha a janela após imprimir
                 }, 600);
             };
         } catch (error) {
@@ -587,10 +666,10 @@
     };
 
     // ============================================
-    // IMPRIMIR TODOS OS FILTRADOS (LOTE)
+    // IMPRIMIR LOTE
     // ============================================
     window.imprimirTodosTermosFiltrados = async function() {
-        const filtrados = estadoAcompanhamento.filtrados;
+        const filtrados = estado.filtrados;
         
         if (filtrados.length === 0) {
             alert('Nenhum termo para imprimir');
@@ -604,7 +683,7 @@
             const ids = filtrados.map(t => t._id || t.id);
             const token = localStorage.getItem('auth_token');
             
-            const response = await fetch('/api/visitas-publico/termos-oficiais-lote', {
+            const response = await fetchComTimeout('/api/visitas-publico/termos-oficiais-lote', {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
@@ -614,26 +693,22 @@
                     termoIds: ids,
                     incluirSemAutorizacao: true 
                 })
-            });
+            }, 60000); // 60s para lote
             
             const data = await response.json();
             
-            if (!data.success) {
-                throw new Error(data.error || 'Erro ao gerar termos');
-            }
+            if (!data.success) throw new Error(data.error || 'Erro ao gerar termos');
             
             const win = window.open('', '_blank');
             win.document.open();
             win.document.write(data.html);
             win.document.close();
             
-            // Garante que a impressão só ocorra após o carregamento completo de imagens e CSS
             win.onload = () => {
                 setTimeout(() => {
                     win.focus();
                     win.print();
-                    // win.close(); // Opcional: fecha a janela após imprimir
-                }, 800); // Tempo maior para lote
+                }, 800);
             };
         } catch (error) {
             console.error('Erro:', error);
@@ -641,5 +716,5 @@
         }
     };
 
-    console.log('✅ acompanhamento-visitas.js carregado');
+    console.log('✅ acompanhamento-visitas.js carregado (v2.0 - otimizado)');
 })();
