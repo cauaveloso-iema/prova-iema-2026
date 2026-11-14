@@ -198,15 +198,10 @@ router.get('/health', (req, res) => {
 // ============================================
 router.get('/turmas', authenticateToken, verificarPermissaoVisitas, async (req, res) => {
   try {
-    // 🔥 Cache de 5min
     const cached = _cacheGet('visitas:turmas');
     if (cached) {
-      console.log('⚡ Turmas do cache');
       return res.json(cached);
     }
-
-    const t0 = Date.now();
-    console.log('🔍 Buscando turmas...');
 
     // 🚀 1 única query: distinct em User
     const turmasDosAlunos = await User.distinct('turma', {
@@ -242,7 +237,7 @@ router.get('/turmas', authenticateToken, verificarPermissaoVisitas, async (req, 
     };
 
     _cacheSet('visitas:turmas', response);
-    console.log(`✅ ${todasTurmas.length} turmas em ${Date.now() - t0}ms`);
+    console.log(`✅ ${todasTurmas.length} turmas em cache`);
 
     res.json(response);
   } catch (error) {
@@ -255,7 +250,6 @@ router.get('/cursos', authenticateToken, verificarPermissaoVisitas, async (req, 
   try {
     const cached = _cacheGet('visitas:cursos');
     if (cached) {
-      console.log('⚡ Cursos do cache');
       return res.json(cached);
     }
 
@@ -311,8 +305,6 @@ router.get('/alunos-por-turma', authenticateToken, verificarPermissaoVisitas, as
       .sort({ turma: 1, nome: 1 })
       .lean();
     
-    console.log(`✅ ${alunos.length} alunos encontrados`);
-    
     res.json({
       success: true,
       total: alunos.length,
@@ -338,7 +330,6 @@ router.get('/professores', authenticateToken, verificarPermissaoVisitas, async (
   try {
     const cached = _cacheGet('visitas:professores');
     if (cached) {
-      console.log('⚡ Professores do cache');
       return res.json(cached);
     }
 
@@ -419,7 +410,6 @@ router.get('/buscar-localizacao', authenticateToken, verificarPermissaoVisitas, 
 // Listar todos os termos (🚀 OTIMIZADO COM $facet + CACHE + SELECT ENXUTO)
 router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, res) => {
   try {
-    const t0 = Date.now();
     const { status, turma, search, page = 1, limit = 20 } = req.query;
 
     // 🔥 Cache só quando NÃO há busca textual (search é dinâmico, não cacheia)
@@ -427,7 +417,6 @@ router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, 
     if (cacheKey) {
       const cached = _cacheGet(cacheKey);
       if (cached) {
-        console.log(`⚡ /termos do cache (${cacheKey})`);
         return res.json(cached);
       }
     }
@@ -628,7 +617,6 @@ router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, 
 
     if (cacheKey) _cacheSet(cacheKey, response);
 
-    console.log(`✅ /termos em ${Date.now() - t0}ms | ${termos.length} termos | total ${total}`);
     res.json(response);
     
   } catch (error) {
@@ -965,7 +953,7 @@ router.put('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (r
       termo
     });
   } catch (error) {
-    console.error('❌ Erro:', error);
+    console.error('❌ Erro ao atualizar termo:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -978,8 +966,11 @@ router.delete('/termos/:id', authenticateToken, verificarPermissaoVisitas, async
     // 🔥 Invalida cache de termos
     _invalidateTermosCache();
     
+    console.log(`🗑️ Termo ${termo.codigo} excluído`);
+    
     res.json({ success: true, message: 'Termo excluído!' });
   } catch (error) {
+    console.error('❌ Erro ao excluir termo:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1008,6 +999,7 @@ router.post('/termos/:id/assinar-gestor', authenticateToken, verificarPermissaoV
     
     res.json({ success: true, message: 'Assinatura adicionada!', termo });
   } catch (error) {
+    console.error('❌ Erro ao assinar termo:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1019,7 +1011,6 @@ router.get('/configuracao', authenticateToken, verificarPermissaoVisitas, async 
   try {
     const cached = _cacheGet('visitas:configuracao');
     if (cached) {
-      console.log('⚡ Configuração do cache');
       return res.json(cached);
     }
 
@@ -1029,6 +1020,7 @@ router.get('/configuracao', authenticateToken, verificarPermissaoVisitas, async 
 
     res.json(response);
   } catch (error) {
+    console.error('❌ Erro ao buscar configuração:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1050,8 +1042,11 @@ router.put('/configuracao', authenticateToken, verificarPermissaoVisitas, async 
     // 🔥 Invalida cache de configuração
     _cache.delete('visitas:configuracao');
     
+    console.log(`⚙️ Configuração atualizada: visitasAbertas=${config.visitasAbertas}`);
+    
     res.json({ success: true, message: 'Configuração atualizada', configuracao: config });
   } catch (error) {
+    console.error('❌ Erro ao atualizar configuração:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1100,6 +1095,7 @@ router.get('/estatisticas', authenticateToken, verificarPermissaoVisitas, async 
       porTurma
     });
   } catch (error) {
+    console.error('❌ Erro ao calcular estatísticas:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
