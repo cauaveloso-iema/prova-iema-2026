@@ -1,67 +1,49 @@
 // ============================================
 // 🏫 COORDENAÇÃO DE PÁTIO - MODO AUTOMÁTICO E MANUAL
-// Frontend JS separado do HTML
+// 🚀 VERSÃO OTIMIZADA: Câmera rápida, Retry automático
 // ============================================
 
 let token = localStorage.getItem('auth_token');
 let currentAluno = null;
 let scannerAuto = null;
 let scannerAutoAtivo = false;
+let __scannerIniciando = false;
 let modoAtual = 'automatico';
 let turmasDisponiveis = [];
 let alunosPorTurma = [];
 
-// ============================================
-// 🛡️ PROTEÇÃO CONTRA alert() NATIVO (Kodular)
-// ============================================
-(function protegerContraAlertNativo() {
-    let __emProgresso = false;
+// Cache de turmas
+let __turmasCache = { dados: null, timestamp: 0 };
+const __TURMAS_CACHE_MS = 60000;
 
-    window.mostrarToastPatio = function(mensagem) {
-        if (__emProgresso) {
-            console.log('[ALERT-RECURSÃO-EVITADA]', mensagem);
-            return;
-        }
-        __emProgresso = true;
+// ============================================
+// 🚀 FETCH COM TIMEOUT E RETRY
+// ============================================
+async function fetchComRetry(url, options = {}, timeoutMs = 45000, tentativas = 2) {
+    for (let i = 1; i <= tentativas; i++) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
         try {
-            const isWebView = /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
-                            (typeof window.AppInventor !== 'undefined');
+            const response = await fetch(url, { ...options, signal: controller.signal });
+            clearTimeout(timeoutId);
 
-            if (typeof window.mostrarToastPatio === 'function') {
-                window.mostrarToastPatio(String(mensagem), 'info');
-                return;
+            if (!response.ok && [502, 503, 504].includes(response.status)) {
+                throw new Error(`Servidor acordando (${response.status})`);
             }
-
-            if (!isWebView) {
-                console.log('%c[ALERT] ' + mensagem, 'background:#667eea;color:white;padding:4px 8px;border-radius:4px;');
-                return;
+            return response;
+        } catch (error) {
+            clearTimeout(timeoutId);
+            const isLastTry = (i === tentativas);
+            
+            if (isLastTry || (error.message.includes('acordando') === false && error.name !== 'AbortError')) {
+                if (error.name === 'AbortError') throw new Error(`Tempo esgotado (${timeoutMs / 1000}s)`);
+                throw error;
             }
-
-            const modal = document.createElement('div');
-            modal.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;
-                background:rgba(0,0,0,0.6);display:flex;align-items:center;
-                justify-content:center;z-index:999999;padding:20px;box-sizing:border-box;`;
-            modal.innerHTML = `
-                <div style="background:white;border-radius:16px;padding:25px;max-width:380px;
-                            width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);text-align:center;">
-                    <div style="font-size:48px;margin-bottom:15px;">ℹ️</div>
-                    <p style="margin:0 0 20px;color:#374151;font-size:15px;
-                            line-height:1.5;white-space:pre-line;">${String(mensagem)}</p>
-                    <button onclick="this.closest('div').parentElement.remove()"
-                            style="width:100%;padding:12px;background:#667eea;color:white;
-                                border:none;border-radius:10px;font-size:14px;
-                                font-weight:600;cursor:pointer;">OK</button>
-                </div>
-            `;
-            document.body.appendChild(modal);
-        } finally {
-            __emProgresso = false;
+            await new Promise(r => setTimeout(r, 3000));
         }
-    };
-
-    console.log('🛡️ [Proteção] window.mostrarToastPatio sobrescrito (coordenação de pátio)');
-})();
+    }
+}
 
 // ============================================
 // 🍞 TOAST CUSTOMIZADO
@@ -156,11 +138,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('userName').textContent = userData.nome || 'Usuário';
     document.getElementById('dataAtual').textContent = new Date().toLocaleDateString('pt-BR');
 
-    await carregarFotoPerfil();
-    await carregarContadores();
-    await carregarTurmasParaManual();
+    // 🚀 PRIORIDADE 1: Câmera abre primeiro
+    await iniciarScannerAutomatico();
 
-    iniciarScannerAutomatico();
+    // 🚀 PRIORIDADE 2: Carrega o resto em background (cascata)
+    setTimeout(async () => {
+        try { await carregarFotoPerfil(); } catch (e) {}
+        setTimeout(() => carregarTurmasParaManual(), 300);
+        setTimeout(() => carregarContadores(), 600);
+    }, 100);
 
     setInterval(carregarContadores, 30000);
 
@@ -187,51 +173,53 @@ async function carregarFotoPerfil() {
                 avatarDiv.innerHTML = `<img src="${data.perfil.fotoPerfil}" alt="Foto de perfil">`;
             }
         }
-    } catch (error) {
-        console.error('Erro ao carregar foto:', error);
-    }
+    } catch (error) {}
 }
 
 // ============================================
-// 📷 SCANNER AUTOMÁTICO
+// 📷 SCANNER AUTOMÁTICO (VERSÃO ROBUSTA)
 // ============================================
 async function iniciarScannerAutomatico() {
     const qrContainer = document.getElementById('qr-reader-auto');
     if (!qrContainer) return;
+    if (scannerAutoAtivo || __scannerIniciando) return;
+    __scannerIniciando = true;
 
     qrContainer.innerHTML = '<div id="qr-reader-auto-new" style="width: 100%;"></div>';
 
-    scannerAuto = new Html5Qrcode("qr-reader-auto-new");
-
-    const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        qrContainer.innerHTML = `<div class="alert alert-warning m-3" style="border-radius: 12px;"><i class="fas fa-video-slash" style="font-size: 32px; display: block; margin-bottom: 10px;"></i><strong>Câmera não disponível</strong><br>Use o <strong>Modo Manual</strong>.<button class="btn btn-sm btn-primary mt-3" onclick="setModo('manual')" style="border-radius: 30px;"><i class="fas fa-users"></i> Modo Manual</button></div>`;
+        __scannerIniciando = false;
+        return;
+    }
 
     try {
+        scannerAuto = new Html5Qrcode("qr-reader-auto-new");
+        const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
         await scannerAuto.start({ facingMode: "environment" }, config, onScanSuccessAuto, () => {});
         scannerAutoAtivo = true;
-        console.log('✅ Scanner Automático iniciado');
     } catch (err) {
-        console.error('Erro ao iniciar scanner automático:', err);
-        qrContainer.innerHTML = `<div class="mostrarToastPatio mostrarToastPatio-warning m-3">Não foi possível acessar a câmera.</div>`;
+        let msg = 'Não foi possível acessar a câmera.';
+        if (err.message?.includes('NotFoundError')) msg = 'Nenhuma câmera encontrada.';
+        else if (err.message?.includes('NotAllowedError')) msg = 'Permissão de câmera negada.';
+        else if (err.message?.includes('NotReadableError')) msg = 'Câmera em uso por outro app.';
+        qrContainer.innerHTML = `<div class="alert alert-warning m-3" style="border-radius: 12px;"><i class="fas fa-video-slash" style="font-size: 32px; display: block; margin-bottom: 10px;"></i><strong>Câmera indisponível</strong><br><span style="font-size: 13px;">${msg}</span><button class="btn btn-sm btn-primary mt-3" onclick="setModo('manual')" style="border-radius: 30px;"><i class="fas fa-users"></i> Modo Manual</button></div>`;
         scannerAutoAtivo = false;
+        scannerAuto = null;
+    } finally {
+        __scannerIniciando = false;
     }
 }
 
 async function pararScannerAutomatico() {
-    if (scannerAuto && scannerAutoAtivo) {
-        try {
-            await scannerAuto.stop();
-            scannerAutoAtivo = false;
-            console.log('✅ Scanner Automático parado');
-        } catch (e) {
-            console.log('⚠️ Erro ao parar scanner automático:', e.message);
-        }
-    }
+    if (!scannerAuto) { scannerAutoAtivo = false; __scannerIniciando = false; return; }
+    try { if (scannerAutoAtivo) await scannerAuto.stop(); } catch (e) {}
+    scannerAutoAtivo = false;
     scannerAuto = null;
+    __scannerIniciando = false;
 }
 
 async function onScanSuccessAuto(decodedText) {
-    console.log('QR Code escaneado (Automático):', decodedText);
-
     let alunoId = null;
     if (decodedText.match(/^[a-f0-9]{24}$/i)) alunoId = decodedText;
     else if (decodedText.includes('aluno=')) {
@@ -242,10 +230,7 @@ async function onScanSuccessAuto(decodedText) {
         if (match) alunoId = match[1];
     }
 
-    if (!alunoId) {
-        mostrarToastPatio('QR Code inválido');
-        return;
-    }
+    if (!alunoId) { mostrarToastPatio('QR Code inválido'); return; }
 
     await pararScannerAutomatico();
     await buscarAluno(alunoId);
@@ -265,46 +250,51 @@ async function setModo(modo) {
         document.getElementById('modoManualBtn').classList.remove('active');
         document.getElementById('modoAutomatico').style.display = 'block';
         document.getElementById('modoManual').style.display = 'none';
-
         await iniciarScannerAutomatico();
     } else {
         document.getElementById('modoManualBtn').classList.add('active');
         document.getElementById('modoAutomaticoBtn').classList.remove('active');
         document.getElementById('modoAutomatico').style.display = 'none';
         document.getElementById('modoManual').style.display = 'block';
-
         await pararScannerAutomatico();
 
         const turmaSelecionada = document.getElementById('filtroTurmaManual').value;
-        if (turmaSelecionada) {
-            await carregarAlunosPorTurma();
-        } else {
-            document.getElementById('listaAlunosManual').innerHTML = '<div class="text-center py-3">Selecione uma turma para ver os alunos</div>';
-        }
+        if (turmaSelecionada) await carregarAlunosPorTurma();
+        else document.getElementById('listaAlunosManual').innerHTML = '<div class="text-center py-3">Selecione uma turma para ver os alunos</div>';
     }
 }
 
 // ============================================
-// 👥 MODO MANUAL - TURMAS E ALUNOS
+// 👥 MODO MANUAL
 // ============================================
 async function carregarTurmasParaManual() {
     try {
-        const response = await fetch('/api/coordenacao-patio/alunos', {
+        if (__turmasCache.dados && (Date.now() - __turmasCache.timestamp < __TURMAS_CACHE_MS)) {
+            const turmaSelect = document.getElementById('filtroTurmaManual');
+            if (turmaSelect && turmaSelect.options.length <= 1) {
+                turmaSelect.innerHTML = '<option value="">Selecione uma turma...</option>';
+                __turmasCache.dados.forEach(turma => {
+                    turmaSelect.innerHTML += `<option value="${escapeHTML(turma)}">${escapeHTML(turma)}</option>`;
+                });
+            }
+            return;
+        }
+
+        const response = await fetchComRetry('/api/coordenacao-patio/alunos', {
             headers: { 'Authorization': `Bearer ${token}` }
-        });
+        }, 15000);
         const data = await response.json();
 
         if (data.success && data.turmas) {
             turmasDisponiveis = data.turmas;
+            __turmasCache = { dados: data.turmas, timestamp: Date.now() };
             const turmaSelect = document.getElementById('filtroTurmaManual');
             turmaSelect.innerHTML = '<option value="">Selecione uma turma...</option>';
             data.turmas.forEach(turma => {
                 turmaSelect.innerHTML += `<option value="${escapeHTML(turma)}">${escapeHTML(turma)}</option>`;
             });
         }
-    } catch (error) {
-        console.error('Erro ao carregar turmas:', error);
-    }
+    } catch (error) {}
 }
 
 async function carregarAlunosPorTurma() {
@@ -318,9 +308,9 @@ async function carregarAlunosPorTurma() {
     document.getElementById('listaAlunosManual').innerHTML = '<div class="text-center py-3"><div class="loading"></div><p>Carregando alunos...</p></div>';
 
     try {
-        const response = await fetch(`/api/coordenacao-patio/alunos?turma=${encodeURIComponent(turmaSelecionada)}`, {
+        const response = await fetchComRetry(`/api/coordenacao-patio/alunos?turma=${encodeURIComponent(turmaSelecionada)}`, {
             headers: { 'Authorization': `Bearer ${token}` }
-        });
+        }, 15000);
         const data = await response.json();
 
         if (data.success && data.alunos) {
@@ -330,7 +320,6 @@ async function carregarAlunosPorTurma() {
             document.getElementById('listaAlunosManual').innerHTML = '<div class="mostrarToastPatio mostrarToastPatio-warning">Nenhum aluno encontrado nesta turma</div>';
         }
     } catch (error) {
-        console.error('Erro:', error);
         document.getElementById('listaAlunosManual').innerHTML = '<div class="mostrarToastPatio mostrarToastPatio-danger">Erro ao carregar alunos</div>';
     }
 }
@@ -341,9 +330,7 @@ function filtrarAlunosManual() {
     const busca = (document.getElementById('filtroBuscaManual').value || '').toLowerCase();
 
     let alunosFiltrados = alunosPorTurma;
-    if (busca) {
-        alunosFiltrados = alunosFiltrados.filter(a => (a.nome || '').toLowerCase().includes(busca));
-    }
+    if (busca) alunosFiltrados = alunosFiltrados.filter(a => (a.nome || '').toLowerCase().includes(busca));
 
     alunosFiltrados.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
 
@@ -384,8 +371,6 @@ function filtrarAlunosManual() {
 }
 
 async function selecionarAluno(alunoId, alunoNome, itemEl) {
-    console.log(`🎯 Aluno selecionado: ${alunoNome} (${alunoId})`);
-
     if (itemEl) {
         itemEl.style.background = '#ede9fe';
         itemEl.style.borderColor = '#667eea';
@@ -400,11 +385,7 @@ async function selecionarAluno(alunoId, alunoNome, itemEl) {
         `;
     }
 
-    try {
-        await buscarAluno(alunoId);
-    } catch (error) {
-        console.error('Erro ao processar aluno:', error);
-    }
+    try { await buscarAluno(alunoId); } catch (error) {}
 }
 
 // ============================================
@@ -415,7 +396,7 @@ async function buscarAluno(alunoId) {
         await pararScannerAutomatico();
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
 
         const response = await fetch(`/api/coordenacao-patio/aluno/${alunoId}`, {
             headers: { 'Authorization': `Bearer ${token}` },
@@ -433,26 +414,15 @@ async function buscarAluno(alunoId) {
             await registrarRefeicaoAutomatico();
         } else {
             mostrarToastPatio('Usuário não encontrado');
-            if (modoAtual === 'automatico') {
-                await iniciarScannerAutomatico();
-            } else {
-                await carregarAlunosPorTurma();
-            }
+            if (modoAtual === 'automatico') await iniciarScannerAutomatico();
+            else await carregarAlunosPorTurma();
         }
     } catch (error) {
-        console.error('Erro:', error);
+        if (error.name === 'AbortError') mostrarToastPatio('Tempo esgotado ao buscar aluno. Tente novamente.');
+        else mostrarToastPatio('Erro ao buscar usuário');
 
-        if (error.name === 'AbortError') {
-            mostrarToastPatio('Tempo esgotado ao buscar aluno. Tente novamente.');
-        } else {
-            mostrarToastPatio('Erro ao buscar usuário');
-        }
-
-        if (modoAtual === 'automatico') {
-            await iniciarScannerAutomatico();
-        } else {
-            await carregarAlunosPorTurma();
-        }
+        if (modoAtual === 'automatico') await iniciarScannerAutomatico();
+        else await carregarAlunosPorTurma();
     }
 }
 
@@ -504,11 +474,8 @@ function exibirAluno(data) {
         btn.innerHTML = `<i class="fas fa-check-circle me-2"></i> Registrar ${horario.tipoRefeicao === 'manha' ? 'LANCHE DA MANHÃ' : horario.tipoRefeicao === 'almoco' ? 'ALMOÇO' : 'LANCHE DA TARDE'}`;
     } else {
         btn.disabled = true;
-        if (horario.jaComeu) {
-            btn.innerHTML = `<i class="fas fa-check-circle me-2"></i> JÁ REGISTRADO HOJE`;
-        } else {
-            btn.innerHTML = `<i class="fas fa-times-circle me-2"></i> FORA DO HORÁRIO`;
-        }
+        if (horario.jaComeu) btn.innerHTML = `<i class="fas fa-check-circle me-2"></i> JÁ REGISTRADO HOJE`;
+        else btn.innerHTML = `<i class="fas fa-times-circle me-2"></i> FORA DO HORÁRIO`;
     }
 
     document.getElementById('alunoInfo').style.display = 'block';
@@ -529,9 +496,7 @@ async function registrarRefeicaoAutomatico() {
 
     if (!tipoRefeicao) {
         mostrarToastPatio('Fora do horário de refeição');
-        if (modoAtual === 'automatico') {
-            await iniciarScannerAutomatico();
-        }
+        if (modoAtual === 'automatico') await iniciarScannerAutomatico();
         return;
     }
 
@@ -550,11 +515,8 @@ async function registrarRefeicaoAutomatico() {
 
             await carregarContadores();
 
-            if (modoAtual === 'automatico') {
-                await iniciarScannerAutomatico();
-            } else {
-                await carregarAlunosPorTurma();
-            }
+            if (modoAtual === 'automatico') await iniciarScannerAutomatico();
+            else await carregarAlunosPorTurma();
         } else {
             if (data.rodizio && !data.rodizio.pode) {
                 mostrarToastPatio(`❌ ${data.error}\n\n📋 Motivo: ${data.rodizio.mensagem}`);
@@ -578,20 +540,13 @@ async function registrarRefeicaoAutomatico() {
                 mostrarToastPatio(`❌ ${data.error}`);
             }
 
-            if (modoAtual === 'automatico') {
-                await iniciarScannerAutomatico();
-            } else {
-                await carregarAlunosPorTurma();
-            }
+            if (modoAtual === 'automatico') await iniciarScannerAutomatico();
+            else await carregarAlunosPorTurma();
         }
     } catch (error) {
-        console.error('Erro:', error);
         mostrarToastPatio('Erro ao registrar');
-        if (modoAtual === 'automatico') {
-            await iniciarScannerAutomatico();
-        } else {
-            await carregarAlunosPorTurma();
-        }
+        if (modoAtual === 'automatico') await iniciarScannerAutomatico();
+        else await carregarAlunosPorTurma();
     }
 }
 
@@ -604,9 +559,9 @@ async function registrarRefeicao() {
 // ============================================
 async function carregarContadores() {
     try {
-        const response = await fetch('/api/coordenacao-patio/registros-hoje', {
+        const response = await fetchComRetry('/api/coordenacao-patio/registros-hoje', {
             headers: { 'Authorization': `Bearer ${token}` }
-        });
+        }, 15000);
         const data = await response.json();
 
         if (data.success) {
@@ -626,9 +581,7 @@ async function carregarContadores() {
                 document.getElementById('ultimosRegistros').innerHTML = '<div class="text-center text-muted py-3">Nenhum registro hoje</div>';
             }
         }
-    } catch (error) {
-        console.error('Erro ao carregar contadores:', error);
-    }
+    } catch (error) {}
 }
 
 // ============================================
@@ -651,9 +604,7 @@ document.addEventListener('keydown', (e) => {
         if (currentAluno) {
             document.getElementById('alunoInfo').style.display = 'none';
             currentAluno = null;
-            if (modoAtual === 'automatico') {
-                iniciarScannerAutomatico();
-            }
+            if (modoAtual === 'automatico') iniciarScannerAutomatico();
         }
     }
 });
@@ -775,9 +726,7 @@ document.addEventListener('keydown', (e) => {
             if (data.success) {
                 __notificacoesCache = data.notificacoes || [];
             }
-        } catch (error) {
-            console.error('Erro ao carregar notificações:', error);
-        }
+        } catch (error) {}
     }
 
     function renderizarSino() {
@@ -865,26 +814,22 @@ document.addEventListener('keydown', (e) => {
         const dropdown = document.getElementById('notificacoesDropdown');
         if (!dropdown) return;
 
-        // Se já está aberto, fecha
         if (dropdown.classList.contains('show')) {
             fecharNotificacoes();
             return;
         }
 
-        // Abre (usa classe .show — o CSS cuida do display: block)
         dropdown.classList.add('show');
-        dropdown.style.display = '';   // limpa qualquer display inline anterior
+        dropdown.style.display = '';
 
-        // Carrega a lista
         carregarTudo();
     }
 
-    // 🔥 CORREÇÃO PRINCIPAL: fecharNotificacoes robusto
     function fecharNotificacoes() {
         const dropdown = document.getElementById('notificacoesDropdown');
         if (dropdown) {
             dropdown.classList.remove('show');
-            dropdown.style.display = '';   // ← limpa display inline (impedia fechar!)
+            dropdown.style.display = '';
         }
         const btn = document.getElementById('notificacoesBtn');
         if (btn) btn.classList.remove('active');
@@ -903,9 +848,7 @@ document.addEventListener('keydown', (e) => {
             } else {
                 carregarTudo();
             }
-        } catch (error) {
-            console.error('Erro ao abrir notificação:', error);
-        }
+        } catch (error) {}
     }
 
     async function marcarTodasLidas() {
@@ -920,9 +863,7 @@ document.addEventListener('keydown', (e) => {
                 await carregarTudo();
                 mostrarNotificacaoInterna('Notificações marcadas como lidas!', 'success');
             }
-        } catch (error) {
-            console.error('Erro ao marcar todas como lidas:', error);
-        }
+        } catch (error) {}
     }
 
     async function limparMinhasNotificacoes(event) {
@@ -948,7 +889,6 @@ document.addEventListener('keydown', (e) => {
                 throw new Error(data.error || 'Erro ao excluir');
             }
         } catch (error) {
-            console.error('❌ Erro:', error);
             mostrarNotificacaoInterna(error.message, 'error');
         }
     }
@@ -961,7 +901,6 @@ document.addEventListener('keydown', (e) => {
         if (notificacoesInterval) clearInterval(notificacoesInterval);
     });
 
-    // Expor globalmente
     window.abrirNotificacoes = abrirNotificacoes;
     window.abrirNotificacao = abrirNotificacao;
     window.marcarTodasLidas = marcarTodasLidas;

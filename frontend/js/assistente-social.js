@@ -2,6 +2,7 @@
 // ASSISTENTE SOCIAL - SISTEMA DE ATENDIMENTOS
 // Com Filtros, Remarcação, Assinatura, Sino, Notificações
 // + 🆕 ASSINATURA VIA QR CODE (SESSÃO)
+// 🚀 VERSÃO OTIMIZADA: Câmera rápida, Retry automático, Sem logs desnecessários
 // ============================================
 
 let token = localStorage.getItem('auth_token');
@@ -14,6 +15,7 @@ let __tiposSelecionados = [];
 
 let scannerAuto = null;
 let scannerAutoAtivo = false;
+let __scannerIniciando = false;
 
 let modoAtual = 'automatico';
 let turmasDisponiveis = [];
@@ -34,6 +36,15 @@ let __concluidosPorPagina = 10;
 let __concluidosTotal = 0;
 let __concluidosDados = [];
 
+// Cache de turmas
+let __turmasCache = { dados: null, timestamp: 0 };
+const __TURMAS_CACHE_MS = 60000;
+
+// Controle de carga
+let __carregandoRecentes = false;
+let __ultimaCargaRecentes = 0;
+const CACHE_RECENTES_MS = 5000;
+
 // ============================================
 // 🆕 ESTADO DA SESSÃO DE ASSINATURA VIA QR CODE
 // ============================================
@@ -47,7 +58,6 @@ const estadoSessaoAssinatura = {
     }
 };
 
-// Modo assinatura (quando abre via ?assinatura=UUID)
 let sessaoAssinaturaModo = null;
 let sessaoAssinaturaAtual = null;
 let telaCanvas = null;
@@ -63,24 +73,17 @@ let telaLastY = 0;
 // 🛡️ PROTEÇÃO CONTRA alert() NATIVO (Kodular)
 // ============================================
 (function protegerContraAlertNativo() {
-    const alertOriginal = window.alert.bind(window);
     let __alertaEmProgresso = false;
     
     window.alert = function(mensagem) {
-        if (__alertaEmProgresso) {
-            console.log('[ALERT-RECURSÃO-EVITADA]', mensagem);
-            return;
-        }
+        if (__alertaEmProgresso) return;
         __alertaEmProgresso = true;
         
         try {
             const isWebView = /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
                               (typeof window.AppInventor !== 'undefined');
             
-            if (!isWebView) {
-                console.log('%c[ALERT] ' + mensagem, 'background:#8b5cf6;color:white;padding:4px 8px;border-radius:4px;');
-                return;
-            }
+            if (!isWebView) return;
             
             const modal = document.createElement('div');
             modal.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;
@@ -103,8 +106,6 @@ let telaLastY = 0;
             __alertaEmProgresso = false;
         }
     };
-    
-    console.log('🛡️ [Proteção] window.alert sobrescrito (sem recursão)');
 })();
 
 // ============================================
@@ -159,7 +160,36 @@ function formatarDataBR(dataStr) {
 }
 
 // ============================================
-// 📄 UTILITÁRIO: GERADOR DE CSV PROFISSIONAL
+// 🚀 FETCH COM TIMEOUT E RETRY
+// ============================================
+async function fetchComRetry(url, options = {}, timeoutMs = 45000, tentativas = 2) {
+    for (let i = 1; i <= tentativas; i++) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+            const response = await fetch(url, { ...options, signal: controller.signal });
+            clearTimeout(timeoutId);
+
+            if (!response.ok && [502, 503, 504].includes(response.status)) {
+                throw new Error(`Servidor acordando (${response.status})`);
+            }
+            return response;
+        } catch (error) {
+            clearTimeout(timeoutId);
+            const isLastTry = (i === tentativas);
+            
+            if (isLastTry || (error.message.includes('acordando') === false && error.name !== 'AbortError')) {
+                if (error.name === 'AbortError') throw new Error(`Tempo esgotado (${timeoutMs / 1000}s)`);
+                throw error;
+            }
+            await new Promise(r => setTimeout(r, 3000));
+        }
+    }
+}
+
+// ============================================
+// 📄 GERADOR DE CSV PROFISSIONAL
 // ============================================
 function gerarBaixarCSV(opts) {
     const {
@@ -189,10 +219,7 @@ function gerarBaixarCSV(opts) {
 
     const esc = (v) => {
         if (v === null || v === undefined) return '""';
-        let s = String(v)
-            .replace(/\r\n|\r|\n/g, ' ')
-            .replace(/"/g, '""')
-            .trim();
+        let s = String(v).replace(/\r\n|\r|\n/g, ' ').replace(/"/g, '""').trim();
         return `"${s}"`;
     };
 
@@ -205,58 +232,42 @@ function gerarBaixarCSV(opts) {
     const linhasDados = registros.map(reg => {
         return colunas.map(col => {
             let v;
-            try {
-                v = col.format ? col.format(reg) : reg[col.key];
-            } catch (e) {
-                console.warn(`Erro coluna ${col.key}:`, e);
-                v = '';
-            }
+            try { v = col.format ? col.format(reg) : reg[col.key]; } catch (e) { v = ''; }
             return esc(v);
         }).join(';');
     });
 
     const L = [];
-
     L.push(linhaUnica('IEMA PLENO: SÃO LUÍS - CENTRO'));
     L.push(linhaUnica('Sistema de Atendimentos — EducaPleno'));
     L.push(linhaUnica(`Setor: ${setor}`));
     L.push(linhaUnica(''));
-
     L.push(linhaUnica(titulo.toUpperCase()));
     if (subtitulo) L.push(linhaUnica(subtitulo));
     L.push(linhaUnica(''));
-
     L.push(linhaUnica(`Data de geração: ${dataGeracao}`));
     L.push(linhaUnica(`Total de registros: ${registros.length}`));
 
     if (metricas && typeof metricas === 'object') {
         Object.entries(metricas).forEach(([label, valor]) => {
-            if (valor !== null && valor !== undefined && valor !== '') {
-                L.push(linhaUnica(`${label}: ${valor}`));
-            }
+            if (valor !== null && valor !== undefined && valor !== '') L.push(linhaUnica(`${label}: ${valor}`));
         });
     }
 
     if (filtros.length > 0) {
         L.push(linhaUnica('Filtros aplicados:'));
-        filtros.forEach(f => {
-            if (f && f.valor) L.push(linhaUnica(`  • ${f.label}: ${f.valor}`));
-        });
+        filtros.forEach(f => { if (f && f.valor) L.push(linhaUnica(`  • ${f.label}: ${f.valor}`)); });
     }
 
     if (observacoes) L.push(linhaUnica(`Observações: ${observacoes}`));
-
     L.push(linhaUnica(''));
     L.push(linhaUnica('─'.repeat(40)));
     L.push(linhaUnica(''));
-
     L.push(linhaCabecalho);
     L.push(...linhasDados);
-
     L.push(linhaUnica(''));
     L.push(linhaUnica('─'.repeat(40)));
     L.push(linhaUnica(''));
-
     L.push(linhaUnica('Documento gerado automaticamente pelo EducaPleno'));
     L.push(linhaUnica(`Setor responsável: ${setor}`));
     L.push(linhaUnica(`Gerado em: ${dataGeracao}`));
@@ -273,13 +284,9 @@ function gerarBaixarCSV(opts) {
         link.style.display = 'none';
         document.body.appendChild(link);
         link.click();
-        setTimeout(() => {
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-        }, 100);
+        setTimeout(() => { document.body.removeChild(link); URL.revokeObjectURL(url); }, 100);
         return true;
     } catch (e) {
-        console.error('Erro ao gerar CSV:', e);
         mostrarToastConcluido('❌ Erro ao gerar CSV', 'error');
         return false;
     }
@@ -416,26 +423,11 @@ async function verificarLembretesNotificar() {
     });
 }
 
-function atualizarBadgeComUrgencia() {
-    const badge = safeGet('notificacoesBadge');
-    const btn = safeGet('notificacoesBtn');
-    if (!badge || !btn || !__lembretesAtuais || __lembretesAtuais.length === 0) return;
-    const temUrgente = __lembretesAtuais.some(r => calcularNivelAlerta(r).urgente);
-    if (temUrgente) {
-        btn.classList.add('tem-novidade');
-        badge.style.background = '#dc2626';
-    } else {
-        btn.classList.remove('tem-novidade');
-        badge.style.background = '#ef4444';
-    }
-}
-
 document.addEventListener('DOMContentLoaded', async () => {
     
     // 🆕 MODO ASSINATURA (URL ?assinatura=UUID)
     const modoAssinatura = new URLSearchParams(window.location.search).get('assinatura');
     if (modoAssinatura) {
-        console.log('📱 Modo assinatura detectado:', modoAssinatura);
         await mostrarTelaAssinatura(modoAssinatura);
         return;
     }
@@ -460,18 +452,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     safeSetText('dataAtual', new Date().toLocaleDateString('pt-BR'));
     atualizarStatusNotificacao();
     
-    try {
-        await Promise.allSettled([
-            carregarFotoPerfil(),
-            carregarAtendimentosAtivos(),
-            carregarTurmasParaRelatorio(),
-            carregarTurmasParaManual(),
-            carregarDashboard(),
-            carregarLembretes()
-        ]);
-    } catch (error) { console.error('Erro:', error); }
-    
+    // 🚀 PRIORIDADE 1: Câmera abre primeiro
     await iniciarScannerAutomatico();
+    
+    // 🚀 PRIORIDADE 2: Carrega o resto em background (cascata)
+    setTimeout(async () => {
+        try { await carregarFotoPerfil(); } catch (e) {}
+        setTimeout(() => carregarTurmasParaManual(), 300);
+        setTimeout(() => carregarTurmasParaRelatorio(), 600);
+        setTimeout(() => carregarAtendimentosAtivos(), 900);
+        setTimeout(() => carregarDashboard(), 1200);
+        setTimeout(() => carregarLembretes(), 1500);
+    }, 100);
+    
     setTimeout(() => inicializarAssinatura(), 800);
     configurarFiltrosAndamento();
     configurarFiltrosConcluidos();
@@ -481,11 +474,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (permitido) setTimeout(() => verificarLembretesNotificar(), 2000);
     }, 3000);
     
+    // 🔄 Polling inteligente
     setInterval(() => {
+        if (__scannerIniciando) return;
         if (safeGet('ativos')?.classList.contains('active')) carregarAtendimentosAtivos();
         if (safeGet('dashboard')?.classList.contains('active')) carregarDashboard();
         carregarLembretes();
-    }, 30000);
+    }, 45000);
     
     setInterval(() => {
         if (__lembretesAtuais && __lembretesAtuais.length > 0) {
@@ -511,12 +506,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     safeGet('dashboard-tab')?.addEventListener('shown.bs.tab', () => {
         carregarDashboard();
         carregarAtendimentosConcluidos(1);
-        atualizarContadorAtendimentosAntigos();  // 🆕
+        atualizarContadorAtendimentosAntigos();
     });
     safeGet('relatorios-tab')?.addEventListener('shown.bs.tab', () => carregarTurmasParaRelatorio());
     safeGet('ativos-tab')?.addEventListener('shown.bs.tab', () => {
         carregarAtendimentosAtivos();
-        atualizarContadorAtendimentosAntigos();  // 🆕
+        atualizarContadorAtendimentosAntigos();
     });
     
     safeGet('modoAutomaticoBtn')?.addEventListener('click', () => setModo('automatico'));
@@ -538,7 +533,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 window.addEventListener('beforeunload', () => {
     pararScannerAutomatico();
     pararMonitoramentoSessao('assistenteSocial');
-    // 🆕 Remove listener de redimensionamento
     window.removeEventListener('resize', handleResizeCanvasTela);
 });
 
@@ -550,40 +544,29 @@ async function carregarFotoPerfil() {
             const avatar = safeGet('userAvatar');
             if (avatar) avatar.innerHTML = `<img src="${data.perfil.fotoPerfil}" alt="Foto">`;
         }
-    } catch (error) { console.error('Erro:', error); }
+    } catch (error) {}
 }
 
 // ============================================
-// 1. RELÓGIO EM TEMPO REAL
+// HEADER (Relógio, Menu, Perfil, Sino)
 // ============================================
 function atualizarRelogio() {
     const elTempo = document.getElementById('relogioTempoReal');
     const elData = document.getElementById('relogioData');
     if (!elTempo) return;
-    
     const agora = new Date();
-    const horas = String(agora.getHours()).padStart(2, '0');
-    const minutos = String(agora.getMinutes()).padStart(2, '0');
-    const segundos = String(agora.getSeconds()).padStart(2, '0');
-    
-    elTempo.textContent = `${horas}:${minutos}:${segundos}`;
-    
+    elTempo.textContent = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}:${String(agora.getSeconds()).padStart(2, '0')}`;
     if (elData) {
-        const dataFormatada = agora.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
-        elData.textContent = dataFormatada.replace(/\./g, '').replace(/,/g, ' •');
+        elData.textContent = agora.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }).replace(/\./g, '').replace(/,/g, ' •');
     }
 }
 setInterval(atualizarRelogio, 1000);
 atualizarRelogio();
 
-// ============================================
-// 2. MENU DO USUÁRIO (Avatar)
-// ============================================
 function toggleUserMenu(event) {
     if (event) event.stopPropagation();
     const dropdown = document.getElementById('userDropdown');
     const chevron = document.getElementById('userChevron');
-    
     if (dropdown) {
         const isShowing = dropdown.classList.contains('show');
         if (isShowing) {
@@ -600,113 +583,67 @@ document.addEventListener('click', function(event) {
     const container = document.getElementById('userMenuContainer');
     const dropdown = document.getElementById('userDropdown');
     const chevron = document.getElementById('userChevron');
-    
     if (container && !container.contains(event.target)) {
         if (dropdown) dropdown.classList.remove('show');
         if (chevron) chevron.style.transform = 'rotate(0deg)';
     }
 });
 
-// ============================================
-// 4. BOAS-VINDAS E TURNO DINÂMICO
-// ============================================
 function atualizarBoasVindasETurno() {
     const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
     const nomeEl = document.getElementById('headerNomeUsuario');
-    if (nomeEl && userData.nome) {
-        const primeiroNome = userData.nome.split(' ')[0];
-        nomeEl.textContent = primeiroNome;
-    }
-
+    if (nomeEl && userData.nome) nomeEl.textContent = userData.nome.split(' ')[0];
     const agora = new Date();
     const hora = agora.getHours();
-    let turno = 'Matutino';
-    let icone = 'fa-sun text-warning';
-
-    if (hora >= 12 && hora < 18) {
-        turno = 'Vespertino';
-        icone = 'fa-cloud-sun text-warning';
-    } else if (hora >= 18 || hora < 5) {
-        turno = 'Noturno';
-        icone = 'fa-moon text-primary';
-    }
-
+    let turno = 'Matutino', icone = 'fa-sun text-warning';
+    if (hora >= 12 && hora < 18) { turno = 'Vespertino'; icone = 'fa-cloud-sun text-warning'; }
+    else if (hora >= 18 || hora < 5) { turno = 'Noturno'; icone = 'fa-moon text-primary'; }
     const turnoEl = document.getElementById('headerTurno');
     const iconeEl = document.getElementById('headerTurnoIcone');
-    
     if (turnoEl) turnoEl.textContent = turno;
     if (iconeEl) iconeEl.className = `fas ${icone} me-1`;
 }
+document.addEventListener('DOMContentLoaded', () => { atualizarBoasVindasETurno(); setInterval(atualizarBoasVindasETurno, 60000); });
 
-document.addEventListener('DOMContentLoaded', () => {
-    atualizarBoasVindasETurno();
-    setInterval(atualizarBoasVindasETurno, 60000); 
-});
-
-// ============================================
-// 5. CORREÇÃO: ABRIR MENU DE NOTIFICAÇÕES PELO AVATAR
-// ============================================
 function abrirMenuNotificacoesSeguro(event) {
     if (event) event.stopPropagation();
-
-    // 1. Fecha o menu do usuário
     const userDropdown = document.getElementById('userDropdown');
     const chevron = document.getElementById('userChevron');
     if (userDropdown) userDropdown.classList.remove('show');
     if (chevron) chevron.style.transform = 'rotate(0deg)';
-
-    // 2. Abre o dropdown do sino
     const notifDropdown = document.getElementById('notificacoesDropdown');
-    if (notifDropdown) {
-        notifDropdown.classList.add('show');
-        notifDropdown.style.display = 'block'; // Garante que abra
-    }
-    
-    // 3. Carrega as notificações
-    if (typeof carregarTudo === 'function') {
-        carregarTudo();
-    }
+    if (notifDropdown) { notifDropdown.classList.add('show'); notifDropdown.style.display = 'block'; }
+    if (typeof carregarTudo === 'function') carregarTudo();
 }
 
-// ============================================
-// 6. CORREÇÃO: FECHAR O SINO (BOTÃO X)
-// ============================================
-// Substitui a função original para garantir que o display suma
 function fecharNotificacoes() {
     const dropdown = document.getElementById('notificacoesDropdown');
     if (dropdown) {
         dropdown.classList.remove('show');
-        dropdown.style.display = 'none'; // Força o fechamento
+        dropdown.style.display = 'none';
     }
-    
     const btn = document.getElementById('notificacoesBtn');
     if (btn) btn.classList.remove('active');
 }
 
-// Impede que o clique no botão fechar do sino (X) se propague e reabra o menu
 document.addEventListener('click', function(event) {
     const btnFecharSino = event.target.closest('.notificacoes-header button[onclick*="fecharNotificacoes"]');
-    
     if (btnFecharSino) {
         event.stopPropagation();
         fecharNotificacoes();
     }
 }, true);
 
-// Fecha o sino ao clicar fora dele
 document.addEventListener('click', function(event) {
     const notifDropdown = document.getElementById('notificacoesDropdown');
     const containerSino = document.getElementById('containerSinoOriginal');
-    
     if (notifDropdown && notifDropdown.classList.contains('show')) {
-        if (containerSino && !containerSino.contains(event.target)) {
-            fecharNotificacoes();
-        }
+        if (containerSino && !containerSino.contains(event.target)) fecharNotificacoes();
     }
 });
 
 // ============================================
-// 🎯 FILTROS DA ABA EM ANDAMENTO
+// FILTROS DA ABA EM ANDAMENTO
 // ============================================
 function configurarFiltrosAndamento() {
     const ids = ['filtroAndamentoBusca', 'filtroAndamentoTurma', 'filtroAndamentoTipo',
@@ -864,9 +801,6 @@ function popularFiltroTurmasAndamento() {
     if (valorAtual && turmas.includes(valorAtual)) select.value = valorAtual;
 }
 
-// ============================================
-// 🗑️ FILTROS DOS CONCLUÍDOS
-// ============================================
 function configurarFiltrosConcluidos() {
     ['filtroConcluidosBusca', 'filtroConcluidosTipo', 'filtroConcluidosResultado'].forEach(id => {
         const el = safeGet(id);
@@ -887,7 +821,7 @@ function limparFiltrosConcluidos() {
     if (busca) busca.value = '';
     if (tipo) tipo.value = '';
     if (resultado) resultado.value = '';
-    __concluidosPaginaAtual = 1;  // 🔥 Volta pra página 1
+    __concluidosPaginaAtual = 1;
     carregarAtendimentosConcluidos(1);
 }
 
@@ -1023,27 +957,46 @@ function obterAssinaturaBase64() {
 }
 
 // ============================================
-// SCANNER AUTOMÁTICO
+// SCANNER AUTOMÁTICO (VERSÃO ROBUSTA)
 // ============================================
 async function iniciarScannerAutomatico() {
     const qrContainer = safeGet('qr-reader-auto');
     if (!qrContainer) return;
+    if (scannerAutoAtivo || __scannerIniciando) return;
+    __scannerIniciando = true;
+
     qrContainer.innerHTML = '<div id="qr-reader-auto-new" style="width: 100%;"></div>';
-    scannerAuto = new Html5Qrcode("qr-reader-auto-new");
-    const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        qrContainer.innerHTML = `<div class="alert alert-warning m-3" style="border-radius: 12px;"><i class="fas fa-video-slash" style="font-size: 32px; display: block; margin-bottom: 10px;"></i><strong>Câmera não disponível</strong><br>Use o <strong>Modo Manual</strong>.<button class="btn btn-sm btn-primary mt-3" onclick="setModo('manual')" style="border-radius: 30px;"><i class="fas fa-users"></i> Modo Manual</button></div>`;
+        __scannerIniciando = false;
+        return;
+    }
+
     try {
+        scannerAuto = new Html5Qrcode("qr-reader-auto-new");
+        const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
         await scannerAuto.start({ facingMode: "environment" }, config, onScanSuccessAuto, () => {});
         scannerAutoAtivo = true;
     } catch (err) {
-        qrContainer.innerHTML = `<div class="mostrarToastConcluido mostrarToastConcluido-warning m-3">Não foi possível acessar a câmera.</div>`;
+        let msg = 'Não foi possível acessar a câmera.';
+        if (err.message?.includes('NotFoundError')) msg = 'Nenhuma câmera encontrada.';
+        else if (err.message?.includes('NotAllowedError')) msg = 'Permissão de câmera negada.';
+        else if (err.message?.includes('NotReadableError')) msg = 'Câmera em uso por outro app.';
+        qrContainer.innerHTML = `<div class="alert alert-warning m-3" style="border-radius: 12px;"><i class="fas fa-video-slash" style="font-size: 32px; display: block; margin-bottom: 10px;"></i><strong>Câmera indisponível</strong><br><span style="font-size: 13px;">${msg}</span><button class="btn btn-sm btn-primary mt-3" onclick="setModo('manual')" style="border-radius: 30px;"><i class="fas fa-users"></i> Modo Manual</button></div>`;
         scannerAutoAtivo = false;
+        scannerAuto = null;
+    } finally {
+        __scannerIniciando = false;
     }
 }
 
 async function pararScannerAutomatico() {
-    if (scannerAuto && scannerAutoAtivo) { try { await scannerAuto.stop(); } catch (e) {} }
+    if (!scannerAuto) { scannerAutoAtivo = false; __scannerIniciando = false; return; }
+    try { if (scannerAutoAtivo) await scannerAuto.stop(); } catch (e) {}
     scannerAutoAtivo = false;
     scannerAuto = null;
+    __scannerIniciando = false;
 }
 
 async function onScanSuccessAuto(decodedText) {
@@ -1096,12 +1049,23 @@ async function setModo(modo) {
 // ============================================
 async function carregarTurmasParaManual() {
     try {
+        if (__turmasCache.dados && (Date.now() - __turmasCache.timestamp < __TURMAS_CACHE_MS)) {
+            const select = safeGet('filtroTurmaManual');
+            if (select && select.options.length <= 1) {
+                select.innerHTML = '<option value="">Selecione uma turma...</option>';
+                __turmasCache.dados.forEach(turma => {
+                    select.innerHTML += `<option value="${escapeHTML(turma)}">${escapeHTML(turma)}</option>`;
+                });
+            }
+            return;
+        }
         const response = await fetch('/api/assistente-social/turmas', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
         if (data.success && Array.isArray(data.turmas)) {
             turmasDisponiveis = data.turmas;
+            __turmasCache = { dados: data.turmas, timestamp: Date.now() };
             const select = safeGet('filtroTurmaManual');
             if (select) {
                 select.innerHTML = '<option value="">Selecione uma turma...</option>';
@@ -1167,7 +1131,7 @@ async function buscarAluno(alunoId) {
     try {
         await pararScannerAutomatico();
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
         const response = await fetch(`/api/assistente-social/aluno/${alunoId}`, {
             headers: { 'Authorization': `Bearer ${token}` }, signal: controller.signal
         });
@@ -1183,7 +1147,7 @@ async function buscarAluno(alunoId) {
             if (modoAtual === 'automatico') reiniciarScannerAutomatico(); else carregarAlunosPorTurma();
         }
     } catch (error) {
-        mostrarToastConcluido(error.name === 'AbortError' ? 'Tempo esgotado' : 'Erro ao buscar aluno');
+        mostrarToastConcluido(error.name === 'AbortError' ? 'Tempo esgotado' : 'Erro ao buscar aluno', 'error');
         if (modoAtual === 'automatico') reiniciarScannerAutomatico(); else carregarAlunosPorTurma();
     }
 }
@@ -1243,6 +1207,7 @@ function mostrarFormRegistro() {
     const tipoInput = safeGet('tipoTarefaSelecionado');
     if (tipoInput) tipoInput.value = '';
     tipoTarefaSelecionado = null;
+    __tiposSelecionados = [];
     document.querySelectorAll('.tipo-card').forEach(c => c.classList.remove('selected'));
     safeGet('descricao').value = '';
     safeGet('observacoes').value = '';
@@ -1251,7 +1216,6 @@ function mostrarFormRegistro() {
     safeSetHTML('camposEspecificos', '');
     limparAssinatura();
     
-    // 🆕 Reseta estado da sessão de assinatura
     limparEstadoSessaoAssinatura('assistenteSocial');
     const checkAssinatura = safeGet('assistenteSocialNecessitaAssinatura');
     if (checkAssinatura) checkAssinatura.checked = false;
@@ -1388,7 +1352,6 @@ function renderizarCamposEspecificosMultiplos() {
     container.innerHTML = blocos.join('') + htmlExtras;
 }
 
-// Compatibilidade com chamadas antigas
 function renderizarCamposEspecificos(tipo) {
     renderizarCamposEspecificosMultiplos();
 }
@@ -1421,7 +1384,7 @@ function coletarDetalhes() {
 }
 
 // ============================================
-// REGISTRAR OCORRÊNCIA (COM ASSINATURA VIA QR)
+// REGISTRAR OCORRÊNCIA
 // ============================================
 async function registrarOcorrencia() {
     if (__tiposSelecionados.length === 0) { 
@@ -1458,8 +1421,8 @@ async function registrarOcorrencia() {
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({
                 alunoId: currentAluno.id,
-                tiposTarefa: __tiposSelecionados,       // 🆕 array
-                tipoTarefa: __tiposSelecionados[0],     // compatibilidade
+                tiposTarefa: __tiposSelecionados,
+                tipoTarefa: __tiposSelecionados[0],
                 descricao,
                 observacoes: safeGet('observacoes')?.value || '',
                 gravidade: safeGet('gravidade')?.value || 'media',
@@ -1477,26 +1440,14 @@ async function registrarOcorrencia() {
                 fetch(`/api/sessoes-assinatura/${sessaoId}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${token}` }
-                }).catch(e => console.warn(e));
+                }).catch(e => {});
             }
             pararMonitoramentoSessao('assistenteSocial');
             fecharModalAssinatura('assistenteSocial');
             limparEstadoSessaoAssinatura('assistenteSocial');
             
             mostrarToastConcluido(`✅ ${data.message}`, 'success');
-
-            // 🛡️ Chama de forma segura (com fallback inline)
-            if (typeof finalizarAposSucesso === 'function') {
-                finalizarAposSucesso();
-            } else {
-                console.warn('[registrarOcorrencia] finalizarAposSucesso não encontrada, executando fallback');
-                limparTela();
-                if (modoAtual === 'automatico') reiniciarScannerAutomatico();
-                else carregarAlunosPorTurma();
-                carregarAtendimentosAtivos();
-                carregarDashboard();
-                carregarLembretes();
-            }
+            finalizarAposSucesso();
         } else {
             mostrarToastConcluido('❌ ' + (data.error || 'Erro ao registrar'), 'error');
         }
@@ -1523,7 +1474,6 @@ function limparTela() {
     currentAluno = null;
     currentAtendimento = null;
     
-    // 🆕 Reseta multi-seleção
     __tiposSelecionados = [];
     tipoTarefaSelecionado = null;
     const tipoInput = safeGet('tipoTarefaSelecionado');
@@ -1537,33 +1487,7 @@ function limparTela() {
         fetch(`/api/sessoes-assinatura/${sessaoId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
-        }).catch(e => console.warn(e));
-    }
-    pararMonitoramentoSessao('assistenteSocial');
-    fecharModalAssinatura('assistenteSocial');
-    limparEstadoSessaoAssinatura('assistenteSocial');
-    
-    const checkAssinatura = safeGet('assistenteSocialNecessitaAssinatura');
-    if (checkAssinatura) checkAssinatura.checked = false;
-    const blocoInfo = safeGet('assistenteSocialBlocoAssinaturaInfo');
-    if (blocoInfo) { blocoInfo.style.display = 'none'; blocoInfo.innerHTML = ''; }
-}
-
-function limparTela() {
-    safeGet('alunoInfo').style.display = 'none';
-    safeGet('formRegistro').style.display = 'none';
-    currentAluno = null;
-    currentAtendimento = null;
-    tipoTarefaSelecionado = null;
-    limparAssinatura();
-    
-    // 🆕 Limpa a sessão de assinatura
-    const sessaoId = estadoSessaoAssinatura.assistenteSocial?.sessaoId;
-    if (sessaoId) {
-        fetch(`/api/sessoes-assinatura/${sessaoId}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
-        }).catch(e => console.warn(e));
+        }).catch(e => {});
     }
     pararMonitoramentoSessao('assistenteSocial');
     fecharModalAssinatura('assistenteSocial');
@@ -1577,7 +1501,7 @@ function limparTela() {
 
 function reiniciarScannerAutomatico() {
     setTimeout(() => {
-        if (!scannerAutoAtivo && modoAtual === 'automatico') iniciarScannerAutomatico();
+        if (!scannerAutoAtivo && !__scannerIniciando && modoAtual === 'automatico') iniciarScannerAutomatico();
     }, 1000);
 }
 
@@ -1588,22 +1512,22 @@ async function carregarAtendimentosAtivos() {
     const container = safeGet('listaAtendimentosAtivos');
     if (!container) return;
     try {
-        const response = await fetch('/api/assistente-social/atendimentos-ativos', {
+        const response = await fetchComRetry('/api/assistente-social/atendimentos-ativos', {
             headers: { 'Authorization': `Bearer ${token}` }
-        });
+        }, 15000);
         const data = await response.json();
         __atendimentosAtivosBrutos = (data.success && Array.isArray(data.atendimentos)) ? data.atendimentos : [];
         popularFiltroTurmasAndamento();
         aplicarFiltrosAndamento();
         atualizarBadgeTabAtivos(__atendimentosAtivosBrutos.length);
-        atualizarContadorAtendimentosAntigos();  // 🆕
+        atualizarContadorAtendimentosAntigos();
     } catch (error) {
         container.innerHTML = `<div class="mostrarToastConcluido mostrarToastConcluido-danger"><i class="fas fa-exclamation-triangle"></i> Erro ao carregar</div>`;
     }
 }
 
 // ============================================
-// 🆕 ATUALIZAR CONTADOR DE ATENDIMENTOS +24H
+// 🆕 CONTADOR DE +24H
 // ============================================
 async function atualizarContadorAtendimentosAntigos() {
     try {
@@ -1613,30 +1537,20 @@ async function atualizarContadorAtendimentosAntigos() {
                 'Cache-Control': 'no-cache'
             }
         });
-        
         if (!response.ok) return;
-        
         const data = await response.json();
         if (!data.success) return;
         
         const total = data.total || 0;
-        
-        // 1. Atualiza contador principal
         const totalEl = document.getElementById('totalAtendimentosAntigos');
         if (totalEl) totalEl.textContent = String(total);
         
-        // 2. Atualiza badge
         const badge = document.getElementById('badgeAtendimentosAntigos');
         if (badge) {
-            if (total > 0) {
-                badge.textContent = total;
-                badge.style.display = 'inline-block';
-            } else {
-                badge.style.display = 'none';
-            }
+            if (total > 0) { badge.textContent = total; badge.style.display = 'inline-block'; }
+            else badge.style.display = 'none';
         }
         
-        // 3. Atualiza alerta vermelho
         const alerta = document.getElementById('alertaAtendimentosAntigos');
         if (alerta) {
             if (total > 0) {
@@ -1648,12 +1562,10 @@ async function atualizarContadorAtendimentosAntigos() {
                             <div style="flex: 1;">
                                 <strong style="color: #991b1b; font-size: 15px;">⚠️ ${total} atendimento(s) há mais de 24h em andamento!</strong>
                                 <p style="margin: 4px 0 0; font-size: 13px; color: #991b1b;">
-                                    Verifique se já foram encerrados para manter os registros atualizados.
+                                    Verifique se já foram encerrados.
                                 </p>
                             </div>
-                            <button onclick="abrirModalVerificacao24h()" 
-                                    class="btn btn-sm btn-danger"
-                                    style="border-radius: 8px; white-space: nowrap;">
+                            <button onclick="abrirModalVerificacao24h()" class="btn btn-sm btn-danger" style="border-radius: 8px; white-space: nowrap;">
                                 <i class="fas fa-clipboard-check"></i> Verificar
                             </button>
                         </div>
@@ -1665,57 +1577,27 @@ async function atualizarContadorAtendimentosAntigos() {
             }
         }
         
-        // 4. Adiciona/remove classe de pulso
         const card = document.getElementById('cardAtendimentosAntigos');
         if (card) {
             if (total > 0) card.classList.add('tem-alerta');
             else card.classList.remove('tem-alerta');
         }
-        
-        // 5. Notificação push (uma vez por sessão)
-        if (total > 0 && !sessionStorage.getItem('alerta24hNotificadoAS')) {
-            if ('Notification' in window && Notification.permission === 'granted') {
-                try {
-                    new Notification('⚠️ Atendimentos há mais de 24h', {
-                        body: `Você tem ${total} atendimento(s) em andamento há mais de 24h. Verifique se já foram encerrados.`,
-                        icon: '/icons/favicon.ico',
-                        tag: 'alerta-24h-as'
-                    });
-                } catch (e) {}
-            }
-            sessionStorage.setItem('alerta24hNotificadoAS', 'true');
-        }
-    } catch (error) {
-        console.warn('[CARD-24H-AS] Erro:', error);
-    }
+    } catch (error) {}
 }
 
-// ============================================
-// 🆕 MODAL DE VERIFICAÇÃO DE ATENDIMENTOS >24H
-// ============================================
 async function abrirModalVerificacao24h() {
     try {
         const response = await fetch('/api/assistente-social/atendimentos-antigos?t=' + Date.now(), {
-            headers: { 
-                'Authorization': `Bearer ${token}`,
-                'Cache-Control': 'no-cache'
-            }
+            headers: { 'Authorization': `Bearer ${token}`, 'Cache-Control': 'no-cache' }
         });
         const data = await response.json();
         
         if (!data.success || !data.atendimentos || data.atendimentos.length === 0) {
-            mostrarToastConcluido('✅ Nenhum atendimento há mais de 24h para verificar!', 'success');
-            const modalAntigo = safeGet('modalVerificacao24h');
-            if (modalAntigo) {
-                const inst = bootstrap.Modal.getInstance(modalAntigo);
-                if (inst) inst.hide();
-                setTimeout(() => modalAntigo.remove(), 300);
-            }
+            mostrarToastConcluido('✅ Nenhum atendimento há mais de 24h!', 'success');
             return;
         }
         
         const lista = data.atendimentos;
-        
         const oldModal = safeGet('modalVerificacao24h');
         if (oldModal) oldModal.remove();
         
@@ -1724,10 +1606,7 @@ async function abrirModalVerificacao24h() {
                 <div class="modal-dialog modal-lg modal-dialog-scrollable">
                     <div class="modal-content">
                         <div class="modal-header" style="background: linear-gradient(135deg, #dc2626, #991b1b); color: white;">
-                            <h5 class="modal-title">
-                                <i class="fas fa-clock"></i> 
-                                Verificação de Atendimentos (>24h)
-                            </h5>
+                            <h5 class="modal-title"><i class="fas fa-clock"></i> Verificação de Atendimentos (>24h)</h5>
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
@@ -1736,10 +1615,7 @@ async function abrirModalVerificacao24h() {
                                     <i class="fas fa-exclamation-triangle" style="color: #dc2626; font-size: 20px;"></i>
                                     <div>
                                         <strong style="color: #991b1b;">Atenção!</strong>
-                                        <p style="margin: 4px 0 0; font-size: 13px; color: #991b1b;">
-                                            Os atendimentos abaixo estão em andamento há mais de 24h. 
-                                            Verifique se já foram encerrados ou se precisam continuar abertos.
-                                        </p>
+                                        <p style="margin: 4px 0 0; font-size: 13px; color: #991b1b;">Os atendimentos abaixo estão em andamento há mais de 24h.</p>
                                     </div>
                                 </div>
                             </div>
@@ -1748,64 +1624,22 @@ async function abrirModalVerificacao24h() {
                                 <div class="card mb-3" style="border-left: 4px solid ${a.nivelAlerta === 'critico' ? '#dc2626' : '#f59e0b'};">
                                     <div class="card-body">
                                         <div style="display: flex; align-items: flex-start; gap: 12px;">
-                                            <img src="${a.alunoFoto || gerarAvatarSVG(a.alunoNome)}" 
-                                                 style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;"
-                                                 onerror="this.onerror=null; this.src='${gerarAvatarSVG(a.alunoNome)}'">
+                                            <img src="${a.alunoFoto || gerarAvatarSVG(a.alunoNome)}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;" onerror="this.onerror=null; this.src='${gerarAvatarSVG(a.alunoNome)}'">
                                             <div style="flex: 1;">
                                                 <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px;">
                                                     <div>
                                                         <h5 style="margin: 0 0 4px; color: #5b21b6;">${escapeHTML(a.alunoNome)}</h5>
-                                                        <small style="color: #6b7280;">
-                                                            <i class="fas fa-graduation-cap"></i> ${escapeHTML(a.alunoTurma || '-')}
-                                                            ${a.alunoMatricula ? ` • <i class="fas fa-id-card"></i> ${escapeHTML(a.alunoMatricula)}` : ''}
-                                                        </small>
+                                                        <small style="color: #6b7280;"><i class="fas fa-graduation-cap"></i> ${escapeHTML(a.alunoTurma || '-')}</small>
                                                     </div>
-                                                    <div style="text-align: right;">
-                                                        <div style="background: #fef2f2; color: #991b1b; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; display: inline-flex; align-items: center; gap: 4px;">
-                                                            <i class="fas fa-clock"></i> ${escapeHTML(a.tempoTexto)}
-                                                        </div>
-                                                        ${a.totalAlertas24h > 0 ? `
-                                                            <div style="font-size: 10px; color: #9ca3af; margin-top: 4px;">
-                                                                ${a.totalAlertas24h} alerta(s) enviado(s)
-                                                            </div>
-                                                        ` : ''}
+                                                    <div>
+                                                        <div style="background: #fef2f2; color: #991b1b; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; display: inline-flex; align-items: center; gap: 4px;"><i class="fas fa-clock"></i> ${escapeHTML(a.tempoTexto)}</div>
                                                     </div>
                                                 </div>
-                                                
-                                                <div style="margin-top: 8px;">
-                                                    <span class="badge" style="background: #8b5cf6; font-size: 11px;">
-                                                        ${escapeHTML(a.tipoTarefaLabel)}
-                                                    </span>
-                                                    <span class="badge" style="background: ${a.gravidade === 'critica' ? '#dc2626' : a.gravidade === 'alta' ? '#f59e0b' : '#6b7280'}; font-size: 11px;">
-                                                        ${escapeHTML((a.gravidade || 'media').toUpperCase())}
-                                                    </span>
-                                                    <span class="badge" style="background: #6b7280; font-size: 11px;">
-                                                        ${escapeHTML((a.prioridade || 'normal').toUpperCase())}
-                                                    </span>
-                                                </div>
-                                                
-                                                <div style="background: #f9fafb; padding: 8px 10px; border-radius: 6px; margin-top: 8px; font-size: 13px; color: #374151;">
-                                                    ${escapeHTML((a.descricao || '').substring(0, 200))}${(a.descricao || '').length > 200 ? '...' : ''}
-                                                </div>
-                                                
-                                                <div style="font-size: 11px; color: #9ca3af; margin-top: 6px;">
-                                                    <i class="fas fa-user"></i> Registrado por ${escapeHTML(a.registradoPorNome || '-')} 
-                                                    • <i class="fas fa-calendar"></i> ${new Date(a.dataHoraEntrada).toLocaleString('pt-BR')}
-                                                </div>
-                                                
+                                                <div style="background: #f9fafb; padding: 8px 10px; border-radius: 6px; margin-top: 8px; font-size: 13px;">${escapeHTML((a.descricao || '').substring(0, 200))}</div>
                                                 <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
-                                                    <button class="btn btn-sm btn-success" 
-                                                            onclick="verificarAtendimento24h('${a.id}', 'ja_encerrou')">
-                                                        <i class="fas fa-check-circle"></i> Já encerrou
-                                                    </button>
-                                                    <button class="btn btn-sm btn-warning" 
-                                                            onclick="verificarAtendimento24h('${a.id}', 'manter_aberto')">
-                                                        <i class="fas fa-clock"></i> Manter aberto (+20min)
-                                                    </button>
-                                                    <button class="btn btn-sm btn-info" 
-                                                            onclick="verAtendimento('${a.id}')">
-                                                        <i class="fas fa-eye"></i> Ver detalhes
-                                                    </button>
+                                                    <button class="btn btn-sm btn-success" onclick="verificarAtendimento24h('${a.id}', 'ja_encerrou')"><i class="fas fa-check-circle"></i> Já encerrou</button>
+                                                    <button class="btn btn-sm btn-warning" onclick="verificarAtendimento24h('${a.id}', 'manter_aberto')"><i class="fas fa-clock"></i> Manter aberto</button>
+                                                    <button class="btn btn-sm btn-info" onclick="verAtendimento('${a.id}')"><i class="fas fa-eye"></i> Ver</button>
                                                 </div>
                                             </div>
                                         </div>
@@ -1814,84 +1648,50 @@ async function abrirModalVerificacao24h() {
                             `).join('')}
                         </div>
                         <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                                <i class="fas fa-times"></i> Fechar
-                            </button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="fas fa-times"></i> Fechar</button>
                         </div>
                     </div>
                 </div>
-            </div>
-        `;
-        
+            </div>`;
         document.body.insertAdjacentHTML('beforeend', modalHtml);
-        const modal = new bootstrap.Modal(safeGet('modalVerificacao24h'));
-        modal.show();
-        
-    } catch (error) {
-        console.error('Erro ao abrir verificação 24h:', error);
-        mostrarToastConcluido('Erro ao carregar atendimentos antigos', 'error');
-    }
+        new bootstrap.Modal(safeGet('modalVerificacao24h')).show();
+    } catch (error) {}
 }
 
-// ============================================
-// 🆕 VERIFICAR ATENDIMENTO DE 24H
-// ============================================
 async function verificarAtendimento24h(atendimentoId, acao) {
     try {
         let resultado = 'resolvido';
         let observacoes = '';
         
         if (acao === 'ja_encerrou') {
-            const resultadoEscolhido = prompt(
-                `Qual o resultado do atendimento?\n\nDigite o número:\n1 - Resolvido\n2 - Em Acompanhamento\n3 - Reincidente\n4 - Encaminhado\n5 - Pendente`,
-                '1'
-            );
-            
+            const resultadoEscolhido = prompt(`Qual o resultado?\n1 - Resolvido\n2 - Em Acompanhamento\n3 - Reincidente\n4 - Encaminhado\n5 - Pendente`, '1');
             if (resultadoEscolhido === null) return;
-            
-            const mapa = {
-                '1': 'resolvido',
-                '2': 'em_acompanhamento',
-                '3': 'reincidente',
-                '4': 'encaminhado',
-                '5': 'pendente'
-            };
-            
+            const mapa = { '1': 'resolvido', '2': 'em_acompanhamento', '3': 'reincidente', '4': 'encaminhado', '5': 'pendente' };
             resultado = mapa[resultadoEscolhido] || 'resolvido';
-            observacoes = prompt('Observações finais (opcional):', '') || '';
+            observacoes = prompt('Observações finais:', '') || '';
         } else {
-            const confirmar = await confirm('Manter o atendimento aberto?\n\nVocê será lembrado novamente em 20 minutos.');
-            if (!confirmar) return;
+            if (!(await confirm('Manter o atendimento aberto?'))) return;
         }
         
         const response = await fetch(`/api/assistente-social/atendimento/${atendimentoId}/verificar-24h`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ acao, resultado, observacoes })
         });
-        
         const data = await response.json();
         
         if (data.success) {
             mostrarToastConcluido(`✅ ${data.message}`, 'success');
-            
             await abrirModalVerificacao24h();
             carregarAtendimentosAtivos();
             carregarDashboard();
             atualizarContadorAtendimentosAntigos();
-            
-            if (acao === 'ja_encerrou') {
-                carregarAtendimentosConcluidos(1);
-            }
+            if (acao === 'ja_encerrou') carregarAtendimentosConcluidos(1);
         } else {
-            mostrarToastConcluido('❌ ' + (data.error || 'Erro ao verificar'), 'error');
+            mostrarToastConcluido('❌ ' + (data.error || 'Erro'), 'error');
         }
     } catch (error) {
-        console.error('Erro ao verificar atendimento 24h:', error);
-        mostrarToastConcluido('Erro ao verificar atendimento', 'error');
+        mostrarToastConcluido('Erro ao verificar', 'error');
     }
 }
 
@@ -1908,20 +1708,9 @@ function renderizarListaAtendimentosAtivos(lista) {
     
     if (!lista || lista.length === 0) {
         if (__atendimentosAtivosBrutos.length > 0) {
-            container.innerHTML = `
-                <div class="estado-vazio-filtro">
-                    <i class="fas fa-search"></i>
-                    <p>Nenhum atendimento corresponde aos filtros</p>
-                    <button class="btn btn-sm btn-outline-primary" onclick="limparFiltrosAndamento()">
-                        <i class="fas fa-times"></i> Limpar filtros
-                    </button>
-                </div>`;
+            container.innerHTML = `<div class="estado-vazio-filtro"><i class="fas fa-search"></i><p>Nenhum atendimento corresponde aos filtros</p><button class="btn btn-sm btn-outline-primary" onclick="limparFiltrosAndamento()"><i class="fas fa-times"></i> Limpar filtros</button></div>`;
         } else {
-            container.innerHTML = `
-                <div class="text-center text-muted py-5">
-                    <i class="fas fa-check-circle fa-3x mb-3" style="color:#10b981;"></i>
-                    <p>Nenhum atendimento em andamento</p>
-                </div>`;
+            container.innerHTML = `<div class="text-center text-muted py-5"><i class="fas fa-check-circle fa-3x mb-3" style="color:#10b981;"></i><p>Nenhum atendimento em andamento</p></div>`;
         }
         return;
     }
@@ -1929,22 +1718,16 @@ function renderizarListaAtendimentosAtivos(lista) {
     const prioridadeIcon = { urgente: '🔴', alta: '🟠', normal: '🟡', baixa: '🟢' };
     
     container.innerHTML = lista.map(a => {
-        // 🔒 Detecta se está mascarado
         const estaMascarado = a._mascarado === true;
         const podeEditar = !estaMascarado;
         
         return `
         <div class="list-group-item filtrado" ${estaMascarado ? 'style="border-left: 4px solid #f59e0b;"' : ''}>
-            ${estaMascarado ? `
-                <div style="background: #fef3c7; color: #92400e; padding: 6px 10px; border-radius: 6px; font-size: 12px; margin-bottom: 8px;">
-                    <i class="fas fa-lock"></i> <strong>Conteúdo protegido</strong> — criado por ${escapeHTML(a._criadorNome || 'outro profissional')}
-                </div>
-            ` : ''}
+            ${estaMascarado ? `<div style="background: #fef3c7; color: #92400e; padding: 6px 10px; border-radius: 6px; font-size: 12px; margin-bottom: 8px;"><i class="fas fa-lock"></i> <strong>Conteúdo protegido</strong> — criado por ${escapeHTML(a._criadorNome || 'outro profissional')}</div>` : ''}
+            ${a.alerta24hAtivo ? `<div style="background: #fef2f2; border-left: 3px solid #dc2626; padding: 6px 10px; border-radius: 6px; font-size: 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;"><i class="fas fa-exclamation-triangle" style="color: #dc2626;"></i><strong style="color: #991b1b;">Atendimento há mais de 24h!</strong></div>` : ''}
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
                 <div class="d-flex align-items-center gap-3">
-                    <img src="${a.alunoFoto || gerarAvatarSVG(a.alunoNome || '?')}" 
-                         style="width:50px;height:50px;border-radius:50%;object-fit:cover;"
-                         onerror="this.onerror=null; this.src='${gerarAvatarSVG(a.alunoNome || '?')}'">
+                    <img src="${a.alunoFoto || gerarAvatarSVG(a.alunoNome || '?')}" style="width:50px;height:50px;border-radius:50%;object-fit:cover;" onerror="this.onerror=null; this.src='${gerarAvatarSVG(a.alunoNome || '?')}'">
                     <div>
                         <strong>${escapeHTML(a.alunoNome || '')}</strong>
                         <br><small class="text-muted">Turma: ${escapeHTML(a.alunoTurma || '-')}</small>
@@ -1959,32 +1742,14 @@ function renderizarListaAtendimentosAtivos(lista) {
                 <div class="text-end">
                     <small class="text-muted d-block"><i class="fas fa-clock"></i> Há ${a.tempoAtendimento || 0} min</small>
                     <div class="mt-2 d-flex gap-1 flex-wrap justify-content-end">
-                        <button class="btn btn-sm btn-info" onclick="verAtendimento('${a.id}')" title="Ver detalhes">
-                            <i class="fas fa-eye"></i> Ver
-                        </button>
-                        <button class="btn btn-sm btn-success" onclick="imprimirAtendimento('${a.id}')" title="Imprimir">
-                            <i class="fas fa-print"></i>
-                        </button>
-                        
+                        <button class="btn btn-sm btn-info" onclick="verAtendimento('${a.id}')" title="Ver detalhes"><i class="fas fa-eye"></i> Ver</button>
+                        <button class="btn btn-sm btn-success" onclick="imprimirAtendimento('${a.id}')" title="Imprimir"><i class="fas fa-print"></i></button>
                         ${podeEditar ? `
-                            <button class="btn btn-sm btn-secondary" onclick="abrirEditarAtendimento('${a.id}')" title="Editar">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button class="btn btn-sm btn-primary" onclick="abrirFinalizacao('${a.id}')" title="Finalizar">
-                                <i class="fas fa-check"></i>
-                            </button>
-                            <button class="btn btn-sm btn-warning" onclick="abrirRemarcar('${a.id}')" title="Remarcar">
-                                <i class="fas fa-calendar-plus"></i>
-                            </button>
-                            <button class="btn btn-sm btn-danger" onclick="excluirAtendimento('${a.id}')" title="Excluir">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        ` : `
-                            <span class="badge" style="background: #fef3c7; color: #92400e; padding: 6px 10px;" 
-                                  title="Somente o profissional que criou pode editar">
-                                <i class="fas fa-lock"></i> Somente leitura
-                            </span>
-                        `}
+                            <button class="btn btn-sm btn-secondary" onclick="abrirEditarAtendimento('${a.id}')" title="Editar"><i class="fas fa-edit"></i></button>
+                            <button class="btn btn-sm btn-primary" onclick="abrirFinalizacao('${a.id}')" title="Finalizar"><i class="fas fa-check"></i></button>
+                            <button class="btn btn-sm btn-warning" onclick="abrirRemarcar('${a.id}')" title="Remarcar"><i class="fas fa-calendar-plus"></i></button>
+                            <button class="btn btn-sm btn-danger" onclick="excluirAtendimento('${a.id}')" title="Excluir"><i class="fas fa-trash"></i></button>
+                        ` : `<span class="badge" style="background: #fef3c7; color: #92400e; padding: 6px 10px;" title="Somente leitura"><i class="fas fa-lock"></i> Somente leitura</span>`}
                     </div>
                 </div>
             </div>
@@ -2009,21 +1774,11 @@ function abrirFinalizacao(atendimentoId) {
                 </div>
                 <div class="modal-body"><p>Selecione o resultado:</p>
                     <div class="d-grid gap-2">
-                        <button class="btn btn-outline-success text-start" onclick="confirmarFinalizacao('${atendimentoId}', 'resolvido')">
-                            <i class="fas fa-check-circle"></i> <strong>Resolvido</strong><br><small class="text-muted">O caso foi resolvido</small>
-                        </button>
-                        <button class="btn btn-outline-info text-start" onclick="confirmarFinalizacao('${atendimentoId}', 'em_acompanhamento')">
-                            <i class="fas fa-clock"></i> <strong>Em Acompanhamento</strong><br><small class="text-muted">Precisa de acompanhamento contínuo</small>
-                        </button>
-                        <button class="btn btn-outline-warning text-start" onclick="confirmarFinalizacao('${atendimentoId}', 'reincidente')">
-                            <i class="fas fa-redo"></i> <strong>Reincidente</strong><br><small class="text-muted">Já teve ocorrências anteriores</small>
-                        </button>
-                        <button class="btn btn-outline-secondary text-start" onclick="confirmarFinalizacao('${atendimentoId}', 'encaminhado')">
-                            <i class="fas fa-share"></i> <strong>Encaminhado</strong><br><small class="text-muted">Encaminhado para outro setor</small>
-                        </button>
-                        <button class="btn btn-outline-danger text-start" onclick="confirmarFinalizacao('${atendimentoId}', 'pendente')">
-                            <i class="fas fa-hourglass-half"></i> <strong>Pendente</strong><br><small class="text-muted">Aguardando ação</small>
-                        </button>
+                        <button class="btn btn-outline-success text-start" onclick="confirmarFinalizacao('${atendimentoId}', 'resolvido')"><i class="fas fa-check-circle"></i> <strong>Resolvido</strong><br><small class="text-muted">O caso foi resolvido</small></button>
+                        <button class="btn btn-outline-info text-start" onclick="confirmarFinalizacao('${atendimentoId}', 'em_acompanhamento')"><i class="fas fa-clock"></i> <strong>Em Acompanhamento</strong><br><small class="text-muted">Precisa de acompanhamento contínuo</small></button>
+                        <button class="btn btn-outline-warning text-start" onclick="confirmarFinalizacao('${atendimentoId}', 'reincidente')"><i class="fas fa-redo"></i> <strong>Reincidente</strong><br><small class="text-muted">Já teve ocorrências anteriores</small></button>
+                        <button class="btn btn-outline-secondary text-start" onclick="confirmarFinalizacao('${atendimentoId}', 'encaminhado')"><i class="fas fa-share"></i> <strong>Encaminhado</strong><br><small class="text-muted">Encaminhado para outro setor</small></button>
+                        <button class="btn btn-outline-danger text-start" onclick="confirmarFinalizacao('${atendimentoId}', 'pendente')"><i class="fas fa-hourglass-half"></i> <strong>Pendente</strong><br><small class="text-muted">Aguardando ação</small></button>
                     </div>
                 </div>
             </div></div>
@@ -2035,9 +1790,7 @@ function abrirFinalizacao(atendimentoId) {
 }
 
 async function confirmarFinalizacao(atendimentoId, resultado) {
-    if (document.activeElement && document.activeElement.blur) {
-        document.activeElement.blur();
-    }
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     
     const modalEl = safeGet('modalFinalizar');
     const modal = bootstrap.Modal.getInstance(modalEl);
@@ -2047,17 +1800,15 @@ async function confirmarFinalizacao(atendimentoId, resultado) {
             modalEl.removeEventListener('hidden.bs.modal', handler);
             
             if (resultado === 'em_acompanhamento') {
-                const querRemarcar = await confirm('✅ Atendimento marcado como "Em Acompanhamento".\n\n🔄 Deseja REMARCAR este atendimento?\n\n• Sim → Abre formulário de remarcação\n• Não → Apenas finaliza');
+                const querRemarcar = await confirm('✅ Atendimento marcado como "Em Acompanhamento".\n\n🔄 Deseja REMARCAR este atendimento?');
                 if (querRemarcar) {
                     await finalizarAtendimento(atendimentoId, resultado, true);
                     setTimeout(() => abrirRemarcar(atendimentoId), 500);
                     return;
                 }
             }
-            
             await finalizarAtendimento(atendimentoId, resultado, false);
         }, { once: true });
-        
         modal.hide();
     } else {
         await finalizarAtendimento(atendimentoId, resultado, false);
@@ -2139,7 +1890,7 @@ async function confirmarRemarcacao() {
             body: JSON.stringify({ atendimentoId, dataRemarcacao, horarioRemarcacao, motivoRemarcacao, observacoesRemarcacao })
         });
         const ct = response.headers.get('content-type') || '';
-        if (!ct.includes('application/json')) { mostrarToastConcluido('⚠️ Funcionalidade indisponível no servidor', 'error'); return; }
+        if (!ct.includes('application/json')) { mostrarToastConcluido('⚠️ Funcionalidade indisponível.', 'error'); return; }
         const data = await response.json();
         if (data.success) {
             mostrarToastConcluido(`✅ ${data.message}`, 'success');
@@ -2179,12 +1930,9 @@ function abrirFinalizacaoRemarcacao(remarcacaoId) {
 async function confirmarFinalizacaoRemarcacao(remarcacaoId, acao) {
     const modal = bootstrap.Modal.getInstance(safeGet('modalFinalizarRemarcacao'));
     if (modal) modal.hide();
-    
     if (acao === 'cancelado') {
-        const confirmar = await confirm('Tem certeza que deseja CANCELAR?');
-        if (!confirmar) return;
+        if (!(await confirm('Tem certeza que deseja CANCELAR?'))) return;
     }
-    
     try {
         const response = await fetch('/api/assistente-social/remarcacoes/finalizar', {
             method: 'POST',
@@ -2196,12 +1944,8 @@ async function confirmarFinalizacaoRemarcacao(remarcacaoId, acao) {
             mostrarToastConcluido(`✅ ${data.message}`, 'success');
             carregarAtendimentosAtivos();
             carregarLembretes();
-        } else {
-            mostrarToastConcluido('❌ ' + (data.error || 'Erro'), 'error');
-        }
-    } catch (error) {
-        console.error('Erro ao finalizar remarcação:', error);
-    }
+        } else mostrarToastConcluido('❌ ' + (data.error || 'Erro'), 'error');
+    } catch (error) {}
 }
 
 function abrirRemarcarPorRemarcacao(remarcacaoId) {
@@ -2211,18 +1955,18 @@ function abrirRemarcarPorRemarcacao(remarcacaoId) {
         .then(r => r.json())
         .then(data => {
             if (data.success && data.remarcacao?.atendimentoId) abrirRemarcar(data.remarcacao.atendimentoId);
-            else mostrarToastConcluido('Erro ao carregar dados', 'error');
+            else mostrarToastConcluido('Erro ao carregar', 'error');
         })
-        .catch(e => mostrarToastConcluido('Erro ao carregar dados'));
+        .catch(e => mostrarToastConcluido('Erro ao carregar'));
 }
 
 async function excluirAtendimento(atendimentoId) {
     if (!atendimentoId) return;
     
-    const confirmar1 = await confirm('⚠️ Tem certeza que deseja EXCLUIR este atendimento?\n\nEsta ação não pode ser desfeita!');
+    const confirmar1 = await confirm('⚠️ Tem certeza que deseja EXCLUIR este atendimento?');
     if (!confirmar1) return;
     
-    const confirmar2 = await confirm('⚠️ ÚLTIMA CONFIRMAÇÃO!\n\nTodos os dados serão perdidos permanentemente.');
+    const confirmar2 = await confirm('⚠️ ÚLTIMA CONFIRMAÇÃO!');
     if (!confirmar2) return;
     
     try {
@@ -2239,23 +1983,17 @@ async function excluirAtendimento(atendimentoId) {
             carregarLembretes();
             carregarAtendimentosConcluidos(__concluidosPaginaAtual);
         } else {
-            // 🔒 Trata bloqueio específico
             if (data.code === 'ADMIN_NAO_CRIADOR') {
-                mostrarNotificacaoInterna(
-                    '🔒 Acesso restrito\n\n' + data.error,
-                    'warning'
-                );
+                mostrarNotificacaoInterna('🔒 Acesso restrito\n\n' + data.error, 'warning');
             } else {
                 mostrarToastConcluido('❌ ' + (data.error || 'Erro'), 'error');
             }
         }
-    } catch (error) {
-        console.error('Erro ao excluir:', error);
-    }
+    } catch (error) {}
 }
 
 // ============================================
-// ✏️ EDITAR ATENDIMENTO
+// EDITAR ATENDIMENTO
 // ============================================
 async function abrirEditarAtendimento(atendimentoId) {
     if (!atendimentoId) return;
@@ -2296,9 +2034,7 @@ async function abrirEditarAtendimento(atendimentoId) {
                 <div class="modal-dialog modal-lg modal-dialog-scrollable">
                     <div class="modal-content">
                         <div class="modal-header" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white;">
-                            <h5 class="modal-title">
-                                <i class="fas fa-edit"></i> Editar Atendimento
-                            </h5>
+                            <h5 class="modal-title"><i class="fas fa-edit"></i> Editar Atendimento</h5>
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
@@ -2318,12 +2054,8 @@ async function abrirEditarAtendimento(atendimentoId) {
                             
                             <div class="mb-3">
                                 <label class="form-label">Tipos de Tarefa <span class="text-danger">*</span></label>
-                                <small class="text-muted d-block mb-2">
-                                    <i class="fas fa-info-circle"></i> Você pode marcar mais de um tipo.
-                                </small>
-                                <div class="tipos-tarefa-grid" id="editTiposGrid">
-                                    ${tiposCards}
-                                </div>
+                                <small class="text-muted d-block mb-2"><i class="fas fa-info-circle"></i> Você pode marcar mais de um tipo.</small>
+                                <div class="tipos-tarefa-grid" id="editTiposGrid">${tiposCards}</div>
                             </div>
                             
                             <div class="mb-3">
@@ -2360,12 +2092,8 @@ async function abrirEditarAtendimento(atendimentoId) {
                             <div id="editCamposEspecificos"></div>
                         </div>
                         <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                                <i class="fas fa-times"></i> Cancelar
-                            </button>
-                            <button type="button" class="btn btn-primary" onclick="salvarEdicaoAtendimento()">
-                                <i class="fas fa-save"></i> Salvar Alterações
-                            </button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="fas fa-times"></i> Cancelar</button>
+                            <button type="button" class="btn btn-primary" onclick="salvarEdicaoAtendimento()"><i class="fas fa-save"></i> Salvar</button>
                         </div>
                     </div>
                 </div>
@@ -2377,44 +2105,30 @@ async function abrirEditarAtendimento(atendimentoId) {
         preencherCamposEspecificosEdicaoAS(tiposDoAtendimento, a.detalhes || {});
         
     } catch (error) {
-        console.error('Erro:', error);
         mostrarToastConcluido('Erro ao carregar para edição', 'error');
     }
 }
 
 function getIconePorTipoAS(tipo) {
     const icones = {
-        'evasao_escolar': 'fa-door-open',
-        'desinteresse_aprendizado': 'fa-frown',
-        'problemas_disciplina': 'fa-exclamation-triangle',
-        'insubordinacao_limites': 'fa-hand-paper',
-        'vulnerabilidade_drogas': 'fa-pills',
-        'atitudes_agressivas': 'fa-angry',
-        'baixo_rendimento': 'fa-chart-line',
-        'encaminhamento': 'fa-share',
-        'intervencao': 'fa-hands-helping',
-        'atendimento': 'fa-comments',
-        'outros': 'fa-ellipsis-h'
+        'evasao_escolar': 'fa-door-open', 'desinteresse_aprendizado': 'fa-frown',
+        'problemas_disciplina': 'fa-exclamation-triangle', 'insubordinacao_limites': 'fa-hand-paper',
+        'vulnerabilidade_drogas': 'fa-pills', 'atitudes_agressivas': 'fa-angry',
+        'baixo_rendimento': 'fa-chart-line', 'encaminhamento': 'fa-share',
+        'intervencao': 'fa-hands-helping', 'atendimento': 'fa-comments', 'outros': 'fa-ellipsis-h'
     };
     return icones[tipo] || 'fa-tag';
 }
 
 function toggleTipoTarefaEdicaoAS(tipo) {
     if (!tipo) return;
-    
     const valoresAtuais = coletarValoresAtuaisEdicaoAS();
-    
     const idx = __tiposSelecionados.indexOf(tipo);
-    if (idx >= 0) {
-        __tiposSelecionados.splice(idx, 1);
-    } else {
-        __tiposSelecionados.push(tipo);
-    }
+    if (idx >= 0) __tiposSelecionados.splice(idx, 1); else __tiposSelecionados.push(tipo);
     
     document.querySelectorAll('#editTiposGrid .tipo-card').forEach(c => {
         const t = c.getAttribute('data-tipo');
-        if (__tiposSelecionados.includes(t)) c.classList.add('selected');
-        else c.classList.remove('selected');
+        if (__tiposSelecionados.includes(t)) c.classList.add('selected'); else c.classList.remove('selected');
     });
     
     const hidden = safeGet('editTiposSelecionados');
@@ -2427,108 +2141,43 @@ function toggleTipoTarefaEdicaoAS(tipo) {
 function renderizarCamposEspecificosEdicaoAS() {
     const container = safeGet('editCamposEspecificos');
     if (!container) return;
-    
-    if (__tiposSelecionados.length === 0) {
-        container.innerHTML = '';
-        return;
-    }
+    if (__tiposSelecionados.length === 0) { container.innerHTML = ''; return; }
     
     const blocos = __tiposSelecionados.map(tipo => {
         const label = TIPO_LABELS[tipo] || tipo;
         let htmlTipo = '';
         
         switch (tipo) {
-            case 'evasao_escolar':
-                htmlTipo = `<div class="row">
-                    <div class="col-md-6 mb-3"><label class="form-label">Motivo da Evasão</label><input type="text" id="editDetalheMotivoEvasao_${tipo}" class="form-control" data-detalhe-key="motivoEvasao"></div>
-                    <div class="col-md-6 mb-3"><label class="form-label">Frequência de Faltas</label><input type="text" id="editDetalheFrequenciaFaltas_${tipo}" class="form-control" data-detalhe-key="frequenciaFaltas"></div>
-                </div>`;
-                break;
-            case 'desinteresse_aprendizado':
-                htmlTipo = `<div class="mb-3"><label class="form-label">Disciplinas Afetadas</label><input type="text" id="editDetalheDisciplinasAfetadas_${tipo}" class="form-control" data-detalhe-key="disciplinasAfetadas"></div>
-                    <div class="mb-3"><label class="form-label">Estratégias de Motivação</label><textarea id="editDetalheEstrategiasMotivacao_${tipo}" class="form-control" rows="2" data-detalhe-key="estrategiasMotivacao"></textarea></div>`;
-                break;
-            case 'problemas_disciplina':
-                htmlTipo = `<div class="mb-3"><label class="form-label">Tipo de Indisciplina</label><input type="text" id="editDetalheTipoIndisciplina_${tipo}" class="form-control" data-detalhe-key="tipoIndisciplina"></div>
-                    <div class="mb-3"><label class="form-label">Professores Envolvidos</label><input type="text" id="editDetalheProfessoresEnvolvidos_${tipo}" class="form-control" data-detalhe-key="professoresEnvolvidos"></div>`;
-                break;
-            case 'insubordinacao_limites':
-                htmlTipo = `<div class="mb-3"><label class="form-label">Contexto da Insubordinação</label><textarea id="editDetalheContextoInsubordinacao_${tipo}" class="form-control" rows="2" data-detalhe-key="contextoInsubordinacao"></textarea></div>`;
-                break;
-            case 'vulnerabilidade_drogas':
-                htmlTipo = `<div class="row">
-                    <div class="col-md-6 mb-3"><label class="form-label">Tipo de Substância</label><input type="text" id="editDetalheTipoSubstancia_${tipo}" class="form-control" data-detalhe-key="tipoSubstancia"></div>
-                    <div class="col-md-6 mb-3"><label class="form-label">Encaminhamento p/ Tratamento</label><input type="text" id="editDetalheEncaminhamentoTratamento_${tipo}" class="form-control" data-detalhe-key="encaminhamentoTratamento"></div>
-                </div>`;
-                break;
-            case 'atitudes_agressivas':
-                htmlTipo = `<div class="row">
-                    <div class="col-md-6 mb-3"><label class="form-label">Tipo de Agressão</label><input type="text" id="editDetalheTipoAgressao_${tipo}" class="form-control" data-detalhe-key="tipoAgressao"></div>
-                    <div class="col-md-6 mb-3"><label class="form-label">Vítimas</label><input type="text" id="editDetalheVitimas_${tipo}" class="form-control" data-detalhe-key="vitimas"></div>
-                </div>`;
-                break;
-            case 'baixo_rendimento':
-                htmlTipo = `<div class="mb-3"><label class="form-label">Notas Recentes</label><input type="text" id="editDetalheNotasRecentes_${tipo}" class="form-control" data-detalhe-key="notasRecentes"></div>
-                    <div class="mb-3"><label class="form-label">Disciplinas Críticas</label><input type="text" id="editDetalheDisciplinasCriticas_${tipo}" class="form-control" data-detalhe-key="disciplinasCriticas"></div>`;
-                break;
-            case 'encaminhamento':
-                htmlTipo = `<div class="mb-3"><label class="form-label">Órgão Encaminhado</label><input type="text" id="editDetalheOrgaoEncaminhado_${tipo}" class="form-control" data-detalhe-key="orgaoEncaminhado"></div>
-                    <div class="mb-3"><label class="form-label">Motivo do Encaminhamento</label><textarea id="editDetalheMotivoEncaminhamento_${tipo}" class="form-control" rows="2" data-detalhe-key="motivoEncaminhamento"></textarea></div>`;
-                break;
-            case 'intervencao':
-                htmlTipo = `<div class="mb-3"><label class="form-label">Tipo de Intervenção</label><input type="text" id="editDetalheTipoIntervencao_${tipo}" class="form-control" data-detalhe-key="tipoIntervencao"></div>
-                    <div class="mb-3"><label class="form-label">Participantes</label><input type="text" id="editDetalheParticipantesIntervencao_${tipo}" class="form-control" data-detalhe-key="participantesIntervencao"></div>`;
-                break;
-            case 'atendimento':
-                htmlTipo = `<div class="row">
-                    <div class="col-md-6 mb-3"><label class="form-label">Tipo de Atendimento</label><input type="text" id="editDetalheTipoAtendimento_${tipo}" class="form-control" data-detalhe-key="tipoAtendimento"></div>
-                    <div class="col-md-6 mb-3"><label class="form-label">Duração (min)</label><input type="number" id="editDetalheDuracaoAtendimento_${tipo}" class="form-control" min="1" data-detalhe-key="duracaoAtendimento"></div>
-                </div>`;
-                break;
-            case 'outros':
-                htmlTipo = `<div class="mb-3"><label class="form-label">Especifique</label><input type="text" id="editDetalheTipoTarefaOutros_${tipo}" class="form-control" data-detalhe-key="tipoTarefaOutros"></div>`;
-                break;
-            default:
-                htmlTipo = '';
+            case 'evasao_escolar': htmlTipo = `<div class="row"><div class="col-md-6 mb-3"><label class="form-label">Motivo da Evasão</label><input type="text" id="editDetalheMotivoEvasao_${tipo}" class="form-control" data-detalhe-key="motivoEvasao"></div><div class="col-md-6 mb-3"><label class="form-label">Frequência de Faltas</label><input type="text" id="editDetalheFrequenciaFaltas_${tipo}" class="form-control" data-detalhe-key="frequenciaFaltas"></div></div>`; break;
+            case 'desinteresse_aprendizado': htmlTipo = `<div class="mb-3"><label class="form-label">Disciplinas Afetadas</label><input type="text" id="editDetalheDisciplinasAfetadas_${tipo}" class="form-control" data-detalhe-key="disciplinasAfetadas"></div><div class="mb-3"><label class="form-label">Estratégias de Motivação</label><textarea id="editDetalheEstrategiasMotivacao_${tipo}" class="form-control" rows="2" data-detalhe-key="estrategiasMotivacao"></textarea></div>`; break;
+            case 'problemas_disciplina': htmlTipo = `<div class="mb-3"><label class="form-label">Tipo de Indisciplina</label><input type="text" id="editDetalheTipoIndisciplina_${tipo}" class="form-control" data-detalhe-key="tipoIndisciplina"></div><div class="mb-3"><label class="form-label">Professores Envolvidos</label><input type="text" id="editDetalheProfessoresEnvolvidos_${tipo}" class="form-control" data-detalhe-key="professoresEnvolvidos"></div>`; break;
+            case 'insubordinacao_limites': htmlTipo = `<div class="mb-3"><label class="form-label">Contexto da Insubordinação</label><textarea id="editDetalheContextoInsubordinacao_${tipo}" class="form-control" rows="2" data-detalhe-key="contextoInsubordinacao"></textarea></div>`; break;
+            case 'vulnerabilidade_drogas': htmlTipo = `<div class="row"><div class="col-md-6 mb-3"><label class="form-label">Tipo de Substância</label><input type="text" id="editDetalheTipoSubstancia_${tipo}" class="form-control" data-detalhe-key="tipoSubstancia"></div><div class="col-md-6 mb-3"><label class="form-label">Encaminhamento p/ Tratamento</label><input type="text" id="editDetalheEncaminhamentoTratamento_${tipo}" class="form-control" data-detalhe-key="encaminhamentoTratamento"></div></div>`; break;
+            case 'atitudes_agressivas': htmlTipo = `<div class="row"><div class="col-md-6 mb-3"><label class="form-label">Tipo de Agressão</label><input type="text" id="editDetalheTipoAgressao_${tipo}" class="form-control" data-detalhe-key="tipoAgressao"></div><div class="col-md-6 mb-3"><label class="form-label">Vítimas</label><input type="text" id="editDetalheVitimas_${tipo}" class="form-control" data-detalhe-key="vitimas"></div></div>`; break;
+            case 'baixo_rendimento': htmlTipo = `<div class="mb-3"><label class="form-label">Notas Recentes</label><input type="text" id="editDetalheNotasRecentes_${tipo}" class="form-control" data-detalhe-key="notasRecentes"></div><div class="mb-3"><label class="form-label">Disciplinas Críticas</label><input type="text" id="editDetalheDisciplinasCriticas_${tipo}" class="form-control" data-detalhe-key="disciplinasCriticas"></div>`; break;
+            case 'encaminhamento': htmlTipo = `<div class="mb-3"><label class="form-label">Órgão Encaminhado</label><input type="text" id="editDetalheOrgaoEncaminhado_${tipo}" class="form-control" data-detalhe-key="orgaoEncaminhado"></div><div class="mb-3"><label class="form-label">Motivo do Encaminhamento</label><textarea id="editDetalheMotivoEncaminhamento_${tipo}" class="form-control" rows="2" data-detalhe-key="motivoEncaminhamento"></textarea></div>`; break;
+            case 'intervencao': htmlTipo = `<div class="mb-3"><label class="form-label">Tipo de Intervenção</label><input type="text" id="editDetalheTipoIntervencao_${tipo}" class="form-control" data-detalhe-key="tipoIntervencao"></div><div class="mb-3"><label class="form-label">Participantes</label><input type="text" id="editDetalheParticipantesIntervencao_${tipo}" class="form-control" data-detalhe-key="participantesIntervencao"></div>`; break;
+            case 'atendimento': htmlTipo = `<div class="row"><div class="col-md-6 mb-3"><label class="form-label">Tipo de Atendimento</label><input type="text" id="editDetalheTipoAtendimento_${tipo}" class="form-control" data-detalhe-key="tipoAtendimento"></div><div class="col-md-6 mb-3"><label class="form-label">Duração (min)</label><input type="number" id="editDetalheDuracaoAtendimento_${tipo}" class="form-control" min="1" data-detalhe-key="duracaoAtendimento"></div></div>`; break;
+            case 'outros': htmlTipo = `<div class="mb-3"><label class="form-label">Especifique</label><input type="text" id="editDetalheTipoTarefaOutros_${tipo}" class="form-control" data-detalhe-key="tipoTarefaOutros"></div>`; break;
+            default: htmlTipo = '';
         }
         
         if (!htmlTipo) return '';
         
-        return `
-            <div class="bloco-tipo-especifico" data-tipo-bloco="${tipo}">
-                <div class="bloco-tipo-header">
-                    <i class="fas fa-tag"></i> ${escapeHTML(label)}
-                </div>
-                <div class="bloco-tipo-body">
-                    ${htmlTipo}
-                </div>
-            </div>
-        `;
+        return `<div class="bloco-tipo-especifico" data-tipo-bloco="${tipo}"><div class="bloco-tipo-header"><i class="fas fa-tag"></i> ${escapeHTML(label)}</div><div class="bloco-tipo-body">${htmlTipo}</div></div>`;
     }).filter(Boolean);
     
-    const htmlExtras = `
-        <div class="mt-3">
-            <div class="mb-3"><label class="form-label">Contexto Familiar</label><textarea id="editDetalheContextoFamiliar" class="form-control" rows="2" data-detalhe-key="contextoFamiliar"></textarea></div>
-            <div class="mb-3"><label class="form-label">Histórico Anterior</label><textarea id="editDetalheHistoricoAnterior" class="form-control" rows="2" data-detalhe-key="historicoAnterior"></textarea></div>
-            <div class="mb-3"><label class="form-label">Providências Tomadas</label><textarea id="editDetalheProvidencias" class="form-control" rows="2" data-detalhe-key="providenciasTomadas"></textarea></div>
-            <div class="mb-3"><label class="form-label">Próximos Passos</label><textarea id="editDetalheProximosPassos" class="form-control" rows="2" data-detalhe-key="proximosPassos"></textarea></div>
-        </div>
-    `;
-    
+    const htmlExtras = `<div class="mt-3"><div class="mb-3"><label class="form-label">Contexto Familiar</label><textarea id="editDetalheContextoFamiliar" class="form-control" rows="2" data-detalhe-key="contextoFamiliar"></textarea></div><div class="mb-3"><label class="form-label">Histórico Anterior</label><textarea id="editDetalheHistoricoAnterior" class="form-control" rows="2" data-detalhe-key="historicoAnterior"></textarea></div><div class="mb-3"><label class="form-label">Providências Tomadas</label><textarea id="editDetalheProvidencias" class="form-control" rows="2" data-detalhe-key="providenciasTomadas"></textarea></div><div class="mb-3"><label class="form-label">Próximos Passos</label><textarea id="editDetalheProximosPassos" class="form-control" rows="2" data-detalhe-key="proximosPassos"></textarea></div></div>`;
     container.innerHTML = blocos.join('') + htmlExtras;
 }
 
 function preencherCamposEspecificosEdicaoAS(tipos, detalhes) {
     __tiposSelecionados = Array.isArray(tipos) ? [...tipos] : [];
-    
     document.querySelectorAll('#editTiposGrid .tipo-card').forEach(c => {
         const t = c.getAttribute('data-tipo');
-        if (__tiposSelecionados.includes(t)) c.classList.add('selected');
-        else c.classList.remove('selected');
+        if (__tiposSelecionados.includes(t)) c.classList.add('selected'); else c.classList.remove('selected');
     });
-    
     renderizarCamposEspecificosEdicaoAS();
-    
     if (!detalhes) return;
     
     const preencherTodos = (key, valorFormatado) => {
@@ -2539,10 +2188,8 @@ function preencherCamposEspecificosEdicaoAS(tipos, detalhes) {
     Object.entries(detalhes).forEach(([detKey, valor]) => {
         if (valor === undefined || valor === null || valor === '') return;
         if (detKey === 'tiposTarefaAdicionais') return;
-        
         let valorFormatado = valor;
         if (Array.isArray(valor)) valorFormatado = valor.join(', ');
-        
         preencherTodos(detKey, valorFormatado);
     });
 }
@@ -2560,34 +2207,21 @@ function coletarValoresAtuaisEdicaoAS() {
 function restaurarValoresEdicaoAS(valores) {
     if (!valores || Object.keys(valores).length === 0) return;
     Object.entries(valores).forEach(([key, val]) => {
-        document.querySelectorAll(`#editCamposEspecificos [data-detalhe-key="${key}"]`).forEach(el => {
-            el.value = val;
-        });
+        document.querySelectorAll(`#editCamposEspecificos [data-detalhe-key="${key}"]`).forEach(el => { el.value = val; });
     });
 }
 
 function coletarDetalhesEdicaoAS() {
     const detalhes = {};
-    const chavesArray = [
-        'profissionaisEnvolvidos', 'participantesAtendimento', 'disciplinasAfetadas',
-        'professoresEnvolvidos', 'disciplinasCriticas', 'participantesIntervencao'
-    ];
-    
+    const chavesArray = ['profissionaisEnvolvidos', 'participantesAtendimento', 'disciplinasAfetadas', 'professoresEnvolvidos', 'disciplinasCriticas', 'participantesIntervencao'];
     document.querySelectorAll('#editCamposEspecificos [data-detalhe-key]').forEach(el => {
         const key = el.getAttribute('data-detalhe-key');
         const val = el.value;
         if (!val) return;
-        
-        if (key === 'duracaoAtendimento' || key === 'duracaoSessao') {
-            const n = parseInt(val);
-            if (!isNaN(n) && n > 0) detalhes[key] = n;
-        } else if (chavesArray.includes(key)) {
-            detalhes[key] = val.split(',').map(t => t.trim()).filter(t => t.length > 0);
-        } else {
-            detalhes[key] = val.trim();
-        }
+        if (key === 'duracaoAtendimento' || key === 'duracaoSessao') { const n = parseInt(val); if (!isNaN(n) && n > 0) detalhes[key] = n; }
+        else if (chavesArray.includes(key)) detalhes[key] = val.split(',').map(t => t.trim()).filter(t => t.length > 0);
+        else detalhes[key] = val.trim();
     });
-    
     return detalhes;
 }
 
@@ -2598,32 +2232,18 @@ async function salvarEdicaoAtendimento() {
     const prioridade = safeGet('editPrioridade')?.value;
     const observacoes = safeGet('editObservacoes')?.value || '';
     
-    if (__tiposSelecionados.length === 0) {
-        mostrarToastConcluido('Selecione pelo menos um tipo de tarefa', 'error');
-        return;
-    }
-    
-    if (!descricao) {
-        mostrarToastConcluido('A descrição é obrigatória', 'error');
-        return;
-    }
+    if (__tiposSelecionados.length === 0) { mostrarToastConcluido('Selecione pelo menos um tipo', 'error'); return; }
+    if (!descricao) { mostrarToastConcluido('A descrição é obrigatória', 'error'); return; }
     
     const detalhesEnviados = coletarDetalhesEdicaoAS();
-    console.log('[salvar edição AS] detalhes enviados:', detalhesEnviados);
     
     try {
         const response = await fetch(`/api/assistente-social/atendimento/${atendimentoId}`, {
             method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({
                 tiposTarefa: __tiposSelecionados,
-                descricao,
-                gravidade,
-                prioridade,
-                observacoes,
+                descricao, gravidade, prioridade, observacoes,
                 detalhes: detalhesEnviados
             })
         });
@@ -2632,9 +2252,7 @@ async function salvarEdicaoAtendimento() {
         if (data.success) {
             const modal = bootstrap.Modal.getInstance(safeGet('modalEditarAtendimento'));
             if (modal) modal.hide();
-            
-            mostrarToastConcluido('✅ Atendimento atualizado com sucesso!', 'success');
-            
+            mostrarToastConcluido('✅ Atendimento atualizado!', 'success');
             carregarAtendimentosAtivos();
             carregarDashboard();
             carregarLembretes();
@@ -2643,20 +2261,13 @@ async function salvarEdicaoAtendimento() {
             if (data.code === 'ADMIN_NAO_CRIADOR') {
                 const modal = bootstrap.Modal.getInstance(safeGet('modalEditarAtendimento'));
                 if (modal) modal.hide();
-                mostrarNotificacaoInterna(
-                    '🔒 Acesso restrito\n\n' + data.error,
-                    'warning'
-                );
+                mostrarNotificacaoInterna('🔒 Acesso restrito\n\n' + data.error, 'warning');
             } else {
-                mostrarToastConcluido('❌ ' + (data.error || 'Erro ao salvar'), 'error');
+                mostrarToastConcluido('❌ ' + (data.error || 'Erro'), 'error');
             }
         }
-    } catch (error) {
-        console.error('Erro:', error);
-        mostrarToastConcluido('Erro ao salvar alterações', 'error');
-    }
+    } catch (error) { mostrarToastConcluido('Erro ao salvar', 'error'); }
 }
-
 // ============================================
 // 👁️ VER ATENDIMENTO (MODAL DETALHADO)
 // ============================================
@@ -2674,8 +2285,6 @@ async function verAtendimento(atendimentoId) {
             return; 
         }
         const a = data.atendimento;
-        
-        // 🔒 Detecta se está mascarado
         const estaMascarado = a._mascarado === true;
         
         let detalhesHTML = '';
@@ -2696,7 +2305,6 @@ async function verAtendimento(atendimentoId) {
                 tipoTarefaOutros: 'Especificação',
                 providenciasTomadas: 'Providências Tomadas',
                 proximosPassos: 'Próximos Passos',
-                // 🆕 Específicos
                 motivoEvasao: 'Motivo da Evasão',
                 frequenciaFaltas: 'Frequência de Faltas',
                 disciplinasAfetadas: 'Disciplinas Afetadas',
@@ -2794,7 +2402,6 @@ async function verAtendimento(atendimentoId) {
                                             <strong style="color: #92400e; font-size: 15px;">Conteúdo Protegido</strong>
                                             <p style="margin: 4px 0 0; font-size: 13px; color: #92400e; line-height: 1.4;">
                                                 Este atendimento foi registrado por <strong>${escapeHTML(a.entrada?.registradoPorNome || 'outro profissional')}</strong>.
-                                                Por questões de privacidade, apenas o profissional responsável pode visualizar ou editar o conteúdo.
                                             </p>
                                         </div>
                                     </div>
@@ -2879,7 +2486,7 @@ async function verAtendimento(atendimentoId) {
                                 ` : ''}
                             ` : `
                                 <span class="badge" style="background: #fef3c7; color: #92400e; padding: 10px 16px; font-size: 13px;">
-                                    <i class="fas fa-lock"></i> Ações disponíveis apenas para o profissional responsável
+                                    <i class="fas fa-lock"></i> Ações disponíveis apenas para o responsável
                                 </span>
                             `}
                         </div>
@@ -2924,21 +2531,17 @@ async function imprimirAtendimento(atendimentoId) {
             const qrR = await fetch(`/api/aluno/qrcode/${a.alunoId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            
             if (qrR.ok) {
                 const qrD = await qrR.json();
                 if (qrD.success && qrD.qrCode) qr = qrD.qrCode;
             }
-        } catch (e) {
-            console.info('QR Code não pôde ser carregado');
-        }
+        } catch (e) {}
         
         const win = window.open('', '_blank');
         win.document.write(gerarHTMLImpressaoAS(a, qr));
         win.document.close();
         win.onload = () => setTimeout(() => win.print(), 500);
     } catch (e) {
-        console.error(e);
         mostrarToastConcluido('Erro ao imprimir atendimento', 'error');
     }
 }
@@ -2964,38 +2567,21 @@ function gerarHTMLImpressaoAS(a, qrCodeUrl) {
     let detalhesHTML = '';
     if (a.detalhes && Object.keys(a.detalhes).length > 0) {
         const mapaDetalhes = {
-            contextoFamiliar: 'Contexto Familiar',
-            historicoAnterior: 'Histórico Anterior',
-            profissionaisEnvolvidos: 'Profissionais Envolvidos',
-            condicaoSocial: 'Condição Social',
-            encaminhadoPara: 'Encaminhado Para',
-            motivoEncaminhamento: 'Motivo do Encaminhamento',
-            agendadoPara: 'Agendado Para',
-            tipoIntervencao: 'Tipo de Intervenção',
-            metodosUtilizados: 'Métodos Utilizados',
-            duracaoSessao: 'Duração da Sessão (min)',
-            modalidadeAtendimento: 'Modalidade',
-            participantesAtendimento: 'Participantes',
-            tipoTarefaOutros: 'Especificação',
-            providenciasTomadas: 'Providências',
-            proximosPassos: 'Próximos Passos',
-            // 🆕 Específicos
-            motivoEvasao: 'Motivo da Evasão',
-            frequenciaFaltas: 'Frequência de Faltas',
-            disciplinasAfetadas: 'Disciplinas Afetadas',
-            estrategiasMotivacao: 'Estratégias de Motivação',
-            tipoIndisciplina: 'Tipo de Indisciplina',
-            professoresEnvolvidos: 'Professores Envolvidos',
-            contextoInsubordinacao: 'Contexto da Insubordinação',
-            tipoSubstancia: 'Tipo de Substância',
-            encaminhamentoTratamento: 'Encaminhamento p/ Tratamento',
-            tipoAgressao: 'Tipo de Agressão',
-            vitimas: 'Vítimas',
-            notasRecentes: 'Notas Recentes',
-            disciplinasCriticas: 'Disciplinas Críticas',
-            orgaoEncaminhado: 'Órgão Encaminhado',
-            participantesIntervencao: 'Participantes da Intervenção',
-            tipoAtendimento: 'Tipo de Atendimento',
+            contextoFamiliar: 'Contexto Familiar', historicoAnterior: 'Histórico Anterior',
+            profissionaisEnvolvidos: 'Profissionais Envolvidos', condicaoSocial: 'Condição Social',
+            encaminhadoPara: 'Encaminhado Para', motivoEncaminhamento: 'Motivo do Encaminhamento',
+            agendadoPara: 'Agendado Para', tipoIntervencao: 'Tipo de Intervenção',
+            metodosUtilizados: 'Métodos Utilizados', duracaoSessao: 'Duração da Sessão (min)',
+            modalidadeAtendimento: 'Modalidade', participantesAtendimento: 'Participantes',
+            tipoTarefaOutros: 'Especificação', providenciasTomadas: 'Providências',
+            proximosPassos: 'Próximos Passos', motivoEvasao: 'Motivo da Evasão',
+            frequenciaFaltas: 'Frequência de Faltas', disciplinasAfetadas: 'Disciplinas Afetadas',
+            estrategiasMotivacao: 'Estratégias de Motivação', tipoIndisciplina: 'Tipo de Indisciplina',
+            professoresEnvolvidos: 'Professores Envolvidos', contextoInsubordinacao: 'Contexto da Insubordinação',
+            tipoSubstancia: 'Tipo de Substância', encaminhamentoTratamento: 'Encaminhamento p/ Tratamento',
+            tipoAgressao: 'Tipo de Agressão', vitimas: 'Vítimas', notasRecentes: 'Notas Recentes',
+            disciplinasCriticas: 'Disciplinas Críticas', orgaoEncaminhado: 'Órgão Encaminhado',
+            participantesIntervencao: 'Participantes da Intervenção', tipoAtendimento: 'Tipo de Atendimento',
             duracaoAtendimento: 'Duração do Atendimento (min)'
         };
         
@@ -3167,9 +2753,7 @@ function gerarHTMLImpressaoAS(a, qrCodeUrl) {
         
         <div class="assinaturas">
             <div class="assinatura">
-                <div class="assinatura-container-relatorio">
-                    ${assinaturaHTML}
-                </div>
+                <div class="assinatura-container-relatorio">${assinaturaHTML}</div>
                 <div class="assinatura-linha">Assinatura do Responsável</div>
             </div>
             <div class="assinatura">
@@ -3206,11 +2790,7 @@ async function carregarAtendimentosConcluidos(pagina = 1) {
     const tipo = safeGet('filtroConcluidosTipo')?.value || '';
     const resultado = safeGet('filtroConcluidosResultado')?.value || '';
     
-    container.innerHTML = `
-        <div class="text-center py-4">
-            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-            <p class="text-muted mt-2 mb-0">Carregando atendimentos...</p>
-        </div>`;
+    container.innerHTML = `<div class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary" role="status"></div><p class="text-muted mt-2 mb-0">Carregando atendimentos...</p></div>`;
     
     try {
         const params = new URLSearchParams();
@@ -3218,8 +2798,6 @@ async function carregarAtendimentosConcluidos(pagina = 1) {
         params.append('limit', __concluidosPorPagina);
         params.append('page', pagina);
         if (tipo) params.append('tipo', tipo);
-        
-        // 🔥 NOVO: envia a busca e resultado pro backend
         if (busca) params.append('busca', busca);
         if (resultado) params.append('resultado', resultado);
         
@@ -3233,9 +2811,7 @@ async function carregarAtendimentosConcluidos(pagina = 1) {
             return;
         }
         
-        // 🔥 NÃO filtra mais no cliente — o backend já filtra!
         const lista = data.atendimentos;
-        
         __concluidosDados = lista;
         __concluidosTotal = data.total || lista.length;
         
@@ -3243,7 +2819,6 @@ async function carregarAtendimentosConcluidos(pagina = 1) {
         renderizarListaConcluidos(lista);
         renderizarPaginacaoConcluidos(data.totalPages || 1);
     } catch (error) {
-        console.error('Erro ao carregar concluídos:', error);
         container.innerHTML = `<div class="mostrarToastConcluido mostrarToastConcluido-danger"><i class="fas fa-exclamation-triangle"></i> Erro ao carregar atendimentos</div>`;
     }
 }
@@ -3258,11 +2833,7 @@ function renderizarListaConcluidos(lista) {
     if (!container) return;
     
     if (lista.length === 0) {
-        container.innerHTML = `
-            <div class="text-center py-4 text-muted">
-                <i class="fas fa-inbox fa-3x mb-3" style="color:#cbd5e1;"></i>
-                <p>Nenhum atendimento corresponde aos filtros</p>
-            </div>`;
+        container.innerHTML = `<div class="text-center py-4 text-muted"><i class="fas fa-inbox fa-3x mb-3" style="color:#cbd5e1;"></i><p>Nenhum atendimento corresponde aos filtros</p></div>`;
         return;
     }
     
@@ -3324,7 +2895,6 @@ function renderizarPaginacaoConcluidos(totalPaginas) {
     if (!container) return;
     
     if (info) info.textContent = `Página ${__concluidosPaginaAtual} de ${totalPaginas}`;
-    
     if (totalPaginas <= 1) { container.innerHTML = ''; return; }
     
     let html = '<nav><ul class="pagination pagination-sm mb-0">';
@@ -3355,10 +2925,10 @@ function renderizarPaginacaoConcluidos(totalPaginas) {
 async function excluirAtendimentoConcluido(atendimentoId, alunoNome) {
     if (!atendimentoId) return;
     
-    const confirmar1 = await confirm(`⚠️ Tem certeza que deseja EXCLUIR este atendimento?\n\nAluno: ${alunoNome}\n\nEsta ação não pode ser desfeita!`);
+    const confirmar1 = await confirm(`⚠️ Tem certeza que deseja EXCLUIR este atendimento?\n\nAluno: ${alunoNome}`);
     if (!confirmar1) return;
     
-    const confirmar2 = await confirm('⚠️ ÚLTIMA CONFIRMAÇÃO!\n\nTodos os dados serão perdidos permanentemente.');
+    const confirmar2 = await confirm('⚠️ ÚLTIMA CONFIRMAÇÃO!');
     if (!confirmar2) return;
     
     try {
@@ -3386,15 +2956,11 @@ async function excluirAtendimentoConcluido(atendimentoId, alunoNome) {
                     }
                 }, 300);
             }
-            mostrarToastConcluido('✅ Atendimento excluído com sucesso!', 'success');
+            mostrarToastConcluido('✅ Atendimento excluído!', 'success');
             carregarDashboard();
             carregarLembretes();
-        } else {
-            console.error('❌ ' + (data.error || 'Erro'));
         }
-    } catch (error) {
-        console.error('Erro ao excluir atendimento:', error);
-    }
+    } catch (error) {}
 }
 
 // ============================================
@@ -3404,50 +2970,25 @@ function mostrarToastConcluido(mensagem, tipo = 'info') {
     const msg = String(mensagem || '');
     let tipoFinal = tipo;
     
-    if (msg.trim().startsWith('✅')) {
-        tipoFinal = 'success';
-    } else if (msg.trim().startsWith('❌') || msg.trim().startsWith('⚠️')) {
-        tipoFinal = msg.trim().startsWith('⚠️') ? 'warning' : 'error';
-    }
+    if (msg.trim().startsWith('✅')) tipoFinal = 'success';
+    else if (msg.trim().startsWith('❌') || msg.trim().startsWith('⚠️')) tipoFinal = msg.trim().startsWith('⚠️') ? 'warning' : 'error';
     
-    const cores = {
-        success: '#10b981',
-        error: '#ef4444',
-        warning: '#f59e0b',
-        info: '#8b5cf6'
-    };
-    const icons = {
-        success: 'fa-check-circle',
-        error: 'fa-times-circle',
-        warning: 'fa-exclamation-triangle',
-        info: 'fa-info-circle'
-    };
+    const cores = { success: '#10b981', error: '#ef4444', warning: '#f59e0b', info: '#8b5cf6' };
+    const icons = { success: 'fa-check-circle', error: 'fa-times-circle', warning: 'fa-exclamation-triangle', info: 'fa-info-circle' };
     
     const toast = document.createElement('div');
-    toast.style.cssText = `
-        position: fixed; bottom: 20px; right: 20px;
-        background: ${cores[tipoFinal] || cores.info}; color: white;
-        padding: 12px 20px; border-radius: 10px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 99999;
-        font-size: 14px; font-weight: 600;
-        display: flex; align-items: center; gap: 10px;
-        animation: slideInRight 0.3s ease-out; max-width: 400px;`;
+    toast.style.cssText = `position: fixed; bottom: 20px; right: 20px; background: ${cores[tipoFinal] || cores.info}; color: white; padding: 12px 20px; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 99999; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 10px; animation: slideInRight 0.3s ease-out; max-width: 400px;`;
     toast.innerHTML = `<i class="fas ${icons[tipoFinal] || icons.info}"></i> ${msg}`;
     
     if (!document.getElementById('toastAnimation')) {
         const style = document.createElement('style');
         style.id = 'toastAnimation';
-        style.textContent = `
-            @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-            @keyframes slideOutRight { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }`;
+        style.textContent = `@keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } } @keyframes slideOutRight { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }`;
         document.head.appendChild(style);
     }
     
     document.body.appendChild(toast);
-    setTimeout(() => {
-        toast.style.animation = 'slideOutRight 0.3s ease-in';
-        setTimeout(() => toast.remove(), 300);
-    }, 3500);
+    setTimeout(() => { toast.style.animation = 'slideOutRight 0.3s ease-in'; setTimeout(() => toast.remove(), 300); }, 3500);
 }
 
 // ============================================
@@ -3462,19 +3003,9 @@ function abrirExclusaoEmMassa() {
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="mostrarToastConcluido mostrarToastConcluido-danger">
-                        <strong>⚠️ ATENÇÃO!</strong><br>
-                        Esta ação é <strong>IRREVERSÍVEL</strong>. Todos os atendimentos que corresponderem aos filtros serão <strong>PERMANENTEMENTE EXCLUÍDOS</strong>.
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Excluir atendimentos finalizados antes de:</label>
-                        <input type="date" id="massaDataCorte" class="form-control" value="${new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}">
-                        <small class="text-muted">Todos os atendimentos finalizados antes desta data serão excluídos</small>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Digite "CONFIRMAR" para prosseguir:</label>
-                        <input type="text" id="massaConfirmacao" class="form-control" placeholder="Digite CONFIRMAR" autocomplete="off">
-                    </div>
+                    <div class="mostrarToastConcluido mostrarToastConcluido-danger"><strong>⚠️ ATENÇÃO!</strong><br>Esta ação é <strong>IRREVERSÍVEL</strong>.</div>
+                    <div class="mb-3"><label class="form-label">Excluir finalizados antes de:</label><input type="date" id="massaDataCorte" class="form-control" value="${new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}"></div>
+                    <div class="mb-3"><label class="form-label">Digite "CONFIRMAR":</label><input type="text" id="massaConfirmacao" class="form-control" placeholder="Digite CONFIRMAR" autocomplete="off"></div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -3491,8 +3022,8 @@ function abrirExclusaoEmMassa() {
 async function confirmarExclusaoMassa() {
     const dataCorte = safeGet('massaDataCorte')?.value;
     const confirmacao = (safeGet('massaConfirmacao')?.value || '').trim().toUpperCase();
-    if (confirmacao !== 'CONFIRMAR') { mostrarToastConcluido('⚠️ Digite "CONFIRMAR" para prosseguir', 'error'); return; }
-    if (!dataCorte) { mostrarToastConcluido('⚠️ Selecione uma data de corte', 'error'); return; }
+    if (confirmacao !== 'CONFIRMAR') { mostrarToastConcluido('⚠️ Digite "CONFIRMAR"', 'error'); return; }
+    if (!dataCorte) { mostrarToastConcluido('⚠️ Selecione uma data', 'error'); return; }
     
     const modal = bootstrap.Modal.getInstance(safeGet('modalExclusaoMassa'));
     if (modal) modal.hide();
@@ -3504,7 +3035,7 @@ async function confirmarExclusaoMassa() {
             body: JSON.stringify({ dataCorte, status: 'finalizado', confirmacao: 'CONFIRMAR' })
         });
         const ct = response.headers.get('content-type') || '';
-        if (!ct.includes('application/json')) { mostrarToastConcluido('⚠️ Funcionalidade indisponível no servidor.', 'error'); return; }
+        if (!ct.includes('application/json')) { mostrarToastConcluido('⚠️ Indisponível.', 'error'); return; }
         const data = await response.json();
         if (data.success) {
             mostrarToastConcluido(`✅ ${data.excluidos || 0} atendimentos excluídos!`, 'success');
@@ -3534,11 +3065,7 @@ async function carregarDashboard() {
             if (dashboardCharts.tipos) try { dashboardCharts.tipos.destroy(); } catch(e){}
             dashboardCharts.tipos = new Chart(ctxTipos.getContext('2d'), {
                 type: 'bar',
-                data: {
-                    labels: data.porTipo.map(t => t.label || ''),
-                    datasets: [{ label: 'Ocorrências', data: data.porTipo.map(t => t.count || 0),
-                        backgroundColor: ['#8b5cf6', '#7c3aed', '#6d28d9', '#5b21b6', '#a78bfa', '#c4b5fd'], borderRadius: 8 }]
-                },
+                data: { labels: data.porTipo.map(t => t.label || ''), datasets: [{ label: 'Ocorrências', data: data.porTipo.map(t => t.count || 0), backgroundColor: ['#8b5cf6', '#7c3aed', '#6d28d9', '#5b21b6', '#a78bfa', '#c4b5fd'], borderRadius: 8 }] },
                 options: { responsive: true, maintainAspectRatio: true, indexAxis: 'y', plugins: { legend: { display: false } } }
             });
         }
@@ -3550,8 +3077,7 @@ async function carregarDashboard() {
             const cor = { baixa: '#10b981', media: '#f59e0b', alta: '#ef4444', critica: '#7f1d1d' };
             dashboardCharts.gravidade = new Chart(ctxGrav.getContext('2d'), {
                 type: 'doughnut',
-                data: { labels: data.porGravidade.map(g => lbl[g.gravidade] || g.gravidade),
-                    datasets: [{ data: data.porGravidade.map(g => g.count || 0), backgroundColor: data.porGravidade.map(g => cor[g.gravidade] || '#6b7280') }] },
+                data: { labels: data.porGravidade.map(g => lbl[g.gravidade] || g.gravidade), datasets: [{ data: data.porGravidade.map(g => g.count || 0), backgroundColor: data.porGravidade.map(g => cor[g.gravidade] || '#6b7280') }] },
                 options: { responsive: true, maintainAspectRatio: true }
             });
         }
@@ -3561,9 +3087,7 @@ async function carregarDashboard() {
             if (dashboardCharts.atendimentos) try { dashboardCharts.atendimentos.destroy(); } catch(e){}
             dashboardCharts.atendimentos = new Chart(ctxAt.getContext('2d'), {
                 type: 'line',
-                data: { labels: data.tendencias.ultimos7Dias.map(d => d.dia || ''),
-                    datasets: [{ label: 'Ocorrências', data: data.tendencias.ultimos7Dias.map(d => d.atendimentos || 0),
-                        borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.1)', fill: true, tension: 0.4 }] },
+                data: { labels: data.tendencias.ultimos7Dias.map(d => d.dia || ''), datasets: [{ label: 'Ocorrências', data: data.tendencias.ultimos7Dias.map(d => d.atendimentos || 0), borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.1)', fill: true, tension: 0.4 }] },
                 options: { responsive: true, maintainAspectRatio: true }
             });
         }
@@ -3573,9 +3097,7 @@ async function carregarDashboard() {
             if (dashboardCharts.turmas) try { dashboardCharts.turmas.destroy(); } catch(e){}
             dashboardCharts.turmas = new Chart(ctxTurmas.getContext('2d'), {
                 type: 'bar',
-                data: { labels: data.tendencias.porTurma.map(t => t.turma || 'Sem turma'),
-                    datasets: [{ label: 'Ocorrências', data: data.tendencias.porTurma.map(t => t.count || 0),
-                        backgroundColor: '#c4b5fd', borderRadius: 8 }] },
+                data: { labels: data.tendencias.porTurma.map(t => t.turma || 'Sem turma'), datasets: [{ label: 'Ocorrências', data: data.tendencias.porTurma.map(t => t.count || 0), backgroundColor: '#c4b5fd', borderRadius: 8 }] },
                 options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } }
             });
         }
@@ -3584,13 +3106,10 @@ async function carregarDashboard() {
         if (reinc) {
             const lista = data.tendencias?.alunosReincidentes || [];
             if (lista.length > 0) {
-                reinc.innerHTML = `<div class="table-responsive"><table class="table table-sm">
-                    <thead><tr><th>Aluno</th><th>Turma</th><th>Ocorrências</th></tr></thead>
-                    <tbody>${lista.map(a => `<tr><td><strong>${escapeHTML(a.alunoNome || '')}</strong></td><td>${escapeHTML(a.alunoTurma || '-')}</td><td><span class="badge bg-danger">${a.count || 0}</span></td></tr>`).join('')}</tbody>
-                </table></div>`;
+                reinc.innerHTML = `<div class="table-responsive"><table class="table table-sm"><thead><tr><th>Aluno</th><th>Turma</th><th>Ocorrências</th></tr></thead><tbody>${lista.map(a => `<tr><td><strong>${escapeHTML(a.alunoNome || '')}</strong></td><td>${escapeHTML(a.alunoTurma || '-')}</td><td><span class="badge bg-danger">${a.count || 0}</span></td></tr>`).join('')}</tbody></table></div>`;
             } else reinc.innerHTML = `<p class="text-muted text-center py-3"><i class="fas fa-check-circle text-success"></i> Nenhum aluno reincidente</p>`;
         }
-    } catch (error) { console.error('Erro no dashboard:', error); }
+    } catch (error) {}
 }
 
 // ============================================
@@ -3762,19 +3281,13 @@ async function carregarRelatorio() {
             if (dF) url += `dataFim=${dF}&`;
         } else if (tipo === 'turma') {
             const turma = safeGet('filtroTurma')?.value;
-            if (!turma) { 
-                mostrarToastConcluido('Selecione uma turma', 'error'); 
-                return; 
-            }
+            if (!turma) { mostrarToastConcluido('Selecione uma turma', 'error'); return; }
             url = `/api/assistente-social/relatorio/turma/${encodeURIComponent(turma)}?`;
             if (dI) url += `dataInicio=${dI}&`;
             if (dF) url += `dataFim=${dF}&`;
         } else if (tipo === 'aluno') {
             const alunoId = safeGet('filtroAluno')?.value;
-            if (!alunoId) { 
-                mostrarToastConcluido('Selecione um aluno', 'error'); 
-                return; 
-            }
+            if (!alunoId) { mostrarToastConcluido('Selecione um aluno', 'error'); return; }
             url = `/api/assistente-social/relatorio/aluno/${alunoId}?`;
             if (dI) url += `dataInicio=${dI}&`;
             if (dF) url += `dataFim=${dF}&`;
@@ -3793,16 +3306,11 @@ async function carregarRelatorio() {
             if (btnPDF) btnPDF.disabled = false;
             
             const total = data.totalAtendimentos || data.estatisticas?.totalAtendimentos || 0;
-            if (total === 0) {
-                mostrarToastConcluido('⚠️ Nenhum registro encontrado. Verifique as datas e filtros.', 'warning');
-            }
+            if (total === 0) mostrarToastConcluido('⚠️ Nenhum registro encontrado.', 'warning');
         } else {
-            mostrarToastConcluido('Erro: ' + (data.error || 'Erro ao carregar relatório'), 'error');
+            mostrarToastConcluido('Erro: ' + (data.error || ''), 'error');
         }
-    } catch (error) {
-        console.error('Erro ao carregar relatório:', error);
-        mostrarToastConcluido('Erro ao carregar relatório', 'error');
-    }
+    } catch (error) { mostrarToastConcluido('Erro ao carregar relatório', 'error'); }
 }
 
 function exibirRelatorio(data, tipo) {
@@ -3869,111 +3377,34 @@ function exibirRelatorio(data, tipo) {
 }
 
 function exportarCSV() {
-    if (!relatorioData) {
-        mostrarToastConcluido('⚠️ Nenhum relatório carregado.\n\nClique em BUSCAR primeiro.', 'warning');
-        return;
-    }
-
+    if (!relatorioData) { mostrarToastConcluido('⚠️ Nenhum relatório carregado.', 'warning'); return; }
     const dados = relatorioData.registros || relatorioData.atendimentos || [];
-
-    if (dados.length === 0) {
-        mostrarToastConcluido('⚠️ Nenhum registro para exportar.\n\nVerifique os filtros de data.', 'warning');
-        return;
-    }
-
+    if (dados.length === 0) { mostrarToastConcluido('⚠️ Nenhum registro para exportar.', 'warning'); return; }
+    
     const tipo = relatorioData.aluno ? 'aluno' : (relatorioData.turma ? 'turma' : 'geral');
-
-    // ============================================
-    // TÍTULO / SUBTÍTULO
-    // ============================================
-    let titulo = 'Relatório de Atendimentos';
-    let subtitulo = '';
-
-    if (tipo === 'geral') {
-        titulo = 'Relatório Geral de Atendimentos';
-        subtitulo = 'Visão consolidada do Assistente Social';
-    } else if (tipo === 'turma') {
-        titulo = 'Relatório de Atendimentos por Turma';
-        subtitulo = `Turma: ${relatorioData.turma || ''}`;
-    } else if (tipo === 'aluno') {
-        titulo = 'Relatório Individual — Assistente Social';
-        subtitulo = `${relatorioData.aluno?.nome || ''} — ${relatorioData.aluno?.turma || ''}`;
-    }
-
-    // ============================================
-    // COLUNAS
-    // ============================================
+    let titulo = 'Relatório de Atendimentos', subtitulo = '';
+    if (tipo === 'geral') { titulo = 'Relatório Geral de Atendimentos'; subtitulo = 'Visão consolidada do Assistente Social'; }
+    else if (tipo === 'turma') { titulo = 'Relatório de Atendimentos por Turma'; subtitulo = `Turma: ${relatorioData.turma || ''}`; }
+    else if (tipo === 'aluno') { titulo = 'Relatório Individual — Assistente Social'; subtitulo = `${relatorioData.aluno?.nome || ''} — ${relatorioData.aluno?.turma || ''}`; }
+    
     const colunas = [
-        {
-            label: 'Data do Registro',
-            format: (a) => a.dataFormatada
-                || (a.dataEntrada ? new Date(a.dataEntrada).toLocaleString('pt-BR') : '')
-        },
-        {
-            label: 'Data de Saída',
-            format: (a) => a.dataSaida
-                ? new Date(a.dataSaida).toLocaleString('pt-BR')
-                : ''
-        },
-        {
-            label: 'Aluno',
-            format: (a) => a.alunoNome || relatorioData.aluno?.nome || ''
-        },
-        {
-            label: 'Matrícula',
-            format: (a) => a.alunoMatricula || relatorioData.aluno?.matricula || ''
-        },
-        {
-            label: 'Turma',
-            format: (a) => a.alunoTurma || relatorioData.aluno?.turma || relatorioData.turma || ''
-        },
-        {
-            label: 'Curso',
-            format: (a) => a.alunoCurso || relatorioData.aluno?.curso || ''
-        },
-        {
-            label: 'Tipo de Tarefa',
-            format: (a) => a.tipoTarefaLabel || TIPO_LABELS[a.tipoTarefa] || ''
-        },
-        {
-            label: 'Descrição',
-            format: (a) => a.descricao || ''
-        },
-        {
-            label: 'Observações',
-            format: (a) => a.observacoes || ''
-        },
-        {
-            label: 'Gravidade',
-            format: (a) => (a.gravidade || 'media').toUpperCase()
-        },
-        {
-            label: 'Prioridade',
-            format: (a) => (a.prioridade || 'normal').toUpperCase()
-        },
-        {
-            label: 'Status',
-            format: (a) => a.status === 'em_andamento'
-                ? 'Em Andamento'
-                : 'Finalizado'
-        },
-        {
-            label: 'Resultado',
-            format: (a) => a.resultado || a.saida?.resultado || ''
-        },
-        {
-            label: 'Registrado por',
-            format: (a) => a.registradoPorNome || a.entrada?.registradoPor || ''
-        },
-        {
-            label: 'Assinatura',
-            format: (a) => a.temAssinatura ? 'Sim' : 'Não'
-        }
+        { label: 'Data do Registro', format: (a) => a.dataFormatada || (a.dataEntrada ? new Date(a.dataEntrada).toLocaleString('pt-BR') : '') },
+        { label: 'Data de Saída', format: (a) => a.dataSaida ? new Date(a.dataSaida).toLocaleString('pt-BR') : '' },
+        { label: 'Aluno', format: (a) => a.alunoNome || relatorioData.aluno?.nome || '' },
+        { label: 'Matrícula', format: (a) => a.alunoMatricula || relatorioData.aluno?.matricula || '' },
+        { label: 'Turma', format: (a) => a.alunoTurma || relatorioData.aluno?.turma || relatorioData.turma || '' },
+        { label: 'Curso', format: (a) => a.alunoCurso || relatorioData.aluno?.curso || '' },
+        { label: 'Tipo de Tarefa', format: (a) => a.tipoTarefaLabel || TIPO_LABELS[a.tipoTarefa] || '' },
+        { label: 'Descrição', format: (a) => a.descricao || '' },
+        { label: 'Observações', format: (a) => a.observacoes || '' },
+        { label: 'Gravidade', format: (a) => (a.gravidade || 'media').toUpperCase() },
+        { label: 'Prioridade', format: (a) => (a.prioridade || 'normal').toUpperCase() },
+        { label: 'Status', format: (a) => a.status === 'em_andamento' ? 'Em Andamento' : 'Finalizado' },
+        { label: 'Resultado', format: (a) => a.resultado || a.saida?.resultado || '' },
+        { label: 'Registrado por', format: (a) => a.registradoPorNome || a.entrada?.registradoPor || '' },
+        { label: 'Assinatura', format: (a) => a.temAssinatura ? 'Sim' : 'Não' }
     ];
-
-    // ============================================
-    // FILTROS APLICADOS
-    // ============================================
+    
     const filtros = [];
     const dI = safeGet('dataInicio')?.value;
     const dF = safeGet('dataFim')?.value;
@@ -3981,61 +3412,29 @@ function exportarCSV() {
     if (dF) filtros.push({ label: 'Data final', valor: dF });
     if (relatorioData.turma) filtros.push({ label: 'Turma', valor: relatorioData.turma });
     if (relatorioData.aluno?.nome) filtros.push({ label: 'Aluno', valor: relatorioData.aluno.nome });
-
-    // ============================================
-    // MÉTRICAS
-    // ============================================
+    
     const metricas = {};
-    if (tipo === 'geral') {
-        metricas['Total de atendimentos'] = relatorioData.totalAtendimentos || 0;
-        metricas['Com assinatura'] = relatorioData.comAssinatura || 0;
-        metricas['Turmas atendidas'] = (relatorioData.porTurma || []).length;
-    } else if (tipo === 'turma') {
-        metricas['Total de atendimentos'] = relatorioData.estatisticas?.totalAtendimentos || 0;
-        metricas['Alunos atendidos'] = relatorioData.estatisticas?.totalAlunosAtendidos
-            || (relatorioData.porAluno || []).length;
-    } else if (tipo === 'aluno') {
-        metricas['Total de atendimentos'] = relatorioData.estatisticas?.totalAtendimentos || 0;
-        metricas['Tipos diferentes'] = (relatorioData.estatisticas?.porTipo || []).length;
-    }
-
+    if (tipo === 'geral') { metricas['Total de atendimentos'] = relatorioData.totalAtendimentos || 0; metricas['Com assinatura'] = relatorioData.comAssinatura || 0; metricas['Turmas atendidas'] = (relatorioData.porTurma || []).length; }
+    else if (tipo === 'turma') { metricas['Total de atendimentos'] = relatorioData.estatisticas?.totalAtendimentos || 0; metricas['Alunos atendidos'] = relatorioData.estatisticas?.totalAlunosAtendidos || (relatorioData.porAluno || []).length; }
+    else if (tipo === 'aluno') { metricas['Total de atendimentos'] = relatorioData.estatisticas?.totalAtendimentos || 0; metricas['Tipos diferentes'] = (relatorioData.estatisticas?.porTipo || []).length; }
+    
     const ok = gerarBaixarCSV({
-        titulo,
-        subtitulo,
-        setor: 'Assistente Social',
-        colunas,
-        registros: dados,
-        filtros,
-        metricas,
-        nomeArquivo: `relatorio-assistente-social-${tipo}`,
-        observacoes: `${dados.length} atendimento(s) listado(s)`
+        titulo, subtitulo, setor: 'Assistente Social', colunas, registros: dados, filtros, metricas,
+        nomeArquivo: `relatorio-assistente-social-${tipo}`, observacoes: `${dados.length} atendimento(s) listado(s)`
     });
-
-    if (ok) {
-        mostrarToastConcluido(`✅ Relatório exportado (${dados.length} registro(s))!`, 'success');
-    }
+    
+    if (ok) mostrarToastConcluido(`✅ Relatório exportado (${dados.length} registro(s))!`, 'success');
 }
 
-// ============================================
-// 📄 EXPORTAR PDF (padrão unificado)
-// ============================================
 function exportarPDF() {
-    if (!relatorioData) {
-        mostrarToastConcluido('⚠️ Gere um relatório primeiro. Clique em BUSCAR.', 'warning');
-        return;
-    }
-    
+    if (!relatorioData) { mostrarToastConcluido('⚠️ Gere um relatório primeiro.', 'warning'); return; }
     const html = gerarHTMLRelatorioAS(relatorioData);
-    
     const win = window.open('', '_blank');
     win.document.write(html);
     win.document.close();
     win.onload = () => setTimeout(() => win.print(), 500);
 }
 
-// ============================================
-// 🎯 HABILITAR BOTÕES APÓS CARREGAR RELATÓRIO
-// ============================================
 function habilitarBotoesRelatorioAS() {
     const btnCSV = safeGet('btnExportarCSVAS');
     const btnPDF = safeGet('btnExportarPDFAS');
@@ -4043,16 +3442,12 @@ function habilitarBotoesRelatorioAS() {
     if (btnPDF) btnPDF.disabled = false;
 }
 
-// ============================================
-// 🎨 GERAR HTML DO RELATÓRIO
-// ============================================
 function gerarHTMLRelatorioAS(data) {
     const tipo = data.aluno ? 'aluno' : (data.turma ? 'turma' : 'geral');
     const logoIema = '/uploads/logo-iema.png';
     const carimbo = '/icons/assinatura_assistente_social.ico';
     const dataGeracao = new Date().toLocaleString('pt-BR');
     
-    // Buscar assinatura digital
     let assinaturaDigital = null;
     const lista = data.registros || data.atendimentos || [];
     const comAssinatura = lista.find(a => a.temAssinatura && a.assinaturaBase64);
@@ -4060,227 +3455,55 @@ function gerarHTMLRelatorioAS(data) {
     
     let titulo = 'Relatório de Atendimentos - Assistente Social';
     let subtitulo = '';
-    if (tipo === 'turma') {
-        titulo = 'Relatório de Atendimentos';
-        subtitulo = `Turma: ${data.turma || ''}`;
-    } else if (tipo === 'aluno') {
-        titulo = 'Relatório Individual do Aluno';
-        subtitulo = `${data.aluno?.nome || ''} — ${data.aluno?.turma || ''}`;
-    } else {
-        subtitulo = 'Relatório Geral';
-    }
+    if (tipo === 'turma') { titulo = 'Relatório de Atendimentos'; subtitulo = `Turma: ${data.turma || ''}`; }
+    else if (tipo === 'aluno') { titulo = 'Relatório Individual do Aluno'; subtitulo = `${data.aluno?.nome || ''} — ${data.aluno?.turma || ''}`; }
+    else subtitulo = 'Relatório Geral';
     
     let statsHTML = '';
     if (tipo === 'geral') {
-        statsHTML = `
-            <div class="stats">
-                <div class="stat">
-                    <div class="stat-value">${data.totalAtendimentos || 0}</div>
-                    <div class="stat-label">Total de Atendimentos</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">${(data.porTipo || []).length}</div>
-                    <div class="stat-label">Tipos Diferentes</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">${(data.porTurma || []).length}</div>
-                    <div class="stat-label">Turmas Atendidas</div>
-                </div>
-            </div>`;
+        statsHTML = `<div class="stats"><div class="stat"><div class="stat-value">${data.totalAtendimentos || 0}</div><div class="stat-label">Total de Atendimentos</div></div><div class="stat"><div class="stat-value">${(data.porTipo || []).length}</div><div class="stat-label">Tipos Diferentes</div></div><div class="stat"><div class="stat-value">${(data.porTurma || []).length}</div><div class="stat-label">Turmas Atendidas</div></div></div>`;
     } else if (tipo === 'turma') {
-        statsHTML = `
-            <div class="stats">
-                <div class="stat"><div class="stat-value">${data.estatisticas?.totalAtendimentos || 0}</div><div class="stat-label">Total de Atendimentos</div></div>
-                <div class="stat"><div class="stat-value">${data.estatisticas?.totalAlunosAtendidos || (data.porAluno || []).length}</div><div class="stat-label">Alunos Atendidos</div></div>
-                <div class="stat"><div class="stat-value">${(data.porAluno || []).length}</div><div class="stat-label">Alunos com Registro</div></div>
-            </div>`;
+        statsHTML = `<div class="stats"><div class="stat"><div class="stat-value">${data.estatisticas?.totalAtendimentos || 0}</div><div class="stat-label">Total de Atendimentos</div></div><div class="stat"><div class="stat-value">${data.estatisticas?.totalAlunosAtendidos || (data.porAluno || []).length}</div><div class="stat-label">Alunos Atendidos</div></div></div>`;
     } else {
-        statsHTML = `
-            <div class="stats">
-                <div class="stat"><div class="stat-value">${data.estatisticas?.totalAtendimentos || 0}</div><div class="stat-label">Total de Atendimentos</div></div>
-                <div class="stat"><div class="stat-value">${(data.estatisticas?.porTipo || []).length}</div><div class="stat-label">Tipos Diferentes</div></div>
-                <div class="stat"><div class="stat-value">${Object.keys(data.estatisticas?.porGravidade || {}).length}</div><div class="stat-label">Níveis de Gravidade</div></div>
-            </div>`;
+        statsHTML = `<div class="stats"><div class="stat"><div class="stat-value">${data.estatisticas?.totalAtendimentos || 0}</div><div class="stat-label">Total de Atendimentos</div></div><div class="stat"><div class="stat-value">${(data.estatisticas?.porTipo || []).length}</div><div class="stat-label">Tipos Diferentes</div></div></div>`;
     }
     
     let tabelaHTML = '';
-    
     if (tipo === 'geral') {
         const porTipo = Array.isArray(data.porTipo) ? data.porTipo : [];
         const porTurma = Array.isArray(data.porTurma) ? data.porTurma : [];
         const atendimentos = Array.isArray(data.atendimentos) ? data.atendimentos : [];
-        
-        tabelaHTML = `
-            <div class="section-title">📊 Distribuição por Tipo</div>
-            <table>
-                <thead><tr><th>Tipo de Tarefa</th><th style="width:120px;text-align:center;">Quantidade</th></tr></thead>
-                <tbody>${porTipo.map(t => `<tr><td><strong>${escapeHTML(t.label || '')}</strong></td><td style="text-align:center;">${t.count || 0}</td></tr>`).join('') || '<tr><td colspan="2" style="text-align:center;">Nenhum dado disponível</td></tr>'}</tbody>
-            </table>
-            
-            <div class="section-title">🏫 Distribuição por Turma</div>
-            <table>
-                <thead><tr><th>Turma</th><th style="width:120px;text-align:center;">Total</th><th style="width:120px;text-align:center;">Alunos</th></tr></thead>
-                <tbody>${porTurma.map(t => `<tr><td><strong>${escapeHTML(t.turma || 'Sem turma')}</strong></td><td style="text-align:center;">${t.total || 0}</td><td style="text-align:center;">${t.totalAlunos || 0}</td></tr>`).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum dado disponível</td></tr>'}</tbody>
-            </table>
-            
-            <div class="section-title">📋 Últimos Atendimentos</div>
-            <table>
-                <thead><tr><th>Data</th><th>Aluno</th><th>Turma</th><th>Tipo</th><th>Gravidade</th><th>Status</th></tr></thead>
-                <tbody>${atendimentos.slice(0, 30).map(a => `
-                    <tr>
-                        <td>${a.dataEntrada ? new Date(a.dataEntrada).toLocaleDateString('pt-BR') : '-'}</td>
-                        <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
-                        <td>${escapeHTML(a.alunoTurma || '')}</td>
-                        <td>${escapeHTML(a.tipoTarefaLabel || '')}</td>
-                        <td>${escapeHTML((a.gravidade || 'media').toUpperCase())}</td>
-                        <td><span class="badge-status ${a.status === 'finalizado' ? 'finalizado' : 'andamento'}">${a.status === 'finalizado' ? '✅ Finalizado' : '⏳ Em Andamento'}</span></td>
-                    </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;">Nenhum atendimento registrado</td></tr>'}
-                </tbody>
-            </table>`;
+        tabelaHTML = `<div class="section-title">📊 Distribuição por Tipo</div><table><thead><tr><th>Tipo de Tarefa</th><th style="width:120px;text-align:center;">Quantidade</th></tr></thead><tbody>${porTipo.map(t => `<tr><td><strong>${escapeHTML(t.label || '')}</strong></td><td style="text-align:center;">${t.count || 0}</td></tr>`).join('')}</tbody></table><div class="section-title">🏫 Distribuição por Turma</div><table><thead><tr><th>Turma</th><th style="width:120px;text-align:center;">Total</th><th style="width:120px;text-align:center;">Alunos</th></tr></thead><tbody>${porTurma.map(t => `<tr><td><strong>${escapeHTML(t.turma || 'Sem turma')}</strong></td><td style="text-align:center;">${t.total || 0}</td><td style="text-align:center;">${t.totalAlunos || 0}</td></tr>`).join('')}</tbody></table><div class="section-title">📋 Últimos Atendimentos</div><table><thead><tr><th>Data</th><th>Aluno</th><th>Turma</th><th>Tipo</th><th>Status</th></tr></thead><tbody>${atendimentos.slice(0, 30).map(a => `<tr><td>${a.dataEntrada ? new Date(a.dataEntrada).toLocaleDateString('pt-BR') : '-'}</td><td><strong>${escapeHTML(a.alunoNome || '')}</strong></td><td>${escapeHTML(a.alunoTurma || '')}</td><td>${escapeHTML(a.tipoTarefaLabel || '')}</td><td><span class="badge-status ${a.status === 'finalizado' ? 'finalizado' : 'andamento'}">${a.status === 'finalizado' ? '✅ Finalizado' : '⏳ Em Andamento'}</span></td></tr>`).join('')}</tbody></table>`;
     } else if (tipo === 'turma') {
         const porAluno = Array.isArray(data.porAluno) ? data.porAluno : [];
+        tabelaHTML = `<div class="section-title">👥 Atendimentos por Aluno</div><table><thead><tr><th>Aluno</th><th style="width:100px;text-align:center;">Total</th><th>Tipos</th></tr></thead><tbody>${porAluno.map(a => `<tr><td><strong>${escapeHTML(a.alunoNome || '')}</strong></td><td style="text-align:center;">${a.total || 0}</td><td>${Object.entries(a.tipos || {}).map(([t, c]) => `${escapeHTML(TIPO_LABELS[t] || t)}: ${c}`).join('<br>')}</td></tr>`).join('')}</tbody></table>`;
+    } else {
         const porTipo = Array.isArray(data.estatisticas?.porTipo) ? data.estatisticas.porTipo : [];
-        
-        tabelaHTML = `
-            <div class="section-title">📊 Distribuição por Tipo</div>
-            <table>
-                <thead><tr><th>Tipo de Tarefa</th><th style="width:120px;text-align:center;">Quantidade</th></tr></thead>
-                <tbody>${porTipo.map(t => `<tr><td><strong>${escapeHTML(t.label || '')}</strong></td><td style="text-align:center;">${t.count || 0}</td></tr>`).join('') || '<tr><td colspan="2" style="text-align:center;">Nenhum dado</td></tr>'}</tbody>
-            </table>
-            
-            <div class="section-title">👥 Atendimentos por Aluno</div>
-            <table>
-                <thead><tr><th>Aluno</th><th style="width:100px;text-align:center;">Total</th><th>Tipos</th></tr></thead>
-                <tbody>${porAluno.map(a => `
-                    <tr>
-                        <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
-                        <td style="text-align:center;">${a.total || 0}</td>
-                        <td>${Object.entries(a.tipos || {}).map(([t, c]) => `${escapeHTML(TIPO_LABELS[t] || t)}: ${c}`).join('<br>')}</td>
-                    </tr>`).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum dado</td></tr>'}
-                </tbody>
-            </table>`;
-    } else if (tipo === 'aluno') {
-        const porTipo = Array.isArray(data.estatisticas?.porTipo) ? data.estatisticas.porTipo : [];
-        const porGrav = data.estatisticas?.porGravidade || {};
         const atendimentos = Array.isArray(data.atendimentos) ? data.atendimentos : [];
-        
-        tabelaHTML = `
-            <div class="section-title">📊 Distribuição por Tipo</div>
-            <table>
-                <thead><tr><th>Tipo de Tarefa</th><th style="width:120px;text-align:center;">Quantidade</th></tr></thead>
-                <tbody>${porTipo.map(t => `<tr><td><strong>${escapeHTML(t.label || '')}</strong></td><td style="text-align:center;">${t.count || 0}</td></tr>`).join('') || '<tr><td colspan="2" style="text-align:center;">Nenhum dado</td></tr>'}</tbody>
-            </table>
-            
-            <div class="section-title">⚠️ Distribuição por Gravidade</div>
-            <table>
-                <thead><tr><th>Gravidade</th><th style="width:120px;text-align:center;">Quantidade</th></tr></thead>
-                <tbody>${Object.entries(porGrav).map(([g, c]) => `<tr><td><strong>${escapeHTML(g.toUpperCase())}</strong></td><td style="text-align:center;">${c}</td></tr>`).join('') || '<tr><td colspan="2" style="text-align:center;">Nenhum dado</td></tr>'}</tbody>
-            </table>
-            
-            <div class="section-title">📋 Histórico de Atendimentos</div>
-            <table>
-                <thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Gravidade</th><th>Status</th></tr></thead>
-                <tbody>${atendimentos.map(a => `
-                    <tr>
-                        <td>${a.dataEntrada ? new Date(a.dataEntrada).toLocaleDateString('pt-BR') : '-'}</td>
-                        <td>${escapeHTML(a.tipoTarefaLabel || '')}</td>
-                        <td>${escapeHTML((a.descricao || '').substring(0, 80))}${(a.descricao || '').length > 80 ? '...' : ''}</td>
-                        <td>${escapeHTML((a.gravidade || 'media').toUpperCase())}</td>
-                        <td><span class="badge-status ${a.status === 'finalizado' ? 'finalizado' : 'andamento'}">${a.status === 'finalizado' ? '✅ Finalizado' : '⏳ Em Andamento'}</span></td>
-                    </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;">Nenhum atendimento</td></tr>'}
-                </tbody>
-            </table>`;
+        tabelaHTML = `<div class="section-title">📊 Distribuição por Tipo</div><table><thead><tr><th>Tipo de Tarefa</th><th style="width:120px;text-align:center;">Quantidade</th></tr></thead><tbody>${porTipo.map(t => `<tr><td><strong>${escapeHTML(t.label || '')}</strong></td><td style="text-align:center;">${t.count || 0}</td></tr>`).join('')}</tbody></table><div class="section-title">📋 Histórico</div><table><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Status</th></tr></thead><tbody>${atendimentos.map(a => `<tr><td>${a.dataEntrada ? new Date(a.dataEntrada).toLocaleDateString('pt-BR') : '-'}</td><td>${escapeHTML(a.tipoTarefaLabel || '')}</td><td>${escapeHTML((a.descricao || '').substring(0, 80))}</td><td><span class="badge-status ${a.status === 'finalizado' ? 'finalizado' : 'andamento'}">${a.status === 'finalizado' ? '✅ Finalizado' : '⏳ Em Andamento'}</span></td></tr>`).join('')}</tbody></table>`;
     }
     
-    return `<!DOCTYPE html>
-    <html lang="pt-BR">
-    <head>
-        <meta charset="UTF-8">
-        <title>${titulo}</title>
-        <style>
-            @page { size: A4 portrait; margin: 8mm; }
-            * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; line-height: 1.25; color: #000; }
-            
-            .header { text-align: center; border-bottom: 1.5px double #000; padding-bottom: 4px; margin-bottom: 6px; }
-            .header img { max-width: 100%; max-height: 14mm; object-fit: contain; display: block; margin: 0 auto 2px; }
-            .header h1 { font-size: 10pt; text-transform: uppercase; font-weight: bold; margin: 2px 0 0; }
-            .header p { font-size: 8pt; margin: 1px 0 0; }
-            
-            .titulo { text-align: center; font-size: 11pt; font-weight: bold; background: #ede9fe; padding: 4px 8px; border: 1.5px solid #000; margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.5px; }
-            .subtitulo { text-align: center; font-size: 9pt; margin: 0 0 6px; font-style: italic; }
-            
-            .stats { display: flex; gap: 8px; margin: 6px 0 8px; padding: 6px 8px; background: #f5f3ff; border-radius: 5px; border: 1px solid #ddd6fe; }
-            .stat { text-align: center; flex: 1; border-right: 1px solid #ddd6fe; }
-            .stat:last-child { border-right: none; }
-            .stat-value { font-size: 13pt; font-weight: bold; color: #7c3aed; line-height: 1; }
-            .stat-label { font-size: 7.5pt; color: #666; margin-top: 2px; }
-            
-            .section-title { font-size: 9pt; font-weight: bold; background: #e8e8e8; padding: 2px 6px; border-left: 3px solid #8b5cf6; margin: 6px 0 3px; }
-            
-            table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 6px; }
-            th { background: #8b5cf6; color: white; padding: 4px 5px; text-align: left; border: 1px solid #7c3aed; font-size: 8pt; }
-            td { padding: 3px 5px; border: 1px solid #ddd; vertical-align: top; }
-            tr:nth-child(even) { background: #f9fafb; }
-            
-            .badge-status { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 7.5pt; font-weight: bold; }
-            .badge-status.finalizado { background: #d1fae5; color: #065f46; }
-            .badge-status.andamento { background: #fef3c7; color: #92400e; }
-            
-            .assinaturas { display: flex; justify-content: center; margin-top: 25px; gap: 30px; }
-            .assinatura { flex: 0 0 60%; text-align: center; }
-            
-            .assinatura-container-relatorio { position: relative; min-height: 18mm; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 0; }
-            .assinatura-container-relatorio::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; border-bottom: 1px solid #000; }
-            .assinatura-img { max-height: 14mm; max-width: 100%; object-fit: contain; position: relative; z-index: 2; margin-bottom: 1mm; }
-            .carimbo-overlay { position: absolute; bottom: 1mm; left: 50%; transform: translateX(-50%); max-height: 15mm; max-width: 55mm; object-fit: contain; opacity: 0.95; pointer-events: none; z-index: 1; }
-            .assinatura-linha { padding-top: 3px; font-size: 8pt; margin-top: 2px; }
-            
-            .footer { text-align: center; margin-top: 8px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
-            .footer p { margin: 1px 0; }
-            .registro-info { font-size: 7.5pt; color: #666; margin-top: 6px; text-align: center; }
-            
-            .btn-print { display: block; margin: 10px auto; padding: 8px 20px; background: #8b5cf6; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; font-family: Arial, sans-serif; }
-            .btn-print:hover { background: #7c3aed; }
-            
-            @media print { .no-print { display: none !important; } body { padding: 0; } }
-        </style>
-    </head>
-    <body>
+    return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>${titulo}</title><style>
+        @page { size: A4 portrait; margin: 8mm; } * { box-sizing: border-box; margin: 0; padding: 0; } body { font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; line-height: 1.25; color: #000; }
+        .header { text-align: center; border-bottom: 1.5px double #000; padding-bottom: 4px; margin-bottom: 6px; } .header img { max-width: 100%; max-height: 14mm; object-fit: contain; display: block; margin: 0 auto 2px; } .header h1 { font-size: 10pt; text-transform: uppercase; font-weight: bold; margin: 2px 0 0; } .header p { font-size: 8pt; margin: 1px 0 0; }
+        .titulo { text-align: center; font-size: 11pt; font-weight: bold; background: #ede9fe; padding: 4px 8px; border: 1.5px solid #000; margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.5px; } .subtitulo { text-align: center; font-size: 9pt; margin: 0 0 6px; font-style: italic; }
+        .stats { display: flex; gap: 8px; margin: 6px 0 8px; padding: 6px 8px; background: #f5f3ff; border-radius: 5px; border: 1px solid #ddd6fe; } .stat { text-align: center; flex: 1; border-right: 1px solid #ddd6fe; } .stat:last-child { border-right: none; } .stat-value { font-size: 13pt; font-weight: bold; color: #7c3aed; line-height: 1; } .stat-label { font-size: 7.5pt; color: #666; margin-top: 2px; }
+        .section-title { font-size: 9pt; font-weight: bold; background: #e8e8e8; padding: 2px 6px; border-left: 3px solid #8b5cf6; margin: 6px 0 3px; }
+        table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 6px; } th { background: #8b5cf6; color: white; padding: 4px 5px; text-align: left; border: 1px solid #7c3aed; font-size: 8pt; } td { padding: 3px 5px; border: 1px solid #ddd; vertical-align: top; } tr:nth-child(even) { background: #f9fafb; }
+        .badge-status { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 7.5pt; font-weight: bold; } .badge-status.finalizado { background: #d1fae5; color: #065f46; } .badge-status.andamento { background: #fef3c7; color: #92400e; }
+        .assinaturas { display: flex; justify-content: center; margin-top: 25px; gap: 30px; } .assinatura { flex: 0 0 60%; text-align: center; } .assinatura-container-relatorio { position: relative; min-height: 18mm; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 0; } .assinatura-container-relatorio::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; border-bottom: 1px solid #000; } .assinatura-img { max-height: 14mm; max-width: 100%; object-fit: contain; position: relative; z-index: 2; margin-bottom: 1mm; } .carimbo-overlay { position: absolute; bottom: 1mm; left: 50%; transform: translateX(-50%); max-height: 15mm; max-width: 55mm; object-fit: contain; opacity: 0.95; pointer-events: none; z-index: 1; } .assinatura-linha { padding-top: 3px; font-size: 8pt; margin-top: 2px; }
+        .footer { text-align: center; margin-top: 8px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; } .footer p { margin: 1px 0; } .registro-info { font-size: 7.5pt; color: #666; margin-top: 6px; text-align: center; }
+        .btn-print { display: block; margin: 10px auto; padding: 8px 20px; background: #8b5cf6; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; font-family: Arial, sans-serif; } .btn-print:hover { background: #7c3aed; }
+        @media print { .no-print { display: none !important; } body { padding: 0; } }
+    </style></head><body>
         <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
-        
-        <div class="header">
-            <img src="${logoIema}" alt="IEMA" onerror="this.style.display='none'">
-            <h1>IEMA Pleno: São Luís - Centro</h1>
-            <p>Sistema de Atendimentos — Assistente Social</p>
-        </div>
-        
-        <div class="titulo">🤝 ${titulo}</div>
-        ${subtitulo ? `<div class="subtitulo">${escapeHTML(subtitulo)}</div>` : ''}
-        
-        ${statsHTML}
-        ${tabelaHTML}
-        
-        <div class="assinaturas">
-            <div class="assinatura">
-                <div class="assinatura-container-relatorio">
-                    ${assinaturaDigital ? `<img class="assinatura-img" src="${assinaturaDigital}" alt="Assinatura">` : ''}
-                    <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
-                </div>
-                <div class="assinatura-linha">Assinatura do Responsável / Assistente Social</div>
-            </div>
-        </div>
-        
-        <div class="registro-info">
-            Relatório gerado em <strong>${dataGeracao}</strong>
-        </div>
-        
-        <div class="footer">
-            <p>Documento gerado automaticamente pelo EducaPleno</p>
-            <p>Setor: Assistente Social</p>
-        </div>
-    </body>
-    </html>`;
+        <div class="header"><img src="${logoIema}" alt="IEMA" onerror="this.style.display='none'"><h1>IEMA Pleno: São Luís - Centro</h1><p>Sistema de Atendimentos — Assistente Social</p></div>
+        <div class="titulo">🤝 ${titulo}</div>${subtitulo ? `<div class="subtitulo">${escapeHTML(subtitulo)}</div>` : ''}
+        ${statsHTML}${tabelaHTML}
+        <div class="assinaturas"><div class="assinatura"><div class="assinatura-container-relatorio">${assinaturaDigital ? `<img class="assinatura-img" src="${assinaturaDigital}" alt="Assinatura">` : ''}<img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'"></div><div class="assinatura-linha">Assinatura do Responsável / Assistente Social</div></div></div>
+        <div class="registro-info">Relatório gerado em <strong>${dataGeracao}</strong></div>
+        <div class="footer"><p>Documento gerado automaticamente pelo EducaPleno</p><p>Setor: Assistente Social</p></div>
+    </body></html>`;
 }
 
 // ============================================================================
@@ -4301,7 +3524,6 @@ async function toggleNecessitaAssinatura(modulo) {
     
     if (check.checked) {
         const snapshot = montarSnapshotAtendimento(modulo);
-        
         if (!snapshot.alunoId) {
             mostrarToastConcluido('⚠️ Selecione um aluno antes de marcar a assinatura', 'warning');
             check.checked = false;
@@ -4315,31 +3537,18 @@ async function toggleNecessitaAssinatura(modulo) {
         try {
             const response = await fetch('/api/sessoes-assinatura', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    sessaoId,
-                    tipo: 'assistente_social',
-                    dadosAtendimento: snapshot
-                })
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ sessaoId, tipo: 'assistente_social', dadosAtendimento: snapshot })
             });
-            
             const data = await response.json();
             if (!data.success) throw new Error(data.error || 'Erro ao criar sessão');
-            
-            console.log('✅ Sessão criada:', sessaoId);
             
             const urlAssinatura = `${window.location.origin}/assistente-social.html?assinatura=${sessaoId}`;
             
             try {
                 const qrResponse = await fetch('/api/qrcode/gerar', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                     body: JSON.stringify({ url: urlAssinatura })
                 });
                 const qrData = await qrResponse.json();
@@ -4347,37 +3556,26 @@ async function toggleNecessitaAssinatura(modulo) {
                 if (qrData.success && qrData.qrCode) {
                     estadoSessaoAssinatura[modulo].qrCodeDataUrl = qrData.qrCode;
                 } else {
-                    estadoSessaoAssinatura[modulo].qrCodeDataUrl = 
-                        `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
+                    estadoSessaoAssinatura[modulo].qrCodeDataUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
                 }
             } catch (e) {
-                console.warn('Erro ao gerar QR Code, usando fallback:', e);
-                estadoSessaoAssinatura[modulo].qrCodeDataUrl = 
-                    `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
+                estadoSessaoAssinatura[modulo].qrCodeDataUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
             }
             
             abrirModalAssinatura(modulo, urlAssinatura);
             iniciarMonitoramentoSessao(modulo, sessaoId);
             
-            mostrarToastConcluido('📱 QR Code gerado! Peça para o responsável escanear.', 'info');
-            
+            mostrarToastConcluido('📱 QR Code gerado!', 'info');
         } catch (e) {
-            console.error('Erro ao criar sessão:', e);
-            mostrarToastConcluido('❌ Erro ao criar sessão de assinatura', 'error');
+            mostrarToastConcluido('❌ Erro ao criar sessão', 'error');
             check.checked = false;
             estadoSessaoAssinatura[modulo].sessaoId = null;
         }
     } else {
         const sessaoId = estadoSessaoAssinatura[modulo].sessaoId;
         if (sessaoId) {
-            try {
-                await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-            } catch (e) { console.warn(e); }
+            try { await fetch(`/api/sessoes-assinatura/${sessaoId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }); } catch (e) {}
         }
-        
         estadoSessaoAssinatura[modulo].sessaoId = null;
         estadoSessaoAssinatura[modulo].assinaturaCapturada = null;
         estadoSessaoAssinatura[modulo].qrCodeDataUrl = null;
@@ -4388,37 +3586,22 @@ async function toggleNecessitaAssinatura(modulo) {
 
 function montarSnapshotAtendimento(modulo) {
     const labels = {
-        'evasao_escolar': 'Evasão Escolar',
-        'desinteresse_aprendizado': 'Desinteresse pelo Aprendizado',
-        'problemas_disciplina': 'Problemas com Disciplina',
-        'insubordinacao_limites': 'Insubordinação a Limites/Regras',
-        'vulnerabilidade_drogas': 'Vulnerabilidade às Drogas',
-        'atitudes_agressivas': 'Atitudes Agressivas/Violentas',
-        'baixo_rendimento': 'Baixo Rendimento Escolar',
-        'encaminhamento': 'Encaminhamento',
-        'intervencao': 'Intervenção',
-        'atendimento': 'Atendimento',
-        'outros': 'Outros'
+        'evasao_escolar': 'Evasão Escolar', 'desinteresse_aprendizado': 'Desinteresse pelo Aprendizado',
+        'problemas_disciplina': 'Problemas com Disciplina', 'insubordinacao_limites': 'Insubordinação a Limites/Regras',
+        'vulnerabilidade_drogas': 'Vulnerabilidade às Drogas', 'atitudes_agressivas': 'Atitudes Agressivas/Violentas',
+        'baixo_rendimento': 'Baixo Rendimento Escolar', 'encaminhamento': 'Encaminhamento',
+        'intervencao': 'Intervenção', 'atendimento': 'Atendimento', 'outros': 'Outros'
     };
     
     const labelTipos = __tiposSelecionados.map(t => labels[t] || t).join(' + ');
     
     return {
-        alunoId: currentAluno?.id,
-        alunoNome: currentAluno?.nome,
-        alunoMatricula: currentAluno?.matricula,
-        alunoTurma: currentAluno?.turma,
-        alunoCurso: currentAluno?.curso,
-        alunoFoto: currentAluno?.fotoPerfil,
-        tiposTarefa: __tiposSelecionados,
-        tipoTarefa: __tiposSelecionados[0],
-        tipoTarefaLabel: labelTipos,
-        motivo: __tiposSelecionados[0],
-        motivoLabel: labelTipos,
-        descricao: safeGet('descricao')?.value || '',
-        observacoes: safeGet('observacoes')?.value || '',
-        gravidade: safeGet('gravidade')?.value || 'media',
-        prioridade: safeGet('prioridade')?.value || 'normal',
+        alunoId: currentAluno?.id, alunoNome: currentAluno?.nome, alunoMatricula: currentAluno?.matricula,
+        alunoTurma: currentAluno?.turma, alunoCurso: currentAluno?.curso, alunoFoto: currentAluno?.fotoPerfil,
+        tiposTarefa: __tiposSelecionados, tipoTarefa: __tiposSelecionados[0], tipoTarefaLabel: labelTipos,
+        motivo: __tiposSelecionados[0], motivoLabel: labelTipos,
+        descricao: safeGet('descricao')?.value || '', observacoes: safeGet('observacoes')?.value || '',
+        gravidade: safeGet('gravidade')?.value || 'media', prioridade: safeGet('prioridade')?.value || 'normal',
         data: new Date().toISOString().split('T')[0]
     };
 }
@@ -4436,163 +3619,80 @@ function abrirModalAssinatura(modulo, urlAssinatura) {
                 <div class="modal-content" style="border-radius: 20px; border: none; overflow: hidden;">
                     <div class="modal-header" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; border: none; padding: 20px 25px;">
                         <h5 class="modal-title" style="display: flex; align-items: center; gap: 10px;">
-                            <i class="fas fa-signature"></i> 
-                            Aguardando Assinatura
+                            <i class="fas fa-signature"></i> Aguardando Assinatura
                         </h5>
                         <button type="button" class="btn-close btn-close-white" onclick="assistenteSocial.fecharModalAssinatura('${modulo}')"></button>
                     </div>
-                    
                     <div class="modal-body" style="padding: 30px; text-align: center;">
-                        
-                        <!-- ÁREA DO QR CODE -->
                         <div id="assistenteQrView">
-                            <div id="modalAssinaturaStatus" style="margin-bottom: 20px;">
+                            <div style="margin-bottom: 20px;">
                                 <div style="background: #fef3c7; border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 12px; text-align: left;">
                                     <div style="width: 40px; height: 40px; border-radius: 50%; border: 4px solid #f59e0b; border-top-color: transparent; animation: spinQR 1s linear infinite; flex-shrink: 0;"></div>
                                     <div>
                                         <strong style="color: #92400e;">Aguardando assinatura...</strong>
-                                        <p style="margin: 3px 0 0; font-size: 13px; color: #78350f;">
-                                            Peça para o responsável escanear o QR Code abaixo
-                                        </p>
+                                        <p style="margin: 3px 0 0; font-size: 13px; color: #78350f;">Peça para o responsável escanear o QR Code</p>
                                     </div>
                                 </div>
                             </div>
-                            
                             <div style="background: white; border: 2px solid #e2e8f0; border-radius: 16px; padding: 20px; display: inline-block;">
-                                <img src="${qrUrl}" 
-                                    alt="QR Code para assinatura" 
-                                    style="width: 260px; height: 260px; display: block;"
-                                    id="qrCodeImage">
-                                <p style="margin: 12px 0 0; font-size: 13px; color: #64748b;">
-                                    <i class="fas fa-mobile-alt"></i> 
-                                    Aponte a câmera do celular
-                                </p>
+                                <img src="${qrUrl}" alt="QR Code" style="width: 260px; height: 260px; display: block;" id="qrCodeImage">
+                                <p style="margin: 12px 0 0; font-size: 13px; color: #64748b;"><i class="fas fa-mobile-alt"></i> Aponte a câmera</p>
                             </div>
-                            
                             <div style="margin-top: 20px; padding: 14px; background: #f5f3ff; border-radius: 12px; font-size: 13px; color: #5b21b6; text-align: left;">
-                                <div style="display: flex; gap: 8px; margin-bottom: 6px;">
-                                    <i class="fas fa-info-circle"></i>
-                                    <span><strong>O responsável assina direto no celular dele.</strong> Assim que ele confirmar, você verá aqui automaticamente.</span>
-                                </div>
-                                <div style="display: flex; gap: 8px;">
-                                    <i class="fas fa-clock"></i>
-                                    <span>Sessão válida por <strong>30 minutos</strong>.</span>
-                                </div>
+                                <div style="display: flex; gap: 8px; margin-bottom: 6px;"><i class="fas fa-info-circle"></i><span><strong>O responsável assina direto no celular dele.</strong></span></div>
+                                <div style="display: flex; gap: 8px;"><i class="fas fa-clock"></i><span>Sessão válida por <strong>30 minutos</strong>.</span></div>
                             </div>
-                            
                             <div style="margin-top: 16px;">
-                                <button onclick="assistenteSocial.copiarLinkAssinatura('${urlAssinatura}')"
-                                        class="btn-copiar-link">
-                                    <i class="fas fa-link"></i> Copiar link de assinatura
-                                </button>
+                                <button onclick="assistenteSocial.copiarLinkAssinatura('${urlAssinatura}')" class="btn btn-outline-primary btn-sm"><i class="fas fa-link"></i> Copiar link</button>
                             </div>
-                            
-                            <!-- LINK PARA ASSINAR AQUI -->
                             <div style="margin-top: 14px; padding-top: 14px; border-top: 1px dashed #cbd5e1;">
-                                <p style="margin: 0 0 8px; font-size: 12px; color: #64748b;">
-                                    Não consegue escanear? 
-                                </p>
-                                <button type="button"
-                                        onclick="mostrarCanvasAssinaturaInline('${modulo}')"
-                                        style="background: transparent; border: none; color: #7c3aed; font-weight: 600; font-size: 14px; cursor: pointer; text-decoration: underline; padding: 6px 10px; border-radius: 8px;">
+                                <p style="margin: 0 0 8px; font-size: 12px; color: #64748b;">Não consegue escanear?</p>
+                                <button type="button" onclick="mostrarCanvasAssinaturaInline('${modulo}')" style="background: transparent; border: none; color: #7c3aed; font-weight: 600; font-size: 14px; cursor: pointer; text-decoration: underline;">
                                     <i class="fas fa-pen-fancy"></i> Assinar aqui mesmo
                                 </button>
                             </div>
                         </div>
-                        
-                        <!-- ÁREA DO CANVAS INLINE -->
                         <div id="assistenteCanvasView" style="display: none;">
                             <div style="background: #f5f3ff; border-radius: 12px; padding: 14px; margin-bottom: 16px; text-align: left;">
-                                <div style="display: flex; gap: 8px;">
-                                    <i class="fas fa-info-circle" style="color: #5b21b6;"></i>
-                                    <span style="font-size: 13px; color: #5b21b6;">
-                                        Peça para o responsável assinar no espaço abaixo com o dedo ou mouse.
-                                    </span>
-                                </div>
+                                <div style="display: flex; gap: 8px;"><i class="fas fa-info-circle" style="color: #5b21b6;"></i><span style="font-size: 13px; color: #5b21b6;">Peça para o responsável assinar abaixo.</span></div>
                             </div>
-                            
-                            <div id="assistenteModalCanvasWrapper" 
-                                 style="position: relative; background: white; border: 3px dashed #cbd5e0; border-radius: 16px; overflow: hidden; height: 260px; margin-bottom: 14px; touch-action: none;">
+                            <div id="assistenteModalCanvasWrapper" style="position: relative; background: white; border: 3px dashed #cbd5e0; border-radius: 16px; overflow: hidden; height: 260px; margin-bottom: 14px; touch-action: none;">
                                 <canvas id="assistenteModalCanvas" style="width: 100%; height: 100%; display: block;"></canvas>
-                                <div id="assistenteModalPlaceholder" 
-                                     style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #94a3b8; pointer-events: none; width: 100%;">
-                                    <i class="fas fa-pen-fancy" style="font-size: 28px; display: block; margin-bottom: 5px;"></i>
-                                    <span style="font-size: 13px;">Assine aqui</span>
+                                <div id="assistenteModalPlaceholder" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #94a3b8; pointer-events: none; width: 100%;">
+                                    <i class="fas fa-pen-fancy" style="font-size: 28px; display: block; margin-bottom: 5px;"></i><span style="font-size: 13px;">Assine aqui</span>
                                 </div>
                             </div>
-                            
                             <div style="display: flex; gap: 10px;">
-                                <button type="button"
-                                        onclick="limparCanvasInline()"
-                                        style="flex: 1; padding: 12px; background: #f1f5f9; color: #475569; border: none; border-radius: 10px; font-weight: 600; font-size: 14px; cursor: pointer;">
-                                    <i class="fas fa-eraser"></i> Limpar
-                                </button>
-                                <button type="button"
-                                        id="assistenteBtnConfirmarInline"
-                                        onclick="salvarAssinaturaInline('${modulo}')"
-                                        disabled
-                                        style="flex: 2; padding: 12px; background: #cbd5e0; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 14px; cursor: not-allowed;">
-                                    <i class="fas fa-check"></i> Confirmar Assinatura
-                                </button>
+                                <button type="button" onclick="limparCanvasInline()" style="flex: 1; padding: 12px; background: #f1f5f9; color: #475569; border: none; border-radius: 10px; font-weight: 600; font-size: 14px; cursor: pointer;"><i class="fas fa-eraser"></i> Limpar</button>
+                                <button type="button" id="assistenteBtnConfirmarInline" onclick="salvarAssinaturaInline('${modulo}')" disabled style="flex: 2; padding: 12px; background: #cbd5e0; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 14px; cursor: not-allowed;"><i class="fas fa-check"></i> Confirmar Assinatura</button>
                             </div>
-                            
                             <div style="margin-top: 14px;">
-                                <button type="button"
-                                        onclick="voltarParaQRCode()"
-                                        style="background: transparent; border: none; color: #64748b; font-size: 13px; cursor: pointer; text-decoration: underline;">
-                                    <i class="fas fa-arrow-left"></i> Voltar para o QR Code
-                                </button>
+                                <button type="button" onclick="voltarParaQRCode()" style="background: transparent; border: none; color: #64748b; font-size: 13px; cursor: pointer; text-decoration: underline;"><i class="fas fa-arrow-left"></i> Voltar para o QR Code</button>
                             </div>
                         </div>
-                        
                     </div>
-                    
                     <div class="modal-footer" style="border-top: 1px solid #e5e7eb; padding: 15px 25px; justify-content: space-between;">
-                        <button type="button" class="btn btn-outline-secondary" onclick="assistenteSocial.fecharModalAssinatura('${modulo}')" style="border-radius: 10px;">
-                            <i class="fas fa-eye-slash"></i> Ocultar
-                        </button>
-                        <button type="button" class="btn btn-danger" onclick="assistenteSocial.cancelarSessaoAssinatura('${modulo}')" style="border-radius: 10px;">
-                            <i class="fas fa-times"></i> Cancelar Assinatura
-                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="assistenteSocial.fecharModalAssinatura('${modulo}')" style="border-radius: 10px;"><i class="fas fa-eye-slash"></i> Ocultar</button>
+                        <button type="button" class="btn btn-danger" onclick="assistenteSocial.cancelarSessaoAssinatura('${modulo}')" style="border-radius: 10px;"><i class="fas fa-times"></i> Cancelar Assinatura</button>
                     </div>
                 </div>
             </div>
         </div>
-        
-        <style>
-            @keyframes spinQR { to { transform: rotate(360deg); } }
-            @keyframes fadeInCanvas { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-        </style>`;
+        <style>@keyframes spinQR { to { transform: rotate(360deg); } } @keyframes fadeInCanvas { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }</style>`;
     
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     estadoSessaoAssinatura[modulo].modalInstance = new bootstrap.Modal(safeGet('modalAssinaturaQR'));
     estadoSessaoAssinatura[modulo].modalInstance.show();
-    
-    setTimeout(() => {
-        const img = safeGet('qrCodeImage');
-        if (img && window.innerWidth < 500) {
-            img.style.width = '200px';
-            img.style.height = '200px';
-        }
-    }, 200);
 }
 
-// ============================================
-// 🆕 CANVAS INLINE DO ASSISTENTE SOCIAL
-// ============================================
-let __inlineCanvasStateAS = {
-    ctx: null, canvas: null, wrapper: null, placeholder: null,
-    desenhando: false, temAssinatura: false, lastX: 0, lastY: 0, inicializado: false
-};
+let __inlineCanvasStateAS = { ctx: null, canvas: null, wrapper: null, placeholder: null, desenhando: false, temAssinatura: false, lastX: 0, lastY: 0, inicializado: false };
 
 function mostrarCanvasAssinaturaInline(modulo) {
     const qrView = safeGet('assistenteQrView');
     const canvasView = safeGet('assistenteCanvasView');
     if (!qrView || !canvasView) return;
-    
     qrView.style.display = 'none';
     canvasView.style.display = 'block';
-    
     setTimeout(() => inicializarCanvasInlineAS(), 50);
 }
 
@@ -4600,7 +3700,6 @@ function voltarParaQRCode() {
     const qrView = safeGet('assistenteQrView');
     const canvasView = safeGet('assistenteCanvasView');
     if (!qrView || !canvasView) return;
-    
     canvasView.style.display = 'none';
     qrView.style.display = 'block';
 }
@@ -4618,10 +3717,7 @@ function inicializarCanvasInlineAS() {
     __inlineCanvasStateAS.temAssinatura = false;
     
     const rect = wrapper.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) {
-        setTimeout(() => inicializarCanvasInlineAS(), 100);
-        return;
-    }
+    if (rect.width === 0 || rect.height === 0) { setTimeout(() => inicializarCanvasInlineAS(), 100); return; }
     
     const dpr = window.devicePixelRatio || 1;
     canvas.width = rect.width * dpr;
@@ -4639,17 +3735,10 @@ function inicializarCanvasInlineAS() {
     __inlineCanvasStateAS.ctx = ctx;
     
     const btn = safeGet('assistenteBtnConfirmarInline');
-    if (btn) {
-        btn.disabled = true;
-        btn.style.background = '#cbd5e0';
-        btn.style.cursor = 'not-allowed';
-    }
+    if (btn) { btn.disabled = true; btn.style.background = '#cbd5e0'; btn.style.cursor = 'not-allowed'; }
     
     if (placeholder) placeholder.style.opacity = '1';
-    if (wrapper) {
-        wrapper.style.borderColor = '#cbd5e0';
-        wrapper.style.borderStyle = 'dashed';
-    }
+    if (wrapper) { wrapper.style.borderColor = '#cbd5e0'; wrapper.style.borderStyle = 'dashed'; }
     
     if (__inlineCanvasStateAS.inicializado) return;
     __inlineCanvasStateAS.inicializado = true;
@@ -4670,17 +3759,9 @@ function inicializarCanvasInlineAS() {
         const p = getPos(e);
         __inlineCanvasStateAS.lastX = p.x;
         __inlineCanvasStateAS.lastY = p.y;
-        if (wrapper) {
-            wrapper.style.borderColor = '#8b5cf6';
-            wrapper.style.borderStyle = 'solid';
-        }
+        if (wrapper) { wrapper.style.borderColor = '#8b5cf6'; wrapper.style.borderStyle = 'solid'; }
         if (placeholder) placeholder.style.opacity = '0';
-        
-        if (btn) {
-            btn.disabled = false;
-            btn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
-            btn.style.cursor = 'pointer';
-        }
+        if (btn) { btn.disabled = false; btn.style.background = 'linear-gradient(135deg, #10b981, #059669)'; btn.style.cursor = 'pointer'; }
     };
     
     const desenhar = (e) => {
@@ -4714,55 +3795,29 @@ function limparCanvasInline() {
     const canvas = __inlineCanvasStateAS.canvas;
     const ctx = __inlineCanvasStateAS.ctx;
     if (!canvas || !ctx) return;
-    
     const rect = canvas.getBoundingClientRect();
     ctx.clearRect(0, 0, rect.width, rect.height);
     __inlineCanvasStateAS.temAssinatura = false;
-    
     if (__inlineCanvasStateAS.placeholder) __inlineCanvasStateAS.placeholder.style.opacity = '1';
-    if (__inlineCanvasStateAS.wrapper) {
-        __inlineCanvasStateAS.wrapper.style.borderColor = '#cbd5e0';
-        __inlineCanvasStateAS.wrapper.style.borderStyle = 'dashed';
-    }
-    
+    if (__inlineCanvasStateAS.wrapper) { __inlineCanvasStateAS.wrapper.style.borderColor = '#cbd5e0'; __inlineCanvasStateAS.wrapper.style.borderStyle = 'dashed'; }
     const btn = safeGet('assistenteBtnConfirmarInline');
-    if (btn) {
-        btn.disabled = true;
-        btn.style.background = '#cbd5e0';
-        btn.style.cursor = 'not-allowed';
-    }
+    if (btn) { btn.disabled = true; btn.style.background = '#cbd5e0'; btn.style.cursor = 'not-allowed'; }
 }
 
 async function salvarAssinaturaInline(modulo) {
-    if (!__inlineCanvasStateAS.temAssinatura || !__inlineCanvasStateAS.canvas) {
-        mostrarToastConcluido('⚠️ Assine antes de confirmar', 'warning');
-        return;
-    }
-    
+    if (!__inlineCanvasStateAS.temAssinatura || !__inlineCanvasStateAS.canvas) { mostrarToastConcluido('⚠️ Assine antes de confirmar', 'warning'); return; }
     const sessaoId = estadoSessaoAssinatura[modulo]?.sessaoId;
-    if (!sessaoId) {
-        mostrarToastConcluido('⚠️ Sessão não encontrada', 'error');
-        return;
-    }
+    if (!sessaoId) { mostrarToastConcluido('⚠️ Sessão não encontrada', 'error'); return; }
     
     const btn = safeGet('assistenteBtnConfirmarInline');
-    if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
-    }
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...'; }
     
     try {
         const base64 = __inlineCanvasStateAS.canvas.toDataURL('image/png');
-        
         const response = await fetch(`/api/sessoes-assinatura/${sessaoId}/assinar`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                assinaturaBase64: base64,
-                assinanteNome: 'Responsável'
-            })
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ assinaturaBase64: base64, assinanteNome: 'Responsável' })
         });
-        
         const data = await response.json();
         if (!data.success) throw new Error(data.error || 'Erro ao salvar');
         
@@ -4773,69 +3828,40 @@ async function salvarAssinaturaInline(modulo) {
             const agora = new Date().toLocaleString('pt-BR');
             canvasView.innerHTML = `
                 <div style="animation: fadeInCanvas 0.3s ease;">
-                    <div style="background: linear-gradient(135deg, #10b981, #059669); border-radius: 14px; padding: 16px 20px; margin-bottom: 16px; display: flex; align-items: center; gap: 14px; color: white; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);">
-                        <div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.25); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                            <i class="fas fa-check" style="font-size: 22px;"></i>
-                        </div>
+                    <div style="background: linear-gradient(135deg, #10b981, #059669); border-radius: 14px; padding: 16px 20px; margin-bottom: 16px; display: flex; align-items: center; gap: 14px; color: white;">
+                        <div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.25); display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><i class="fas fa-check" style="font-size: 22px;"></i></div>
                         <div style="flex: 1; text-align: left;">
                             <h4 style="margin: 0 0 2px; font-size: 16px; font-weight: 700;">Assinatura Registrada!</h4>
                             <p style="margin: 0; font-size: 13px; opacity: 0.95;">Confirmada em ${agora}</p>
                         </div>
                     </div>
-                    <div style="text-align: left; margin-bottom: 10px;">
-                        <span style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;"><i class="fas fa-signature"></i> Assinatura capturada</span>
-                    </div>
-                    <div style="position: relative; background: #f0fdf4; border: 3px solid #10b981; border-radius: 16px; overflow: hidden; height: 220px; display: flex; align-items: center; justify-content: center; padding: 12px; box-sizing: border-box; box-shadow: inset 0 2px 8px rgba(16, 185, 129, 0.08);">
+                    <div style="position: relative; background: #f0fdf4; border: 3px solid #10b981; border-radius: 16px; overflow: hidden; height: 220px; display: flex; align-items: center; justify-content: center; padding: 12px; box-sizing: border-box;">
                         <img src="${base64}" alt="Assinatura" style="max-width: 100%; max-height: 100%; object-fit: contain; display: block;">
-                        <div style="position: absolute; top: 10px; right: 10px; background: #10b981; color: white; padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 700; display: flex; align-items: center; gap: 4px; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);">
-                            <i class="fas fa-lock" style="font-size: 9px;"></i> VERIFICADA
-                        </div>
                     </div>
                     <div style="display: flex; gap: 10px; margin-top: 16px;">
-                        <button type="button" onclick="assistenteSocial.refazerAssinatura('${modulo}')" style="flex: 1; padding: 12px; background: #fef3c7; color: #92400e; border: 2px solid #f59e0b; border-radius: 10px; font-weight: 600; font-size: 13px; cursor: pointer;">
-                            <i class="fas fa-redo"></i> Refazer
-                        </button>
-                        <button type="button" onclick="assistenteSocial.fecharModalAssinatura('${modulo}')" style="flex: 2; padding: 12px; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 13px; cursor: pointer;">
-                            <i class="fas fa-check-circle"></i> Concluir
-                        </button>
+                        <button type="button" onclick="assistenteSocial.refazerAssinatura('${modulo}')" style="flex: 1; padding: 12px; background: #fef3c7; color: #92400e; border: 2px solid #f59e0b; border-radius: 10px; font-weight: 600; font-size: 13px; cursor: pointer;"><i class="fas fa-redo"></i> Refazer</button>
+                        <button type="button" onclick="assistenteSocial.fecharModalAssinatura('${modulo}')" style="flex: 2; padding: 12px; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 13px; cursor: pointer;"><i class="fas fa-check-circle"></i> Concluir</button>
                     </div>
                 </div>`;
         }
         
         pararMonitoramentoSessao(modulo);
-        
-        atualizarStatusAssinado(modulo, {
-            assinaturaBase64: base64,
-            assinadaPorNome: 'Responsável',
-            assinadaEm: new Date().toISOString()
-        });
-        
-        mostrarToastConcluido('✅ Assinatura registrada com sucesso!', 'success');
+        atualizarStatusAssinado(modulo, { assinaturaBase64: base64, assinadaPorNome: 'Responsável', assinadaEm: new Date().toISOString() });
+        mostrarToastConcluido('✅ Assinatura registrada!', 'success');
         
     } catch (e) {
-        console.error('Erro:', e);
         mostrarToastConcluido('❌ ' + e.message, 'error');
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Assinatura';
-        }
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Assinatura'; }
     }
 }
 
 function fecharModalAssinatura(modulo) {
-    if (estadoSessaoAssinatura[modulo].modalInstance) {
-        estadoSessaoAssinatura[modulo].modalInstance.hide();
-    }
+    if (estadoSessaoAssinatura[modulo].modalInstance) estadoSessaoAssinatura[modulo].modalInstance.hide();
     const modalEl = safeGet('modalAssinaturaQR');
     if (modalEl) setTimeout(() => modalEl.remove(), 300);
     
-    // 🆕 Se já foi assinado, mostra o bloco verde. Senão, o amarelo.
     if (estadoSessaoAssinatura[modulo].assinaturaCapturada) {
-        atualizarStatusAssinado(modulo, {
-            assinaturaBase64: estadoSessaoAssinatura[modulo].assinaturaCapturada,
-            assinadaPorNome: 'Responsável',
-            assinadaEm: new Date().toISOString()
-        });
+        atualizarStatusAssinado(modulo, { assinaturaBase64: estadoSessaoAssinatura[modulo].assinaturaCapturada, assinadaPorNome: 'Responsável', assinadaEm: new Date().toISOString() });
     } else {
         mostrarBlocoCompactoAssinatura(modulo);
     }
@@ -4843,40 +3869,26 @@ function fecharModalAssinatura(modulo) {
 
 function mostrarBlocoCompactoAssinatura(modulo) {
     let bloco = safeGet(`${modulo}BlocoAssinaturaInfo`);
-    
     if (!bloco) {
         bloco = document.createElement('div');
         bloco.id = `${modulo}BlocoAssinaturaInfo`;
         const check = safeGet(`${modulo}NecessitaAssinatura`);
-        if (check && check.parentElement) {
-            check.parentElement.parentElement.appendChild(bloco);
-        }
+        if (check && check.parentElement) check.parentElement.parentElement.appendChild(bloco);
     }
-    
     bloco.style.display = 'block';
     bloco.innerHTML = `
         <div class="alert alert-warning" style="font-size: 13px; border-radius: 10px; border-left: 4px solid #f59e0b; margin-top: 10px;">
             <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                 <i class="fas fa-clock"></i>
-                <div style="flex: 1;">
-                    <strong>Aguardando assinatura...</strong>
-                    <p style="margin: 3px 0 0; font-size: 12px;">O responsável precisa escanear o QR Code</p>
-                </div>
-                <button type="button" class="btn btn-sm btn-warning" 
-                        onclick="assistenteSocial.reabrirModalAssinatura('${modulo}')"
-                        style="border-radius: 8px;">
-                    <i class="fas fa-qrcode"></i> Mostrar QR
-                </button>
+                <div style="flex: 1;"><strong>Aguardando assinatura...</strong><p style="margin: 3px 0 0; font-size: 12px;">O responsável precisa escanear o QR Code</p></div>
+                <button type="button" class="btn btn-sm btn-warning" onclick="assistenteSocial.reabrirModalAssinatura('${modulo}')" style="border-radius: 8px;"><i class="fas fa-qrcode"></i> Mostrar QR</button>
             </div>
         </div>`;
 }
 
 function reabrirModalAssinatura(modulo) {
     const sessaoId = estadoSessaoAssinatura[modulo].sessaoId;
-    if (!sessaoId) {
-        mostrarToastConcluido('⚠️ Nenhuma sessão ativa', 'warning');
-        return;
-    }
+    if (!sessaoId) { mostrarToastConcluido('⚠️ Nenhuma sessão ativa', 'warning'); return; }
     const urlAssinatura = `${window.location.origin}/assistente-social.html?assinatura=${sessaoId}`;
     abrirModalAssinatura(modulo, urlAssinatura);
 }
@@ -4899,50 +3911,31 @@ async function copiarLinkAssinatura(url) {
 function iniciarMonitoramentoSessao(modulo, sessaoId) {
     pararMonitoramentoSessao(modulo);
     
-    console.log('👀 Monitorando sessão:', sessaoId);
-    
-    const intervalId = setInterval(async () => {
+    estadoSessaoAssinatura[modulo].monitoramentoInterval = setInterval(async () => {
         try {
-            const response = await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
+            const response = await fetch(`/api/sessoes-assinatura/${sessaoId}`, { headers: { 'Authorization': `Bearer ${token}` } });
             if (!response.ok) {
-                if (response.status === 404) {
-                    console.warn('Sessão expirou ou foi removida');
-                    pararMonitoramentoSessao(modulo);
-                }
+                if (response.status === 404) pararMonitoramentoSessao(modulo);
                 return;
             }
-            
             const data = await response.json();
             if (!data.success) return;
             
             if (data.sessao.status === 'assinado') {
-                console.log('✅ Assinatura capturada!');
-                
                 estadoSessaoAssinatura[modulo].assinaturaCapturada = data.sessao.assinaturaBase64;
                 atualizarStatusAssinado(modulo, data.sessao);
                 pararMonitoramentoSessao(modulo);
                 
-                if (estadoSessaoAssinatura[modulo].modalInstance) {
-                    estadoSessaoAssinatura[modulo].modalInstance.hide();
-                }
+                if (estadoSessaoAssinatura[modulo].modalInstance) estadoSessaoAssinatura[modulo].modalInstance.hide();
                 const modalEl = safeGet('modalAssinaturaQR');
                 if (modalEl) setTimeout(() => modalEl.remove(), 300);
                 
-                mostrarToastConcluido(`✅ Assinatura capturada por ${data.sessao.assinadaPorNome}!`, 'success');
-                
+                mostrarToastConcluido(`✅ Assinatura capturada!`, 'success');
             } else if (data.sessao.status === 'cancelado') {
-                console.log('Sessão cancelada');
                 pararMonitoramentoSessao(modulo);
             }
-        } catch (e) {
-            console.warn('Erro no monitoramento:', e);
-        }
+        } catch (e) {}
     }, 3000);
-    
-    estadoSessaoAssinatura[modulo].monitoramentoInterval = intervalId;
 }
 
 function pararMonitoramentoSessao(modulo) {
@@ -4955,16 +3948,12 @@ function pararMonitoramentoSessao(modulo) {
 
 function atualizarStatusAssinado(modulo, sessao) {
     let bloco = safeGet(`${modulo}BlocoAssinaturaInfo`);
-    
     if (!bloco) {
         bloco = document.createElement('div');
         bloco.id = `${modulo}BlocoAssinaturaInfo`;
         const check = safeGet(`${modulo}NecessitaAssinatura`);
-        if (check && check.parentElement) {
-            check.parentElement.parentElement.appendChild(bloco);
-        }
+        if (check && check.parentElement) check.parentElement.parentElement.appendChild(bloco);
     }
-    
     bloco.style.display = 'block';
     bloco.innerHTML = `
         <div style="margin-top: 10px; background: #f0fdf4; border: 2px solid #10b981; border-radius: 12px; padding: 14px;">
@@ -4972,84 +3961,50 @@ function atualizarStatusAssinado(modulo, sessao) {
                 <i class="fas fa-check-circle" style="color: #10b981; font-size: 22px;"></i>
                 <div style="flex: 1;">
                     <strong style="color: #065f46;">✓ Assinatura capturada!</strong>
-                    <p style="margin: 3px 0 0; font-size: 12px; color: #047857;">
-                        Assinado por <strong>${escapeHTML(sessao.assinadaPorNome || '')}</strong>
-                        ${sessao.assinadaEm ? ` em ${new Date(sessao.assinadaEm).toLocaleString('pt-BR')}` : ''}
-                    </p>
+                    <p style="margin: 3px 0 0; font-size: 12px; color: #047857;">Assinado por <strong>${escapeHTML(sessao.assinadaPorNome || '')}</strong> ${sessao.assinadaEm ? ` em ${new Date(sessao.assinadaEm).toLocaleString('pt-BR')}` : ''}</p>
                 </div>
             </div>
             <div style="background: white; border-radius: 8px; padding: 8px; text-align: center;">
-                <img src="${sessao.assinaturaBase64}" 
-                    style="max-width: 100%; max-height: 100px;" 
-                    alt="Assinatura">
+                <img src="${sessao.assinaturaBase64}" style="max-width: 100%; max-height: 100px;" alt="Assinatura">
             </div>
-            <button type="button" 
-                    onclick="assistenteSocial.refazerAssinatura('${modulo}')"
-                    class="btn btn-sm btn-outline-danger w-100 mt-2"
-                    style="border-radius: 8px;">
-                <i class="fas fa-redo"></i> Refazer Assinatura
-            </button>
+            <button type="button" onclick="assistenteSocial.refazerAssinatura('${modulo}')" class="btn btn-sm btn-outline-danger w-100 mt-2" style="border-radius: 8px;"><i class="fas fa-redo"></i> Refazer Assinatura</button>
         </div>`;
 }
 
 async function cancelarSessaoAssinatura(modulo) {
-    const confirmar = await confirm('Cancelar a assinatura? O responsável não poderá mais assinar este atendimento.');
+    const confirmar = await confirm('Cancelar a assinatura?');
     if (!confirmar) return;
-    
     const sessaoId = estadoSessaoAssinatura[modulo].sessaoId;
     if (sessaoId) {
-        try {
-            await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-        } catch (e) { console.warn(e); }
+        try { await fetch(`/api/sessoes-assinatura/${sessaoId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }); } catch (e) {}
     }
-    
     pararMonitoramentoSessao(modulo);
     fecharModalAssinatura(modulo);
-    
     estadoSessaoAssinatura[modulo].sessaoId = null;
     estadoSessaoAssinatura[modulo].assinaturaCapturada = null;
     estadoSessaoAssinatura[modulo].qrCodeDataUrl = null;
-    
     const check = safeGet(`${modulo}NecessitaAssinatura`);
     if (check) check.checked = false;
-    
     const bloco = safeGet(`${modulo}BlocoAssinaturaInfo`);
     if (bloco) bloco.style.display = 'none';
-    
     mostrarToastConcluido('Sessão cancelada', 'info');
 }
 
 async function refazerAssinatura(modulo) {
-    const confirmar = await confirm('Refazer a assinatura? A atual será descartada.');
+    const confirmar = await confirm('Refazer a assinatura?');
     if (!confirmar) return;
-    
     const sessaoId = estadoSessaoAssinatura[modulo].sessaoId;
     if (sessaoId) {
-        try {
-            await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-        } catch (e) { console.warn(e); }
+        try { await fetch(`/api/sessoes-assinatura/${sessaoId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }); } catch (e) {}
     }
-    
     pararMonitoramentoSessao(modulo);
     estadoSessaoAssinatura[modulo].sessaoId = null;
     estadoSessaoAssinatura[modulo].assinaturaCapturada = null;
     estadoSessaoAssinatura[modulo].qrCodeDataUrl = null;
-    
     const bloco = safeGet(`${modulo}BlocoAssinaturaInfo`);
     if (bloco) bloco.style.display = 'none';
-    
     const check = safeGet(`${modulo}NecessitaAssinatura`);
-    if (check) {
-        check.checked = false;
-        check.checked = true;
-        await toggleNecessitaAssinatura(modulo);
-    }
+    if (check) { check.checked = false; check.checked = true; await toggleNecessitaAssinatura(modulo); }
 }
 
 function limparEstadoSessaoAssinatura(modulo) {
@@ -5065,12 +4020,9 @@ function limparEstadoSessaoAssinatura(modulo) {
 // ============================================================================
 // 📱 MODO ASSINATURA (via URL ?assinatura=UUID)
 // ============================================================================
-
 async function mostrarTelaAssinatura(sessaoId) {
     document.querySelectorAll('.header-top, .card, .container > *').forEach(el => {
-        if (el && !el.id?.includes('content')) {
-            el.style.display = 'none';
-        }
+        if (el && !el.id?.includes('content')) el.style.display = 'none';
     });
     
     let container = safeGet('telaAssinaturaContainer');
@@ -5084,20 +4036,17 @@ async function mostrarTelaAssinatura(sessaoId) {
     container.innerHTML = `
         <div style="min-height: 100vh; background: #f0f4f8; padding: 10px; display: flex; flex-direction: column; box-sizing: border-box; overflow-y: auto;">
             <div style="max-width: 800px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; flex: 1; min-height: 0;">
-                
                 <div style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; padding: 12px 20px; border-radius: 16px 16px 0 0; text-align: center; flex-shrink: 0;">
                     <h1 style="font-size: 18px; margin: 0; display: flex; align-items: center; justify-content: center; gap: 10px;">
                         <i class="fas fa-signature"></i> Assinatura Digital - Assistente Social
                     </h1>
                 </div>
-                
                 <div id="telaAssinaturaInfo" style="background: white; padding: 15px; border-left: 4px solid #8b5cf6; flex-shrink: 0; max-height: 40vh; overflow-y: auto;">
                     <div style="text-align: center; padding: 20px;">
                         <div style="width: 30px; height: 30px; border: 4px solid #e2e8f0; border-top-color: #8b5cf6; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 10px;"></div>
                         <p style="color: #64748b; margin: 0; font-size: 14px;">Carregando atendimento...</p>
                     </div>
                 </div>
-                
                 <div id="telaAssinaturaArea" style="background: white; padding: 15px; display: none; border-radius: 0 0 16px 16px; flex: 1; display: flex; flex-direction: column; min-height: 0;">
                     <div id="canvasWrapper" style="position: relative; background: white; border: 3px dashed #cbd5e0; border-radius: 16px; overflow: hidden; flex: 1; min-height: 150px; margin-bottom: 12px; touch-action: none;">
                         <canvas id="canvasAssinatura" style="width: 100%; height: 100%; display: block;"></canvas>
@@ -5106,65 +4055,31 @@ async function mostrarTelaAssinatura(sessaoId) {
                             <span style="font-size: 14px;">Assine aqui com o dedo</span>
                         </div>
                     </div>
-                    
                     <div style="display: flex; gap: 10px; flex-shrink: 0;">
-                        <button onclick="assistenteSocial.limparAssinaturaTela()" 
-                                style="flex: 1; padding: 12px; background: #f1f5f9; color: #475569; border: none; border-radius: 12px; font-weight: 600; font-size: 14px;">
-                            <i class="fas fa-eraser"></i> Limpar
-                        </button>
-                        <button id="btnSalvarAssinatura" onclick="assistenteSocial.salvarAssinaturaTela()" disabled
-                                style="flex: 2; padding: 12px; background: #cbd5e0; color: white; border: none; border-radius: 12px; font-weight: 600; font-size: 14px; cursor: not-allowed;">
-                            <i class="fas fa-check"></i> Confirmar Assinatura
-                        </button>
+                        <button onclick="assistenteSocial.limparAssinaturaTela()" style="flex: 1; padding: 12px; background: #f1f5f9; color: #475569; border: none; border-radius: 12px; font-weight: 600; font-size: 14px;"><i class="fas fa-eraser"></i> Limpar</button>
+                        <button id="btnSalvarAssinatura" onclick="assistenteSocial.salvarAssinaturaTela()" disabled style="flex: 2; padding: 12px; background: #cbd5e0; color: white; border: none; border-radius: 12px; font-weight: 600; font-size: 14px; cursor: not-allowed;"><i class="fas fa-check"></i> Confirmar Assinatura</button>
                     </div>
                 </div>
             </div>
         </div>
-        
-        <style>
-            @keyframes spin { to { transform: rotate(360deg); } }
-            @media (max-height: 500px) {
-                #telaAssinaturaInfo { max-height: 25vh; }
-                #telaAssinaturaArea { padding: 10px; }
-                #canvasWrapper { min-height: 80px; }
-            }
-        </style>
-    `;
+        <style>@keyframes spin { to { transform: rotate(360deg); } } @media (max-height: 500px) { #telaAssinaturaInfo { max-height: 25vh; } #telaAssinaturaArea { padding: 10px; } #canvasWrapper { min-height: 80px; } }</style>`;
     
     try {
         const response = await fetch(`/api/sessoes-assinatura/${sessaoId}`);
         const data = await response.json();
         
         if (!data.success) {
-            safeGet('telaAssinaturaInfo').innerHTML = `
-                <div style="text-align: center; padding: 30px 20px;">
-                    <i class="fas fa-exclamation-triangle" style="font-size: 40px; color: #ef4444; margin-bottom: 10px; display: block;"></i>
-                    <h3 style="color: #ef4444; margin: 0 0 8px; font-size: 18px;">Sessão inválida ou expirada</h3>
-                    <p style="color: #64748b; margin: 0; font-size: 14px;">${data.error || 'Esta sessão de assinatura não existe mais ou expirou (30 min).'}</p>
-                </div>
-            `;
+            safeGet('telaAssinaturaInfo').innerHTML = `<div style="text-align: center; padding: 30px 20px;"><i class="fas fa-exclamation-triangle" style="font-size: 40px; color: #ef4444; margin-bottom: 10px; display: block;"></i><h3 style="color: #ef4444; margin: 0 0 8px; font-size: 18px;">Sessão inválida ou expirada</h3><p style="color: #64748b; margin: 0; font-size: 14px;">${data.error || 'Esta sessão de assinatura não existe mais ou expirou (30 min).'}</p></div>`;
             return;
         }
         
         if (data.sessao.status === 'assinado') {
-            safeGet('telaAssinaturaInfo').innerHTML = `
-                <div style="text-align: center; padding: 30px 20px;">
-                    <i class="fas fa-check-circle" style="font-size: 40px; color: #10b981; margin-bottom: 10px; display: block;"></i>
-                    <h3 style="color: #10b981; margin: 0 0 8px; font-size: 18px;">Esta sessão já foi assinada</h3>
-                    <p style="color: #64748b; margin: 0; font-size: 14px;">Assinada por ${escapeHTML(data.sessao.assinadaPorNome || '')}</p>
-                </div>
-            `;
+            safeGet('telaAssinaturaInfo').innerHTML = `<div style="text-align: center; padding: 30px 20px;"><i class="fas fa-check-circle" style="font-size: 40px; color: #10b981; margin-bottom: 10px; display: block;"></i><h3 style="color: #10b981; margin: 0 0 8px; font-size: 18px;">Esta sessão já foi assinada</h3><p style="color: #64748b; margin: 0; font-size: 14px;">Assinada por ${escapeHTML(data.sessao.assinadaPorNome || '')}</p></div>`;
             return;
         }
         
         if (data.sessao.status === 'cancelado') {
-            safeGet('telaAssinaturaInfo').innerHTML = `
-                <div style="text-align: center; padding: 30px 20px;">
-                    <i class="fas fa-times-circle" style="font-size: 40px; color: #ef4444; margin-bottom: 10px; display: block;"></i>
-                    <h3 style="color: #ef4444; margin: 0 0 8px; font-size: 18px;">Sessão cancelada</h3>
-                    <p style="color: #64748b; margin: 0; font-size: 14px;">Esta sessão de assinatura foi cancelada.</p>
-                </div>
-            `;
+            safeGet('telaAssinaturaInfo').innerHTML = `<div style="text-align: center; padding: 30px 20px;"><i class="fas fa-times-circle" style="font-size: 40px; color: #ef4444; margin-bottom: 10px; display: block;"></i><h3 style="color: #ef4444; margin: 0 0 8px; font-size: 18px;">Sessão cancelada</h3><p style="color: #64748b; margin: 0; font-size: 14px;">Esta sessão de assinatura foi cancelada.</p></div>`;
             return;
         }
         
@@ -5175,68 +4090,37 @@ async function mostrarTelaAssinatura(sessaoId) {
                 <h2 style="margin: 0 0 4px; font-size: 16px; color: #5b21b6;">Assistente Social</h2>
                 <p style="margin: 0; color: #64748b; font-size: 12px;">Confirme os dados e assine abaixo</p>
             </div>
-            
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                <div>
-                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Aluno</span>
-                    <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML(d.alunoNome || '-')}</span>
-                </div>
-                <div>
-                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Turma</span>
-                    <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML(d.alunoTurma || '-')}</span>
-                </div>
-                <div>
-                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Motivo</span>
-                    <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML(d.motivoLabel || '-')}</span>
-                </div>
-                <div>
-                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Gravidade</span>
-                    <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML((d.gravidade || 'media').toUpperCase())}</span>
-                </div>
-                ${d.descricao ? `
-                    <div style="grid-column: 1 / -1;">
-                        <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Descrição</span>
-                        <span style="font-size: 12px; color: #1e293b;">${escapeHTML(d.descricao.substring(0, 150))}${d.descricao.length > 150 ? '...' : ''}</span>
-                    </div>
-                ` : ''}
-            </div>
-        `;
+                <div><span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Aluno</span><span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML(d.alunoNome || '-')}</span></div>
+                <div><span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Turma</span><span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML(d.alunoTurma || '-')}</span></div>
+                <div><span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Motivo</span><span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML(d.motivoLabel || '-')}</span></div>
+                <div><span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Gravidade</span><span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML((d.gravidade || 'media').toUpperCase())}</span></div>
+                ${d.descricao ? `<div style="grid-column: 1 / -1;"><span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Descrição</span><span style="font-size: 12px; color: #1e293b;">${escapeHTML(d.descricao.substring(0, 150))}${d.descricao.length > 150 ? '...' : ''}</span></div>` : ''}
+            </div>`;
         
         safeGet('telaAssinaturaArea').style.display = 'flex';
-        
         sessaoAssinaturaModo = sessaoId;
         sessaoAssinaturaAtual = data.sessao;
-        
         setTimeout(() => inicializarCanvasTela(), 100);
         window.addEventListener('resize', handleResizeCanvasTela);
-        
     } catch (e) {
-        safeGet('telaAssinaturaInfo').innerHTML = `
-            <div style="text-align: center; padding: 30px 20px;">
-                <i class="fas fa-exclamation-triangle" style="font-size: 40px; color: #ef4444; margin-bottom: 10px; display: block;"></i>
-                <h3 style="color: #ef4444; margin: 0 0 8px; font-size: 18px;">Erro ao carregar</h3>
-                <p style="color: #64748b; margin: 0; font-size: 14px;">${e.message}</p>
-            </div>
-        `;
+        safeGet('telaAssinaturaInfo').innerHTML = `<div style="text-align: center; padding: 30px 20px;"><i class="fas fa-exclamation-triangle" style="font-size: 40px; color: #ef4444; margin-bottom: 10px; display: block;"></i><h3 style="color: #ef4444; margin: 0 0 8px; font-size: 18px;">Erro ao carregar</h3><p style="color: #64748b; margin: 0; font-size: 14px;">${e.message}</p></div>`;
     }
 }
 
 function handleResizeCanvasTela() {
     const canvas = safeGet('canvasAssinatura');
     const wrapper = safeGet('canvasWrapper');
-    
     if (!canvas || !wrapper) return;
     
     if (!telaTemAssinatura) {
         const rect = wrapper.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0) return;
-        
         const dpr = window.devicePixelRatio || 1;
         canvas.width = rect.width * dpr;
         canvas.height = rect.height * dpr;
         canvas.style.width = rect.width + 'px';
         canvas.style.height = rect.height + 'px';
-        
         const ctx = canvas.getContext('2d');
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.scale(dpr, dpr);
@@ -5249,16 +4133,13 @@ function handleResizeCanvasTela() {
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = canvas.width;
         tempCanvas.height = canvas.height;
-        const tempCtx = tempCanvas.getContext('2d');
-        tempCtx.drawImage(canvas, 0, 0);
-        
+        tempCanvas.getContext('2d').drawImage(canvas, 0, 0);
         const rect = wrapper.getBoundingClientRect();
         const dpr = window.devicePixelRatio || 1;
         canvas.width = rect.width * dpr;
         canvas.height = rect.height * dpr;
         canvas.style.width = rect.width + 'px';
         canvas.style.height = rect.height + 'px';
-        
         const ctx = canvas.getContext('2d');
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.scale(dpr, dpr);
@@ -5267,7 +4148,6 @@ function handleResizeCanvasTela() {
         ctx.lineJoin = 'round';
         ctx.strokeStyle = '#8b5cf6';
         telaCtx = ctx;
-        
         ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height, 0, 0, rect.width, rect.height);
     }
 }
@@ -5325,13 +4205,8 @@ function inicializarCanvasTela() {
         wrapper.style.borderColor = '#8b5cf6';
         wrapper.style.borderStyle = 'solid';
         placeholder.style.opacity = '0';
-        
         const btn = safeGet('btnSalvarAssinatura');
-        if (btn) {
-            btn.disabled = false;
-            btn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
-            btn.style.cursor = 'pointer';
-        }
+        if (btn) { btn.disabled = false; btn.style.background = 'linear-gradient(135deg, #10b981, #059669)'; btn.style.cursor = 'pointer'; }
     };
     
     const desenhar = (e) => {
@@ -5367,79 +4242,35 @@ function limparAssinaturaTela() {
     telaCtx.clearRect(0, 0, rect.width, rect.height);
     telaTemAssinatura = false;
     if (telaPlaceholder) telaPlaceholder.style.opacity = '1';
-    if (telaWrapper) {
-        telaWrapper.style.borderColor = '#cbd5e0';
-        telaWrapper.style.borderStyle = 'dashed';
-    }
+    if (telaWrapper) { telaWrapper.style.borderColor = '#cbd5e0'; telaWrapper.style.borderStyle = 'dashed'; }
     const btn = safeGet('btnSalvarAssinatura');
-    if (btn) {
-        btn.disabled = true;
-        btn.style.background = '#cbd5e0';
-        btn.style.cursor = 'not-allowed';
-    }
+    if (btn) { btn.disabled = true; btn.style.background = '#cbd5e0'; btn.style.cursor = 'not-allowed'; }
 }
 
 async function salvarAssinaturaTela() {
     if (!telaTemAssinatura || !sessaoAssinaturaModo) return;
     
     const btn = safeGet('btnSalvarAssinatura');
-    if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
-    }
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...'; }
     
     try {
         const base64 = telaCanvas.toDataURL('image/png');
-        
         const response = await fetch(`/api/sessoes-assinatura/${sessaoAssinaturaModo}/assinar`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ 
-                assinaturaBase64: base64,
-                assinanteNome: 'Responsável'
-            })
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ assinaturaBase64: base64, assinanteNome: 'Responsável' })
         });
         
         const data = await response.json();
         if (!data.success) throw new Error(data.error || 'Erro ao salvar');
         
-        safeGet('telaAssinaturaInfo').innerHTML = `
-            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; width: 100%;">
-                <i class="fas fa-check-circle" style="font-size: 56px; color: #10b981; margin-bottom: 15px; display: block;"></i>
-                <h2 style="color: #10b981; margin: 0 0 8px; font-size: 20px;">Assinatura Confirmada!</h2>
-                <p style="color: #64748b; margin: 0 0 20px; font-size: 14px; line-height: 1.5;">
-                    A assinatura foi registrada com sucesso.<br>
-                    Você já pode fechar esta janela.
-                </p>
-                <button onclick="window.close()" 
-                        style="padding: 12px 28px; background: #8b5cf6; color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 14px; display: inline-flex; align-items: center; gap: 8px;">
-                    <i class="fas fa-times"></i> Fechar
-                </button>
-            </div>
-        `;
+        safeGet('telaAssinaturaInfo').innerHTML = `<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; width: 100%;"><i class="fas fa-check-circle" style="font-size: 56px; color: #10b981; margin-bottom: 15px; display: block;"></i><h2 style="color: #10b981; margin: 0 0 8px; font-size: 20px;">Assinatura Confirmada!</h2><p style="color: #64748b; margin: 0 0 20px; font-size: 14px; line-height: 1.5;">A assinatura foi registrada com sucesso.<br>Você já pode fechar esta janela.</p><button onclick="window.close()" style="padding: 12px 28px; background: #8b5cf6; color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 14px; display: inline-flex; align-items: center; gap: 8px;"><i class="fas fa-times"></i> Fechar</button></div>`;
         safeGet('telaAssinaturaArea').style.display = 'none';
         
         const telaInfo = safeGet('telaAssinaturaInfo');
-        if (telaInfo) {
-            telaInfo.style.flex = '1';
-            telaInfo.style.display = 'flex';
-            telaInfo.style.alignItems = 'center';
-            telaInfo.style.justifyContent = 'center';
-            telaInfo.style.maxHeight = 'none';
-            telaInfo.style.borderLeft = 'none';
-            telaInfo.style.borderRadius = '0 0 16px 16px';
-        }
-        
+        if (telaInfo) { telaInfo.style.flex = '1'; telaInfo.style.display = 'flex'; telaInfo.style.alignItems = 'center'; telaInfo.style.justifyContent = 'center'; telaInfo.style.maxHeight = 'none'; telaInfo.style.borderLeft = 'none'; telaInfo.style.borderRadius = '0 0 16px 16px'; }
     } catch (e) {
-        console.error('Erro ao salvar assinatura:', e);
         mostrarToastConcluido('❌ ' + e.message, 'error');
-        
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Assinatura';
-        }
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Assinatura'; }
     }
 }
 
@@ -5452,31 +4283,16 @@ let __lembretesCache = [];
 let __totalNaoLidasServidor = null;
 
 function isWebView() {
-    return /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
-           (typeof window.AppInventor !== 'undefined');
+    return /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) || (typeof window.AppInventor !== 'undefined');
 }
 
 function mostrarNotificacaoInterna(mensagem, tipo = 'info') {
     if (!isWebView()) { mostrarToastConcluido(mensagem); return; }
-    
     const modal = document.createElement('div');
-    modal.style.cssText = `position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center;
-        z-index: 999999; padding: 20px; box-sizing: border-box;`;
+    modal.style.cssText = `position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 999999; padding: 20px; box-sizing: border-box;`;
     const icones = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
     const cores = { success: '#10b981', error: '#dc2626', warning: '#f59e0b', info: '#8b5cf6' };
-    
-    modal.innerHTML = `
-        <div style="background: white; border-radius: 16px; padding: 25px; max-width: 380px; width: 100%;
-                    box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center;">
-            <div style="font-size: 48px; margin-bottom: 15px;">${icones[tipo] || 'ℹ️'}</div>
-            <p style="margin: 0 0 20px; color: #374151; font-size: 15px; line-height: 1.5; white-space: pre-line;">
-                ${mensagem}</p>
-            <button onclick="this.closest('div').parentElement.remove()"
-                    style="width: 100%; padding: 12px; background: ${cores[tipo] || cores.info};
-                           color: white; border: none; border-radius: 10px; font-size: 14px;
-                           font-weight: 600; cursor: pointer;">OK</button>
-        </div>`;
+    modal.innerHTML = `<div style="background: white; border-radius: 16px; padding: 25px; max-width: 380px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center;"><div style="font-size: 48px; margin-bottom: 15px;">${icones[tipo] || 'ℹ️'}</div><p style="margin: 0 0 20px; color: #374151; font-size: 15px; line-height: 1.5; white-space: pre-line;">${mensagem}</p><button onclick="this.closest('div').parentElement.remove()" style="width: 100%; padding: 12px; background: ${cores[tipo] || cores.info}; color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">OK</button></div>`;
     document.body.appendChild(modal);
 }
 
@@ -5484,35 +4300,12 @@ function confirmarInterno(mensagem) {
     return new Promise((resolve) => {
         const old = document.getElementById('confirmInternoModal');
         if (old) old.remove();
-        
-        const modalHtml = `
-            <div class="modal fade" id="confirmInternoModal" tabindex="-1" data-bs-backdrop="static">
-                <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content">
-                        <div class="modal-header" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white;">
-                            <h5 class="modal-title"><i class="fas fa-question-circle"></i> Confirmação</h5>
-                        </div>
-                        <div class="modal-body" style="white-space: pre-line; font-size: 15px;">${escapeHTML(mensagem)}</div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" id="btnCancelarConfirmInterno">
-                                <i class="fas fa-times"></i> Cancelar</button>
-                            <button type="button" class="btn btn-danger" id="btnConfirmarConfirmInterno">
-                                <i class="fas fa-check"></i> Confirmar</button>
-                        </div>
-                    </div>
-                </div>
-            </div>`;
+        const modalHtml = `<div class="modal fade" id="confirmInternoModal" tabindex="-1" data-bs-backdrop="static"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white;"><h5 class="modal-title"><i class="fas fa-question-circle"></i> Confirmação</h5></div><div class="modal-body" style="white-space: pre-line; font-size: 15px;">${escapeHTML(mensagem)}</div><div class="modal-footer"><button type="button" class="btn btn-secondary" id="btnCancelarConfirmInterno"><i class="fas fa-times"></i> Cancelar</button><button type="button" class="btn btn-danger" id="btnConfirmarConfirmInterno"><i class="fas fa-check"></i> Confirmar</button></div></div></div></div>`;
         document.body.insertAdjacentHTML('beforeend', modalHtml);
-        
         const modalEl = document.getElementById('confirmInternoModal');
         const modal = new bootstrap.Modal(modalEl);
         modal.show();
-        
-        const finalizar = (resultado) => {
-            modal.hide();
-            setTimeout(() => modalEl.remove(), 300);
-            resolve(resultado);
-        };
+        const finalizar = (resultado) => { modal.hide(); setTimeout(() => modalEl.remove(), 300); resolve(resultado); };
         document.getElementById('btnConfirmarConfirmInterno').addEventListener('click', () => finalizar(true));
         document.getElementById('btnCancelarConfirmInterno').addEventListener('click', () => finalizar(false));
     });
@@ -5520,26 +4313,18 @@ function confirmarInterno(mensagem) {
 
 function iniciarSistemaNotificacoesUnificado() {
     if (!document.getElementById('notificacoesBtn')) return;
-
     carregarTudo();
-
     if (notificacoesInterval) clearInterval(notificacoesInterval);
     notificacoesInterval = setInterval(carregarTudo, 30000);
-
     document.addEventListener('click', function(event) {
         const dropdown = document.getElementById('notificacoesDropdown');
         const btn = document.getElementById('notificacoesBtn');
-        if (dropdown && btn && !btn.contains(event.target) && !dropdown.contains(event.target)) {
-            dropdown.classList.remove('show');
-        }
+        if (dropdown && btn && !btn.contains(event.target) && !dropdown.contains(event.target)) dropdown.classList.remove('show');
     });
 }
 
 async function carregarTudo() {
-    await Promise.all([
-        carregarNotificacoesSistema(),
-        carregarLembretesRemarcacao()
-    ]);
+    await Promise.all([carregarNotificacoesSistema(), carregarLembretesRemarcacao()]);
     renderizarSinoUnificado();
     atualizarBadgeUnificado();
 }
@@ -5548,366 +4333,148 @@ async function carregarNotificacoesSistema() {
     try {
         const tk = localStorage.getItem('auth_token');
         if (!tk) return;
-
-        const response = await fetch('/api/notificacoes?apenasNaoLidas=false&limite=20', {
-            headers: { 'Authorization': `Bearer ${tk}` }
-        });
+        const response = await fetch('/api/notificacoes?apenasNaoLidas=false&limite=20', { headers: { 'Authorization': `Bearer ${tk}` } });
         const data = await response.json();
-        if (data.success) {
-            __notificacoesCache = data.notificacoes || [];
-        }
-
+        if (data.success) __notificacoesCache = data.notificacoes || [];
+        
         try {
-            const countRes = await fetch('/api/notificacoes/nao-lidas/contador', {
-                headers: { 'Authorization': `Bearer ${tk}` }
-            });
+            const countRes = await fetch('/api/notificacoes/nao-lidas/contador', { headers: { 'Authorization': `Bearer ${tk}` } });
             if (countRes.ok) {
                 const countData = await countRes.json();
                 __totalNaoLidasServidor = Number(countData.count) || 0;
             }
-        } catch (e) {
-            __totalNaoLidasServidor = null;
-        }
-
+        } catch (e) { __totalNaoLidasServidor = null; }
+        
         atualizarBadgeUnificado();
-    } catch (error) {
-        console.error('Erro ao carregar notificações:', error);
-    }
+    } catch (error) {}
 }
 
 async function carregarLembretesRemarcacao() {
     try {
         const tk = localStorage.getItem('auth_token');
         if (!tk) return;
-
-        const response = await fetch('/api/assistente-social/remarcacoes/pendentes', {
-            headers: { 'Authorization': `Bearer ${tk}` }
-        });
-        const contentType = response.headers.get('content-type') || '';
-        if (!response.ok || !contentType.includes('application/json')) {
-            __lembretesCache = [];
-            atualizarBadgeUnificado();
-            return;
-        }
+        const response = await fetch('/api/assistente-social/remarcacoes/pendentes', { headers: { 'Authorization': `Bearer ${tk}` } });
+        const ct = response.headers.get('content-type') || '';
+        if (!response.ok || !ct.includes('application/json')) { __lembretesCache = []; atualizarBadgeUnificado(); return; }
         const data = await response.json();
-        if (data.success && Array.isArray(data.remarcacoes)) {
-            __lembretesCache = data.remarcacoes;
-        } else {
-            __lembretesCache = [];
-        }
-
+        __lembretesCache = (data.success && Array.isArray(data.remarcacoes)) ? data.remarcacoes : [];
         atualizarBadgeUnificado();
-    } catch (error) {
-        __lembretesCache = [];
-        atualizarBadgeUnificado();
-    }
+    } catch (error) { __lembretesCache = []; atualizarBadgeUnificado(); }
 }
 
 function renderizarSinoUnificado() {
     const lista = document.getElementById('notificacoesLista');
     if (!lista) return;
-
     const temNotificacoes = __notificacoesCache.length > 0;
     const temLembretes = __lembretesCache.length > 0;
-
     if (!temNotificacoes && !temLembretes) {
-        lista.innerHTML = `
-            <div class="notificacoes-vazio">
-                <i class="fas fa-bell-slash"></i>
-                <p>Nenhuma notificação</p>
-            </div>`;
+        lista.innerHTML = `<div class="notificacoes-vazio"><i class="fas fa-bell-slash"></i><p>Nenhuma notificação</p></div>`;
         return;
     }
-
     let html = '';
-
     if (temLembretes) {
-        html += `
-            <div class="notificacoes-secao">
-                <div class="notificacoes-secao-titulo">
-                    <i class="fas fa-calendar-alt"></i>
-                    <span>Lembretes de Remarcação</span>
-                    <span class="badge-count">${__lembretesCache.length}</span>
-                </div>`;
-
+        html += `<div class="notificacoes-secao"><div class="notificacoes-secao-titulo"><i class="fas fa-calendar-alt"></i><span>Lembretes de Remarcação</span><span class="badge-count">${__lembretesCache.length}</span></div>`;
         const ordem = { atrasado: 0, iminente: 1, proximo: 2, hoje: 3, amanha: 4, futuro: 5 };
-        const lembretesOrdenados = [...__lembretesCache].sort((a, b) => {
-            return ordem[calcularNivelAlerta(a).nivel] - ordem[calcularNivelAlerta(b).nivel];
-        });
-
+        const lembretesOrdenados = [...__lembretesCache].sort((a, b) => ordem[calcularNivelAlerta(a).nivel] - ordem[calcularNivelAlerta(b).nivel]);
         lembretesOrdenados.forEach(r => {
-            const nivel = calcularNivelAlerta(r);
-            let itemClass = '';
-            let badgeClass = 'futuro';
-            let badgeText = nivel.label;
-
+            const nivel = calcularNivelAlerta(r); let itemClass = '', badgeClass = 'futuro', badgeText = nivel.label;
             if (nivel.nivel === 'atrasado') { itemClass = 'atrasado'; badgeClass = 'atrasado'; badgeText = `⚠️ ${nivel.label}`; }
             else if (nivel.nivel === 'iminente') { itemClass = 'urgente'; badgeClass = 'urgente'; badgeText = `🔴 ${nivel.label}`; }
             else if (nivel.nivel === 'proximo') { itemClass = 'proximo'; badgeClass = 'proximo'; badgeText = `🟠 ${nivel.label}`; }
             else if (nivel.nivel === 'hoje') { itemClass = 'hoje'; badgeClass = 'hoje'; badgeText = `🟡 Hoje ${r.horarioRemarcacao}`; }
             else if (nivel.nivel === 'amanha') { itemClass = 'amanha'; badgeClass = 'amanha'; badgeText = `🔵 Amanhã ${r.horarioRemarcacao}`; }
-
-            html += `
-                <div class="lembrete-item ${itemClass}">
-                    <div class="lembrete-header">
-                        <span class="lembrete-nome">${escapeHTML(r.alunoNome || '')}</span>
-                        <span class="lembrete-badge ${badgeClass}">${badgeText}</span>
-                    </div>
-                    <div class="lembrete-turma">
-                        <i class="fas fa-graduation-cap"></i> ${escapeHTML(r.alunoTurma || '-')}
-                    </div>
-                    <div class="lembrete-data">
-                        <span><i class="fas fa-calendar"></i> ${formatarDataBR(r.dataRemarcacao)}</span>
-                        <span><i class="fas fa-clock"></i> ${r.horarioRemarcacao || '-'}</span>
-                    </div>
-                    <span class="lembrete-tipo">${escapeHTML(r.tipoTarefaLabel || '')}</span>
-                    <div class="lembrete-acoes">
-                        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); verAtendimento('${r.atendimentoId}')">
-                            <i class="fas fa-eye"></i> Ver
-                        </button>
-                        <button class="btn btn-warning btn-sm" onclick="event.stopPropagation(); abrirRemarcar('${r.atendimentoId}')">
-                            <i class="fas fa-calendar-plus"></i> Remarcar
-                        </button>
-                        <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); abrirFinalizacaoRemarcacao('${r.id}')">
-                            <i class="fas fa-check"></i> Finalizar
-                        </button>
-                    </div>
-                </div>`;
+            html += `<div class="lembrete-item ${itemClass}"><div class="lembrete-header"><span class="lembrete-nome">${escapeHTML(r.alunoNome || '')}</span><span class="lembrete-badge ${badgeClass}">${badgeText}</span></div><div class="lembrete-turma"><i class="fas fa-graduation-cap"></i> ${escapeHTML(r.alunoTurma || '-')}</div><div class="lembrete-data"><span><i class="fas fa-calendar"></i> ${formatarDataBR(r.dataRemarcacao)}</span><span><i class="fas fa-clock"></i> ${r.horarioRemarcacao || '-'}</span></div><span class="lembrete-tipo">${escapeHTML(r.tipoTarefaLabel || '')}</span><div class="lembrete-acoes"><button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); verAtendimento('${r.atendimentoId}')"><i class="fas fa-eye"></i> Ver</button><button class="btn btn-warning btn-sm" onclick="event.stopPropagation(); abrirRemarcar('${r.atendimentoId}')"><i class="fas fa-calendar-plus"></i> Remarcar</button><button class="btn btn-success btn-sm" onclick="event.stopPropagation(); abrirFinalizacaoRemarcacao('${r.id}')"><i class="fas fa-check"></i> Finalizar</button></div></div>`;
         });
-
         html += `</div>`;
     }
-
     if (temNotificacoes) {
-        html += `
-            <div class="notificacoes-secao">
-                <div class="notificacoes-secao-titulo" style="background: #ede9fe; color: #5b21b6;">
-                    <i class="fas fa-bell" style="color: #8b5cf6;"></i>
-                    <span>Notificações do Sistema</span>
-                    <span class="badge-count" style="background: #8b5cf6;">${__notificacoesCache.filter(n => !n.lida).length} não lidas</span>
-                </div>`;
-
+        html += `<div class="notificacoes-secao"><div class="notificacoes-secao-titulo" style="background: #ede9fe; color: #5b21b6;"><i class="fas fa-bell" style="color: #8b5cf6;"></i><span>Notificações do Sistema</span><span class="badge-count" style="background: #8b5cf6;">${__notificacoesCache.filter(n => !n.lida).length} não lidas</span></div>`;
         __notificacoesCache.forEach(notif => {
-            const data = new Date(notif.createdAt);
-            const agora = new Date();
-            const diffMs = agora - data;
-            const diffMin = Math.floor(diffMs / 60000);
-            const diffHr = Math.floor(diffMs / 3600000);
-            const diffDia = Math.floor(diffMs / 86400000);
-
-            let tempoTexto;
-            if (diffMin < 1) tempoTexto = 'agora mesmo';
-            else if (diffMin < 60) tempoTexto = `há ${diffMin} min`;
-            else if (diffHr < 24) tempoTexto = `há ${diffHr} h`;
-            else tempoTexto = `há ${diffDia} d`;
-
+            const data = new Date(notif.createdAt); const agora = new Date(); const diffMs = agora - data;
+            const diffMin = Math.floor(diffMs / 60000); const diffHr = Math.floor(diffMs / 3600000); const diffDia = Math.floor(diffMs / 86400000);
+            let tempoTexto = diffMin < 1 ? 'agora mesmo' : diffMin < 60 ? `há ${diffMin} min` : diffHr < 24 ? `há ${diffHr} h` : `há ${diffDia} d`;
             const classeLida = notif.lida ? '' : 'nao-lida';
             const linkSeguro = String(notif.link || '#').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
             const idSeguro = String(notif._id || '').replace(/"/g, '').replace(/'/g, '');
             const temLink = notif.link && notif.link !== '#' && notif.link !== 'null' && notif.link !== 'undefined';
-
-            html += `
-                <div class="notificacao-item ${classeLida}"
-                     data-notif-id="${idSeguro}"
-                     data-notif-link="${linkSeguro}"
-                     style="cursor: pointer;">
-                    <div class="notificacao-icone" style="background: ${notif.cor || '#8b5cf6'};">
-                        ${notif.icone || '📋'}
-                    </div>
-                    <div class="notificacao-conteudo">
-                        <div class="notificacao-titulo">${escapeHTML(notif.titulo || '')}</div>
-                        <div class="notificacao-mensagem">${escapeHTML(notif.mensagem || '')}</div>
-                        <div class="notificacao-tempo">
-                            <i class="far fa-clock"></i> ${tempoTexto}
-                            ${temLink ? `<span style="margin-left: 8px; color: #8b5cf6; font-weight: 600;"><i class="fas fa-external-link-alt"></i> Abrir</span>` : ''}
-                        </div>
-                    </div>
-                </div>`;
+            html += `<div class="notificacao-item ${classeLida}" data-notif-id="${idSeguro}" data-notif-link="${linkSeguro}" style="cursor: pointer;"><div class="notificacao-icone" style="background: ${notif.cor || '#8b5cf6'};">${notif.icone || '📋'}</div><div class="notificacao-conteudo"><div class="notificacao-titulo">${escapeHTML(notif.titulo || '')}</div><div class="notificacao-mensagem">${escapeHTML(notif.mensagem || '')}</div><div class="notificacao-tempo"><i class="far fa-clock"></i> ${tempoTexto}${temLink ? `<span style="margin-left: 8px; color: #8b5cf6; font-weight: 600;"><i class="fas fa-external-link-alt"></i> Abrir</span>` : ''}</div></div></div>`;
         });
-
         html += `</div>`;
     }
-
     lista.innerHTML = html;
-
     lista.querySelectorAll('.notificacao-item').forEach(item => {
-        item.addEventListener('click', () => {
-            const id = item.getAttribute('data-notif-id');
-            const link = item.getAttribute('data-notif-link');
-            abrirNotificacao(id, link);
-        });
+        item.addEventListener('click', () => abrirNotificacao(item.getAttribute('data-notif-id'), item.getAttribute('data-notif-link')));
     });
 }
 
 async function abrirNotificacao(id, link) {
     try {
         const tk = localStorage.getItem('auth_token');
-
         if (id) {
-            try {
-                await fetch(`/api/notificacoes/${id}/lida`, {
-                    method: 'PUT',
-                    headers: { 'Authorization': `Bearer ${tk}` }
-                });
-            } catch (e) {
-                console.warn('[abrirNotificacao] erro ao marcar como lida:', e);
-            }
+            try { await fetch(`/api/notificacoes/${id}/lida`, { method: 'PUT', headers: { 'Authorization': `Bearer ${tk}` } }); } catch (e) {}
         }
-
         fecharNotificacoes();
         await carregarTudo();
-
-        if (link && link !== '#' && link !== 'null' && link !== 'undefined' && String(link).trim() !== '') {
-            window.location.href = link;
-        }
-    } catch (error) {
-        console.error('[abrirNotificacao]', error);
-        mostrarNotificacaoInterna('Erro ao processar notificação', 'error');
-    }
+        if (link && link !== '#' && link !== 'null' && link !== 'undefined' && String(link).trim() !== '') window.location.href = link;
+    } catch (error) { mostrarNotificacaoInterna('Erro ao processar notificação', 'error'); }
 }
 
 function atualizarBadgeUnificado() {
-    let totalNaoLidas = 0;
-    let totalLembretes = 0;
+    let totalNaoLidas = 0, totalLembretes = 0;
     try {
-        if (typeof __totalNaoLidasServidor === 'number' && __totalNaoLidasServidor >= 0) {
-            totalNaoLidas = __totalNaoLidasServidor;
-        } else {
-            totalNaoLidas = (__notificacoesCache || []).filter(n => !n.lida).length;
-        }
+        totalNaoLidas = (typeof __totalNaoLidasServidor === 'number' && __totalNaoLidasServidor >= 0) ? __totalNaoLidasServidor : (__notificacoesCache || []).filter(n => !n.lida).length;
         totalLembretes = (__lembretesCache || []).length;
-    } catch (e) {
-        console.warn('[atualizarBadgeUnificado] erro ao contar:', e);
-    }
+    } catch (e) {}
     const total = totalNaoLidas + totalLembretes;
-
-    console.log(`[atualizarBadgeUnificado] 📊 Total: ${total} (${totalNaoLidas} notif + ${totalLembretes} lembretes)`);
-
-    const badgeSino = document.getElementById('notificacoesBadge');
-    const btnSino = document.getElementById('notificacoesBtn');
-    if (badgeSino) {
-        if (total > 0) {
-            badgeSino.textContent = total > 99 ? '99+' : total;
-            badgeSino.style.setProperty('display', 'inline', 'important');
-        } else {
-            badgeSino.style.setProperty('display', 'none', 'important');
-        }
-    }
-
+    const badgeSino = document.getElementById('notificacoesBadge'); const btnSino = document.getElementById('notificacoesBtn');
+    if (badgeSino) { if (total > 0) { badgeSino.textContent = total > 99 ? '99+' : total; badgeSino.style.setProperty('display', 'inline', 'important'); } else badgeSino.style.setProperty('display', 'none', 'important'); }
     const badgeAvatar = document.getElementById('userNotificationBadge');
-    if (badgeAvatar) {
-        if (total > 0) {
-            badgeAvatar.textContent = total > 9 ? '9+' : String(total);
-            badgeAvatar.style.setProperty('display', 'flex', 'important');
-            console.log(`[atualizarBadgeUnificado] ✅ Badge avatar exibindo: "${badgeAvatar.textContent}"`);
-        } else {
-            badgeAvatar.style.setProperty('display', 'none', 'important');
-            console.log('[atualizarBadgeUnificado] Badge avatar ocultado (total = 0)');
-        }
-    } else {
-        console.warn('[atualizarBadgeUnificado] ❌ #userNotificationBadge NÃO ENCONTRADO');
-    }
-
+    if (badgeAvatar) { if (total > 0) { badgeAvatar.textContent = total > 9 ? '9+' : String(total); badgeAvatar.style.setProperty('display', 'flex', 'important'); } else badgeAvatar.style.setProperty('display', 'none', 'important'); }
     const badgeMenu = document.getElementById('menuNotifBadge');
-    if (badgeMenu) {
-        if (total > 0) {
-            badgeMenu.style.setProperty('display', 'inline-block', 'important');
-            badgeMenu.textContent = total > 99 ? '99+' : total;
-        } else {
-            badgeMenu.style.setProperty('display', 'none', 'important');
-        }
-    }
-
+    if (badgeMenu) { if (total > 0) { badgeMenu.style.setProperty('display', 'inline-block', 'important'); badgeMenu.textContent = total > 99 ? '99+' : total; } else badgeMenu.style.setProperty('display', 'none', 'important'); }
     const trigger = document.getElementById('userTrigger');
-    if (trigger) {
-        if (total > 0) trigger.classList.add('tem-notificacao');
-        else trigger.classList.remove('tem-notificacao');
-    }
-
-    if (badgeSino && total > 0) {
-        const temUrgente = (__lembretesCache || []).some(r => calcularNivelAlerta(r).urgente);
-        badgeSino.style.background = temUrgente ? '#dc2626' : '#ef4444';
-        if (temUrgente && btnSino) btnSino.classList.add('tem-novidade');
-        else if (btnSino) btnSino.classList.remove('tem-novidade');
-    }
+    if (trigger) { if (total > 0) trigger.classList.add('tem-notificacao'); else trigger.classList.remove('tem-notificacao'); }
+    if (badgeSino && total > 0) { const temUrgente = (__lembretesCache || []).some(r => calcularNivelAlerta(r).urgente); badgeSino.style.background = temUrgente ? '#dc2626' : '#ef4444'; if (temUrgente && btnSino) btnSino.classList.add('tem-novidade'); else if (btnSino) btnSino.classList.remove('tem-novidade'); }
 }
 
 function abrirNotificacoes() {
     const dropdown = document.getElementById('notificacoesDropdown');
     if (!dropdown) return;
     dropdown.classList.toggle('show');
-    if (dropdown.classList.contains('show')) {
-        carregarTudo();
-    }
+    if (dropdown.classList.contains('show')) carregarTudo();
 }
 
 async function marcarTodasLidas() {
     try {
         const token = localStorage.getItem('auth_token');
-        const response = await fetch('/api/notificacoes/marcar-todas-lidas', {
-            method: 'PUT',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const response = await fetch('/api/notificacoes/marcar-todas-lidas', { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
         const data = await response.json();
-        if (data.success) {
-            await carregarTudo();
-            mostrarNotificacaoInterna('Notificações marcadas como lidas!', 'success');
-        }
-    } catch (error) {
-        console.error('Erro ao marcar todas como lidas:', error);
-    }
+        if (data.success) { await carregarTudo(); mostrarNotificacaoInterna('Notificações marcadas como lidas!', 'success'); }
+    } catch (error) {}
 }
 
 async function limparMinhasNotificacoes(event) {
     try {
         const token = localStorage.getItem('auth_token');
-        const confirmacao = await confirmarInterno('🗑️ Deseja excluir TODAS as suas notificações do sistema?\n\n⚠️ Os lembretes de remarcação NÃO serão afetados.\n\nEsta ação não pode ser desfeita.');
+        const confirmacao = await confirmarInterno('🗑️ Deseja excluir TODAS as suas notificações do sistema?\n\n⚠️ Os lembretes de remarcação NÃO serão afetados.');
         if (!confirmacao) return;
-        
-        const response = await fetch('/api/notificacoes/limpar-minhas', {
-            method: 'DELETE',
-            headers: { 
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
-        });
+        const response = await fetch('/api/notificacoes/limpar-minhas', { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } });
         const data = await response.json();
-        
-        if (data.success) {
-            __notificacoesCache = [];
-            await carregarTudo();
-            mostrarNotificacaoInterna('Notificações excluídas com sucesso!', 'success');
-        } else {
-            throw new Error(data.error || 'Erro ao excluir');
-        }
-    } catch (error) {
-        console.error('❌ Erro:', error);
-        mostrarNotificacaoInterna(error.message, 'error');
-    }
+        if (data.success) { __notificacoesCache = []; await carregarTudo(); mostrarNotificacaoInterna('Notificações excluídas!', 'success'); }
+        else throw new Error(data.error || 'Erro');
+    } catch (error) { mostrarNotificacaoInterna(error.message, 'error'); }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => iniciarSistemaNotificacoesUnificado(), 500);
-
-    setTimeout(async () => {
-        try { await carregarTudo(); } catch (e) { /* silencioso */ }
-    }, 1200);
+    setTimeout(async () => { try { await carregarTudo(); } catch (e) {} }, 1200);
 });
 
-window.addEventListener('beforeunload', () => {
-    if (notificacoesInterval) clearInterval(notificacoesInterval);
-});
+window.addEventListener('beforeunload', () => { if (notificacoesInterval) clearInterval(notificacoesInterval); });
 
-// ============================================
-// LOGOUT
-// ============================================
 async function logout() {
     const confirmar = await confirm('Tem certeza que deseja sair?');
-    if (confirmar) {
-        localStorage.removeItem('auth_token');
-        localStorage.removeItem('user_data');
-        window.location.href = '/login.html';
-    }
+    if (confirmar) { localStorage.removeItem('auth_token'); localStorage.removeItem('user_data'); window.location.href = '/login.html'; }
 }
 
 // ============================================
@@ -5957,7 +4524,6 @@ window.habilitarBotoesRelatorioAS = habilitarBotoesRelatorioAS;
 window.gerarHTMLRelatorioAS = gerarHTMLRelatorioAS;
 window.finalizarAposSucesso = finalizarAposSucesso;
 
-// 🆕 SISTEMA DE SESSÃO DE ASSINATURA
 window.assistenteSocial = {
     toggleNecessitaAssinatura,
     abrirModalAssinatura,
@@ -5971,13 +4537,11 @@ window.assistenteSocial = {
     salvarAssinaturaTela
 };
 
-// 🆕 Canvas Inline (Assinatura direto no modal)
 window.mostrarCanvasAssinaturaInline = mostrarCanvasAssinaturaInline;
 window.voltarParaQRCode = voltarParaQRCode;
 window.limparCanvasInline = limparCanvasInline;
 window.salvarAssinaturaInline = salvarAssinaturaInline;
 
-// 🆕 Verificação 24h
 window.abrirModalVerificacao24h = abrirModalVerificacao24h;
 window.verificarAtendimento24h = verificarAtendimento24h;
 window.atualizarContadorAtendimentosAntigos = atualizarContadorAtendimentosAntigos;

@@ -1,5 +1,5 @@
 // frontend/js/admin-simples.js
-// v2.0 - CORRIGIDO: modais com onClick isolado, funções faltantes adicionadas
+// v3.0 - OTIMIZADO: cache, locks, prefetch (mantendo 100% da funcionalidade)
 
 // ============================================
 // 🛡️ PROTEÇÃO CONTRA alert() NATIVO (Kodular)
@@ -107,11 +107,130 @@ class AdminSimples {
         // ===== CONTROLE DE MODAL =====
         this._modalTokenAtual = null;
 
+        // ============================================
+        // 🚀 CACHE EM MEMÓRIA (OTIMIZAÇÃO)
+        // ============================================
+        this._cache = {
+            usuarios:    { data: null, timestamp: 0, ttl: 30 * 1000 },
+            turmas:      { data: null, timestamp: 0, ttl: 30 * 1000 },
+            provas:      { data: null, timestamp: 0, ttl: 30 * 1000 },
+            eixos:       { data: null, timestamp: 0, ttl: 5 * 60 * 1000 },
+            cursos:      { data: null, timestamp: 0, ttl: 5 * 60 * 1000 },
+            resultados:  { data: null, timestamp: 0, ttl: 30 * 1000 },
+            professores: { data: null, timestamp: 0, ttl: 5 * 60 * 1000 },
+            dashboard:   { data: null, timestamp: 0, ttl: 60 * 1000 }
+        };
+
+        // 🔒 Locks anti-clique-duplo
+        this._locks = {
+            carregarUsuarios: false,
+            carregarTurmas: false,
+            carregarProvas: false,
+            carregarEixos: false,
+            carregarCursos: false,
+            carregarResultados: false,
+            carregarDashboard: false,
+            salvarUsuario: false,
+            salvarTurma: false,
+            salvarEixo: false,
+            salvarCurso: false,
+            salvarTurmaCurricular: false,
+            enviarNotificacao: false,
+            adaptarDocumento: false,
+            gerarProva: false,
+            imprimirProva: false
+        };
+
+        // ⏱️ Debounce timers
+        this._debounces = {
+            buscarUsuarios: null,
+            buscarTurmas: null,
+            buscarProvas: null,
+            buscarResultados: null,
+            filtrarTabelaResultados: null
+        };
+
+        // 🚀 Estado de prefetch
+        this._prefetchIniciado = false;
+        this._prefetchCompleto = false;
+
         this.init();
     }
 
+    // ============================================
+    // 🔒 HELPERS DE LOCK
+    // ============================================
+    _adquirirLock(nome) {
+        if (this._locks[nome]) {
+            console.log(`🔒 [Lock] "${nome}" já ativo — ignorando`);
+            return false;
+        }
+        this._locks[nome] = true;
+        return true;
+    }
+
+    _liberarLock(nome) {
+        this._locks[nome] = false;
+    }
+
+    async _comLock(nome, fn) {
+        if (!this._adquirirLock(nome)) return;
+        try {
+            return await fn();
+        } finally {
+            this._liberarLock(nome);
+        }
+    }
+
+    // ============================================
+    // 🚀 HELPERS DE CACHE
+    // ============================================
+    _cacheValido(nome) {
+        const c = this._cache[nome];
+        if (!c || !c.data) return false;
+        return (Date.now() - c.timestamp) < c.ttl;
+    }
+
+    _getCache(nome) {
+        const c = this._cache[nome];
+        return c ? c.data : null;
+    }
+
+    _setCache(nome, data) {
+        const c = this._cache[nome];
+        if (c) {
+            c.data = data;
+            c.timestamp = Date.now();
+        }
+    }
+
+    _invalidarCache(nome = null) {
+        if (nome) {
+            if (this._cache[nome]) {
+                this._cache[nome].data = null;
+                this._cache[nome].timestamp = 0;
+            }
+        } else {
+            Object.keys(this._cache).forEach(k => {
+                this._cache[k].data = null;
+                this._cache[k].timestamp = 0;
+            });
+        }
+    }
+
+    // ============================================
+    // 🚀 HELPERS DE DEBOUNCE
+    // ============================================
+    _debounce(nome, fn, delay = 300) {
+        if (this._debounces[nome]) clearTimeout(this._debounces[nome]);
+        this._debounces[nome] = setTimeout(fn, delay);
+    }
+
+    // ============================================
+    // INICIALIZAÇÃO
+    // ============================================
     async init() {
-        console.log('🚀 Inicializando admin simples v2.0...');
+        console.log('🚀 Inicializando admin simples v3.0...');
         await this.verificarAuth();
         this.atualizarDataHora();
         setInterval(() => this.atualizarDataHora(), 1000);
@@ -119,10 +238,8 @@ class AdminSimples {
         await this.carregarNotificacoes();
         setInterval(() => this.carregarNotificacoes(), 30000);
 
-        await this.carregarUsuarios();
-        await this.carregarTurmas();
-        await this.carregarProvas();
-        await this.carregarResultados();
+        // 🚀 PREFETCH em background (não bloqueia)
+        this._prefetchTudo().catch(e => console.warn('⚠️ Prefetch falhou:', e));
 
         await this.carregarDashboard();
         await this.carregarFotoPerfilAdmin();
@@ -137,18 +254,132 @@ class AdminSimples {
                 }, 300);
             }
         });
+
+        console.log('✅ Admin simples v3.0 inicializado');
+    }
+
+    // ============================================
+    // 🚀 PREFETCH EM BACKGROUND
+    // ============================================
+    async _prefetchTudo() {
+        if (this._prefetchIniciado) return;
+        this._prefetchIniciado = true;
+
+        console.log('🔥 [Prefetch] Iniciando prefetch de dados...');
+
+        const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 1));
+
+        idle(async () => {
+            try {
+                await Promise.all([
+                    this._prefetchUsuarios(),
+                    this._prefetchTurmas(),
+                    this._prefetchProvas(),
+                    this._prefetchEixos(),
+                    this._prefetchCursos(),
+                    this._prefetchResultados()
+                ]);
+                this._prefetchCompleto = true;
+                console.log('✅ [Prefetch] Tudo pré-carregado!');
+            } catch (e) {
+                console.warn('⚠️ [Prefetch] Falha parcial:', e);
+            }
+        });
+    }
+
+    async _prefetchUsuarios() {
+        if (this._cacheValido('usuarios')) return;
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/usuarios?limit=1000', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await response.json();
+            if (data.success) {
+                this._setCache('usuarios', data.usuarios || []);
+                console.log(`🔥 [Prefetch] ${(data.usuarios || []).length} usuários`);
+            }
+        } catch (e) { console.warn('Prefetch usuários:', e); }
+    }
+
+    async _prefetchTurmas() {
+        if (this._cacheValido('turmas')) return;
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/turmas?limit=1000', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await response.json();
+            if (data.success) {
+                this._setCache('turmas', data.turmas || []);
+                console.log(`🔥 [Prefetch] ${(data.turmas || []).length} turmas`);
+            }
+        } catch (e) { console.warn('Prefetch turmas:', e); }
+    }
+
+    async _prefetchProvas() {
+        if (this._cacheValido('provas')) return;
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/provas?limit=100', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await response.json();
+            if (data.success) {
+                this._setCache('provas', data.provas || []);
+                console.log(`🔥 [Prefetch] ${(data.provas || []).length} provas`);
+            }
+        } catch (e) { console.warn('Prefetch provas:', e); }
+    }
+
+    async _prefetchEixos() {
+        if (this._cacheValido('eixos')) return;
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/eixos', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await response.json();
+            if (data.success) {
+                this._setCache('eixos', data.eixos || []);
+                console.log(`🔥 [Prefetch] ${(data.eixos || []).length} eixos`);
+            }
+        } catch (e) { console.warn('Prefetch eixos:', e); }
+    }
+
+    async _prefetchCursos() {
+        if (this._cacheValido('cursos')) return;
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/cursos', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await response.json();
+            if (data.success) {
+                this._setCache('cursos', data.cursos || []);
+                console.log(`🔥 [Prefetch] ${(data.cursos || []).length} cursos`);
+            }
+        } catch (e) { console.warn('Prefetch cursos:', e); }
+    }
+
+    async _prefetchResultados() {
+        if (this._cacheValido('resultados')) return;
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/todos-resultados', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await response.json();
+            if (data.success) {
+                this._setCache('resultados', data.resultados || []);
+                console.log(`🔥 [Prefetch] ${(data.resultados || []).length} resultados`);
+            }
+        } catch (e) { console.warn('Prefetch resultados:', e); }
     }
 
     // ============================================================================
-    // 🎯 SISTEMA DE MODAL CENTRALIZADO (CORRIGE O PROBLEMA DOS NOMES ERRADOS)
+    // 🎯 SISTEMA DE MODAL CENTRALIZADO
     // ============================================================================
-    /**
-     * Abre o modal principal.
-     * @param {string} titulo - HTML do título
-     * @param {string} conteudo - HTML do corpo
-     * @param {boolean} mostrarSalvar - Se true, mostra o botão salvar
-     * @param {Function|null} onSalvar - Callback do botão salvar (ISOLADO!)
-     */
     abrirModal(titulo, conteudo, mostrarSalvar = true, onSalvar = null) {
         console.log('📂 Abrindo modal:', { titulo, mostrarSalvar, temOnSalvar: !!onSalvar });
 
@@ -166,13 +397,11 @@ class AdminSimples {
         modalBody.innerHTML = conteudo || '<p style="padding: 20px; text-align: center;">Nenhum conteúdo disponível</p>';
 
         if (modalSaveBtn) {
-            // 🔥 LIMPA QUALQUER ONCLICK ANTIGO PRIMEIRO
             modalSaveBtn.onclick = null;
             modalSaveBtn.removeAttribute('onclick');
 
             if (mostrarSalvar) {
                 modalSaveBtn.style.display = 'inline-block';
-                // 🔥 SE FOI PASSADO onSalvar, USA; SENÃO, NÃO FAZ NADA
                 if (typeof onSalvar === 'function') {
                     modalSaveBtn.onclick = (e) => {
                         e.preventDefault();
@@ -180,7 +409,6 @@ class AdminSimples {
                         onSalvar();
                     };
                 } else {
-                    // Se não passou callback, o botão não faz nada (evita herdar onclick antigo)
                     modalSaveBtn.onclick = (e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -195,17 +423,11 @@ class AdminSimples {
         modal.style.display = 'flex';
     }
 
-    /**
-     * Alias para compatibilidade — aponta para o mesmo modal.
-     */
     openModal() {
         const modal = document.getElementById('modal');
         if (modal) modal.style.display = 'flex';
     }
 
-    /**
-     * Fecha o modal principal e RESETA o botão salvar.
-     */
     fecharModal() {
         console.log('🔚 Fechando modal');
         const modal = document.getElementById('modal');
@@ -220,9 +442,6 @@ class AdminSimples {
         }
     }
 
-    /**
-     * Alias — algumas funções chamam closeModal()
-     */
     closeModal() {
         this.fecharModal();
     }
@@ -356,7 +575,6 @@ class AdminSimples {
             </style>
         `;
 
-        // 🔥 CHAMA COM CALLBACK ISOLADO
         this.abrirModal(
             '<i class="fas fa-universal-access"></i> Adaptar Documento',
             conteudo,
@@ -367,7 +585,6 @@ class AdminSimples {
             }
         );
 
-        // Customiza o botão
         setTimeout(() => {
             const btn = document.getElementById('modalSaveBtn');
             if (btn) {
@@ -802,7 +1019,7 @@ class AdminSimples {
         }
     }
 
-        // ============================================================================
+    // ============================================================================
     // 📢 ENVIO DE NOTIFICAÇÕES EM MASSA
     // ============================================================================
     async abrirModalEnvioNotificacao() {
@@ -817,7 +1034,6 @@ class AdminSimples {
             return;
         }
 
-        // 🔥 Abre com callback ISOLADO
         this.abrirModal(
             '<i class="fas fa-paper-plane"></i> Enviar Notificação',
             `<div style="text-align:center;padding:40px;">
@@ -831,7 +1047,6 @@ class AdminSimples {
 
         modalSaveBtn.style.display = 'none';
 
-        // Buscar todos os usuários
         let todosUsuarios = [];
         try {
             const token = localStorage.getItem('auth_token');
@@ -864,7 +1079,6 @@ class AdminSimples {
             return;
         }
 
-        // Contagem por perfil
         const c = {
             todos: todosUsuarios.length,
             aluno: todosUsuarios.filter(u => u.role === 'aluno').length,
@@ -886,7 +1100,6 @@ class AdminSimples {
             recepcao: todosUsuarios.filter(u => u.role === 'recepcao').length
         };
 
-        // Estado
         this.usuariosParaNotificacao = todosUsuarios;
         this.usuariosSelecionados = new Set();
         this.tipoDestinatarioAtual = 'todos';
@@ -897,7 +1110,6 @@ class AdminSimples {
 
         const html = `
             <div style="padding:20px;max-width:800px;">
-                <!-- MODO -->
                 <div style="margin-bottom:20px;background:#f8fafc;border-radius:12px;padding:5px;display:flex;gap:5px;">
                     <button type="button" id="modoTodosBtn" onclick="adminSimples.mudarModoNotificacao('todos')"
                         style="flex:1;padding:12px;border:none;border-radius:10px;cursor:pointer;font-weight:600;
@@ -913,7 +1125,6 @@ class AdminSimples {
                     </button>
                 </div>
 
-                <!-- INDIVIDUAL -->
                 <div id="secaoSelecaoIndividual" style="display:none;margin-bottom:20px;">
                     <div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);border-radius:12px;
                                 padding:20px;color:white;">
@@ -953,7 +1164,6 @@ class AdminSimples {
                     </div>
                 </div>
 
-                <!-- PERFIS EM MASSA -->
                 <div id="secaoPerfisMassa" style="margin-bottom:20px;">
                     <label style="display:block;margin-bottom:10px;font-weight:600;font-size:0.9rem;color:#374151;">
                         <i class="fas fa-user-tag" style="color:#4f46e5;"></i> Filtrar por Perfil
@@ -1064,7 +1274,6 @@ class AdminSimples {
                     </div>
                 </div>
 
-                <!-- INFO -->
                 <div id="infoDestinatariosNotificacao" style="background:#eef2ff;border-left:4px solid #4f46e5;
                     padding:12px 15px;border-radius:8px;margin-bottom:20px;display:flex;align-items:center;gap:10px;">
                     <i class="fas fa-info-circle" style="font-size:1.2rem;color:#4f46e5;"></i>
@@ -1073,7 +1282,6 @@ class AdminSimples {
                     </span>
                 </div>
 
-                <!-- TEMPLATES -->
                 <div style="margin-bottom:20px;background:#f8fafc;border-radius:8px;padding:15px;border:1px solid #e5e7eb;">
                     <label style="display:block;margin-bottom:10px;font-weight:600;font-size:0.9rem;color:#374151;">
                         <i class="fas fa-magic" style="color:#4f46e5;"></i> Modelos Rápidos
@@ -1090,7 +1298,6 @@ class AdminSimples {
                     </div>
                 </div>
 
-                <!-- FORM -->
                 <div>
                     <div style="margin-bottom:15px;">
                         <label style="display:block;margin-bottom:5px;font-weight:600;font-size:0.9rem;color:#374151;">
@@ -1143,7 +1350,6 @@ class AdminSimples {
             </div>
         `;
 
-        // 🔥 ABRE O MODAL COM CALLBACK ISOLADO
         this.abrirModal(
             '<i class="fas fa-paper-plane"></i> Enviar Notificação',
             html,
@@ -1363,7 +1569,7 @@ class AdminSimples {
             'supervisao': '🛡️ Supervisão', 'psicologia': '🧠 Psicologia',
             'assistente-social': '🤝 Assistente Social', 'protagonismo': '⭐ Protagonismo',
             'biblioteca': '📚 Biblioteca', 'secretaria': '🎓 Secretaria',
-            'recepcao': '🛎️ Recepção', 'recepcao': '🛎️ Recepção', 'gestao-adm': '🧑‍💼 Gestão ADM'
+            'recepcao': '🛎️ Recepção', 'gestao-adm': '🧑‍💼 Gestão ADM'
         };
 
         const infoEl = document.getElementById('infoDestinatariosNotificacao');
@@ -1608,7 +1814,7 @@ class AdminSimples {
     }
 
     // ============================================================================
-    // DASHBOARD
+    // DASHBOARD (otimizado com cache)
     // ============================================================================
     async mudarAba(aba) {
         this.abaAtual = aba;
@@ -1639,248 +1845,296 @@ class AdminSimples {
     }
 
     async carregarDashboard() {
+        if (this._cacheValido('dashboard')) {
+            const cached = this._getCache('dashboard');
+            this.eixos = cached.eixos || [];
+            this.cursos = cached.cursos || [];
+            this._renderizarDashboard(cached.stats, cached.eixos, cached.cursos);
+            this._revalidarDashboard();
+            return;
+        }
+
+        return this._comLock('carregarDashboard', async () => {
+            const content = document.getElementById('contentArea');
+            if (!content) return;
+
+            try {
+                const token = localStorage.getItem('auth_token');
+
+                const [response, eixosRes, cursosRes] = await Promise.all([
+                    fetch('/api/admin/dashboard', { headers: { 'Authorization': `Bearer ${token}` } }),
+                    fetch('/api/admin/eixos', { headers: { 'Authorization': `Bearer ${token}` } }),
+                    fetch('/api/admin/cursos', { headers: { 'Authorization': `Bearer ${token}` } })
+                ]);
+
+                const data = await response.json();
+                const eixosData = await eixosRes.json();
+                const cursosData = await cursosRes.json();
+
+                const stats = data.success ? data.data : this.getDadosExemplo();
+
+                this.eixos = eixosData.success ? (eixosData.eixos || []) : [];
+                this.cursos = cursosData.success ? (cursosData.cursos || []) : [];
+
+                this._setCache('dashboard', { stats, eixos: this.eixos, cursos: this.cursos });
+                this._setCache('eixos', this.eixos);
+                this._setCache('cursos', this.cursos);
+
+                this._renderizarDashboard(stats, this.eixos, this.cursos);
+            } catch (error) {
+                console.error('❌ Erro ao carregar dashboard:', error);
+                this._renderizarErroDashboard(error.message);
+            }
+        });
+    }
+
+    async _revalidarDashboard() {
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/dashboard', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await response.json();
+            if (data.success) {
+                const stats = data.data;
+                const cached = this._getCache('dashboard') || {};
+                this._setCache('dashboard', { stats, eixos: cached.eixos || this.eixos, cursos: cached.cursos || this.cursos });
+                if (this.abaAtual === 'dashboard') {
+                    this._renderizarDashboard(stats, this.eixos, this.cursos);
+                }
+            }
+        } catch (e) {
+            console.warn('Revalidação dashboard:', e);
+        }
+    }
+
+    _renderizarErroDashboard(mensagem) {
+        const content = document.getElementById('contentArea');
+        if (!content) return;
+        content.innerHTML = `
+            <div style="text-align:center;padding:60px;background:white;border-radius:14px;">
+                <i class="fas fa-exclamation-triangle" style="font-size:48px;color:#dc3545;margin-bottom:15px;"></i>
+                <h3 style="color:#721c24;margin-bottom:8px;">Erro ao carregar dashboard</h3>
+                <p style="color:#6c757d;margin-bottom:20px;">${mensagem}</p>
+                <button onclick="adminSimples.carregarDashboard()" class="btn-primary">
+                    <i class="fas fa-sync-alt"></i> Tentar novamente
+                </button>
+            </div>`;
+    }
+
+    _renderizarDashboard(stats, eixos, cursos) {
         const content = document.getElementById('contentArea');
         if (!content) return;
 
-        try {
-            const token = localStorage.getItem('auth_token');
+        const hora = new Date().getHours();
+        let saudacao = 'Bom dia';
+        if (hora >= 12 && hora < 18) saudacao = 'Boa tarde';
+        else if (hora >= 18 || hora < 6) saudacao = 'Boa noite';
 
-            const [response, eixosRes, cursosRes] = await Promise.all([
-                fetch('/api/admin/dashboard', { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch('/api/admin/eixos', { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch('/api/admin/cursos', { headers: { 'Authorization': `Bearer ${token}` } })
-            ]);
+        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+        const primeiroNome = (userData.nome || 'Admin').split(' ')[0];
 
-            const data = await response.json();
-            const eixosData = await eixosRes.json();
-            const cursosData = await cursosRes.json();
+        const hoje = new Date();
+        const dataFormatada = hoje.toLocaleDateString('pt-BR', {
+            weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+        });
+        const horaFormatada = hoje.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
-            const stats = data.success ? data.data : this.getDadosExemplo();
+        const totalUsuarios = stats.totalUsuarios || 0;
+        const totalTurmas = stats.totalTurmas || 0;
+        const totalProvas = stats.totalProvas || 0;
+        const totalResultados = stats.totalResultados || 0;
+        const turmasAtivas = stats.turmasAtivas || 0;
+        const provasAtivas = stats.provasPorStatus?.ativa || 0;
+        const totalAlunos = stats.totalAlunos || 0;
+        const totalProfessores = stats.totalProfessores || 0;
 
-            this.eixos = eixosData.success ? (eixosData.eixos || []) : [];
-            this.cursos = cursosData.success ? (cursosData.cursos || []) : [];
-
-            const hora = new Date().getHours();
-            let saudacao = 'Bom dia';
-            if (hora >= 12 && hora < 18) saudacao = 'Boa tarde';
-            else if (hora >= 18 || hora < 6) saudacao = 'Boa noite';
-
-            const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-            const primeiroNome = (userData.nome || 'Admin').split(' ')[0];
-
-            const hoje = new Date();
-            const dataFormatada = hoje.toLocaleDateString('pt-BR', {
-                weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-            });
-            const horaFormatada = hoje.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-
-            const totalUsuarios = stats.totalUsuarios || 0;
-            const totalTurmas = stats.totalTurmas || 0;
-            const totalProvas = stats.totalProvas || 0;
-            const totalResultados = stats.totalResultados || 0;
-            const turmasAtivas = stats.turmasAtivas || 0;
-            const provasAtivas = stats.provasPorStatus?.ativa || 0;
-            const totalAlunos = stats.totalAlunos || 0;
-            const totalProfessores = stats.totalProfessores || 0;
-
-            content.innerHTML = `
-                <div class="dashboard-welcome-simples">
-                    <div class="welcome-simples-left">
-                        <h1>👋 Olá, ${primeiroNome}!</h1>
-                        <p>Aqui está o resumo do EducaPleno.</p>
-                    </div>
-                    <div class="welcome-simples-right">
-                        <div class="welcome-simples-date">${dataFormatada}</div>
-                        <div class="welcome-simples-time">${horaFormatada}</div>
-                    </div>
+        content.innerHTML = `
+            <div class="dashboard-welcome-simples">
+                <div class="welcome-simples-left">
+                    <h1>👋 Olá, ${primeiroNome}!</h1>
+                    <p>Aqui está o resumo do EducaPleno.</p>
                 </div>
+                <div class="welcome-simples-right">
+                    <div class="welcome-simples-date">${dataFormatada}</div>
+                    <div class="welcome-simples-time">${horaFormatada}</div>
+                </div>
+            </div>
 
-                <div class="dashboard-cards-simples">
-                    <div class="card-simples usuarios" onclick="adminSimples.mudarAba('usuarios')">
-                        <div class="card-simples-icon"><i class="fas fa-users"></i></div>
-                        <div class="card-simples-content">
-                            <div class="card-simples-label">Usuários</div>
-                            <div class="card-simples-value">${totalUsuarios}</div>
-                            <div class="card-simples-detail">
-                                <i class="fas fa-user-graduate"></i> ${totalAlunos} alunos •
-                                <i class="fas fa-chalkboard-teacher"></i> ${totalProfessores} prof.
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card-simples turmas" onclick="adminSimples.mudarAba('turmas')">
-                        <div class="card-simples-icon"><i class="fas fa-school"></i></div>
-                        <div class="card-simples-content">
-                            <div class="card-simples-label">Turmas</div>
-                            <div class="card-simples-value">${totalTurmas}</div>
-                            <div class="card-simples-detail"><i class="fas fa-check-circle"></i> ${turmasAtivas} ativas</div>
-                        </div>
-                    </div>
-                    <div class="card-simples provas" onclick="adminSimples.mudarAba('provas')">
-                        <div class="card-simples-icon"><i class="fas fa-file-alt"></i></div>
-                        <div class="card-simples-content">
-                            <div class="card-simples-label">Provas</div>
-                            <div class="card-simples-value">${totalProvas}</div>
-                            <div class="card-simples-detail"><i class="fas fa-fire"></i> ${provasAtivas} ativas</div>
-                        </div>
-                    </div>
-                    <div class="card-simples resultados" onclick="adminSimples.mudarAba('resultados')">
-                        <div class="card-simples-icon"><i class="fas fa-chart-bar"></i></div>
-                        <div class="card-simples-content">
-                            <div class="card-simples-label">Resultados</div>
-                            <div class="card-simples-value">${totalResultados}</div>
-                            <div class="card-simples-detail"><i class="fas fa-check-double"></i> correções</div>
+            <div class="dashboard-cards-simples">
+                <div class="card-simples usuarios" onclick="adminSimples.mudarAba('usuarios')">
+                    <div class="card-simples-icon"><i class="fas fa-users"></i></div>
+                    <div class="card-simples-content">
+                        <div class="card-simples-label">Usuários</div>
+                        <div class="card-simples-value">${totalUsuarios}</div>
+                        <div class="card-simples-detail">
+                            <i class="fas fa-user-graduate"></i> ${totalAlunos} alunos •
+                            <i class="fas fa-chalkboard-teacher"></i> ${totalProfessores} prof.
                         </div>
                     </div>
                 </div>
+                <div class="card-simples turmas" onclick="adminSimples.mudarAba('turmas')">
+                    <div class="card-simples-icon"><i class="fas fa-school"></i></div>
+                    <div class="card-simples-content">
+                        <div class="card-simples-label">Turmas</div>
+                        <div class="card-simples-value">${totalTurmas}</div>
+                        <div class="card-simples-detail"><i class="fas fa-check-circle"></i> ${turmasAtivas} ativas</div>
+                    </div>
+                </div>
+                <div class="card-simples provas" onclick="adminSimples.mudarAba('provas')">
+                    <div class="card-simples-icon"><i class="fas fa-file-alt"></i></div>
+                    <div class="card-simples-content">
+                        <div class="card-simples-label">Provas</div>
+                        <div class="card-simples-value">${totalProvas}</div>
+                        <div class="card-simples-detail"><i class="fas fa-fire"></i> ${provasAtivas} ativas</div>
+                    </div>
+                </div>
+                <div class="card-simples resultados" onclick="adminSimples.mudarAba('resultados')">
+                    <div class="card-simples-icon"><i class="fas fa-chart-bar"></i></div>
+                    <div class="card-simples-content">
+                        <div class="card-simples-label">Resultados</div>
+                        <div class="card-simples-value">${totalResultados}</div>
+                        <div class="card-simples-detail"><i class="fas fa-check-double"></i> correções</div>
+                    </div>
+                </div>
+            </div>
 
-                <div class="dashboard-simples-layout">
-                    <div class="dashboard-simples-main">
-                        <div class="painel-simples-card">
-                            <div class="painel-simples-header">
-                                <div class="painel-simples-title">
-                                    <i class="fas fa-history"></i><h3>Atividades Recentes</h3>
-                                </div>
-                                <a href="#" class="painel-simples-link" onclick="event.preventDefault(); adminSimples.verHistorico();">
-                                    Ver histórico <i class="fas fa-arrow-right"></i>
-                                </a>
+            <div class="dashboard-simples-layout">
+                <div class="dashboard-simples-main">
+                    <div class="painel-simples-card">
+                        <div class="painel-simples-header">
+                            <div class="painel-simples-title">
+                                <i class="fas fa-history"></i><h3>Atividades Recentes</h3>
                             </div>
-                            <div class="painel-simples-list" id="atividadesRecentes">
-                                ${this.gerarAtividades(stats.atividadesRecentes)}
-                            </div>
+                            <a href="#" class="painel-simples-link" onclick="event.preventDefault(); adminSimples.verHistorico();">
+                                Ver histórico <i class="fas fa-arrow-right"></i>
+                            </a>
                         </div>
-
-                        <div class="painel-simples-card">
-                            <div class="painel-simples-header">
-                                <div class="painel-simples-title"><i class="fas fa-chart-pie"></i><h3>Estatísticas Rápidas</h3></div>
-                            </div>
-                            <div style="padding:8px;">
-                                <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
-                                    <div style="background:#f0f9ff;padding:15px;border-radius:10px;border-left:3px solid #0891b2;">
-                                        <div style="font-size:11px;color:#0891b2;font-weight:600;margin-bottom:5px;">
-                                            <i class="fas fa-users"></i> ALUNOS ATIVOS
-                                        </div>
-                                        <div style="font-size:22px;font-weight:700;color:#1f2937;">${stats.totalAlunos || 0}</div>
-                                    </div>
-                                    <div style="background:#f0fdf4;padding:15px;border-radius:10px;border-left:3px solid #10b981;">
-                                        <div style="font-size:11px;color:#059669;font-weight:600;margin-bottom:5px;">
-                                            <i class="fas fa-user-graduate"></i> ACESSIBILIDADE
-                                        </div>
-                                        <div style="font-size:22px;font-weight:700;color:#1f2937;">${stats.alunosComAcessibilidade || 0}</div>
-                                    </div>
-                                    <div style="background:#fef3c7;padding:15px;border-radius:10px;border-left:3px solid #f59e0b;">
-                                        <div style="font-size:11px;color:#d97706;font-weight:600;margin-bottom:5px;">
-                                            <i class="fas fa-question-circle"></i> QUESTÕES
-                                        </div>
-                                        <div style="font-size:22px;font-weight:700;color:#1f2937;">${stats.totalQuestoes || 0}</div>
-                                    </div>
-                                    <div style="background:#f3e8ff;padding:15px;border-radius:10px;border-left:3px solid #8b5cf6;">
-                                        <div style="font-size:11px;color:#7c3aed;font-weight:600;margin-bottom:5px;">
-                                            <i class="fas fa-graduation-cap"></i> CURSOS/EIXOS
-                                        </div>
-                                        <div style="font-size:22px;font-weight:700;color:#1f2937;">
-                                            ${(this.cursos?.length || 0)} / ${(this.eixos?.length || 0)}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                        <div class="painel-simples-list" id="atividadesRecentes">
+                            ${this.gerarAtividades(stats.atividadesRecentes)}
                         </div>
                     </div>
 
-                    <div class="dashboard-simples-sidebar">
-                        <div class="painel-simples-card">
-                            <div class="painel-simples-header">
-                                <div class="painel-simples-title"><i class="fas fa-bolt"></i><h3>Ações Rápidas</h3></div>
-                            </div>
-                            <div class="acoes-rapidas-simples">
-                                <a class="acao-rapida-simples-item" onclick="adminSimples.mudarAba('usuarios')">
-                                    <div class="acao-rapida-simples-icon"><i class="fas fa-users"></i></div>
-                                    <span>Gerenciar usuários</span><i class="fas fa-chevron-right"></i>
-                                </a>
-                                <a class="acao-rapida-simples-item" onclick="adminSimples.mudarAba('turmas')">
-                                    <div class="acao-rapida-simples-icon"><i class="fas fa-school"></i></div>
-                                    <span>Gerenciar turmas</span><i class="fas fa-chevron-right"></i>
-                                </a>
-                                <a class="acao-rapida-simples-item" onclick="adminSimples.mudarAba('provas')">
-                                    <div class="acao-rapida-simples-icon"><i class="fas fa-file-alt"></i></div>
-                                    <span>Criar prova</span><i class="fas fa-chevron-right"></i>
-                                </a>
-                                <a class="acao-rapida-simples-item" onclick="adminSimples.abrirModalEnvioNotificacao()">
-                                    <div class="acao-rapida-simples-icon"><i class="fas fa-bullhorn"></i></div>
-                                    <span>Enviar notificação</span><i class="fas fa-chevron-right"></i>
-                                </a>
-                                <a class="acao-rapida-simples-item" onclick="adminSimples.mudarAba('resultados')">
-                                    <div class="acao-rapida-simples-icon"><i class="fas fa-chart-line"></i></div>
-                                    <span>Ver resultados</span><i class="fas fa-chevron-right"></i>
-                                </a>
-                            </div>
+                    <div class="painel-simples-card">
+                        <div class="painel-simples-header">
+                            <div class="painel-simples-title"><i class="fas fa-chart-pie"></i><h3>Estatísticas Rápidas</h3></div>
                         </div>
-
-                        <div class="painel-simples-card">
-                            <div class="painel-simples-header">
-                                <div class="painel-simples-title"><i class="fas fa-th-large"></i><h3>Atalhos</h3></div>
-                            </div>
-                            <div class="atalhos-simples">
-                                <a class="atalho-simples-item" onclick="adminSimples.mudarAba('eixos')">
-                                    <div class="atalho-simples-icon"><i class="fas fa-sitemap"></i></div>
-                                    <div class="atalho-simples-label">Eixos</div>
-                                </a>
-                                <a class="atalho-simples-item" onclick="adminSimples.mudarAba('cursos')">
-                                    <div class="atalho-simples-icon"><i class="fas fa-graduation-cap"></i></div>
-                                    <div class="atalho-simples-label">Cursos</div>
-                                </a>
-                                <a class="atalho-simples-item" onclick="adminSimples.abrirModalUploadAdaptarDocumento()">
-                                    <div class="atalho-simples-icon"><i class="fas fa-universal-access"></i></div>
-                                    <div class="atalho-simples-label">Adaptar</div>
-                                </a>
-                                <a class="atalho-simples-item" onclick="window.location.href='editar-perfil.html'">
-                                    <div class="atalho-simples-icon"><i class="fas fa-user-edit"></i></div>
-                                    <div class="atalho-simples-label">Meu Perfil</div>
-                                </a>
-                            </div>
-                        </div>
-
-                        <div class="painel-simples-card">
-                            <div class="painel-simples-header">
-                                <div class="painel-simples-title"><i class="fas fa-info-circle"></i><h3>Info do Sistema</h3></div>
-                            </div>
-                            <div class="info-sistema-simples">
-                                <div class="info-sistema-item">
-                                    <div class="info-sistema-label"><i class="fas fa-code-branch"></i> Versão</div>
-                                    <div class="info-sistema-valor">2.0.0</div>
+                        <div style="padding:8px;">
+                            <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
+                                <div style="background:#f0f9ff;padding:15px;border-radius:10px;border-left:3px solid #0891b2;">
+                                    <div style="font-size:11px;color:#0891b2;font-weight:600;margin-bottom:5px;">
+                                        <i class="fas fa-users"></i> ALUNOS ATIVOS
+                                    </div>
+                                    <div style="font-size:22px;font-weight:700;color:#1f2937;">${stats.totalAlunos || 0}</div>
                                 </div>
-                                <div class="info-sistema-item">
-                                    <div class="info-sistema-label"><i class="fas fa-circle"></i> Status</div>
-                                    <div class="info-sistema-valor ok"><i class="fas fa-circle" style="font-size:6px;"></i> Online</div>
+                                <div style="background:#f0fdf4;padding:15px;border-radius:10px;border-left:3px solid #10b981;">
+                                    <div style="font-size:11px;color:#059669;font-weight:600;margin-bottom:5px;">
+                                        <i class="fas fa-user-graduate"></i> ACESSIBILIDADE
+                                    </div>
+                                    <div style="font-size:22px;font-weight:700;color:#1f2937;">${stats.alunosComAcessibilidade || 0}</div>
                                 </div>
-                                <div class="info-sistema-item">
-                                    <div class="info-sistema-label"><i class="fas fa-user-shield"></i> Perfil</div>
-                                    <div class="info-sistema-valor">${userData.role === 'super_admin' ? 'Super Admin' : 'Admin'}</div>
+                                <div style="background:#fef3c7;padding:15px;border-radius:10px;border-left:3px solid #f59e0b;">
+                                    <div style="font-size:11px;color:#d97706;font-weight:600;margin-bottom:5px;">
+                                        <i class="fas fa-question-circle"></i> QUESTÕES
+                                    </div>
+                                    <div style="font-size:22px;font-weight:700;color:#1f2937;">${stats.totalQuestoes || 0}</div>
                                 </div>
-                                <div class="info-sistema-item">
-                                    <div class="info-sistema-label"><i class="fas fa-clock"></i> Última sync</div>
-                                    <div class="info-sistema-valor">${horaFormatada}</div>
-                                </div>
-                                <div class="info-sistema-item">
-                                    <div class="info-sistema-label"><i class="fas fa-database"></i> Último backup</div>
-                                    <div class="info-sistema-valor warning"><i class="fas fa-exclamation-triangle"></i> Pendente</div>
+                                <div style="background:#f3e8ff;padding:15px;border-radius:10px;border-left:3px solid #8b5cf6;">
+                                    <div style="font-size:11px;color:#7c3aed;font-weight:600;margin-bottom:5px;">
+                                        <i class="fas fa-graduation-cap"></i> CURSOS/EIXOS
+                                    </div>
+                                    <div style="font-size:22px;font-weight:700;color:#1f2937;">
+                                        ${(cursos?.length || 0)} / ${(eixos?.length || 0)}
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            `;
-        } catch (error) {
-            console.error('❌ Erro ao carregar dashboard:', error);
-            content.innerHTML = `
-                <div style="text-align:center;padding:60px;background:white;border-radius:14px;">
-                    <i class="fas fa-exclamation-triangle" style="font-size:48px;color:#dc3545;margin-bottom:15px;"></i>
-                    <h3 style="color:#721c24;margin-bottom:8px;">Erro ao carregar dashboard</h3>
-                    <p style="color:#6c757d;margin-bottom:20px;">${error.message}</p>
-                    <button onclick="adminSimples.carregarDashboard()" class="btn-primary">
-                        <i class="fas fa-sync-alt"></i> Tentar novamente
-                    </button>
-                </div>`;
-        }
+
+                <div class="dashboard-simples-sidebar">
+                    <div class="painel-simples-card">
+                        <div class="painel-simples-header">
+                            <div class="painel-simples-title"><i class="fas fa-bolt"></i><h3>Ações Rápidas</h3></div>
+                        </div>
+                        <div class="acoes-rapidas-simples">
+                            <a class="acao-rapida-simples-item" onclick="adminSimples.mudarAba('usuarios')">
+                                <div class="acao-rapida-simples-icon"><i class="fas fa-users"></i></div>
+                                <span>Gerenciar usuários</span><i class="fas fa-chevron-right"></i>
+                            </a>
+                            <a class="acao-rapida-simples-item" onclick="adminSimples.mudarAba('turmas')">
+                                <div class="acao-rapida-simples-icon"><i class="fas fa-school"></i></div>
+                                <span>Gerenciar turmas</span><i class="fas fa-chevron-right"></i>
+                            </a>
+                            <a class="acao-rapida-simples-item" onclick="adminSimples.mudarAba('provas')">
+                                <div class="acao-rapida-simples-icon"><i class="fas fa-file-alt"></i></div>
+                                <span>Criar prova</span><i class="fas fa-chevron-right"></i>
+                            </a>
+                            <a class="acao-rapida-simples-item" onclick="adminSimples.abrirModalEnvioNotificacao()">
+                                <div class="acao-rapida-simples-icon"><i class="fas fa-bullhorn"></i></div>
+                                <span>Enviar notificação</span><i class="fas fa-chevron-right"></i>
+                            </a>
+                            <a class="acao-rapida-simples-item" onclick="adminSimples.mudarAba('resultados')">
+                                <div class="acao-rapida-simples-icon"><i class="fas fa-chart-line"></i></div>
+                                <span>Ver resultados</span><i class="fas fa-chevron-right"></i>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="painel-simples-card">
+                        <div class="painel-simples-header">
+                            <div class="painel-simples-title"><i class="fas fa-th-large"></i><h3>Atalhos</h3></div>
+                        </div>
+                        <div class="atalhos-simples">
+                            <a class="atalho-simples-item" onclick="adminSimples.mudarAba('eixos')">
+                                <div class="atalho-simples-icon"><i class="fas fa-sitemap"></i></div>
+                                <div class="atalho-simples-label">Eixos</div>
+                            </a>
+                            <a class="atalho-simples-item" onclick="adminSimples.mudarAba('cursos')">
+                                <div class="atalho-simples-icon"><i class="fas fa-graduation-cap"></i></div>
+                                <div class="atalho-simples-label">Cursos</div>
+                            </a>
+                            <a class="atalho-simples-item" onclick="adminSimples.abrirModalUploadAdaptarDocumento()">
+                                <div class="atalho-simples-icon"><i class="fas fa-universal-access"></i></div>
+                                <div class="atalho-simples-label">Adaptar</div>
+                            </a>
+                            <a class="atalho-simples-item" onclick="window.location.href='editar-perfil.html'">
+                                <div class="atalho-simples-icon"><i class="fas fa-user-edit"></i></div>
+                                <div class="atalho-simples-label">Meu Perfil</div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="painel-simples-card">
+                        <div class="painel-simples-header">
+                            <div class="painel-simples-title"><i class="fas fa-info-circle"></i><h3>Info do Sistema</h3></div>
+                        </div>
+                        <div class="info-sistema-simples">
+                            <div class="info-sistema-item">
+                                <div class="info-sistema-label"><i class="fas fa-code-branch"></i> Versão</div>
+                                <div class="info-sistema-valor">3.0.0</div>
+                            </div>
+                            <div class="info-sistema-item">
+                                <div class="info-sistema-label"><i class="fas fa-circle"></i> Status</div>
+                                <div class="info-sistema-valor ok"><i class="fas fa-circle" style="font-size:6px;"></i> Online</div>
+                            </div>
+                            <div class="info-sistema-item">
+                                <div class="info-sistema-label"><i class="fas fa-user-shield"></i> Perfil</div>
+                                <div class="info-sistema-valor">${userData.role === 'super_admin' ? 'Super Admin' : 'Admin'}</div>
+                            </div>
+                            <div class="info-sistema-item">
+                                <div class="info-sistema-label"><i class="fas fa-clock"></i> Última sync</div>
+                                <div class="info-sistema-valor">${horaFormatada}</div>
+                            </div>
+                            <div class="info-sistema-item">
+                                <div class="info-sistema-label"><i class="fas fa-database"></i> Último backup</div>
+                                <div class="info-sistema-valor warning"><i class="fas fa-exclamation-triangle"></i> Pendente</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
     }
 
     getDadosExemplo() {
@@ -1938,145 +2192,223 @@ class AdminSimples {
         setTimeout(() => this.showToast('ℹ️ Recurso em desenvolvimento', 'info'), 800);
     }
 
-    // ============================================================================
-    // USUÁRIOS
+        // ============================================================================
+    // USUÁRIOS (com cache)
     // ============================================================================
     async carregarUsuarios() {
-        console.log('📢 CARREGANDO USUÁRIOS...');
         const content = document.getElementById('contentArea');
         if (!content) return;
 
-        content.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p>Carregando usuários...</p></div>';
+        const cacheUsuarios = this._getCache('usuarios');
+        const cacheTurmas = this._getCache('turmas');
+        const cacheValido = this._cacheValido('usuarios') && this._cacheValido('turmas');
 
+        if (cacheValido && cacheUsuarios && cacheTurmas) {
+            console.log('⚡ [carregarUsuarios] Usando cache');
+            this._renderizarUsuarios(cacheUsuarios, cacheTurmas);
+            this._revalidarUsuarios();
+            return;
+        }
+
+        return this._comLock('carregarUsuarios', async () => {
+            console.log('📢 CARREGANDO USUÁRIOS...');
+
+            content.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p>Carregando usuários...</p></div>';
+
+            try {
+                const token = localStorage.getItem('auth_token');
+                const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+                const isAdminNormal = userData.role === 'admin';
+
+                const [response, turmasRes] = await Promise.all([
+                    fetch('/api/admin/usuarios?limit=1000', { headers: { 'Authorization': `Bearer ${token}` } }),
+                    fetch('/api/admin/turmas?limit=1000', { headers: { 'Authorization': `Bearer ${token}` } })
+                ]);
+
+                if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
+
+                const data = await response.json();
+                const turmasData = await turmasRes.json().catch(() => ({ success: false }));
+
+                if (!data.success) throw new Error(data.error || 'Erro ao carregar usuários');
+
+                let usuarios = data.usuarios || [];
+                if (isAdminNormal) {
+                    usuarios = usuarios.filter(u => u.role !== 'super_admin');
+                }
+
+                const turmas = turmasData.success ? (turmasData.turmas || []) : [];
+
+                this._setCache('usuarios', usuarios);
+                this._setCache('turmas', turmas);
+
+                this._renderizarUsuarios(usuarios, turmas);
+            } catch (error) {
+                console.error('❌ Erro ao carregar usuários:', error);
+                content.innerHTML = `
+                    <div class="error-container" style="text-align:center;padding:40px;">
+                        <i class="fas fa-exclamation-triangle" style="font-size:48px;color:#dc3545;margin-bottom:15px;"></i>
+                        <h3 style="color:#721c24;">Erro ao carregar usuários</h3>
+                        <p style="color:#6c757d;">${error.message}</p>
+                        <button onclick="adminSimples.carregarUsuarios()" class="btn-primary" style="margin-top:15px;">
+                            <i class="fas fa-sync-alt"></i> Tentar novamente
+                        </button>
+                    </div>`;
+            }
+        });
+    }
+
+    async _revalidarUsuarios() {
         try {
             const token = localStorage.getItem('auth_token');
             const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
             const isAdminNormal = userData.role === 'admin';
 
-            // Busca usuários e turmas em paralelo para popular o filtro
             const [response, turmasRes] = await Promise.all([
                 fetch('/api/admin/usuarios?limit=1000', { headers: { 'Authorization': `Bearer ${token}` } }),
                 fetch('/api/admin/turmas?limit=1000', { headers: { 'Authorization': `Bearer ${token}` } })
             ]);
 
-            if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
-            
             const data = await response.json();
             const turmasData = await turmasRes.json().catch(() => ({ success: false }));
 
-            if (!data.success) throw new Error(data.error || 'Erro ao carregar usuários');
+            if (data.success) {
+                let usuarios = data.usuarios || [];
+                if (isAdminNormal) {
+                    usuarios = usuarios.filter(u => u.role !== 'super_admin');
+                }
+                const turmas = turmasData.success ? (turmasData.turmas || []) : [];
 
-            let usuarios = data.usuarios || [];
-            if (isAdminNormal) {
-                usuarios = usuarios.filter(u => u.role !== 'super_admin');
+                const mudouUsuarios = JSON.stringify(usuarios) !== JSON.stringify(this._getCache('usuarios'));
+                const mudouTurmas = JSON.stringify(turmas) !== JSON.stringify(this._getCache('turmas'));
+
+                this._setCache('usuarios', usuarios);
+                this._setCache('turmas', turmas);
+
+                if ((mudouUsuarios || mudouTurmas) && this.abaAtual === 'usuarios') {
+                    console.log('🔄 [carregarUsuarios] Dados mudaram — re-renderizando');
+                    this._renderizarUsuarios(usuarios, turmas, true);
+                }
             }
-
-            this.usuarios = usuarios;
-            const turmas = turmasData.success ? (turmasData.turmas || []) : [];
-
-            // Gerar opções do select de turmas
-            const opcoesTurmas = turmas.map(t => `<option value="${t.nome}">${t.nome}</option>`).join('');
-
-            content.innerHTML = `
-                <div class="section-header">
-                    <h2><i class="fas fa-users"></i> Usuários</h2>
-                    <button class="btn-primary" onclick="adminSimples.novoUsuario()">
-                        <i class="fas fa-plus"></i> Novo
-                    </button>
-                </div>
-
-                <div class="filters-bar">
-                    <div class="filter-group" style="flex: 2;">
-                        <label><i class="fas fa-search"></i> Buscar</label>
-                        <input type="text" id="buscaUsuario" placeholder="Nome, email, CPF ou matrícula..."
-                            class="form-control" onkeyup="adminSimples.filtrarUsuarios()" autocomplete="off">
-                    </div>
-                    <div class="filter-group">
-                        <label><i class="fas fa-user-tag"></i> Perfil</label>
-                        <select id="filtroRole" class="form-control" onchange="adminSimples.filtrarUsuarios()">
-                            <option value="todos">Todos</option>
-                            <option value="aluno">Alunos</option>
-                            <option value="professor">Professores</option>
-                            <option value="setor_pedagogico">Setor Pedagógico</option>
-                            <option value="coordenacao_patio">Coordenação de Pátio</option>
-                            <option value="cozinha">Cozinha</option>
-                            <option value="gestao_geral">Gestão Geral</option>
-                            <option value="enfermaria">Enfermaria</option>
-                            <option value="supervisao">Supervisão</option>
-                            <option value="psicologia">Psicologia</option>
-                            <option value="assistente-social">Assistente Social</option>
-                            <option value="protagonismo">Protagonismo</option>
-                            <option value="biblioteca">Biblioteca</option>
-                            <option value="secretaria">Secretaria</option>
-                            <option value="gestao-adm">Gestão ADM</option>
-                            <option value="recepcao">Recepção</option>
-                            <option value="admin">Admins</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label><i class="fas fa-circle"></i> Status</label>
-                        <select id="filtroStatus" class="form-control" onchange="adminSimples.filtrarUsuarios()">
-                            <option value="todos">Todos</option>
-                            <option value="ativo">Ativos</option>
-                            <option value="inativo">Inativos</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label><i class="fas fa-school"></i> Turma</label>
-                        <select id="filtroTurma" class="form-control" onchange="adminSimples.filtrarUsuarios()">
-                            <option value="todos">Todas</option>
-                            ${opcoesTurmas}
-                        </select>
-                    </div>
-                    <div class="filter-actions" style="margin-top: 25px;">
-                        <button class="btn-filter" onclick="adminSimples.limparFiltrosUsuarios()">
-                            <i class="fas fa-eraser"></i> Limpar
-                        </button>
-                    </div>
-                </div>
-
-                <div class="table-responsive">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Nome</th><th>Email</th><th>Perfil</th><th>Matrícula</th>
-                                <th>CPF</th><th>Telefone</th><th>Status</th><th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabelaUsuarios">
-                            ${this.gerarLinhasUsuarios(this.usuarios)}
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="pagination">
-                    <button class="btn-pagination" onclick="adminSimples.paginaAnterior('usuarios')" id="btnAnteriorUsuario" disabled>
-                        <i class="fas fa-chevron-left"></i> Anterior
-                    </button>
-                    <span id="pageInfoUsuario">Página 1 de 1</span>
-                    <button class="btn-pagination" onclick="adminSimples.proximaPagina('usuarios')" id="btnProximaUsuario" disabled>
-                        Próxima <i class="fas fa-chevron-right"></i>
-                    </button>
-                </div>
-            `;
-
-            this.paginaAtualUsuario = 1;
-            this.usuariosFiltrados = [...this.usuarios];
-            this.itensPorPagina = 10;
-            this.atualizarTabelaUsuarios();
-
-        } catch (error) {
-            console.error('❌ Erro ao carregar usuários:', error);
-            content.innerHTML = `
-                <div class="error-container" style="text-align:center;padding:40px;">
-                    <i class="fas fa-exclamation-triangle" style="font-size:48px;color:#dc3545;margin-bottom:15px;"></i>
-                    <h3 style="color:#721c24;">Erro ao carregar usuários</h3>
-                    <p style="color:#6c757d;">${error.message}</p>
-                    <button onclick="adminSimples.carregarUsuarios()" class="btn-primary" style="margin-top:15px;">
-                        <i class="fas fa-sync-alt"></i> Tentar novamente
-                    </button>
-                </div>`;
+        } catch (e) {
+            console.warn('Revalidação usuários:', e);
         }
+    }
+
+    _renderizarUsuarios(usuarios, turmas, manterFiltros = false) {
+        const content = document.getElementById('contentArea');
+        if (!content) return;
+
+        const filtrosSalvos = manterFiltros ? {
+            busca: document.getElementById('buscaUsuario')?.value || '',
+            role: document.getElementById('filtroRole')?.value || 'todos',
+            status: document.getElementById('filtroStatus')?.value || 'todos',
+            turma: document.getElementById('filtroTurma')?.value || 'todos'
+        } : null;
+
+        this.usuarios = usuarios;
+        const opcoesTurmas = turmas.map(t => `<option value="${t.nome}">${t.nome}</option>`).join('');
+
+        content.innerHTML = `
+            <div class="section-header">
+                <h2><i class="fas fa-users"></i> Usuários</h2>
+                <button class="btn-primary" onclick="adminSimples.novoUsuario()">
+                    <i class="fas fa-plus"></i> Novo
+                </button>
+            </div>
+
+            <div class="filters-bar">
+                <div class="filter-group" style="flex: 2;">
+                    <label><i class="fas fa-search"></i> Buscar</label>
+                    <input type="text" id="buscaUsuario" placeholder="Nome, email, CPF ou matrícula..."
+                        class="form-control" onkeyup="adminSimples.filtrarUsuariosDebounce()" autocomplete="off">
+                </div>
+                <div class="filter-group">
+                    <label><i class="fas fa-user-tag"></i> Perfil</label>
+                    <select id="filtroRole" class="form-control" onchange="adminSimples.filtrarUsuarios()">
+                        <option value="todos">Todos</option>
+                        <option value="aluno">Alunos</option>
+                        <option value="professor">Professores</option>
+                        <option value="setor_pedagogico">Setor Pedagógico</option>
+                        <option value="coordenacao_patio">Coordenação de Pátio</option>
+                        <option value="cozinha">Cozinha</option>
+                        <option value="gestao_geral">Gestão Geral</option>
+                        <option value="enfermaria">Enfermaria</option>
+                        <option value="supervisao">Supervisão</option>
+                        <option value="psicologia">Psicologia</option>
+                        <option value="assistente-social">Assistente Social</option>
+                        <option value="protagonismo">Protagonismo</option>
+                        <option value="biblioteca">Biblioteca</option>
+                        <option value="secretaria">Secretaria</option>
+                        <option value="gestao-adm">Gestão ADM</option>
+                        <option value="recepcao">Recepção</option>
+                        <option value="admin">Admins</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label><i class="fas fa-circle"></i> Status</label>
+                    <select id="filtroStatus" class="form-control" onchange="adminSimples.filtrarUsuarios()">
+                        <option value="todos">Todos</option>
+                        <option value="ativo">Ativos</option>
+                        <option value="inativo">Inativos</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label><i class="fas fa-school"></i> Turma</label>
+                    <select id="filtroTurma" class="form-control" onchange="adminSimples.filtrarUsuarios()">
+                        <option value="todos">Todas</option>
+                        ${opcoesTurmas}
+                    </select>
+                </div>
+                <div class="filter-actions" style="margin-top: 25px;">
+                    <button class="btn-filter" onclick="adminSimples.limparFiltrosUsuarios()">
+                        <i class="fas fa-eraser"></i> Limpar
+                    </button>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nome</th><th>Email</th><th>Perfil</th><th>Matrícula</th>
+                            <th>CPF</th><th>Telefone</th><th>Status</th><th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaUsuarios">
+                        ${this.gerarLinhasUsuarios(this.usuarios)}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="pagination">
+                <button class="btn-pagination" onclick="adminSimples.paginaAnterior('usuarios')" id="btnAnteriorUsuario" disabled>
+                    <i class="fas fa-chevron-left"></i> Anterior
+                </button>
+                <span id="pageInfoUsuario">Página 1 de 1</span>
+                <button class="btn-pagination" onclick="adminSimples.proximaPagina('usuarios')" id="btnProximaUsuario" disabled>
+                    Próxima <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        `;
+
+        this.paginaAtualUsuario = 1;
+        this.usuariosFiltrados = [...this.usuarios];
+        this.itensPorPagina = 10;
+
+        if (filtrosSalvos) {
+            if (document.getElementById('buscaUsuario')) document.getElementById('buscaUsuario').value = filtrosSalvos.busca;
+            if (document.getElementById('filtroRole')) document.getElementById('filtroRole').value = filtrosSalvos.role;
+            if (document.getElementById('filtroStatus')) document.getElementById('filtroStatus').value = filtrosSalvos.status;
+            if (document.getElementById('filtroTurma')) document.getElementById('filtroTurma').value = filtrosSalvos.turma;
+            this.filtrarUsuarios();
+        } else {
+            this.atualizarTabelaUsuarios();
+        }
+    }
+
+    filtrarUsuariosDebounce() {
+        this._debounce('buscarUsuarios', () => this.filtrarUsuarios(), 250);
     }
 
     gerarLinhasUsuarios(usuarios) {
@@ -2177,8 +2509,9 @@ class AdminSimples {
             if (data.success) {
                 this.showToast(`✅ Usuário ${acaoTexto}!`, 'success');
                 usuario.ativo = novoStatus;
+                this._invalidarCache('usuarios');
+                this._invalidarCache('dashboard');
                 this.atualizarTabelaUsuarios();
-                this.carregarDashboard();
             } else {
                 throw new Error(data.error || 'Erro ao alterar status');
             }
@@ -2213,8 +2546,9 @@ class AdminSimples {
                 this.showToast('✅ Usuário excluído!', 'success');
                 this.usuarios = this.usuarios.filter(u => u._id !== id);
                 this.usuariosFiltrados = this.usuariosFiltrados.filter(u => u._id !== id);
+                this._setCache('usuarios', this.usuarios);
+                this._invalidarCache('dashboard');
                 this.atualizarTabelaUsuarios();
-                this.carregarDashboard();
             } else {
                 throw new Error(data.error || 'Erro ao excluir');
             }
@@ -2303,7 +2637,6 @@ class AdminSimples {
                 </div>`;
 
             this.abrirModal(`📊 Relatório - ${usuario.nome}`, html, false);
-
         } catch (error) {
             console.error('❌ Erro ao gerar relatório:', error);
             this.showToast('❌ Erro ao carregar relatório', 'error');
@@ -2340,22 +2673,18 @@ class AdminSimples {
         const usuariosSemSuper = this.usuarios.filter(u => u.role !== 'super_admin');
 
         this.usuariosFiltrados = usuariosSemSuper.filter(u => {
-            // Filtro de texto (Nome, email, matricula ou CPF)
             const matchBusca = busca === '' ||
                 (u.nome && u.nome.toLowerCase().includes(busca)) ||
                 (u.email && u.email.toLowerCase().includes(busca)) ||
                 (u.matricula && u.matricula.toLowerCase().includes(busca)) ||
                 (u.cpf && u.cpf.includes(busca));
 
-            // Filtro de Perfil
             const matchRole = role === 'todos' || u.role === role;
 
-            // Filtro de Status
             let matchStatus = true;
             if (status === 'ativo') matchStatus = u.ativo === true;
             else if (status === 'inativo') matchStatus = u.ativo === false;
 
-            // Filtro de Turma
             const matchTurma = turma === 'todos' || (u.turma && u.turma === turma);
 
             return matchBusca && matchRole && matchStatus && matchTurma;
@@ -2368,7 +2697,7 @@ class AdminSimples {
     limparFiltrosUsuarios() {
         const buscaInput = document.getElementById('buscaUsuario');
         if (buscaInput) buscaInput.value = '';
-        
+
         const selectRole = document.getElementById('filtroRole');
         if (selectRole) selectRole.value = 'todos';
 
@@ -2841,7 +3170,6 @@ class AdminSimples {
             ? '<i class="fas fa-edit"></i> Editar Usuário'
             : '<i class="fas fa-user-plus"></i> Novo Usuário';
 
-        // 🔥 ABRE COM CALLBACK ISOLADO
         this.abrirModal(titulo, conteudoHTML, true, () => this.salvarUsuario(id));
 
         setTimeout(() => {
@@ -2950,159 +3278,225 @@ class AdminSimples {
     }
 
     async salvarUsuario(id = null) {
-        try {
-            console.log('💾 Salvando usuário. ID:', id);
+        return this._comLock('salvarUsuario', async () => {
+            try {
+                console.log('💾 Salvando usuário. ID:', id);
 
-            const roleSelecionada = document.getElementById('roleUsuario')?.value;
-            if (roleSelecionada === 'super_admin') {
-                this.showToast('❌ Não é possível criar/editar Super Admins', 'error');
-                return;
-            }
-
-            const dados = {
-                nome: document.getElementById('nomeUsuario')?.value?.trim() || '',
-                email: document.getElementById('emailUsuario')?.value?.trim() || '',
-                role: roleSelecionada,
-                ativo: document.getElementById('statusUsuario')?.value === 'true'
-            };
-
-            const cpf = document.getElementById('cpfUsuario')?.value;
-            const telefone = document.getElementById('telefoneUsuario')?.value;
-            const matricula = document.getElementById('matriculaUsuario')?.value;
-
-            if (cpf) dados.cpf = cpf.replace(/\D/g, '');
-            if (telefone) dados.telefone = telefone.replace(/\D/g, '');
-            if (matricula) dados.matricula = matricula;
-
-            if (roleSelecionada === 'aluno') {
-                dados.curso = document.getElementById('cursoUsuario')?.value || '';
-                dados.turma = document.getElementById('turmaUsuario')?.value || '';
-                dados.precisaAcessibilidade = document.getElementById('userAcessibilidade')?.checked || false;
-
-                if (dados.precisaAcessibilidade) {
-                    dados.condicaoAcessibilidade = document.getElementById('condicaoAcessibilidadeUsuario')?.value || '';
-                } else {
-                    dados.condicaoAcessibilidade = '';
+                const roleSelecionada = document.getElementById('roleUsuario')?.value;
+                if (roleSelecionada === 'super_admin') {
+                    this.showToast('❌ Não é possível criar/editar Super Admins', 'error');
+                    return;
                 }
 
-                dados.perfilAlimentar = document.getElementById('perfilAlimentarUsuario')?.value || 'nao_informado';
+                const dados = {
+                    nome: document.getElementById('nomeUsuario')?.value?.trim() || '',
+                    email: document.getElementById('emailUsuario')?.value?.trim() || '',
+                    role: roleSelecionada,
+                    ativo: document.getElementById('statusUsuario')?.value === 'true'
+                };
 
-                const refeicoes = [];
-                document.querySelectorAll('.refeicao-checkbox:checked').forEach(cb => refeicoes.push(cb.value));
-                dados.refeicoesQueParticipa = refeicoes;
-            } else if (roleSelecionada === 'professor') {
-                dados.eixo = document.getElementById('eixoUsuario')?.value || '';
-            } else if (roleSelecionada === 'biblioteca' || roleSelecionada === 'secretaria ||') {
-                dados.departamento = document.getElementById('departamentoUsuario')?.value || '';
-                dados.matricula = document.getElementById('matriculaUsuario')?.value || '';
+                const cpf = document.getElementById('cpfUsuario')?.value;
+                const telefone = document.getElementById('telefoneUsuario')?.value;
+                const matricula = document.getElementById('matriculaUsuario')?.value;
+
+                if (cpf) dados.cpf = cpf.replace(/\D/g, '');
+                if (telefone) dados.telefone = telefone.replace(/\D/g, '');
+                if (matricula) dados.matricula = matricula;
+
+                if (roleSelecionada === 'aluno') {
+                    dados.curso = document.getElementById('cursoUsuario')?.value || '';
+                    dados.turma = document.getElementById('turmaUsuario')?.value || '';
+                    dados.precisaAcessibilidade = document.getElementById('userAcessibilidade')?.checked || false;
+
+                    if (dados.precisaAcessibilidade) {
+                        dados.condicaoAcessibilidade = document.getElementById('condicaoAcessibilidadeUsuario')?.value || '';
+                    } else {
+                        dados.condicaoAcessibilidade = '';
+                    }
+
+                    dados.perfilAlimentar = document.getElementById('perfilAlimentarUsuario')?.value || 'nao_informado';
+
+                    const refeicoes = [];
+                    document.querySelectorAll('.refeicao-checkbox:checked').forEach(cb => refeicoes.push(cb.value));
+                    dados.refeicoesQueParticipa = refeicoes;
+                } else if (roleSelecionada === 'professor') {
+                    dados.eixo = document.getElementById('eixoUsuario')?.value || '';
+                } else if (roleSelecionada === 'biblioteca' || roleSelecionada === 'secretaria') {
+                    dados.departamento = document.getElementById('departamentoUsuario')?.value || '';
+                    dados.matricula = document.getElementById('matriculaUsuario')?.value || '';
+                }
+
+                if (!id) {
+                    const senha = document.getElementById('senhaUsuario')?.value;
+                    if (senha) dados.password = senha;
+                }
+
+                if (!dados.nome) { this.showToast('❌ Nome é obrigatório', 'error'); return; }
+                if (!dados.email) { this.showToast('❌ Email é obrigatório', 'error'); return; }
+
+                console.log('📤 Dados:', dados);
+                this.showToast('💾 Salvando...', 'info');
+
+                const url = id ? `/api/admin/usuarios/${id}` : '/api/admin/usuarios';
+                const method = id ? 'PUT' : 'POST';
+
+                const response = await fetch(url, {
+                    method,
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(dados)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    this.showToast(id ? '✅ Usuário atualizado!' : '✅ Usuário criado!', 'success');
+                    this._invalidarCache('usuarios');
+                    this._invalidarCache('dashboard');
+                    this.fecharModal();
+                    await this.carregarUsuarios();
+                } else {
+                    throw new Error(data.error || 'Erro ao salvar usuário');
+                }
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                this.showToast('❌ ' + error.message, 'error');
             }
-
-            if (!id) {
-                const senha = document.getElementById('senhaUsuario')?.value;
-                if (senha) dados.password = senha;
-            }
-
-            if (!dados.nome) { this.showToast('❌ Nome é obrigatório', 'error'); return; }
-            if (!dados.email) { this.showToast('❌ Email é obrigatório', 'error'); return; }
-
-            console.log('📤 Dados:', dados);
-            this.showToast('💾 Salvando...', 'info');
-
-            const url = id ? `/api/admin/usuarios/${id}` : '/api/admin/usuarios';
-            const method = id ? 'PUT' : 'POST';
-
-            const response = await fetch(url, {
-                method,
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(dados)
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                this.showToast(id ? '✅ Usuário atualizado!' : '✅ Usuário criado!', 'success');
-                this.fecharModal();
-                await this.carregarUsuarios();
-            } else {
-                throw new Error(data.error || 'Erro ao salvar usuário');
-            }
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            this.showToast('❌ ' + error.message, 'error');
-        }
+        });
     }
 
     // ============================================================================
-    // TURMAS
+    // TURMAS (com cache)
     // ============================================================================
     async carregarTurmas() {
-        console.log('📚 CARREGANDO TURMAS...');
         const contentArea = document.getElementById('contentArea');
         if (!contentArea) return;
 
-        contentArea.innerHTML = `
-            <div style="text-align:center;padding:60px;background:white;border-radius:12px;">
-                <div style="width:50px;height:50px;border:5px solid #f3f3f3;border-top:5px solid #667eea;
-                            border-radius:50%;margin:0 auto 20px;animation:spin 1s linear infinite;"></div>
-                <p style="color:#6b7280;">Carregando turmas...</p>
-            </div>
-            <style>@keyframes spin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}</style>`;
+        const cacheTurmas = this._getCache('turmas');
+        const cacheEixos = this._getCache('eixos');
+        const cacheUsuarios = this._getCache('usuarios');
 
+        if (this._cacheValido('turmas') && this._cacheValido('eixos') && cacheTurmas && cacheEixos) {
+            console.log('⚡ [carregarTurmas] Usando cache');
+            const professores = (cacheUsuarios || this.usuarios || [])
+                .filter(u => u.role === 'professor')
+                .map(p => p.nome)
+                .sort();
+            this._renderizarTurmas(cacheTurmas, professores, cacheEixos);
+            this._revalidarTurmas();
+            return;
+        }
+
+        return this._comLock('carregarTurmas', async () => {
+            console.log('📚 CARREGANDO TURMAS...');
+
+            contentArea.innerHTML = `
+                <div style="text-align:center;padding:60px;background:white;border-radius:12px;">
+                    <div style="width:50px;height:50px;border:5px solid #f3f3f3;border-top:5px solid #667eea;
+                                border-radius:50%;margin:0 auto 20px;animation:spin 1s linear infinite;"></div>
+                    <p style="color:#6b7280;">Carregando turmas...</p>
+                </div>
+                <style>@keyframes spin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}</style>`;
+
+            try {
+                const token = localStorage.getItem('auth_token');
+
+                const [turmasRes, professoresRes, eixosRes] = await Promise.all([
+                    fetch('/api/admin/turmas?limit=1000', { headers: { 'Authorization': `Bearer ${token}` } }),
+                    fetch('/api/admin/usuarios?role=professor&limit=1000', { headers: { 'Authorization': `Bearer ${token}` } }),
+                    fetch('/api/admin/eixos', { headers: { 'Authorization': `Bearer ${token}` } })
+                ]);
+
+                const turmasData = await turmasRes.json();
+                const professoresData = await professoresRes.json();
+                const eixosData = await eixosRes.json();
+
+                if (!turmasData.success) throw new Error(turmasData.error || 'Erro ao carregar turmas');
+
+                const todasTurmas = turmasData.turmas || [];
+                const eixos = (eixosData.success && eixosData.eixos) ? eixosData.eixos : [];
+                const professores = (professoresData.success && professoresData.usuarios)
+                    ? professoresData.usuarios.map(p => p.nome).sort()
+                    : [];
+
+                this._setCache('turmas', todasTurmas);
+                this._setCache('eixos', eixos);
+
+                this._renderizarTurmas(todasTurmas, professores, eixos);
+
+                console.log(`✅ ${todasTurmas.length} turmas carregadas`);
+            } catch (error) {
+                console.error('❌ Erro ao carregar turmas:', error);
+                contentArea.innerHTML = this.renderErroTurmas(error.message);
+            }
+        });
+    }
+
+    async _revalidarTurmas() {
         try {
             const token = localStorage.getItem('auth_token');
-
-            const [turmasRes, professoresRes, eixosRes] = await Promise.all([
+            const [turmasRes, eixosRes, professoresRes] = await Promise.all([
                 fetch('/api/admin/turmas?limit=1000', { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch('/api/admin/usuarios?role=professor&limit=1000', { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch('/api/admin/eixos', { headers: { 'Authorization': `Bearer ${token}` } })
+                fetch('/api/admin/eixos', { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch('/api/admin/usuarios?role=professor&limit=1000', { headers: { 'Authorization': `Bearer ${token}` } })
             ]);
 
             const turmasData = await turmasRes.json();
-            const professoresData = await professoresRes.json();
             const eixosData = await eixosRes.json();
+            const professoresData = await professoresRes.json();
 
-            if (!turmasData.success) throw new Error(turmasData.error || 'Erro ao carregar turmas');
+            if (turmasData.success) {
+                const turmas = turmasData.turmas || [];
+                const eixos = (eixosData.success && eixosData.eixos) ? eixosData.eixos : [];
+                const professores = (professoresData.success && professoresData.usuarios)
+                    ? professoresData.usuarios.map(p => p.nome).sort()
+                    : [];
 
-            const todasTurmas = turmasData.turmas || [];
-            this.turmas = todasTurmas;
-            this.turmasFiltradas = [...todasTurmas];
-            this.paginaAtualTurma = 1;
-            this.itensPorPagina = 10;
+                const mudou = JSON.stringify(turmas) !== JSON.stringify(this._getCache('turmas'));
 
-            this.eixos = (eixosData.success && eixosData.eixos) ? eixosData.eixos : [];
+                this._setCache('turmas', turmas);
+                this._setCache('eixos', eixos);
 
-            const todosProfessores = (professoresData.success && professoresData.usuarios)
-                ? professoresData.usuarios.map(p => p.nome).sort()
-                : [];
-            this.todosProfessoresLista = todosProfessores;
-
-            const contagemPorProfessor = {};
-            todasTurmas.forEach(t => {
-                const prof = t.professor?.nome || 'Sem professor';
-                contagemPorProfessor[prof] = (contagemPorProfessor[prof] || 0) + 1;
-            });
-            this.contagemPorProfessor = contagemPorProfessor;
-
-            const totalTurmas = todasTurmas.length;
-            const turmasAtivas = todasTurmas.filter(t => t.ativa === true).length;
-            const turmasInativas = todasTurmas.filter(t => t.ativa === false).length;
-            const alunosComAcessibilidade = todasTurmas.reduce((acc, t) => acc + (t.alunosComAcessibilidade || 0), 0);
-
-            contentArea.innerHTML = this.renderTurmasHTMLSimples({
-                totalTurmas, turmasAtivas, turmasInativas, alunosComAcessibilidade,
-                turmas: todasTurmas, professores: todosProfessores,
-                contagemPorProfessor, eixos: this.eixos
-            });
-
-            this.configurarEventosFiltrosTurmas();
-            console.log(`✅ ${todasTurmas.length} turmas carregadas`);
-        } catch (error) {
-            console.error('❌ Erro ao carregar turmas:', error);
-            contentArea.innerHTML = this.renderErroTurmas(error.message);
+                if (mudou && this.abaAtual === 'turmas') {
+                    this._renderizarTurmas(turmas, professores, eixos, true);
+                }
+            }
+        } catch (e) {
+            console.warn('Revalidação turmas:', e);
         }
+    }
+
+    _renderizarTurmas(turmas, professores, eixos, manterFiltros = false) {
+        const contentArea = document.getElementById('contentArea');
+        if (!contentArea) return;
+
+        this.turmas = turmas;
+        this.turmasFiltradas = [...turmas];
+        this.paginaAtualTurma = 1;
+        this.itensPorPagina = 10;
+        this.eixos = eixos;
+        this.todosProfessoresLista = professores;
+
+        const contagemPorProfessor = {};
+        turmas.forEach(t => {
+            const prof = t.professor?.nome || 'Sem professor';
+            contagemPorProfessor[prof] = (contagemPorProfessor[prof] || 0) + 1;
+        });
+        this.contagemPorProfessor = contagemPorProfessor;
+
+        const totalTurmas = turmas.length;
+        const turmasAtivas = turmas.filter(t => t.ativa === true).length;
+        const turmasInativas = turmas.filter(t => t.ativa === false).length;
+        const alunosComAcessibilidade = turmas.reduce((acc, t) => acc + (t.alunosComAcessibilidade || 0), 0);
+
+        contentArea.innerHTML = this.renderTurmasHTMLSimples({
+            totalTurmas, turmasAtivas, turmasInativas, alunosComAcessibilidade,
+            turmas, professores, contagemPorProfessor, eixos
+        });
+
+        this.configurarEventosFiltrosTurmas();
     }
 
     getEixoLabel(eixoNome) {
@@ -3563,10 +3957,9 @@ class AdminSimples {
     }
 
     filtrarTurmasDebounce(valor) {
-        clearTimeout(this._debounceBuscaTurmas);
-        this._debounceBuscaTurmas = setTimeout(() => {
+        this._debounce('buscarTurmas', () => {
             this.filtrarTurmasLocal(valor);
-        }, 400);
+        }, 250);
     }
 
     filtrarTurmasLocal(termoBusca = null) {
@@ -3652,6 +4045,7 @@ class AdminSimples {
         try {
             if (refreshBtn) refreshBtn.className = 'fas fa-spinner fa-spin';
             this.showToast('🔄 Atualizando turmas...', 'info');
+            this._invalidarCache('turmas');
             await this.carregarTurmas();
             this.showToast('✅ Turmas atualizadas!', 'success');
         } catch (error) {
@@ -3715,8 +4109,9 @@ class AdminSimples {
             if (data.success) {
                 this.showToast(`✅ Turma ${acaoTexto}!`, 'success');
                 turma.ativa = novoStatus;
+                this._invalidarCache('turmas');
+                this._invalidarCache('dashboard');
                 await this.carregarTurmas();
-                this.carregarDashboard();
             } else {
                 throw new Error(data.error || 'Erro');
             }
@@ -3757,6 +4152,8 @@ class AdminSimples {
                 this.showToast('✅ Turma excluída!', 'success');
                 this.turmas = this.turmas.filter(t => (t.id || t._id) !== turmaId);
                 this.turmasFiltradas = this.turmasFiltradas.filter(t => (t.id || t._id) !== turmaId);
+                this._invalidarCache('turmas');
+                this._invalidarCache('dashboard');
                 await this.carregarTurmas();
             } else {
                 throw new Error(data.error || 'Erro');
@@ -4053,6 +4450,7 @@ class AdminSimples {
             const data = await response.json();
             if (data.success) {
                 this.showToast(`✅ ${alunoNome} adicionado!`, 'success');
+                this._invalidarCache('usuarios');
                 const turmaId = this.turmaAtual?.id || this.turmaAtual?._id;
                 if (turmaId) await this.verAlunosTurma(turmaId);
             } else {
@@ -4082,6 +4480,7 @@ class AdminSimples {
             const data = await response.json();
             if (data.success) {
                 this.showToast(`✅ ${alunoNome} removido!`, 'success');
+                this._invalidarCache('usuarios');
                 const turmaId = this.turmaAtual?.id || this.turmaAtual?._id;
                 if (turmaId) await this.verAlunosTurma(turmaId);
             } else {
@@ -4179,7 +4578,6 @@ class AdminSimples {
 
         let turma = null;
         if (turmaId) {
-            // Se turmaId for um objeto (chamado por editarTurma), usa direto
             if (typeof turmaId === 'object') {
                 turma = turmaId;
             } else {
@@ -4348,7 +4746,6 @@ class AdminSimples {
             ? '<i class="fas fa-edit"></i> Editar Turma'
             : '<i class="fas fa-plus"></i> Nova Turma';
 
-        // 🔥 ABRE COM CALLBACK ISOLADO
         const turmaIdParaSalvar = isEdicao ? (turma._id || turma.id) : null;
         this.abrirModal(titulo, conteudoHTML, true, () => this.salvarTurma(turmaIdParaSalvar));
 
@@ -4362,78 +4759,92 @@ class AdminSimples {
     }
 
     async salvarTurma(turmaId = null) {
-        console.log('💾 Salvando turma. ID:', turmaId);
+        return this._comLock('salvarTurma', async () => {
+            console.log('💾 Salvando turma. ID:', turmaId);
 
-        try {
-            const nome = document.getElementById('turmaNome')?.value?.trim();
-            const disciplina = document.getElementById('turmaDisciplina')?.value?.trim();
-            const eixo = document.getElementById('turmaEixo')?.value;
-            const codigo = document.getElementById('turmaCodigo')?.value?.trim();
-            const professorId = document.getElementById('turmaProfessor')?.value || null;
-            const descricao = document.getElementById('turmaDescricao')?.value?.trim();
-            const ativa = document.getElementById('turmaAtiva')?.checked !== false;
+            try {
+                const nome = document.getElementById('turmaNome')?.value?.trim();
+                const disciplina = document.getElementById('turmaDisciplina')?.value?.trim();
+                const eixo = document.getElementById('turmaEixo')?.value;
+                const codigo = document.getElementById('turmaCodigo')?.value?.trim();
+                const professorId = document.getElementById('turmaProfessor')?.value || null;
+                const descricao = document.getElementById('turmaDescricao')?.value?.trim();
+                const ativa = document.getElementById('turmaAtiva')?.checked !== false;
 
-            if (!nome) { this.showToast('❌ Nome é obrigatório', 'error'); return; }
-            if (!disciplina) { this.showToast('❌ Disciplina é obrigatória', 'error'); return; }
-            if (!eixo) { this.showToast('❌ Selecione um eixo', 'error'); return; }
+                if (!nome) { this.showToast('❌ Nome é obrigatório', 'error'); return; }
+                if (!disciplina) { this.showToast('❌ Disciplina é obrigatória', 'error'); return; }
+                if (!eixo) { this.showToast('❌ Selecione um eixo', 'error'); return; }
 
-            const dados = { nome, disciplina, eixo, ativa };
-            if (codigo) dados.codigo = codigo;
-            if (professorId) dados.professorId = professorId;
-            if (descricao) dados.descricao = descricao;
+                const dados = { nome, disciplina, eixo, ativa };
+                if (codigo) dados.codigo = codigo;
+                if (professorId) dados.professorId = professorId;
+                if (descricao) dados.descricao = descricao;
 
-            console.log('📤 Dados:', dados);
-            this.showToast('💾 Salvando turma...', 'info');
+                console.log('📤 Dados:', dados);
+                this.showToast('💾 Salvando turma...', 'info');
 
-            const token = localStorage.getItem('auth_token');
-            const url = turmaId ? `/api/admin/turmas/${turmaId}` : '/api/admin/turmas';
-            const method = turmaId ? 'PUT' : 'POST';
+                const token = localStorage.getItem('auth_token');
+                const url = turmaId ? `/api/admin/turmas/${turmaId}` : '/api/admin/turmas';
+                const method = turmaId ? 'PUT' : 'POST';
 
-            const response = await fetch(url, {
-                method,
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(dados)
-            });
+                const response = await fetch(url, {
+                    method,
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(dados)
+                });
 
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || `Erro ${response.status}`);
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || `Erro ${response.status}`);
 
-            if (data.success) {
-                this.showToast(turmaId ? '✅ Turma atualizada!' : '✅ Turma criada!', 'success');
-                this.fecharModal();
-                await this.carregarTurmas();
-            } else {
-                throw new Error(data.error || 'Erro ao salvar turma');
+                if (data.success) {
+                    this.showToast(turmaId ? '✅ Turma atualizada!' : '✅ Turma criada!', 'success');
+                    this._invalidarCache('turmas');
+                    this._invalidarCache('dashboard');
+                    this.fecharModal();
+                    await this.carregarTurmas();
+                } else {
+                    throw new Error(data.error || 'Erro ao salvar turma');
+                }
+            } catch (error) {
+                console.error('❌ Erro ao salvar turma:', error);
+                this.showToast('❌ ' + error.message, 'error');
             }
-        } catch (error) {
-            console.error('❌ Erro ao salvar turma:', error);
-            this.showToast('❌ ' + error.message, 'error');
-        }
+        });
     }
 
     // ============================================================================
-    // EIXOS
+    // EIXOS (com cache)
     // ============================================================================
     async carregarEixos() {
         const contentArea = document.getElementById('contentArea');
         if (!contentArea) return;
 
-        contentArea.innerHTML = `<div class="loading-spinner"><div class="spinner"></div><p>Carregando eixos...</p></div>`;
-
-        try {
-            const token = localStorage.getItem('auth_token');
-            const response = await fetch('/api/admin/eixos', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await response.json();
-            this.eixos = data.success ? data.eixos : [];
+        if (this._cacheValido('eixos')) {
+            this.eixos = this._getCache('eixos') || [];
             contentArea.innerHTML = this.renderizarEixos();
-        } catch (error) {
-            contentArea.innerHTML = `<p style="color:red;">Erro: ${error.message}</p>`;
+            return;
         }
+
+        return this._comLock('carregarEixos', async () => {
+            contentArea.innerHTML = `<div class="loading-spinner"><div class="spinner"></div><p>Carregando eixos...</p></div>`;
+
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch('/api/admin/eixos', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                const eixos = data.success ? data.eixos : [];
+                this.eixos = eixos;
+                this._setCache('eixos', eixos);
+                contentArea.innerHTML = this.renderizarEixos();
+            } catch (error) {
+                contentArea.innerHTML = `<p style="color:red;">Erro: ${error.message}</p>`;
+            }
+        });
     }
 
     renderizarEixos() {
@@ -4522,44 +4933,47 @@ class AdminSimples {
             ? '<i class="fas fa-edit"></i> Editar Eixo'
             : '<i class="fas fa-plus"></i> Novo Eixo';
 
-        // 🔥 ABRE COM CALLBACK ISOLADO
         this.abrirModal(titulo, conteudo, true, () => this.salvarEixo(eixoId));
     }
 
     async salvarEixo(eixoId = null) {
-        try {
-            const dados = {
-                nome: document.getElementById('eixoNome').value,
-                label: document.getElementById('eixoLabel').value,
-                cor: document.getElementById('eixoCor').value,
-                icone: document.getElementById('eixoIcone').value,
-                descricao: document.getElementById('eixoDescricao').value
-            };
+        return this._comLock('salvarEixo', async () => {
+            try {
+                const dados = {
+                    nome: document.getElementById('eixoNome').value,
+                    label: document.getElementById('eixoLabel').value,
+                    cor: document.getElementById('eixoCor').value,
+                    icone: document.getElementById('eixoIcone').value,
+                    descricao: document.getElementById('eixoDescricao').value
+                };
 
-            const token = localStorage.getItem('auth_token');
-            const url = eixoId ? `/api/admin/eixos/${eixoId}` : '/api/admin/eixos';
-            const method = eixoId ? 'PUT' : 'POST';
+                const token = localStorage.getItem('auth_token');
+                const url = eixoId ? `/api/admin/eixos/${eixoId}` : '/api/admin/eixos';
+                const method = eixoId ? 'PUT' : 'POST';
 
-            this.showToast('🔄 Salvando eixo...', 'info');
+                this.showToast('🔄 Salvando eixo...', 'info');
 
-            const response = await fetch(url, {
-                method,
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify(dados)
-            });
-            const data = await response.json();
+                const response = await fetch(url, {
+                    method,
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dados)
+                });
+                const data = await response.json();
 
-            if (data.success) {
-                this.showToast(eixoId ? '✅ Eixo atualizado!' : '✅ Eixo criado!', 'success');
-                this.fecharModal();
-                await this.carregarEixos();
-            } else {
-                throw new Error(data.error || 'Erro ao salvar eixo');
+                if (data.success) {
+                    this.showToast(eixoId ? '✅ Eixo atualizado!' : '✅ Eixo criado!', 'success');
+                    this._invalidarCache('eixos');
+                    this._invalidarCache('turmas');
+                    this.fecharModal();
+                    await this.carregarEixos();
+                } else {
+                    throw new Error(data.error || 'Erro ao salvar eixo');
+                }
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                this.showToast('❌ ' + error.message, 'error');
             }
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            this.showToast('❌ ' + error.message, 'error');
-        }
+        });
     }
 
     editarEixo(eixoId) { this.abrirModalEixo(eixoId); }
@@ -4585,6 +4999,8 @@ class AdminSimples {
             const data = await response.json();
             if (data.success) {
                 this.showToast('✅ Eixo excluído!', 'success');
+                this._invalidarCache('eixos');
+                this._invalidarCache('turmas');
                 await this.carregarEixos();
             } else {
                 throw new Error(data.error || 'Erro ao excluir eixo');
@@ -4596,30 +5012,45 @@ class AdminSimples {
     }
 
     // ============================================================================
-    // CURSOS
+    // CURSOS (com cache)
     // ============================================================================
     async carregarCursos() {
         const contentArea = document.getElementById('contentArea');
         if (!contentArea) return;
 
-        contentArea.innerHTML = `<div class="loading-spinner"><div class="spinner"></div><p>Carregando cursos...</p></div>`;
-
-        try {
-            const token = localStorage.getItem('auth_token');
-
-            const eixosRes = await fetch('/api/admin/eixos', { headers: { 'Authorization': `Bearer ${token}` } });
-            const eixosData = await eixosRes.json();
-            this.eixos = eixosData.success ? eixosData.eixos : [];
-
-            const cursosRes = await fetch('/api/admin/cursos', { headers: { 'Authorization': `Bearer ${token}` } });
-            const cursosData = await cursosRes.json();
-            this.cursos = cursosData.success ? cursosData.cursos : [];
-
+        if (this._cacheValido('cursos') && this._cacheValido('eixos')) {
+            this.cursos = this._getCache('cursos') || [];
+            this.eixos = this._getCache('eixos') || [];
             contentArea.innerHTML = this.renderizarCursos();
-        } catch (error) {
-            console.error('❌ Erro ao carregar cursos:', error);
-            contentArea.innerHTML = `<p style="color:red;">Erro: ${error.message}</p>`;
+            return;
         }
+
+        return this._comLock('carregarCursos', async () => {
+            contentArea.innerHTML = `<div class="loading-spinner"><div class="spinner"></div><p>Carregando cursos...</p></div>`;
+
+            try {
+                const token = localStorage.getItem('auth_token');
+
+                const [eixosRes, cursosRes] = await Promise.all([
+                    fetch('/api/admin/eixos', { headers: { 'Authorization': `Bearer ${token}` } }),
+                    fetch('/api/admin/cursos', { headers: { 'Authorization': `Bearer ${token}` } })
+                ]);
+
+                const eixosData = await eixosRes.json();
+                const cursosData = await cursosRes.json();
+
+                this.eixos = eixosData.success ? eixosData.eixos : [];
+                this.cursos = cursosData.success ? cursosData.cursos : [];
+
+                this._setCache('eixos', this.eixos);
+                this._setCache('cursos', this.cursos);
+
+                contentArea.innerHTML = this.renderizarCursos();
+            } catch (error) {
+                console.error('❌ Erro ao carregar cursos:', error);
+                contentArea.innerHTML = `<p style="color:red;">Erro: ${error.message}</p>`;
+            }
+        });
     }
 
     renderizarCursos() {
@@ -4804,40 +5235,43 @@ class AdminSimples {
     }
 
     async salvarCurso(cursoId = null) {
-        try {
-            const dados = {
-                nome: document.getElementById('cursoNome').value,
-                eixoId: document.getElementById('cursoEixoId').value
-            };
+        return this._comLock('salvarCurso', async () => {
+            try {
+                const dados = {
+                    nome: document.getElementById('cursoNome').value,
+                    eixoId: document.getElementById('cursoEixoId').value
+                };
 
-            if (!dados.nome || !dados.eixoId) {
-                this.showToast('❌ Nome e eixo são obrigatórios', 'error');
-                return;
+                if (!dados.nome || !dados.eixoId) {
+                    this.showToast('❌ Nome e eixo são obrigatórios', 'error');
+                    return;
+                }
+
+                this.showToast('🔄 Salvando curso...', 'info');
+                const token = localStorage.getItem('auth_token');
+                const url = cursoId ? `/api/admin/cursos/${cursoId}` : '/api/admin/cursos';
+                const method = cursoId ? 'PUT' : 'POST';
+
+                const response = await fetch(url, {
+                    method,
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dados)
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    this.showToast(cursoId ? '✅ Curso atualizado!' : '✅ Curso criado!', 'success');
+                    this._invalidarCache('cursos');
+                    this.fecharModal();
+                    await this.carregarCursos();
+                } else {
+                    throw new Error(data.error || 'Erro ao salvar curso');
+                }
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                this.showToast('❌ ' + error.message, 'error');
             }
-
-            this.showToast('🔄 Salvando curso...', 'info');
-            const token = localStorage.getItem('auth_token');
-            const url = cursoId ? `/api/admin/cursos/${cursoId}` : '/api/admin/cursos';
-            const method = cursoId ? 'PUT' : 'POST';
-
-            const response = await fetch(url, {
-                method,
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify(dados)
-            });
-            const data = await response.json();
-
-            if (data.success) {
-                this.showToast(cursoId ? '✅ Curso atualizado!' : '✅ Curso criado!', 'success');
-                this.fecharModal();
-                await this.carregarCursos();
-            } else {
-                throw new Error(data.error || 'Erro ao salvar curso');
-            }
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            this.showToast('❌ ' + error.message, 'error');
-        }
+        });
     }
 
     editarCurso(cursoId) { this.abrirModalCurso(cursoId); }
@@ -4858,6 +5292,7 @@ class AdminSimples {
             const data = await response.json();
             if (data.success) {
                 this.showToast('✅ Curso excluído!', 'success');
+                this._invalidarCache('cursos');
                 await this.carregarCursos();
             } else {
                 throw new Error(data.error);
@@ -4867,7 +5302,6 @@ class AdminSimples {
         }
     }
 
-    // 🔥 ESTE É O MÉTODO QUE ESTAVA FALTANDO (o erro que você reportou!)
     editarTurmaCurricular(cursoId, turmaId) {
         console.log('✏️ Editando turma curricular:', { cursoId, turmaId });
         this.abrirModalTurmaCurricular(cursoId, turmaId);
@@ -4926,44 +5360,47 @@ class AdminSimples {
     }
 
     async salvarTurmaCurricular(cursoId, turmaId = null) {
-        try {
-            const dados = {
-                codigo: document.getElementById('turmaCodigo')?.value,
-                periodo: document.getElementById('turmaPeriodo')?.value,
-                vagas: parseInt(document.getElementById('turmaVagas')?.value) || 40,
-                ativa: document.getElementById('turmaAtiva')?.checked !== false
-            };
+        return this._comLock('salvarTurmaCurricular', async () => {
+            try {
+                const dados = {
+                    codigo: document.getElementById('turmaCodigo')?.value,
+                    periodo: document.getElementById('turmaPeriodo')?.value,
+                    vagas: parseInt(document.getElementById('turmaVagas')?.value) || 40,
+                    ativa: document.getElementById('turmaAtiva')?.checked !== false
+                };
 
-            if (!dados.codigo || !dados.periodo) {
-                this.showToast('❌ Código e série são obrigatórios', 'error');
-                return;
+                if (!dados.codigo || !dados.periodo) {
+                    this.showToast('❌ Código e série são obrigatórios', 'error');
+                    return;
+                }
+
+                this.showToast('🔄 Salvando turma curricular...', 'info');
+                const token = localStorage.getItem('auth_token');
+                const url = turmaId
+                    ? `/api/admin/cursos/${cursoId}/turmas/${turmaId}`
+                    : `/api/admin/cursos/${cursoId}/turmas`;
+                const method = turmaId ? 'PUT' : 'POST';
+
+                const response = await fetch(url, {
+                    method,
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dados)
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    this.showToast(turmaId ? '✅ Turma atualizada!' : '✅ Turma criada!', 'success');
+                    this._invalidarCache('cursos');
+                    this.fecharModal();
+                    await this.carregarCursos();
+                } else {
+                    throw new Error(data.error || 'Erro ao salvar turma curricular');
+                }
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                this.showToast('❌ ' + error.message, 'error');
             }
-
-            this.showToast('🔄 Salvando turma curricular...', 'info');
-            const token = localStorage.getItem('auth_token');
-            const url = turmaId
-                ? `/api/admin/cursos/${cursoId}/turmas/${turmaId}`
-                : `/api/admin/cursos/${cursoId}/turmas`;
-            const method = turmaId ? 'PUT' : 'POST';
-
-            const response = await fetch(url, {
-                method,
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify(dados)
-            });
-            const data = await response.json();
-
-            if (data.success) {
-                this.showToast(turmaId ? '✅ Turma atualizada!' : '✅ Turma criada!', 'success');
-                this.fecharModal();
-                await this.carregarCursos();
-            } else {
-                throw new Error(data.error || 'Erro ao salvar turma curricular');
-            }
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            this.showToast('❌ ' + error.message, 'error');
-        }
+        });
     }
 
     async excluirTurmaCurricular(cursoId, turmaId) {
@@ -4988,6 +5425,7 @@ class AdminSimples {
             const data = await response.json();
             if (data.success) {
                 this.showToast('✅ Turma curricular excluída!', 'success');
+                this._invalidarCache('cursos');
                 await this.carregarCursos();
             } else {
                 throw new Error(data.error || 'Erro');
@@ -5024,59 +5462,98 @@ class AdminSimples {
             console.error('❌ Erro ao carregar foto:', error);
         }
     }
-
         // ============================================================================
-    // PROVAS
+    // PROVAS (com cache)
     // ============================================================================
     async carregarProvas() {
         console.log('📚 CARREGANDO PROVAS...');
         const contentArea = document.getElementById('contentArea');
 
-        if (contentArea && this.abaAtual === 'provas') {
-            contentArea.innerHTML = `
-                <div style="text-align:center;padding:60px;background:white;border-radius:12px;">
-                    <div style="width:50px;height:50px;border:5px solid #f3f3f3;border-top:5px solid #1e3a8a;
-                                border-radius:50%;margin:0 auto 20px;animation:spin 1s linear infinite;"></div>
-                    <p style="color:#6b7280;">Carregando provas...</p>
-                </div>
-                <style>@keyframes spin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}</style>`;
+        if (this._cacheValido('provas')) {
+            console.log('⚡ [carregarProvas] Usando cache');
+            this.provas = this._getCache('provas') || [];
+            this.professoresLista = this.extrairProfessores(this.provas);
+            if (this.abaAtual === 'provas') this.renderizarPaginaProvas();
+            this._revalidarProvas();
+            return;
         }
 
+        return this._comLock('carregarProvas', async () => {
+            if (contentArea && this.abaAtual === 'provas') {
+                contentArea.innerHTML = `
+                    <div style="text-align:center;padding:60px;background:white;border-radius:12px;">
+                        <div style="width:50px;height:50px;border:5px solid #f3f3f3;border-top:5px solid #1e3a8a;
+                                    border-radius:50%;margin:0 auto 20px;animation:spin 1s linear infinite;"></div>
+                        <p style="color:#6b7280;">Carregando provas...</p>
+                    </div>
+                    <style>@keyframes spin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}</style>`;
+            }
+
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch('/api/admin/provas?limit=100', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
+
+                const data = await response.json();
+                const provas = data.success ? (data.provas || []) : [];
+
+                this._setCache('provas', provas);
+                this.provas = provas;
+                this.professoresLista = this.extrairProfessores(this.provas);
+
+                console.log(`✅ ${provas.length} provas carregadas`);
+
+                if (this.abaAtual === 'provas' && contentArea) {
+                    this.renderizarPaginaProvas();
+                }
+            } catch (error) {
+                console.error('❌ Erro ao carregar provas:', error);
+                this.provas = [];
+
+                if (this.abaAtual === 'provas' && contentArea) {
+                    contentArea.innerHTML = `
+                        <div style="text-align:center;padding:60px;background:white;border-radius:16px;">
+                            <i class="fas fa-exclamation-triangle" style="font-size:48px;color:#dc3545;margin-bottom:20px;"></i>
+                            <h3 style="color:#721c24;margin-bottom:10px;">Erro ao carregar provas</h3>
+                            <p style="color:#6c757d;margin-bottom:20px;">${error.message}</p>
+                            <button onclick="adminSimples.carregarProvas()"
+                                style="background:#1e3a8a;color:white;border:none;padding:10px 30px;
+                                       border-radius:8px;cursor:pointer;">
+                                <i class="fas fa-sync-alt"></i> Tentar novamente
+                            </button>
+                        </div>`;
+                }
+            }
+        });
+    }
+
+    async _revalidarProvas() {
         try {
             const token = localStorage.getItem('auth_token');
             const response = await fetch('/api/admin/provas?limit=100', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-
-            if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
-
             const data = await response.json();
-            this.provas = data.success ? (data.provas || []) : [];
-            this.professoresLista = this.extrairProfessores(this.provas);
-
-            console.log(`✅ ${this.provas.length} provas carregadas`);
-
-            if (this.abaAtual === 'provas' && contentArea) {
-                this.renderizarPaginaProvas();
+            if (data.success) {
+                const provas = data.provas || [];
+                const mudou = JSON.stringify(provas) !== JSON.stringify(this._getCache('provas'));
+                this._setCache('provas', provas);
+                this.provas = provas;
+                this.professoresLista = this.extrairProfessores(this.provas);
+                if (mudou && this.abaAtual === 'provas') {
+                    this.renderizarPaginaProvas();
+                }
             }
-        } catch (error) {
-            console.error('❌ Erro ao carregar provas:', error);
-            this.provas = [];
-
-            if (this.abaAtual === 'provas' && contentArea) {
-                contentArea.innerHTML = `
-                    <div style="text-align:center;padding:60px;background:white;border-radius:16px;">
-                        <i class="fas fa-exclamation-triangle" style="font-size:48px;color:#dc3545;margin-bottom:20px;"></i>
-                        <h3 style="color:#721c24;margin-bottom:10px;">Erro ao carregar provas</h3>
-                        <p style="color:#6c757d;margin-bottom:20px;">${error.message}</p>
-                        <button onclick="adminSimples.carregarProvas()"
-                            style="background:#1e3a8a;color:white;border:none;padding:10px 30px;
-                                   border-radius:8px;cursor:pointer;">
-                            <i class="fas fa-sync-alt"></i> Tentar novamente
-                        </button>
-                    </div>`;
-            }
+        } catch (e) {
+            console.warn('Revalidação provas:', e);
         }
+    }
+
+    filtrarProvasListaDebounce() {
+        this._debounce('buscarProvas', () => this.filtrarProvasLista(), 250);
     }
 
     renderizarPaginaProvas() {
@@ -5173,7 +5650,7 @@ class AdminSimples {
                         <div class="filter-group">
                             <label><i class="fas fa-search"></i> Buscar</label>
                             <input type="text" id="searchProvas" placeholder="Título, conteúdo ou professor..."
-                                value="" onkeyup="adminSimples.filtrarProvasLista()"
+                                value="" onkeyup="adminSimples.filtrarProvasListaDebounce()"
                                 style="width:100%;padding:10px 15px;border:2px solid #e5e7eb;
                                        border-radius:12px;font-size:14px;">
                         </div>
@@ -5397,6 +5874,7 @@ class AdminSimples {
 
     async atualizarProvas() {
         this.showToast('🔄 Atualizando provas...', 'info');
+        this._invalidarCache('provas');
         await this.carregarProvas();
         this.showToast('✅ Provas atualizadas!', 'success');
     }
@@ -5786,76 +6264,78 @@ class AdminSimples {
     }
 
     async gerarProvaSimples() {
-        console.log('🤖 Gerando prova com IA...');
-        const btn = document.querySelector('#formNovaProvaSimples button[type="submit"]');
-        if (!btn) return;
+        return this._comLock('gerarProva', async () => {
+            console.log('🤖 Gerando prova com IA...');
+            const btn = document.querySelector('#formNovaProvaSimples button[type="submit"]');
+            if (!btn) return;
 
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando...';
-        btn.disabled = true;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando...';
+            btn.disabled = true;
 
-        try {
-            const token = localStorage.getItem('auth_token');
-            const professorId = document.getElementById('professorProvaSimples')?.value;
-            const turmaId = document.getElementById('turmaProvaSimples')?.value;
-            const titulo = document.getElementById('tituloProvaSimples')?.value;
-            const tema = document.getElementById('temaProvaSimples')?.value;
-            const periodo = document.getElementById('periodoProvaSimples')?.value;
-            const tipoProva = document.getElementById('tipoProvaSimples')?.value;
-            const quantidade = parseInt(document.getElementById('quantidadeSimples')?.value) || 10;
-            const dificuldade = document.getElementById('dificuldadeSimples')?.value;
-            const horarioInicio = document.getElementById('horarioInicioSimples')?.value;
-            const horarioTermino = document.getElementById('horarioTerminoSimples')?.value;
+            try {
+                const token = localStorage.getItem('auth_token');
+                const professorId = document.getElementById('professorProvaSimples')?.value;
+                const turmaId = document.getElementById('turmaProvaSimples')?.value;
+                const titulo = document.getElementById('tituloProvaSimples')?.value;
+                const tema = document.getElementById('temaProvaSimples')?.value;
+                const periodo = document.getElementById('periodoProvaSimples')?.value;
+                const tipoProva = document.getElementById('tipoProvaSimples')?.value;
+                const quantidade = parseInt(document.getElementById('quantidadeSimples')?.value) || 10;
+                const dificuldade = document.getElementById('dificuldadeSimples')?.value;
+                const horarioInicio = document.getElementById('horarioInicioSimples')?.value;
+                const horarioTermino = document.getElementById('horarioTerminoSimples')?.value;
 
-            if (!professorId) throw new Error('Selecione um professor');
-            if (!turmaId) throw new Error('Selecione uma turma');
-            if (!periodo) throw new Error('Selecione o período');
-            if (!tema) throw new Error('Digite o tema');
+                if (!professorId) throw new Error('Selecione um professor');
+                if (!turmaId) throw new Error('Selecione uma turma');
+                if (!periodo) throw new Error('Selecione o período');
+                if (!tema) throw new Error('Digite o tema');
 
-            let dataLimite = null;
-            const dataLimiteInput = document.getElementById('dataLimiteSimples')?.value;
-            if (dataLimiteInput) {
-                const [ano, mes, dia] = dataLimiteInput.split('-').map(Number);
-                dataLimite = new Date(ano, mes - 1, dia, 23, 59, 59).toISOString();
+                let dataLimite = null;
+                const dataLimiteInput = document.getElementById('dataLimiteSimples')?.value;
+                if (dataLimiteInput) {
+                    const [ano, mes, dia] = dataLimiteInput.split('-').map(Number);
+                    dataLimite = new Date(ano, mes - 1, dia, 23, 59, 59).toISOString();
+                }
+
+                const dadosBase = {
+                    professorId, turmaId, titulo, conteudo: tema,
+                    tipoProva, periodo, quantidadeQuestoes: quantidade,
+                    dificuldade, dataLimite, horarioInicio, horarioTermino
+                };
+
+                if (tipoProva === 'adaptada') {
+                    dadosBase.adaptada = true;
+                    dadosBase.alternativas = 3;
+                }
+
+                const response = await fetch(`/api/turmas/${turmaId}/prova-v2`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(dadosBase)
+                });
+
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || `Erro ${response.status}`);
+
+                if (data.success) {
+                    this.provaGeradaSimples = { id: data.provaId, ...data.prova, questoes: data.questoes || [] };
+                    this.showToast('✅ Prova gerada!', 'success');
+                    this.mostrarPreviewProvaSimples(data.questoes || []);
+                } else {
+                    throw new Error(data.error || 'Erro ao gerar prova');
+                }
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                this.showToast('❌ ' + error.message, 'error');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
             }
-
-            const dadosBase = {
-                professorId, turmaId, titulo, conteudo: tema,
-                tipoProva, periodo, quantidadeQuestoes: quantidade,
-                dificuldade, dataLimite, horarioInicio, horarioTermino
-            };
-
-            if (tipoProva === 'adaptada') {
-                dadosBase.adaptada = true;
-                dadosBase.alternativas = 3;
-            }
-
-            const response = await fetch(`/api/turmas/${turmaId}/prova-v2`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(dadosBase)
-            });
-
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || `Erro ${response.status}`);
-
-            if (data.success) {
-                this.provaGeradaSimples = { id: data.provaId, ...data.prova, questoes: data.questoes || [] };
-                this.showToast('✅ Prova gerada!', 'success');
-                this.mostrarPreviewProvaSimples(data.questoes || []);
-            } else {
-                throw new Error(data.error || 'Erro ao gerar prova');
-            }
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            this.showToast('❌ ' + error.message, 'error');
-        } finally {
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-        }
+        });
     }
 
     mostrarPreviewProvaSimples(questoes) {
@@ -5976,6 +6456,8 @@ class AdminSimples {
             const data = await response.json();
             if (data.success) {
                 this.showToast('✅ Prova publicada!', 'success');
+                this._invalidarCache('provas');
+                this._invalidarCache('dashboard');
                 this.fecharFormCriarProva();
                 await this.carregarProvas();
             } else {
@@ -6264,6 +6746,8 @@ class AdminSimples {
             const data = await response.json();
             if (data.success) {
                 this.showToast('✅ Prova atualizada!', 'success');
+                this._invalidarCache('provas');
+                this._invalidarCache('dashboard');
                 fecharModalEditarSimples();
                 setTimeout(() => this.carregarProvas(), 1500);
             } else {
@@ -6529,6 +7013,8 @@ class AdminSimples {
             const data = await response.json();
             if (data.success) {
                 this.showToast('✅ Prova publicada!', 'success');
+                this._invalidarCache('provas');
+                this._invalidarCache('dashboard');
                 await this.carregarProvas();
             } else {
                 throw new Error(data.error || 'Erro ao publicar');
@@ -6609,6 +7095,7 @@ class AdminSimples {
 
             if (data.success) {
                 this.showToast('✅ Data atualizada!', 'success');
+                this._invalidarCache('provas');
                 this.fecharModal();
                 await this.carregarProvas();
                 setTimeout(() => this.showToast(`📅 Nova data: ${dataFormatada}`, 'info'), 1500);
@@ -6665,6 +7152,8 @@ class AdminSimples {
             if (data.success) {
                 this.showToast('✅ Prova excluída!', 'success');
                 this.provas = this.provas.filter(p => (p.id || p._id) !== id);
+                this._setCache('provas', this.provas);
+                this._invalidarCache('dashboard');
                 const tabela = document.getElementById('tabelaProvas');
                 if (tabela) tabela.innerHTML = this.gerarLinhasProvas(this.provas);
                 this.atualizarContadoresProvas();
@@ -6697,58 +7186,59 @@ class AdminSimples {
     // IMPRESSÃO DE PROVAS
     // ============================================================================
     async baixarImprimirProva(provaId) {
-        console.log('🖨️ Preparando impressão:', provaId);
+        return this._comLock('imprimirProva', async () => {
+            console.log('🖨️ Preparando impressão:', provaId);
 
-        try {
-            const token = localStorage.getItem('auth_token');
-            this.closeAllModals();
-
-            const IS_LOCALHOST = window.location.hostname === 'localhost' ||
-                                window.location.hostname === '127.0.0.1';
-            const API_BASE_URL = IS_LOCALHOST ? 'http://localhost:3000/api' : '/api';
-
-            this.showToast('📄 Preparando prova...', 'info');
-
-            const response = await fetch(`${API_BASE_URL}/provas/${provaId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!response.ok) throw new Error('Erro ao carregar prova');
-
-            const data = await response.json();
-            if (!data.success) throw new Error(data.error || 'Erro');
-
-            const prova = data.prova;
-            const questoes = data.questoes || [];
-
-            // QR Code (com fallback)
-            let qrCodeDataUrl = '';
             try {
-                const correcaoUrl = `${window.location.origin}/corrigir-prova.html?prova=${provaId}`;
-                const qrResponse = await fetch(`${API_BASE_URL}/qrcode/gerar`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ url: correcaoUrl })
+                const token = localStorage.getItem('auth_token');
+                this.closeAllModals();
+
+                const IS_LOCALHOST = window.location.hostname === 'localhost' ||
+                                    window.location.hostname === '127.0.0.1';
+                const API_BASE_URL = IS_LOCALHOST ? 'http://localhost:3000/api' : '/api';
+
+                this.showToast('📄 Preparando prova...', 'info');
+
+                const response = await fetch(`${API_BASE_URL}/provas/${provaId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
+                if (!response.ok) throw new Error('Erro ao carregar prova');
 
-                const ct = qrResponse.headers.get('content-type');
-                if (qrResponse.ok && ct && ct.includes('application/json')) {
-                    const qrData = await qrResponse.json();
-                    if (qrData.success && qrData.qrCode) qrCodeDataUrl = qrData.qrCode;
+                const data = await response.json();
+                if (!data.success) throw new Error(data.error || 'Erro');
+
+                const prova = data.prova;
+                const questoes = data.questoes || [];
+
+                let qrCodeDataUrl = '';
+                try {
+                    const correcaoUrl = `${window.location.origin}/corrigir-prova.html?prova=${provaId}`;
+                    const qrResponse = await fetch(`${API_BASE_URL}/qrcode/gerar`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ url: correcaoUrl })
+                    });
+
+                    const ct = qrResponse.headers.get('content-type');
+                    if (qrResponse.ok && ct && ct.includes('application/json')) {
+                        const qrData = await qrResponse.json();
+                        if (qrData.success && qrData.qrCode) qrCodeDataUrl = qrData.qrCode;
+                    }
+                } catch (qrError) {
+                    console.warn('⚠️ QR Code não gerado:', qrError.message);
                 }
-            } catch (qrError) {
-                console.warn('⚠️ QR Code não gerado:', qrError.message);
-            }
 
-            window.provaParaImpressao = { prova, questoes, qrCodeDataUrl, API_BASE_URL, token };
-            await this.carregarAlunosParaImpressao();
-            this.mostrarModalPerguntaAdaptacao();
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            this.showToast(`❌ Erro: ${error.message}`, 'error');
-        }
+                window.provaParaImpressao = { prova, questoes, qrCodeDataUrl, API_BASE_URL, token };
+                await this.carregarAlunosParaImpressao();
+                this.mostrarModalPerguntaAdaptacao();
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                this.showToast(`❌ Erro: ${error.message}`, 'error');
+            }
+        });
     }
 
     async carregarAlunosParaImpressao() {
@@ -7601,109 +8091,126 @@ class AdminSimples {
     }
 
     // ============================================================================
-    // RESULTADOS
+    // RESULTADOS (com cache)
     // ============================================================================
     async carregarResultados() {
         const contentArea = document.getElementById('contentArea');
         if (!contentArea) return;
 
-        contentArea.innerHTML = `
-            <div class="loading-spinner">
-                <div class="spinner"></div>
-                <p>Carregando resultados...</p>
-            </div>
-            <style>
-                .loading-spinner { text-align:center; padding:60px; background:white; border-radius:12px; }
-                .spinner { width:40px; height:40px; border:4px solid #f3f3f3; border-top:4px solid #0d6efd;
-                    border-radius:50%; margin:0 auto 15px; animation:spin 1s linear infinite; }
-                @keyframes spin { 0% { transform:rotate(0deg); } 100% { transform:rotate(360deg); } }
-            </style>`;
-
-        try {
-            const token = localStorage.getItem('auth_token');
-            const response = await fetch('/api/admin/todos-resultados', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await response.json();
-
-            if (!data.success) throw new Error(data.error || 'Erro ao carregar resultados');
-
-            if (!data.resultados || data.resultados.length === 0) {
-                contentArea.innerHTML = this.renderSemResultados();
-                return;
-            }
-
-            const resultados = data.resultados.map(r => ({
-                id: r.id || r._id,
-                alunoId: r.alunoId,
-                alunoNome: r.alunoNome || 'Aluno',
-                alunoEmail: r.alunoEmail || '',
-                alunoMatricula: r.alunoMatricula || '',
-                alunoTurma: r.alunoTurma || '',
-                provaId: r.provaId,
-                provaTitulo: r.provaTitulo || 'Prova',
-                dataRealizacao: r.dataRealizacao || r.createdAt,
-                notaAutomatica: r.notaAutomatica !== undefined ? r.notaAutomatica : r.nota,
-                notaAutomaticaLiberada: r.notaAutomaticaLiberada !== undefined ? r.notaAutomaticaLiberada : r.notaLiberada,
-                notaManual: r.notaManual,
-                notaManualLiberada: r.notaManualLiberada,
-                notaManualObservacao: r.notaManualObservacao,
-                notaManualData: r.notaManualData,
-                notaManualAtribuidaPor: r.notaManualAtribuidaPor,
-                nota: r.notaManual !== null && r.notaManual !== undefined ? r.notaManual : r.nota,
-                notaLiberada: r.notaManualLiberada || r.notaLiberada,
-                tipoNota: r.tipoNota || (r.notaManual !== null ? 'manual' : 'automatica'),
-                acertos: r.acertos || 0,
-                total: r.total || 0,
-                tempoGasto: r.tempoGasto || 0,
-                status: r.status || (r.nota !== null ? (r.nota >= 7 ? 'aprovado' : 'reprovado') : 'pendente'),
-                cancelada: r.cancelada || false,
-                motivoCancelamento: r.motivoCancelamento,
-                resultadoDetalhado: r.resultadoDetalhado || [],
-                observacoes: r.observacoes || '',
-                createdAt: r.createdAt
-            }));
-
-            const aprovados = resultados.filter(r => r.nota && r.nota >= 7 && !r.cancelada).length;
-            const reprovados = resultados.filter(r => r.nota && r.nota < 7 && !r.cancelada).length;
-            const pendentes = resultados.filter(r => r.nota === null || r.nota === undefined).length;
-            const cancelados = resultados.filter(r => r.cancelada).length;
-            const notasValidas = resultados.filter(r => r.nota !== null && r.nota !== undefined && !r.cancelada).map(r => r.nota);
-            const mediaGeral = notasValidas.length > 0
-                ? (notasValidas.reduce((a, b) => a + b, 0) / notasValidas.length).toFixed(2)
-                : '0.00';
-            const taxaAprovacao = notasValidas.length > 0
-                ? ((aprovados / notasValidas.length) * 100).toFixed(1)
-                : '0.0';
-
-            const estatisticas = {
-                totalResultados: resultados.length,
-                totalAlunos: new Set(resultados.map(r => r.alunoId)).size,
-                totalProvas: new Set(resultados.map(r => r.provaId)).size,
-                aprovados, reprovados, pendentes, cancelados, mediaGeral, taxaAprovacao,
-                notasManuais: resultados.filter(r => r.tipoNota === 'manual').length,
-                notasAutomaticas: resultados.filter(r => r.tipoNota === 'automatica').length
-            };
-
-            this.resultadosCompletos = resultados;
-            this.resultadosFiltrados = resultados;
-            this.paginaAtual = 1;
-            this.itensPorPagina = 15;
-
-            contentArea.innerHTML = this.renderResultadosCompleto(resultados, estatisticas);
-
-            setTimeout(() => {
-                const tbody = document.getElementById('tabelaResultadosBody');
-                if (tbody) tbody.innerHTML = this.gerarLinhasResultados(resultados);
-                this.inicializarGraficosResultados(this.prepararDadosGraficos(resultados));
-                this.configurarEventosResultados();
-                this.atualizarContadoresCards();
-                this.atualizarTabelaPaginada();
-            }, 100);
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            contentArea.innerHTML = this.renderErro(error.message);
+        if (this._cacheValido('resultados')) {
+            console.log('⚡ [carregarResultados] Usando cache');
+            const resultados = this._getCache('resultados') || [];
+            this._renderizarResultados(resultados);
+            return;
         }
+
+        return this._comLock('carregarResultados', async () => {
+            contentArea.innerHTML = `
+                <div class="loading-spinner">
+                    <div class="spinner"></div>
+                    <p>Carregando resultados...</p>
+                </div>
+                <style>
+                    .loading-spinner { text-align:center; padding:60px; background:white; border-radius:12px; }
+                    .spinner { width:40px; height:40px; border:4px solid #f3f3f3; border-top:4px solid #0d6efd;
+                        border-radius:50%; margin:0 auto 15px; animation:spin 1s linear infinite; }
+                    @keyframes spin { 0% { transform:rotate(0deg); } 100% { transform:rotate(360deg); } }
+                </style>`;
+
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch('/api/admin/todos-resultados', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+
+                if (!data.success) throw new Error(data.error || 'Erro ao carregar resultados');
+
+                const resultados = (data.resultados || []).map(r => ({
+                    id: r.id || r._id,
+                    alunoId: r.alunoId,
+                    alunoNome: r.alunoNome || 'Aluno',
+                    alunoEmail: r.alunoEmail || '',
+                    alunoMatricula: r.alunoMatricula || '',
+                    alunoTurma: r.alunoTurma || '',
+                    provaId: r.provaId,
+                    provaTitulo: r.provaTitulo || 'Prova',
+                    dataRealizacao: r.dataRealizacao || r.createdAt,
+                    notaAutomatica: r.notaAutomatica !== undefined ? r.notaAutomatica : r.nota,
+                    notaAutomaticaLiberada: r.notaAutomaticaLiberada !== undefined ? r.notaAutomaticaLiberada : r.notaLiberada,
+                    notaManual: r.notaManual,
+                    notaManualLiberada: r.notaManualLiberada,
+                    notaManualObservacao: r.notaManualObservacao,
+                    notaManualData: r.notaManualData,
+                    notaManualAtribuidaPor: r.notaManualAtribuidaPor,
+                    nota: r.notaManual !== null && r.notaManual !== undefined ? r.notaManual : r.nota,
+                    notaLiberada: r.notaManualLiberada || r.notaLiberada,
+                    tipoNota: r.tipoNota || (r.notaManual !== null ? 'manual' : 'automatica'),
+                    acertos: r.acertos || 0,
+                    total: r.total || 0,
+                    tempoGasto: r.tempoGasto || 0,
+                    status: r.status || (r.nota !== null ? (r.nota >= 7 ? 'aprovado' : 'reprovado') : 'pendente'),
+                    cancelada: r.cancelada || false,
+                    motivoCancelamento: r.motivoCancelamento,
+                    resultadoDetalhado: r.resultadoDetalhado || [],
+                    observacoes: r.observacoes || '',
+                    createdAt: r.createdAt
+                }));
+
+                this._setCache('resultados', resultados);
+                this._renderizarResultados(resultados);
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                contentArea.innerHTML = this.renderErro(error.message);
+            }
+        });
+    }
+
+    _renderizarResultados(resultados) {
+        const contentArea = document.getElementById('contentArea');
+        if (!contentArea) return;
+
+        if (!resultados || resultados.length === 0) {
+            contentArea.innerHTML = this.renderSemResultados();
+            return;
+        }
+
+        const aprovados = resultados.filter(r => r.nota && r.nota >= 7 && !r.cancelada).length;
+        const reprovados = resultados.filter(r => r.nota && r.nota < 7 && !r.cancelada).length;
+        const pendentes = resultados.filter(r => r.nota === null || r.nota === undefined).length;
+        const cancelados = resultados.filter(r => r.cancelada).length;
+        const notasValidas = resultados.filter(r => r.nota !== null && r.nota !== undefined && !r.cancelada).map(r => r.nota);
+        const mediaGeral = notasValidas.length > 0
+            ? (notasValidas.reduce((a, b) => a + b, 0) / notasValidas.length).toFixed(2)
+            : '0.00';
+        const taxaAprovacao = notasValidas.length > 0
+            ? ((aprovados / notasValidas.length) * 100).toFixed(1)
+            : '0.0';
+
+        const estatisticas = {
+            totalResultados: resultados.length,
+            totalAlunos: new Set(resultados.map(r => r.alunoId)).size,
+            totalProvas: new Set(resultados.map(r => r.provaId)).size,
+            aprovados, reprovados, pendentes, cancelados, mediaGeral, taxaAprovacao,
+            notasManuais: resultados.filter(r => r.tipoNota === 'manual').length,
+            notasAutomaticas: resultados.filter(r => r.tipoNota === 'automatica').length
+        };
+
+        this.resultadosCompletos = resultados;
+        this.resultadosFiltrados = resultados;
+        this.paginaAtual = 1;
+        this.itensPorPagina = 15;
+
+        contentArea.innerHTML = this.renderResultadosCompleto(resultados, estatisticas);
+
+        setTimeout(() => {
+            const tbody = document.getElementById('tabelaResultadosBody');
+            if (tbody) tbody.innerHTML = this.gerarLinhasResultados(resultados);
+            this.inicializarGraficosResultados(this.prepararDadosGraficos(resultados));
+            this.configurarEventosResultados();
+            this.atualizarContadoresCards();
+            this.atualizarTabelaPaginada();
+        }, 100);
     }
 
     prepararDadosGraficos(resultados) {
@@ -7847,7 +8354,7 @@ class AdminSimples {
                                 class="filter-input"
                                 style="width:100%;padding:8px 12px;border:1px solid #dee2e6;
                                        border-radius:8px;font-size:13px;"
-                                onkeyup="adminSimples.filtrarTabelaResultados()">
+                                onkeyup="adminSimples.filtrarTabelaResultadosDebounce()">
                         </div>
                         <div class="filter-group" style="flex:1;">
                             <label style="display:block;font-size:12px;color:#6c757d;margin-bottom:5px;">
@@ -8294,6 +8801,7 @@ class AdminSimples {
             if (data.success) {
                 resultado.notaLiberada = true;
                 this.showToast('✅ Nota liberada!', 'success');
+                this._invalidarCache('resultados');
                 this.filtrarTabelaResultados();
                 this.atualizarContadoresCards();
             } else {
@@ -8356,6 +8864,7 @@ class AdminSimples {
         }
 
         this.showToast(`✅ ${sucessos} liberadas, ${erros} erros`, 'success');
+        this._invalidarCache('resultados');
         this.filtrarTabelaResultados();
         this.atualizarContadoresCards();
     }
@@ -8409,6 +8918,10 @@ class AdminSimples {
         this.atualizarContadoresCards();
     }
 
+    filtrarTabelaResultadosDebounce() {
+        this._debounce('filtrarTabelaResultados', () => this.filtrarTabelaResultados(), 250);
+    }
+
     ordenarResultados() {
         if (!this.resultadosFiltrados) return;
         const ordenacao = document.getElementById('filtroOrdenacao')?.value || 'data_desc';
@@ -8457,7 +8970,7 @@ class AdminSimples {
         if (searchInput) {
             const newSearch = searchInput.cloneNode(true);
             searchInput.parentNode.replaceChild(newSearch, searchInput);
-            newSearch.addEventListener('input', () => this.filtrarTabelaResultados());
+            newSearch.addEventListener('input', () => this.filtrarTabelaResultadosDebounce());
         }
         ['filtroStatusAdmin', 'filtroPeriodo'].forEach(id => {
             const el = document.getElementById(id);
@@ -8713,6 +9226,7 @@ class AdminSimples {
             if (!data.success) throw new Error(data.error || 'Erro');
 
             this.showToast('✅ Resultado atualizado!', 'success');
+            this._invalidarCache('resultados');
             this.fecharModal();
             this.filtrarTabelaResultados();
             this.atualizarContadoresCards();
@@ -8745,6 +9259,8 @@ class AdminSimples {
             });
             const data = await response.json();
             if (data.success) {
+                this._invalidarCache('resultados');
+                this._invalidarCache('dashboard');
                 await this.carregarResultados();
                 this.showToast(data.message || '✅ Registro excluído!', 'success');
             } else {
@@ -9268,5 +9784,5 @@ function formatarTelefone(input) {
 }
 
 // Log de inicialização
-console.log('%c✅ admin-simples.js v2.0 carregado com sucesso!',
+console.log('%c✅ admin-simples.js v3.0 OTIMIZADO carregado com sucesso!',
     'background:#10b981;color:white;padding:4px 12px;border-radius:6px;font-weight:600;');

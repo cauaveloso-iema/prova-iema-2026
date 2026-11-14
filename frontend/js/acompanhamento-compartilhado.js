@@ -1,9 +1,9 @@
 // ============================================================================
-// ACOMPANHAMENTO COMPARTILHADO - FRONTEND (VERSÃO DEFINITIVA)
+// ACOMPANHAMENTO COMPARTILHADO - FRONTEND (VERSÃO DEFINITIVA - LIMPA)
 // Agrega dados de TODOS os setores (incluindo BIBLIOTECA)
 // ✅ Listener à prova de falhas
 // ✅ Cache de 60s
-// ✅ Timeout de 15s nas requisições
+// 🚀 Timeout de 45s + Retry automático (Resolve o "Tempo Esgotado" no Render Free)
 // ✅ Paginação de 10 por página
 // ✅ Safety net contra spinner preso
 // ============================================================================
@@ -11,14 +11,9 @@
 (function() {
     'use strict';
 
-    // 🆕 Guarda contra dupla inicialização
-    if (window.__ACOMP_INIT__) {
-        console.warn('⚠️ [Acompanhamento] Já inicializado. Ignorando 2ª carga.');
-        return;
-    }
+    // Guarda contra dupla inicialização
+    if (window.__ACOMP_INIT__) return;
     window.__ACOMP_INIT__ = true;
-
-    console.log('🚀 [Acompanhamento] Inicializando módulo...');
 
     // ============================================
     // ESTADO GLOBAL (exposto em window para debug)
@@ -29,7 +24,6 @@
     window.__acompanhamentoCacheTime = 0;
     const CACHE_TTL = 60 * 1000;
 
-    // 🆕 ESTADO DA PAGINAÇÃO
     window.__acompanhamentoPaginacao = {
         paginaAtual: 1,
         porPagina: 12,
@@ -39,25 +33,35 @@
     };
 
     // ============================================
-    // HELPER: fetch com timeout
+    // 🚀 HELPER: FETCH COM TIMEOUT E RETRY
     // ============================================
-    async function fetchComTimeout(url, options = {}, timeoutMs = 15000) {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    async function fetchComRetry(url, options = {}, timeoutMs = 45000, tentativas = 2) {
+        for (let i = 1; i <= tentativas; i++) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-        try {
-            const response = await fetch(url, {
-                ...options,
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
-            return response;
-        } catch (error) {
-            clearTimeout(timeoutId);
-            if (error.name === 'AbortError') {
-                throw new Error(`Tempo esgotado (${timeoutMs / 1000}s)`);
+            try {
+                const response = await fetch(url, { ...options, signal: controller.signal });
+                clearTimeout(timeoutId);
+
+                // Se o servidor estiver acordando (502, 503, 504), tenta de novo
+                if (!response.ok && [502, 503, 504].includes(response.status)) {
+                    throw new Error(`Servidor acordando (${response.status})`);
+                }
+                return response;
+            } catch (error) {
+                clearTimeout(timeoutId);
+                const isLastTry = (i === tentativas);
+                
+                // Se for a última tentativa ou erro de lógica (404, 401), para.
+                if (isLastTry || (error.message.includes('acordando') === false && error.name !== 'AbortError')) {
+                    if (error.name === 'AbortError') throw new Error(`Tempo esgotado (${timeoutMs / 1000}s)`);
+                    throw error;
+                }
+                
+                // Se for a primeira tentativa e deu erro de rede/timeout, espera 3s e tenta de novo
+                await new Promise(r => setTimeout(r, 3000));
             }
-            throw error;
         }
     }
 
@@ -66,46 +70,32 @@
     // ============================================
     async function carregarAcompanhamento(forcarAtualizacao = false) {
         const container = document.getElementById('acompListaAlunos');
-        if (!container) {
-            console.warn('⚠️ [Acompanhamento] Container #acompListaAlunos não encontrado');
-            return;
-        }
+        if (!container) return;
 
         const token = localStorage.getItem('auth_token');
-        if (!token) {
-            console.warn('⚠️ [Acompanhamento] Sem token');
-            return;
-        }
+        if (!token) return;
 
-        console.log('🔄 [Acompanhamento] Carregando...', { forcarAtualizacao });
-
-        // 🆕 SAFETY NET: remove spinner forçado após 8s
+        // Safety net: remove spinner forçado após 50s
         const safetyTimeout = setTimeout(() => {
             const c = document.getElementById('acompListaAlunos');
-            if (c && c.querySelector('.spinner-border')) {
-                console.warn('⚠️ [SAFETY NET] Spinner preso após 8s. Forçando remoção.');
-                if (!c.querySelector('.card')) {
-                    c.innerHTML = `
-                        <div class="alert alert-warning" style="border-radius:12px;">
-                            <i class="fas fa-exclamation-triangle"></i>
-                            <strong>Consulta demorou mais que o esperado</strong>
-                            <p class="mb-2 mt-2" style="font-size:13px;">
-                                O servidor não respondeu em tempo hábil.
-                            </p>
-                            <button class="btn btn-sm btn-warning" onclick="carregarAcompanhamento(true)">
-                                <i class="fas fa-redo"></i> Tentar novamente
-                            </button>
-                        </div>`;
-                }
+            if (c && c.querySelector('.spinner-border') && !c.querySelector('.card')) {
+                c.innerHTML = `
+                    <div class="alert alert-warning" style="border-radius:12px;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Consulta demorou mais que o esperado</strong>
+                        <p class="mb-2 mt-2" style="font-size:13px;">O servidor não respondeu em tempo hábil.</p>
+                        <button class="btn btn-sm btn-warning" onclick="carregarAcompanhamento(true)">
+                            <i class="fas fa-redo"></i> Tentar novamente
+                        </button>
+                    </div>`;
             }
-        }, 8000);
+        }, 50000);
 
         // Cache
         const agora = Date.now();
         if (!forcarAtualizacao && window.__acompanhamentoCache &&
             (agora - window.__acompanhamentoCacheTime) < CACHE_TTL) {
             clearTimeout(safetyTimeout);
-            console.log('⚡ [Acompanhamento] Usando cache');
             window.__acompanhamentoDados = window.__acompanhamentoCache.dados;
             renderizarListaAcompanhamentoCompartilhado(window.__acompanhamentoCache.dados.alunos);
             return;
@@ -114,9 +104,9 @@
         // Loading
         container.innerHTML = `
             <div class="text-center py-5">
-                <div class="spinner-border text-primary" role="status"></div>
+                <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
                 <p class="text-muted mt-3 mb-1"><strong>Carregando acompanhamento...</strong></p>
-                <small class="text-muted" id="acompLoadingStatus">Consultando todos os setores...</small>
+                <small class="text-muted" id="acompLoadingStatus">Consultando todos os setores (pode levar até 45s)...</small>
             </div>`;
 
         const atualizarStatus = (msg) => {
@@ -125,7 +115,6 @@
         };
 
         try {
-            // Parâmetros
             const params = new URLSearchParams();
             const turma = document.getElementById('acompFiltroTurma')?.value || '';
             const dataInicio = document.getElementById('acompDataInicio')?.value || '';
@@ -140,18 +129,16 @@
 
             atualizarStatus('Buscando resumo e lista em paralelo...');
 
-            // Paralelo
             const [resumoResult, listaResult] = await Promise.allSettled([
-                fetchComTimeout('/api/acompanhamento-compartilhado/resumo-dia', {
+                fetchComRetry('/api/acompanhamento-compartilhado/resumo-dia', {
                     headers: { 'Authorization': `Bearer ${token}` }
-                }, 12000).then(r => r.json()),
+                }, 45000).then(r => r.json()),
 
-                fetchComTimeout(`/api/acompanhamento-compartilhado/alunos?${params}`, {
+                fetchComRetry(`/api/acompanhamento-compartilhado/alunos?${params}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
-                }, 15000).then(r => r.json())
+                }, 45000).then(r => r.json())
             ]);
 
-            // Processa resumo
             if (resumoResult.status === 'fulfilled' && resumoResult.value?.success) {
                 const resumo = resumoResult.value.resumo;
                 atualizarCardResumoCompartilhado('Gestao', resumo.gestao, 'motivos');
@@ -159,13 +146,8 @@
                 atualizarCardResumoCompartilhado('Psico', resumo.psicologia, 'tipos');
                 atualizarCardResumoCompartilhado('Supervisao', resumo.supervisao, 'motivos');
                 atualizarCardResumoCompartilhado('Biblioteca', resumo.biblioteca, 'motivos');
-                console.log('✅ [Acompanhamento] Resumo carregado');
-            } else {
-                console.warn('⚠️ [Acompanhamento] Resumo falhou:',
-                    resumoResult.reason || resumoResult.value?.error);
             }
 
-            // Processa lista
             if (listaResult.status === 'rejected') {
                 throw new Error(listaResult.reason?.message || 'Erro ao carregar lista');
             }
@@ -183,11 +165,7 @@
             await popularFiltroTurmasCompartilhado();
             renderizarListaAcompanhamentoCompartilhado(data.alunos);
 
-            console.log('✅ [Acompanhamento] Lista carregada com sucesso');
-
         } catch (error) {
-            console.error('❌ Erro no acompanhamento:', error);
-
             const isTimeout = error.message?.includes('Tempo esgotado')
                            || error.message?.includes('timeout')
                            || error.name === 'AbortError';
@@ -197,7 +175,7 @@
                     <i class="fas fa-${isTimeout ? 'clock' : 'exclamation-triangle'}"></i>
                     <strong>${isTimeout ? 'A consulta demorou muito' : 'Erro ao carregar'}</strong>
                     <p class="mb-2 mt-2" style="font-size: 13px;">
-                        ${escapeHTMLCompartilhado(error.message)}
+                        ${isTimeout ? 'O banco de dados pode estar iniciando (Cold Start). Tente novamente.' : escapeHTMLCompartilhado(error.message)}
                     </p>
                     <div class="d-flex gap-2 flex-wrap">
                         <button class="btn btn-sm btn-outline-${isTimeout ? 'warning' : 'danger'}"
@@ -223,9 +201,9 @@
         if (!token) return;
 
         try {
-            const response = await fetchComTimeout('/api/acompanhamento-compartilhado/resumo-dia', {
+            const response = await fetchComRetry('/api/acompanhamento-compartilhado/resumo-dia', {
                 headers: { 'Authorization': `Bearer ${token}` }
-            }, 12000);
+            }, 45000);
 
             const data = await response.json();
             if (!data.success) return;
@@ -236,9 +214,8 @@
             atualizarCardResumoCompartilhado('Psico', resumo.psicologia, 'tipos');
             atualizarCardResumoCompartilhado('Supervisao', resumo.supervisao, 'motivos');
             atualizarCardResumoCompartilhado('Biblioteca', resumo.biblioteca, 'motivos');
-
         } catch (error) {
-            console.error('Erro ao carregar resumo:', error);
+            // Silencioso para não sujar o console do usuário
         }
     }
 
@@ -276,9 +253,9 @@
         const valorAtual = select.value;
 
         try {
-            const response = await fetchComTimeout('/api/acompanhamento-compartilhado/turmas', {
+            const response = await fetchComRetry('/api/acompanhamento-compartilhado/turmas', {
                 headers: { 'Authorization': `Bearer ${token}` }
-            }, 10000);
+            }, 15000);
             const data = await response.json();
 
             if (data.success && Array.isArray(data.turmas)) {
@@ -290,12 +267,12 @@
                 select.dataset.populado = 'true';
             }
         } catch (error) {
-            console.error('Erro ao popular turmas:', error);
+            // Silencioso
         }
     }
 
     // ============================================
-    // 🆕 RENDERIZAR LISTA (COM PAGINAÇÃO)
+    // RENDERIZAR LISTA (COM PAGINAÇÃO)
     // ============================================
     function renderizarListaAcompanhamentoCompartilhado(alunos) {
         const container = document.getElementById('acompListaAlunos');
@@ -335,21 +312,15 @@
             return;
         }
 
-        // 🆕 Salva no estado e calcula páginas
+        // Salva no estado e calcula páginas
         const pag = window.__acompanhamentoPaginacao;
         pag.alunosFiltrados = alunosFiltrados;
         pag.totalRegistros = alunosFiltrados.length;
         pag.totalPaginas = Math.ceil(pag.totalRegistros / pag.porPagina);
 
-        // 🆕 Ajusta página atual se estiver fora do range (ex: após filtro)
-        if (pag.paginaAtual > pag.totalPaginas) {
-            pag.paginaAtual = 1;
-        }
-        if (pag.paginaAtual < 1) {
-            pag.paginaAtual = 1;
-        }
+        if (pag.paginaAtual > pag.totalPaginas) pag.paginaAtual = 1;
+        if (pag.paginaAtual < 1) pag.paginaAtual = 1;
 
-        // 🆕 Pega apenas os alunos da página atual
         const inicio = (pag.paginaAtual - 1) * pag.porPagina;
         const fim = inicio + pag.porPagina;
         const alunosDaPagina = alunosFiltrados.slice(inicio, fim);
@@ -362,9 +333,6 @@
             { key: 'biblioteca', label: 'Biblioteca', icon: 'fa-book', color: '#0ea5e9', bg: '#e0f2fe' }
         ];
 
-        // ============================================
-        // RENDERIZA HEADER + CARDS + PAGINAÇÃO
-        // ============================================
         container.innerHTML = `
             <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                 <h6 class="mb-0">
@@ -440,13 +408,12 @@
     }
 
     // ============================================
-    // 🆕 RENDERIZAR CONTROLES DE PAGINAÇÃO
+    // RENDERIZAR CONTROLES DE PAGINAÇÃO
     // ============================================
     function renderizarPaginacaoAcompanhamento() {
         const pag = window.__acompanhamentoPaginacao;
         const { paginaAtual, totalPaginas, totalRegistros, porPagina } = pag;
 
-        // Se só tem 1 página, mostra apenas o contador
         if (totalPaginas <= 1) {
             return `
                 <div class="text-end mt-3 pt-3" style="border-top: 1px solid #e5e7eb;">
@@ -468,39 +435,32 @@
 
         let botoes = '';
 
-        // Primeira
         botoes += paginaAtual > 1
             ? `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); irParaPaginaAcompanhamento(1)" title="Primeira"><i class="fas fa-angle-double-left"></i></a></li>`
             : `<li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-double-left"></i></span></li>`;
 
-        // Anterior
         botoes += paginaAtual > 1
             ? `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); irParaPaginaAcompanhamento(${paginaAtual - 1})" title="Anterior"><i class="fas fa-angle-left"></i></a></li>`
             : `<li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-left"></i></span></li>`;
 
-        // Reticências iniciais
         if (inicio > 1) {
             botoes += `<li class="page-item disabled"><span class="page-link">…</span></li>`;
         }
 
-        // Números
         for (let i = inicio; i <= fim; i++) {
             botoes += i === paginaAtual
                 ? `<li class="page-item active"><span class="page-link">${i}</span></li>`
                 : `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); irParaPaginaAcompanhamento(${i})">${i}</a></li>`;
         }
 
-        // Reticências finais
         if (fim < totalPaginas) {
             botoes += `<li class="page-item disabled"><span class="page-link">…</span></li>`;
         }
 
-        // Próxima
         botoes += paginaAtual < totalPaginas
             ? `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); irParaPaginaAcompanhamento(${paginaAtual + 1})" title="Próxima"><i class="fas fa-angle-right"></i></a></li>`
             : `<li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-right"></i></span></li>`;
 
-        // Última
         botoes += paginaAtual < totalPaginas
             ? `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); irParaPaginaAcompanhamento(${totalPaginas})" title="Última"><i class="fas fa-angle-double-right"></i></a></li>`
             : `<li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-double-right"></i></span></li>`;
@@ -524,7 +484,7 @@
     }
 
     // ============================================
-    // 🆕 IR PARA PÁGINA
+    // IR PARA PÁGINA
     // ============================================
     function irParaPaginaAcompanhamento(pagina) {
         const pag = window.__acompanhamentoPaginacao;
@@ -535,7 +495,6 @@
         pag.paginaAtual = pagina;
         renderizarListaAcompanhamentoCompartilhado(pag.alunosFiltrados);
 
-        // Scroll suave para o topo da lista
         const container = document.getElementById('acompListaAlunos');
         if (container) {
             container.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -547,7 +506,7 @@
     // ============================================
     function filtrarPorSetor(setor) {
         window.__acompanhamentoFiltroSetor = setor;
-        window.__acompanhamentoPaginacao.paginaAtual = 1; // 🆕 reseta a página
+        window.__acompanhamentoPaginacao.paginaAtual = 1;
 
         document.querySelectorAll('#resumoDiaCards .card-acompanhamento').forEach(card => {
             card.style.opacity = '0.5';
@@ -576,7 +535,7 @@
     // ============================================
     function limparFiltrosAcompanhamento() {
         window.__acompanhamentoFiltroSetor = 'todos';
-        window.__acompanhamentoPaginacao.paginaAtual = 1; // 🆕 reseta a página
+        window.__acompanhamentoPaginacao.paginaAtual = 1;
 
         document.querySelectorAll('#resumoDiaCards .card-acompanhamento').forEach(card => {
             card.style.opacity = '1';
@@ -609,33 +568,23 @@
     }
 
     // ============================================
-    // 🆕 REGISTRO DO LISTENER (à prova de falhas)
+    // REGISTRO DO LISTENER
     // ============================================
     function registrarListenerAba() {
         const tab = document.getElementById('acompanhamento-tab');
         if (!tab) {
-            console.warn('⚠️ [Acompanhamento] Aba não encontrada. Tentando novamente em 500ms...');
             setTimeout(registrarListenerAba, 500);
             return;
         }
 
-        // 🆕 Guarda contra dupla inicialização
-        if (tab.dataset.acompListener === 'true') {
-            console.log('ℹ️ [Acompanhamento] Listener já registrado. Ignorando.');
-            return;
-        }
+        if (tab.dataset.acompListener === 'true') return;
         tab.dataset.acompListener = 'true';
 
         tab.addEventListener('shown.bs.tab', () => {
-            console.log('👁️ [Acompanhamento] Aba ativada → carregando dados');
             carregarAcompanhamento();
         });
 
-        console.log('✅ [Acompanhamento] Listener da aba registrado');
-
-        // 🆕 Se a aba JÁ está ativa no momento do carregamento, dispara agora
         if (tab.classList.contains('active')) {
-            console.log('🚀 [Acompanhamento] Aba já está ativa → carregando dados imediatamente');
             setTimeout(() => carregarAcompanhamento(), 100);
         }
     }
@@ -651,41 +600,31 @@
     window.renderizarPaginacaoAcompanhamento = renderizarPaginacaoAcompanhamento;
 
     // ============================================
-    // INICIALIZAÇÃO (à prova de falhas)
+    // INICIALIZAÇÃO
     // ============================================
     function inicializar() {
-        console.log('🎬 [Acompanhamento] Iniciando...');
-
-        // Tenta registrar imediatamente
         registrarListenerAba();
 
-        // Se o DOM ainda não estiver pronto, registra de novo no DOMContentLoaded
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
-                console.log('📄 [Acompanhamento] DOMContentLoaded → re-registrando listener');
                 registrarListenerAba();
             });
         }
 
-        // 🆕 Fallback extra: tenta várias vezes nos primeiros 5 segundos
-        // (caso a aba seja renderizada por outro script depois)
         let tentativas = 0;
         const intervalo = setInterval(() => {
             tentativas++;
             const tab = document.getElementById('acompanhamento-tab');
             if (tab && tab.dataset.acompListener !== 'true') {
-                console.log(`🔁 [Acompanhamento] Tentativa ${tentativas} de registrar listener`);
                 registrarListenerAba();
             } else if (tab && tab.dataset.acompListener === 'true') {
                 clearInterval(intervalo);
             }
             if (tentativas >= 10) {
                 clearInterval(intervalo);
-                console.log('✅ [Acompanhamento] Inicialização concluída');
             }
         }, 500);
     }
 
     inicializar();
-    console.log('✅ [Acompanhamento] Módulo carregado');
 })();

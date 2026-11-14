@@ -1,5 +1,5 @@
 // frontend/js/visitas-admin.js
-// Módulo de Autorização de Visitas Técnicas - ADMIN
+// Módulo de Autorização de Visitas Técnicas - ADMIN (v5.0 - OTIMIZADO)
 
 class VisitasAdmin {
     constructor() {
@@ -18,7 +18,7 @@ class VisitasAdmin {
 
         this.viewMode = localStorage.getItem('visitas_view_mode') || 'grid';
         
-        // Cache de dados
+        // Dados estáticos
         this.turmas = [];
         this.cursos = [];
         this.alunos = [];
@@ -41,16 +41,96 @@ class VisitasAdmin {
             lastX: 0,
             lastY: 0
         };
+
+        // ============================================
+        // 🚀 CACHE INTERNO (OTIMIZAÇÃO)
+        // ============================================
+        this._cache = {
+            configuracao: null,
+            turmas: null,
+            cursos: null,
+            professores: null,
+            termos: null,
+            estatisticas: null,
+            timestamp: 0,
+            ttl: 60 * 1000,            // 1 min para termos
+            ttlEstatico: 5 * 60 * 1000 // 5 min para turmas/cursos/professores
+        };
+
+        // 🚀 Cache de alunos por turma (Map<turma, alunos[]>)
+        this._cacheAlunosPorTurma = new Map();
+        this._ultimoFiltroAlunos = '';
+        this._debounceBuscarAlunos = null;
+        this._precarregandoAlunos = false;
+        this._precarregamentoIniciado = false;
+
+        // 🔒 Locks anti-clique-duplo
+        this._locks = {
+            init: false,
+            carregarDados: false,
+            carregarTermos: false,
+            preaquecer: false,
+            salvarTermo: false,
+            imprimir: false,
+            imprimirLote: false,
+            gerarQRCode: false,
+            buscarAlunos: false
+        };
     }
 
     // ============================================
-    // HELPERS DE HORÁRIO (input type="time")
+    // 🔒 HELPERS DE LOCK
     // ============================================
+    _adquirirLock(nome) {
+        if (this._locks[nome]) {
+            console.log(`🔒 Lock "${nome}" já ativo — ignorando`);
+            return false;
+        }
+        this._locks[nome] = true;
+        return true;
+    }
 
-    /**
-     * Extrai o horário de INÍCIO de uma string tipo "14:00 às 17:00" ou "14hrs às 17hrs".
-     * Retorna "HH:MM" ou "" se não encontrar.
-     */
+    _liberarLock(nome) {
+        this._locks[nome] = false;
+    }
+
+    async _comLock(nome, fn) {
+        if (!this._adquirirLock(nome)) return;
+        try {
+            return await fn();
+        } finally {
+            this._liberarLock(nome);
+        }
+    }
+
+    // ============================================
+    // 🚀 CACHE HELPERS
+    // ============================================
+    _cacheValido(key, ttl = null) {
+        if (!this._cache[key]) return false;
+        const limite = ttl || this._cache.ttl;
+        return (Date.now() - this._cache.timestamp) < limite;
+    }
+
+    _marcarCacheAtualizado() {
+        this._cache.timestamp = Date.now();
+    }
+
+    _invalidarCache() {
+        this._cache.timestamp = 0;
+        this._cache.termos = null;
+        this._cache.estatisticas = null;
+    }
+
+    _limparCacheAlunos() {
+        this._cacheAlunosPorTurma.clear();
+        this._ultimoFiltroAlunos = '';
+        console.log('🧹 Cache de alunos limpo');
+    }
+
+    // ============================================
+    // HELPERS DE HORÁRIO
+    // ============================================
     extrairHoraInicio(horario) {
         if (!horario) return '';
         const m = String(horario).match(/(\d{1,2})\s*(?:[:h]|hs|hrs|hts|horas?|hora)\s*(\d{1,2})?/);
@@ -61,10 +141,6 @@ class VisitasAdmin {
         return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
     }
 
-    /**
-     * Extrai o horário de FIM (o segundo horário da string).
-     * Retorna "HH:MM" ou "" se não encontrar.
-     */
     extrairHoraFim(horario) {
         if (!horario) return '';
         const matches = String(horario).matchAll(/(\d{1,2})\s*(?:[:h]|hs|hrs|hts|horas?|hora)\s*(\d{1,2})?/g);
@@ -78,28 +154,115 @@ class VisitasAdmin {
     }
 
     // ============================================
+    // 🚀 PREAQUECIMENTO
+    // ============================================
+    async preaquecer() {
+        return this._comLock('preaquecer', async () => {
+            if (!this.token) return;
+
+            console.log('🔥 [VisitasAdmin] Prequecendo...');
+
+            try {
+                const [turmasRes, cursosRes, professoresRes] = await Promise.all([
+                    this.apiRequest('/api/setor-pedagogico/visitas/turmas').catch(() => null),
+                    this.apiRequest('/api/setor-pedagogico/visitas/cursos').catch(() => null),
+                    this.apiRequest('/api/setor-pedagogico/visitas/professores').catch(() => null)
+                ]);
+
+                if (turmasRes?.success) {
+                    this.turmas = (turmasRes.turmas || []).map(t =>
+                        typeof t === 'string' ? { id: t, nome: t } : t
+                    );
+                    this._cache.turmas = this.turmas;
+                }
+
+                if (cursosRes?.success) {
+                    this.cursos = cursosRes.cursos || [];
+                    this._cache.cursos = this.cursos;
+                }
+
+                if (professoresRes?.success) {
+                    this.professores = professoresRes.professores || [];
+                    this._cache.professores = this.professores;
+                }
+
+                this._marcarCacheAtualizado();
+                console.log(`🔥 [VisitasAdmin] Preaquecido: ${this.turmas.length} turmas, ${this.cursos.length} cursos, ${this.professores.length} professores`);
+            } catch (e) {
+                console.warn('⚠️ [VisitasAdmin] Falha no preaquecimento:', e);
+            }
+        });
+    }
+
+    // ============================================
     // INICIALIZAÇÃO
     // ============================================
     async init() {
-        console.log('🚀 Inicializando módulo de Visitas...');
-        
-        if (!this.token) {
-            console.error('❌ Token não encontrado');
-            return;
-        }
-        
+        return this._comLock('init', async () => {
+            console.log('🚀 Inicializando módulo de Visitas...');
+
+            if (!this.token) {
+                console.error('❌ Token não encontrado');
+                return;
+            }
+
+            try {
+                const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+                this.currentUser = userData;
+
+                // ⚡ Se tem cache válido, renderiza imediatamente
+                const temCacheValido = this._cacheValido('termos') && this.termos.length > 0;
+
+                if (temCacheValido) {
+                    console.log('⚡ [VisitasAdmin] Usando cache (init rápido)');
+                    this.renderizar();
+                    this._revalidarEmBackground();
+                    return;
+                }
+
+                // Sem cache: carrega tudo
+                await this.carregarConfiguracao();
+                await this.carregarDados();
+                this.renderizar();
+
+                console.log('✅ Módulo de Visitas inicializado');
+            } catch (error) {
+                console.error('❌ Erro ao inicializar:', error);
+                this.showToast('Erro ao carregar módulo de visitas', 'error');
+            }
+        });
+    }
+
+    async _revalidarEmBackground() {
         try {
-            const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-            this.currentUser = userData;
-            
-            await this.carregarConfiguracao();
-            await this.carregarDados();
-            this.renderizar();
-            
-            console.log('✅ Módulo de Visitas inicializado');
-        } catch (error) {
-            console.error('❌ Erro ao inicializar:', error);
-            this.showToast('Erro ao carregar módulo de visitas', 'error');
+            const [configRes, termosRes] = await Promise.all([
+                this.apiRequest('/api/setor-pedagogico/visitas/configuracao').catch(() => null),
+                this.apiRequest(
+                    `/api/setor-pedagogico/visitas/termos?page=${this.paginaAtual}&limit=${this.itensPorPagina}&status=${this.filtros.status}&turma=${this.filtros.turma}&search=${this.filtros.search}`
+                ).catch(() => null)
+            ]);
+
+            if (configRes?.success) {
+                this.configuracao = configRes.configuracao;
+                this._cache.configuracao = configRes.configuracao;
+            }
+
+            if (termosRes?.success) {
+                const mudou = JSON.stringify(termosRes.termos) !== JSON.stringify(this.termos);
+
+                this.termos = termosRes.termos || [];
+                this.termosFiltrados = [...this.termos];
+                this.paginacao = termosRes.paginacao;
+                this.estatisticas = termosRes.estatisticas;
+
+                this._cache.termos = this.termos;
+                this._cache.estatisticas = this.estatisticas;
+                this._marcarCacheAtualizado();
+
+                if (mudou) this.renderizar();
+            }
+        } catch (e) {
+            console.warn('⚠️ Revalidação em background falhou:', e);
         }
     }
 
@@ -115,69 +278,97 @@ class VisitasAdmin {
                 ...options.headers
             }
         });
-        
+
         const data = await response.json();
-        
+
         if (!response.ok && (response.status === 401 || response.status === 403)) {
             localStorage.removeItem('auth_token');
             localStorage.removeItem('user_data');
             window.location.href = '/login.html';
             throw new Error('Sessão expirada');
         }
-        
+
         return data;
     }
 
     // ============================================
-    // CARREGAR DADOS
+    // CARREGAR DADOS (com cache)
     // ============================================
     async carregarDados() {
-        try {
-            const [turmasRes, cursosRes, professoresRes] = await Promise.all([
-                this.apiRequest('/api/setor-pedagogico/visitas/turmas'),
-                this.apiRequest('/api/setor-pedagogico/visitas/cursos'),
-                this.apiRequest('/api/setor-pedagogico/visitas/professores')
-            ]);
-            
-            if (turmasRes.success) {
-                this.turmas = (turmasRes.turmas || []).map(t => 
-                    typeof t === 'string' ? { id: t, nome: t } : t
-                );
+        return this._comLock('carregarDados', async () => {
+            try {
+                const precisaCarregar =
+                    !this._cacheValido('turmas', this._cache.ttlEstatico) ||
+                    !this._cacheValido('cursos', this._cache.ttlEstatico) ||
+                    !this._cacheValido('professores', this._cache.ttlEstatico) ||
+                    this.turmas.length === 0 ||
+                    this.cursos.length === 0 ||
+                    this.professores.length === 0;
+
+                if (precisaCarregar) {
+                    const [turmasRes, cursosRes, professoresRes] = await Promise.all([
+                        this.apiRequest('/api/setor-pedagogico/visitas/turmas').catch(() => null),
+                        this.apiRequest('/api/setor-pedagogico/visitas/cursos').catch(() => null),
+                        this.apiRequest('/api/setor-pedagogico/visitas/professores').catch(() => null)
+                    ]);
+
+                    if (turmasRes?.success) {
+                        this.turmas = (turmasRes.turmas || []).map(t =>
+                            typeof t === 'string' ? { id: t, nome: t } : t
+                        );
+                        this._cache.turmas = this.turmas;
+                    }
+
+                    if (cursosRes?.success) {
+                        this.cursos = cursosRes.cursos || [];
+                        this._cache.cursos = this.cursos;
+                    }
+
+                    if (professoresRes?.success) {
+                        this.professores = professoresRes.professores || [];
+                        this._cache.professores = this.professores;
+                    }
+
+                    this._marcarCacheAtualizado();
+                }
+
+                console.log(`✅ Dados carregados: ${this.turmas.length} turmas, ${this.cursos.length} cursos, ${this.professores.length} professores`);
+
+                await this.carregarTermos();
+            } catch (error) {
+                console.error('❌ Erro ao carregar dados:', error);
+                throw error;
             }
-            
-            if (cursosRes.success) this.cursos = cursosRes.cursos || [];
-            if (professoresRes.success) this.professores = professoresRes.professores || [];
-            
-            console.log(`✅ Dados carregados: ${this.turmas.length} turmas, ${this.cursos.length} cursos, ${this.professores.length} professores`);
-            
-            await this.carregarTermos();
-        } catch (error) {
-            console.error('❌ Erro ao carregar dados:', error);
-            throw error;
-        }
+        });
     }
 
     async carregarTermos() {
-        try {
-            const params = new URLSearchParams({
-                page: this.paginaAtual,
-                limit: this.itensPorPagina,
-                status: this.filtros.status,
-                turma: this.filtros.turma,
-                search: this.filtros.search
-            });
-            
-            const response = await this.apiRequest(`/api/setor-pedagogico/visitas/termos?${params}`);
-            
-            if (response.success) {
-                this.termos = response.termos || [];
-                this.termosFiltrados = [...this.termos];
-                this.paginacao = response.paginacao;
-                this.estatisticas = response.estatisticas;
+        return this._comLock('carregarTermos', async () => {
+            try {
+                const params = new URLSearchParams({
+                    page: this.paginaAtual,
+                    limit: this.itensPorPagina,
+                    status: this.filtros.status,
+                    turma: this.filtros.turma,
+                    search: this.filtros.search
+                });
+
+                const response = await this.apiRequest(`/api/setor-pedagogico/visitas/termos?${params}`);
+
+                if (response.success) {
+                    this.termos = response.termos || [];
+                    this.termosFiltrados = [...this.termos];
+                    this.paginacao = response.paginacao;
+                    this.estatisticas = response.estatisticas;
+
+                    this._cache.termos = this.termos;
+                    this._cache.estatisticas = this.estatisticas;
+                    this._marcarCacheAtualizado();
+                }
+            } catch (error) {
+                console.error('❌ Erro ao carregar termos:', error);
             }
-        } catch (error) {
-            console.error('❌ Erro ao carregar termos:', error);
-        }
+        });
     }
 
     // ============================================
@@ -189,9 +380,9 @@ class VisitasAdmin {
             console.warn('⚠️ Container de visitas não encontrado');
             return;
         }
-        
+
         const stats = this.estatisticas || { total: 0, pendentes: 0, autorizados: 0, recusados: 0 };
-        
+
         container.innerHTML = `
             <div class="visitas-container">
                 <!-- HEADER -->
@@ -244,7 +435,7 @@ class VisitasAdmin {
                     </div>
                 </div>
 
-                <!-- PAINEL DE CONFIGURAÇÕES DA PÁGINA PÚBLICA -->
+                <!-- PAINEL DE CONFIGURAÇÕES -->
                 <div style="background: linear-gradient(135deg, #f0f9ff, #e0f2fe); border-radius: 16px; padding: 20px; margin-bottom: 25px; border: 2px solid #bae6fd;">
                     <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
                         <div style="width: 50px; height: 50px; background: linear-gradient(135deg, #3b82f6, #2563eb); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px; flex-shrink: 0;">
@@ -322,7 +513,6 @@ class VisitasAdmin {
 
                 <!-- ABAS DE STATUS + FILTROS -->
                 <div class="visitas-filters-card">
-                    
                     <div class="status-tabs" style="display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; padding-bottom: 15px; border-bottom: 2px solid #f0f0f0;">
                         <button class="status-tab ${this.filtros.status === 'todos' ? 'active' : ''}" 
                                 onclick="visitasAdmin.filtrarPorStatus('todos')">
@@ -426,7 +616,7 @@ class VisitasAdmin {
                 ${this.paginacao && this.paginacao.pages > 1 ? this.renderizarPaginacao() : ''}
             </div>
         `;
-        
+
         const buscaInput = document.getElementById('buscaTermo');
         if (buscaInput) {
             let timeout;
@@ -458,9 +648,9 @@ class VisitasAdmin {
                 </div>
             `;
         }
-        
+
         const modo = this.viewMode || 'grid';
-        
+
         if (modo === 'list') {
             return `
                 <div class="termos-lista-view">
@@ -468,7 +658,7 @@ class VisitasAdmin {
                 </div>
             `;
         }
-        
+
         return `
             <div class="termos-lista">
                 ${this.termosFiltrados.map(termo => this.renderizarCardTermo(termo)).join('')}
@@ -476,38 +666,35 @@ class VisitasAdmin {
         `;
     }
 
-    // ============================================
-    // 📋 RENDERIZAR LINHA (MODO LISTA)
-    // ============================================
     renderizarLinhaTermo(termo) {
         const status = termo.status || 'pendente';
         const dataVisita = termo.dataVisita 
             ? new Date(termo.dataVisita).toLocaleDateString('pt-BR') 
             : 'N/A';
-        
+
         const statusLabel = {
             'pendente': '⏳ Pendente',
             'parcialmente_autorizado': '🔶 Parcial',
             'autorizado': '✅ Autorizado',
             'recusado': '❌ Recusado'
         }[status] || status;
-        
+
         const badgeAlunos = termo.totalAlunos > 1 
             ? `<span style="background: #e0e7ff; color: #3730a3; padding: 2px 8px; border-radius: 20px; font-size: 10px; margin-left: 6px;">+${termo.totalAlunos - 1}</span>`
             : '';
-        
+
         const badgeProf = termo.totalProfessores > 1
             ? `<span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 20px; font-size: 10px; margin-left: 6px;">+${termo.totalProfessores - 1}</span>`
             : '';
-        
+
         const badgeTurmas = (termo.totalTurmas && termo.totalTurmas > 1)
             ? `<span style="background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 20px; font-size: 10px; margin-left: 6px;"><i class="fas fa-school"></i> ${termo.totalTurmas} turmas</span>`
             : '';
-        
+
         const turmasTexto = (termo.turmas && termo.turmas.length > 0)
             ? termo.turmas.slice(0, 2).join(', ') + (termo.turmas.length > 2 ? ` +${termo.turmas.length - 2}` : '')
             : (termo.alunoTurma || 'N/A');
-        
+
         return `
             <div class="termo-linha" onclick="visitasAdmin.verDetalhes('${termo._id}')" style="cursor: pointer;">
                 <div class="termo-linha-status" data-status="${status}"></div>
@@ -574,19 +761,19 @@ class VisitasAdmin {
     mudarViewMode(mode) {
         this.viewMode = mode;
         localStorage.setItem('visitas_view_mode', mode);
-        
+
         const container = document.getElementById('listaTermos');
         if (container) {
             container.innerHTML = this.renderizarListaTermos();
         }
-        
+
         document.querySelectorAll('.view-btn').forEach(btn => btn.classList.remove('active'));
         document.querySelector(`.view-btn[onclick*="'${mode}'"]`)?.classList.add('active');
     }
 
     ordenarTermos(ordenacao) {
         this.filtros.ordenacao = ordenacao;
-        
+
         switch(ordenacao) {
             case 'data_desc':
                 this.termosFiltrados.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -604,8 +791,7 @@ class VisitasAdmin {
                 this.termosFiltrados.sort((a, b) => (a.codigo || '').localeCompare(b.codigo || ''));
                 break;
         }
-        
-        this.renderizarListaTermos();
+
         const container = document.getElementById('listaTermos');
         if (container) {
             container.innerHTML = this.renderizarListaTermos();
@@ -617,37 +803,37 @@ class VisitasAdmin {
         const dataVisita = termo.dataVisita 
             ? new Date(termo.dataVisita).toLocaleDateString('pt-BR') 
             : 'Não definida';
-        
+
         const statusLabel = {
             'pendente': '⏳ Pendente',
             'parcialmente_autorizado': '🔶 Parcial',
             'autorizado': '✅ Autorizado',
             'recusado': '❌ Recusado'
         }[status] || status;
-        
+
         const badgeMultiplosAlunos = termo.totalAlunos > 1 
             ? `<span style="background: rgba(255,255,255,0.3); padding: 2px 8px; border-radius: 30px; font-size: 10px; margin-left: 6px;">+${termo.totalAlunos - 1} aluno(s)</span>`
             : '';
-        
+
         const badgeMultiplosProf = termo.totalProfessores > 1
             ? `<span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 30px; font-size: 10px; margin-left: 6px;">+${termo.totalProfessores - 1} prof.</span>`
             : '';
-        
+
         const badgeTurmas = (termo.totalTurmas && termo.totalTurmas > 1)
             ? `<span style="background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 30px; font-size: 10px; margin-left: 6px;"><i class="fas fa-school"></i> ${termo.totalTurmas} turmas</span>`
             : '';
-        
+
         const turmasTexto = (termo.turmas && termo.turmas.length > 0)
             ? termo.turmas.slice(0, 2).join(', ') + (termo.turmas.length > 2 ? ` +${termo.turmas.length - 2}` : '')
             : (termo.alunoTurma || 'N/A');
-        
+
         const progresso = termo.totalResponsaveis > 0
             ? `<div style="font-size: 11px; color: #6b7280; margin-top: 8px;">
                 <i class="fas fa-check-circle" style="color: #10b981;"></i>
                 ${termo.responsaveisAutorizados} de ${termo.totalResponsaveis} responsável(is) autorizou(aram)
             </div>`
             : '';
-        
+
         return `
             <div class="termo-card">
                 <div class="termo-card-header ${status}">
@@ -705,24 +891,24 @@ class VisitasAdmin {
     renderizarPaginacao() {
         const { page, pages } = this.paginacao;
         let botoes = '';
-        
+
         const inicio = Math.max(1, page - 2);
         const fim = Math.min(pages, page + 2);
-        
+
         if (inicio > 1) {
             botoes += `<button class="btn-filter" onclick="visitasAdmin.irParaPagina(1)">1</button>`;
             if (inicio > 2) botoes += `<span style="padding: 0 8px;">...</span>`;
         }
-        
+
         for (let i = inicio; i <= fim; i++) {
             botoes += `<button class="btn-filter ${i === page ? '' : 'btn-clear'}" onclick="visitasAdmin.irParaPagina(${i})">${i}</button>`;
         }
-        
+
         if (fim < pages) {
             if (fim < pages - 1) botoes += `<span style="padding: 0 8px;">...</span>`;
             botoes += `<button class="btn-filter" onclick="visitasAdmin.irParaPagina(${pages})">${pages}</button>`;
         }
-        
+
         return `
             <div style="display: flex; justify-content: center; gap: 8px; margin-top: 20px; flex-wrap: wrap;">
                 ${botoes}
@@ -763,6 +949,8 @@ class VisitasAdmin {
 
     async atualizar() {
         this.showToast('🔄 Atualizando...', 'info');
+        this._invalidarCache();
+        this._limparCacheAlunos();
         await this.carregarDados();
         this.renderizar();
         this.showToast('✅ Atualizado!', 'success');
@@ -775,28 +963,31 @@ class VisitasAdmin {
         const modalBody = document.getElementById('modalBody');
         const modalTitle = document.getElementById('modalTitle');
         const modalSaveBtn = document.getElementById('modalSaveBtn');
-        
+
         if (!modalBody) return;
-        
+
         let termo = null;
         if (termoId) {
             const response = await this.apiRequest(`/api/setor-pedagogico/visitas/termos/${termoId}`);
             if (response.success) termo = response.termo;
         }
-        
+
         modalTitle.innerHTML = termoId 
             ? '<i class="fas fa-edit"></i> Editar Termo de Visita'
             : '<i class="fas fa-plus-circle"></i> Novo Termo de Visita';
-        
+
         modalBody.innerHTML = this.renderizarFormularioTermo(termo);
-        
+
         this.configurarFormularioTermo(termo);
-        
+
         modalSaveBtn.innerHTML = termoId ? '💾 Salvar Alterações' : '✏️ Criar Termo';
         modalSaveBtn.onclick = () => this.salvarTermo(termoId);
         modalSaveBtn.style.display = 'inline-block';
-        
+
         this.openModal();
+
+        // 🚀 Prefetch em background: pré-carrega alunos de TODAS as turmas
+        setTimeout(() => this._precarregarAlunosTodasTurmas(), 500);
     }
 
     renderizarFormularioTermo(termo = null) {
@@ -804,7 +995,7 @@ class VisitasAdmin {
             const turmasDoTermo = (termo.turmas && termo.turmas.length > 0)
                 ? [...termo.turmas]
                 : (termo.turmaPrincipal ? [termo.turmaPrincipal] : []);
-            
+
             this.formData.turmasSelecionadas = turmasDoTermo;
             this.formData.alunosSelecionados = (termo.alunos || []).map(a => 
                 (a.alunoId?._id || a.alunoId || '').toString()
@@ -820,10 +1011,9 @@ class VisitasAdmin {
             this.formData.localizacao = null;
         }
 
-        // 🆕 Horário atual (para edição): separa início e fim
         const horarioInicioValue = this.extrairHoraInicio(termo?.horario) || '';
         const horarioFimValue = this.extrairHoraFim(termo?.horario) || '';
-        
+
         return `
             <div class="visita-modal-body">
                 <div class="visita-modal-header-custom">
@@ -858,7 +1048,7 @@ class VisitasAdmin {
                                         ${this.formData.turmasSelecionadas.length} selecionada(s)
                                     </span>
                                 </label>
-                                
+
                                 <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center;">
                                     <select id="formTurmaSelect" class="form-input" style="flex: 1; min-width: 200px;">
                                         <option value="">Selecione uma turma para adicionar...</option>
@@ -883,7 +1073,7 @@ class VisitasAdmin {
                                 <div id="listaTurmasChips">
                                     ${this.renderizarChipsTurmas()}
                                 </div>
-                                
+
                                 <small style="color: #6b7280; font-size: 12px; margin-top: 6px; display: block;">
                                     <i class="fas fa-info-circle"></i> Adicione todas as turmas que participarão da visita. Os alunos de todas elas aparecerão abaixo para seleção.
                                 </small>
@@ -1083,7 +1273,7 @@ class VisitasAdmin {
                         <input type="hidden" id="formLocalizacaoJSON" value='${JSON.stringify(termo?.localizacao || {})}'>
                     </div>
 
-                    <!-- SEÇÃO 5: ASSINATURA DO GESTOR -->
+                    <!-- SEÇÃO 5: ASSINATURA -->
                     <div class="visita-form-section">
                         <div class="visita-form-section-title">
                             <i class="fas fa-signature"></i>
@@ -1121,7 +1311,7 @@ class VisitasAdmin {
                 </div>
             `;
         }
-        
+
         return `
             <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                 ${this.formData.turmasSelecionadas.map(turma => `
@@ -1139,34 +1329,39 @@ class VisitasAdmin {
         `;
     }
 
+    // 🚀 ADICIONAR TURMA (com debounce)
     adicionarTurma() {
         const select = document.getElementById('formTurmaSelect');
         if (!select) return;
-        
+
         const turma = select.value;
         if (!turma) {
             this.showToast('⚠️ Selecione uma turma', 'warning');
             return;
         }
-        
+
         if (this.formData.turmasSelecionadas.includes(turma)) {
             this.showToast('⚠️ Esta turma já foi adicionada', 'warning');
             return;
         }
-        
+
         this.formData.turmasSelecionadas.push(turma);
         select.value = '';
         this.atualizarChipsTurmas();
-        this.buscarAlunos();
+
+        // 🚀 Debounce: se adicionar várias turmas rápido, busca 1x só
+        this._buscarAlunosDebounced();
+
         this.showToast(`✅ Turma "${turma}" adicionada`, 'success');
     }
 
+    // 🚀 REMOVER TURMA (com debounce)
     removerTurma(turma) {
         const idx = this.formData.turmasSelecionadas.indexOf(turma);
         if (idx >= 0) {
             this.formData.turmasSelecionadas.splice(idx, 1);
             this.atualizarChipsTurmas();
-            this.buscarAlunos();
+            this._buscarAlunosDebounced();
         }
     }
 
@@ -1178,22 +1373,32 @@ class VisitasAdmin {
         this.atualizarListaAlunosSelecao();
     }
 
+    // 🚀 Debounce wrapper
+    _buscarAlunosDebounced(delay = 250) {
+        if (this._debounceBuscarAlunos) {
+            clearTimeout(this._debounceBuscarAlunos);
+        }
+        this._debounceBuscarAlunos = setTimeout(() => {
+            this.buscarAlunos();
+        }, delay);
+    }
+
     atualizarChipsTurmas() {
         const container = document.getElementById('listaTurmasChips');
         if (container) {
             container.innerHTML = this.renderizarChipsTurmas();
         }
-        
+
         const contador = document.getElementById('contadorTurmas');
         if (contador) {
             contador.textContent = `${this.formData.turmasSelecionadas.length} selecionada(s)`;
         }
-        
+
         const hidden = document.getElementById('formTurmasArray');
         if (hidden) {
             hidden.value = JSON.stringify(this.formData.turmasSelecionadas);
         }
-        
+
         const select = document.getElementById('formTurmaSelect');
         if (select) {
             select.innerHTML = `
@@ -1220,7 +1425,7 @@ class VisitasAdmin {
                 </div>
             `;
         }
-        
+
         if (!this.alunos || this.alunos.length === 0) {
             return `
                 <div style="padding: 30px; text-align: center; color: #9ca3af;">
@@ -1229,14 +1434,14 @@ class VisitasAdmin {
                 </div>
             `;
         }
-        
+
         const porTurma = {};
         this.alunos.forEach(aluno => {
             const turma = aluno.turma || 'Sem turma';
             if (!porTurma[turma]) porTurma[turma] = [];
             porTurma[turma].push(aluno);
         });
-        
+
         return Object.keys(porTurma).sort().map(turma => `
             <div style="border-bottom: 2px solid #e5e7eb;">
                 <div style="padding: 10px 16px; background: #f0f9ff; color: #1e40af; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 1;">
@@ -1249,7 +1454,7 @@ class VisitasAdmin {
                 ${porTurma[turma].map(aluno => {
                     const selecionado = this.formData.alunosSelecionados.includes(aluno.id.toString());
                     const iniciais = (aluno.nome || 'A').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-                    
+
                     return `
                         <div class="aluno-selecao-item ${selecionado ? 'selecionado' : ''}" 
                             data-aluno-id="${aluno.id}"
@@ -1266,15 +1471,15 @@ class VisitasAdmin {
                             "
                             onmouseover="this.style.background='${selecionado ? '#e0e7ff' : '#f9fafb'}'"
                             onmouseout="this.style.background='${selecionado ? '#eef2ff' : 'white'}'">
-                            
+
                             <input type="checkbox" ${selecionado ? 'checked' : ''} 
                                 onclick="event.stopPropagation(); visitasAdmin.toggleAluno('${aluno.id}')"
                                 style="width: 20px; height: 20px; cursor: pointer; accent-color: #4f46e5; flex-shrink: 0;">
-                            
+
                             <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #4f46e5, #7c3aed); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 14px; flex-shrink: 0;">
                                 ${iniciais}
                             </div>
-                            
+
                             <div style="flex: 1; min-width: 0;">
                                 <div style="font-weight: 600; color: #1f2937; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                                     ${this.escapeHtml(aluno.nome)}
@@ -1284,7 +1489,7 @@ class VisitasAdmin {
                                     ${aluno.curso ? ` • <i class="fas fa-book"></i> ${aluno.curso}` : ''}
                                 </div>
                             </div>
-                            
+
                             ${selecionado ? '<i class="fas fa-check-circle" style="color: #10b981; font-size: 20px; flex-shrink: 0;"></i>' : ''}
                         </div>
                     `;
@@ -1296,13 +1501,13 @@ class VisitasAdmin {
     toggleAluno(alunoId) {
         alunoId = alunoId.toString();
         const idx = this.formData.alunosSelecionados.indexOf(alunoId);
-        
+
         if (idx >= 0) {
             this.formData.alunosSelecionados.splice(idx, 1);
         } else {
             this.formData.alunosSelecionados.push(alunoId);
         }
-        
+
         this.atualizarListaAlunosSelecao();
     }
 
@@ -1322,12 +1527,12 @@ class VisitasAdmin {
         if (container) {
             container.innerHTML = this.renderizarListaAlunosSelecao();
         }
-        
+
         const contador = document.getElementById('contadorAlunos');
         if (contador) {
             contador.textContent = `${this.formData.alunosSelecionados.length} aluno(s)`;
         }
-        
+
         const hidden = document.getElementById('formAlunosIDs');
         if (hidden) {
             hidden.value = JSON.stringify(this.formData.alunosSelecionados);
@@ -1337,22 +1542,22 @@ class VisitasAdmin {
     adicionarProfessor() {
         const select = document.getElementById('formProfessorSelect');
         if (!select) return;
-        
+
         const professorId = select.value;
         if (!professorId) {
             this.showToast('⚠️ Selecione um professor', 'warning');
             return;
         }
-        
+
         if (this.formData.professoresSelecionados.includes(professorId)) {
             this.showToast('⚠️ Este professor já foi adicionado', 'warning');
             return;
         }
-        
+
         this.formData.professoresSelecionados.push(professorId);
         select.value = '';
         this.atualizarChipsProfessores();
-        
+
         const professor = this.professores.find(p => p.id === professorId);
         this.showToast(`✅ ${professor?.nome || 'Professor'} adicionado`, 'success');
     }
@@ -1374,13 +1579,13 @@ class VisitasAdmin {
                 </div>
             `;
         }
-        
+
         return `
             <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                 ${this.formData.professoresSelecionados.map(id => {
                     const p = this.professores.find(prof => prof.id === id);
                     if (!p) return '';
-                    
+
                     return `
                         <div style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border-radius: 30px; font-size: 13px; font-weight: 500;">
                             <i class="fas fa-chalkboard-teacher"></i>
@@ -1402,12 +1607,12 @@ class VisitasAdmin {
         if (container) {
             container.innerHTML = this.renderizarChipsProfessores();
         }
-        
+
         const contador = document.getElementById('contadorProfessores');
         if (contador) {
             contador.textContent = `${this.formData.professoresSelecionados.length} selecionado(s)`;
         }
-        
+
         const hidden = document.getElementById('formProfessoresIDs');
         if (hidden) {
             hidden.value = JSON.stringify(this.formData.professoresSelecionados);
@@ -1421,22 +1626,22 @@ class VisitasAdmin {
             inputLocal.addEventListener('input', (e) => {
                 clearTimeout(timeout);
                 const query = e.target.value.trim();
-                
+
                 if (query.length < 3) {
                     document.getElementById('sugestoesLocal')?.classList.remove('active');
                     return;
                 }
-                
+
                 timeout = setTimeout(() => this.buscarLocalizacao(query), 600);
             });
-            
+
             inputLocal.addEventListener('blur', () => {
                 setTimeout(() => {
                     document.getElementById('sugestoesLocal')?.classList.remove('active');
                 }, 200);
             });
         }
-        
+
         const inputBuscaAluno = document.getElementById('formBuscaAluno');
         if (inputBuscaAluno) {
             let timeout;
@@ -1445,9 +1650,10 @@ class VisitasAdmin {
                 timeout = setTimeout(() => this.buscarAlunos(), 300);
             });
         }
-        
+
         setTimeout(() => this.inicializarAssinaturaGestor(), 200);
-        
+
+        // 🚀 Se já tem turmas selecionadas (edição), busca alunos
         if (this.formData.turmasSelecionadas.length > 0) {
             setTimeout(() => this.buscarAlunos(), 300);
         }
@@ -1456,10 +1662,10 @@ class VisitasAdmin {
     async buscarLocalizacao(query) {
         try {
             const response = await this.apiRequest(`/api/setor-pedagogico/visitas/buscar-localizacao?query=${encodeURIComponent(query)}`);
-            
+
             const container = document.getElementById('sugestoesLocal');
             if (!container) return;
-            
+
             if (response.success && response.resultados.length > 0) {
                 container.innerHTML = response.resultados.map((r, i) => `
                     <div class="localizacao-sugestao-item" onclick='visitasAdmin.selecionarLocalizacao(${JSON.stringify(r).replace(/'/g, "&#39;")})'>
@@ -1480,12 +1686,12 @@ class VisitasAdmin {
     selecionarLocalizacao(local) {
         const inputLocal = document.getElementById('formLocal');
         if (inputLocal) inputLocal.value = local.nome;
-        
+
         document.getElementById('sugestoesLocal').classList.remove('active');
-        
+
         this.formData.localizacao = local;
         document.getElementById('formLocalizacaoJSON').value = JSON.stringify(local);
-        
+
         const infoDiv = document.getElementById('localizacaoSelecionada');
         infoDiv.style.display = 'block';
         infoDiv.innerHTML = `
@@ -1499,42 +1705,141 @@ class VisitasAdmin {
         `;
     }
 
+    // ============================================
+    // 🚀 BUSCAR ALUNOS (com cache por turma + client-side search)
+    // ============================================
     async buscarAlunos() {
-        const curso = document.getElementById('formCurso')?.value;
-        const busca = document.getElementById('formBuscaAluno')?.value?.toLowerCase() || '';
-        
-        if (this.formData.turmasSelecionadas.length === 0) {
-            this.alunos = [];
-            this.atualizarListaAlunosSelecao();
-            return;
-        }
-        
-        try {
-            const params = new URLSearchParams();
-            params.append('turmas', this.formData.turmasSelecionadas.join(','));
-            if (curso) params.append('curso', curso);
-            
-            const response = await this.apiRequest(`/api/setor-pedagogico/visitas/alunos-por-turma?${params}`);
-            
-            if (response.success) {
-                let alunos = response.alunos || [];
-                
+        return this._comLock('buscarAlunos', async () => {
+            const curso = document.getElementById('formCurso')?.value || '';
+            const busca = document.getElementById('formBuscaAluno')?.value?.toLowerCase() || '';
+
+            if (this.formData.turmasSelecionadas.length === 0) {
+                this.alunos = [];
+                this.atualizarListaAlunosSelecao();
+                return;
+            }
+
+            try {
+                // 🔥 Verifica se TODAS as turmas já estão em cache
+                const todasEmCache = this.formData.turmasSelecionadas.every(
+                    t => this._cacheAlunosPorTurma.has(t)
+                );
+
+                let alunos = [];
+                const chaveFiltro = `${this.formData.turmasSelecionadas.sort().join(',')}|${curso}`;
+
+                if (todasEmCache && !curso) {
+                    // ⚡ USA CACHE: concatena alunos de todas as turmas
+                    console.log(`⚡ [buscarAlunos] Usando cache para ${this.formData.turmasSelecionadas.length} turma(s)`);
+
+                    for (const turma of this.formData.turmasSelecionadas) {
+                        const alunosTurma = this._cacheAlunosPorTurma.get(turma) || [];
+                        alunos.push(...alunosTurma);
+                    }
+                } else {
+                    // 🌐 BUSCA NO BACKEND
+                    console.log(`🌐 [buscarAlunos] Buscando no backend (${chaveFiltro})`);
+
+                    const params = new URLSearchParams();
+                    params.append('turmas', this.formData.turmasSelecionadas.join(','));
+                    if (curso) params.append('curso', curso);
+
+                    const response = await this.apiRequest(
+                        `/api/setor-pedagogico/visitas/alunos-por-turma?${params}`
+                    );
+
+                    if (response.success) {
+                        alunos = response.alunos || [];
+
+                        // 🆕 Popula cache por turma (só quando não tem filtro de curso)
+                        if (!curso) {
+                            const porTurma = {};
+                            for (const aluno of alunos) {
+                                const t = aluno.turma || 'Sem turma';
+                                if (!porTurma[t]) porTurma[t] = [];
+                                porTurma[t].push(aluno);
+                            }
+
+                            for (const [turma, lista] of Object.entries(porTurma)) {
+                                this._cacheAlunosPorTurma.set(turma, lista);
+                            }
+                        }
+                    }
+                }
+
+                // 🔍 Filtra por busca (client-side, instantâneo)
                 if (busca) {
-                    alunos = alunos.filter(a => 
+                    alunos = alunos.filter(a =>
                         (a.nome || '').toLowerCase().includes(busca)
                     );
                 }
-                
+
                 this.alunos = alunos;
-                
+
+                // Remove seleções que não estão mais na lista
                 const idsValidos = new Set(alunos.map(a => a.id.toString()));
                 this.formData.alunosSelecionados = this.formData.alunosSelecionados
                     .filter(id => idsValidos.has(id));
-                
+
                 this.atualizarListaAlunosSelecao();
+
+            } catch (error) {
+                console.error('❌ Erro ao buscar alunos:', error);
             }
-        } catch (error) {
-            console.error('❌ Erro ao buscar alunos:', error);
+        });
+    }
+
+    // ============================================
+    // 🚀 PREFETCH EM BACKGROUND
+    // ============================================
+    async _precarregarAlunosTodasTurmas() {
+        if (this._precarregandoAlunos || this._precarregamentoIniciado) return;
+        this._precarregandoAlunos = true;
+
+        try {
+            const turmasNaoCache = this.turmas
+                .map(t => typeof t === 'string' ? t : t.nome)
+                .filter(t => !this._cacheAlunosPorTurma.has(t));
+
+            if (turmasNaoCache.length === 0) {
+                console.log('⚡ Todas as turmas já estão em cache');
+                this._precarregandoAlunos = false;
+                return;
+            }
+
+            console.log(`🚀 Pré-carregando alunos de ${turmasNaoCache.length} turma(s)...`);
+
+            // Busca em lotes de 5 turmas por vez
+            for (let i = 0; i < turmasNaoCache.length; i += 5) {
+                const lote = turmasNaoCache.slice(i, i + 5);
+                try {
+                    const params = new URLSearchParams();
+                    params.append('turmas', lote.join(','));
+
+                    const response = await this.apiRequest(
+                        `/api/setor-pedagogico/visitas/alunos-por-turma?${params}`
+                    );
+
+                    if (response.success) {
+                        const porTurma = {};
+                        for (const aluno of (response.alunos || [])) {
+                            const t = aluno.turma || 'Sem turma';
+                            if (!porTurma[t]) porTurma[t] = [];
+                            porTurma[t].push(aluno);
+                        }
+                        for (const [turma, lista] of Object.entries(porTurma)) {
+                            this._cacheAlunosPorTurma.set(turma, lista);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('⚠️ Falha ao pré-carregar lote:', e);
+                }
+            }
+
+            this._precarregamentoIniciado = true;
+            console.log(`✅ Pré-carregamento concluído: ${this._cacheAlunosPorTurma.size} turma(s) em cache`);
+        } finally {
+            this._precarregandoAlunos = false;
         }
     }
 
@@ -1543,10 +1848,10 @@ class VisitasAdmin {
         if (!canvas) return;
         if (canvas.dataset.init === 'true') return;
         canvas.dataset.init = 'true';
-        
+
         const container = canvas.parentElement;
         const placeholder = document.getElementById('assinaturaGestorPlaceholder');
-        
+
         const ajustarCanvas = () => {
             const rect = canvas.getBoundingClientRect();
             if (rect.width === 0) {
@@ -1566,9 +1871,9 @@ class VisitasAdmin {
             this.assinatura.canvas = canvas;
             this.assinatura.ctx = ctx;
         };
-        
+
         ajustarCanvas();
-        
+
         const getPos = (e) => {
             const rect = canvas.getBoundingClientRect();
             let clientX, clientY;
@@ -1581,7 +1886,7 @@ class VisitasAdmin {
             }
             return { x: clientX - rect.left, y: clientY - rect.top };
         };
-        
+
         const iniciar = (e) => {
             e.preventDefault();
             this.assinatura.desenhando = true;
@@ -1592,7 +1897,7 @@ class VisitasAdmin {
             if (container) container.classList.add('ativa');
             if (placeholder) placeholder.classList.add('escondido');
         };
-        
+
         const desenhar = (e) => {
             if (!this.assinatura.desenhando) return;
             e.preventDefault();
@@ -1604,13 +1909,13 @@ class VisitasAdmin {
             this.assinatura.lastX = pos.x;
             this.assinatura.lastY = pos.y;
         };
-        
+
         const parar = (e) => {
             if (e && e.preventDefault) e.preventDefault();
             this.assinatura.desenhando = false;
             if (container) container.classList.remove('ativa');
         };
-        
+
         canvas.addEventListener('mousedown', iniciar);
         canvas.addEventListener('mousemove', desenhar);
         canvas.addEventListener('mouseup', parar);
@@ -1635,113 +1940,117 @@ class VisitasAdmin {
     // SALVAR TERMO
     // ============================================
     async salvarTermo(termoId = null) {
-        try {
-            const alunosIDs = this.formData.alunosSelecionados;
-            const professoresIDs = this.formData.professoresSelecionados;
-            
-            const atividade = document.getElementById('formAtividade')?.value;
-            const descricaoAtividade = document.getElementById('formDescricaoAtividade')?.value || '';
-            const periodo = document.getElementById('formPeriodo')?.value;
-            const local = document.getElementById('formLocal')?.value;
-            const dataVisita = document.getElementById('formDataVisita')?.value;
-            const cidade = document.getElementById('formCidade')?.value;
-            const localizacaoJSON = document.getElementById('formLocalizacaoJSON')?.value;
-
-            // 🆕 HORÁRIO — monta a partir dos dois <input type="time">
-            const horarioInicio = document.getElementById('formHorarioInicio')?.value; // "14:00"
-            const horarioFim = document.getElementById('formHorarioFim')?.value;       // "17:00"
-
-            let horario = '';
-            if (horarioInicio && horarioFim) {
-                horario = `${horarioInicio} às ${horarioFim}`;
-            } else if (horarioInicio) {
-                horario = horarioInicio;
-            } else if (horarioFim) {
-                horario = horarioFim;
-            }
-            
-            // ============ VALIDAÇÕES ============
-            if (this.formData.turmasSelecionadas.length === 0) {
-                return this.showToast('❌ Adicione ao menos 1 turma', 'error');
-            }
-            if (alunosIDs.length === 0) {
-                return this.showToast('❌ Selecione pelo menos 1 aluno', 'error');
-            }
-            if (professoresIDs.length === 0) {
-                return this.showToast('❌ Selecione pelo menos 1 professor', 'error');
-            }
-            if (!atividade) return this.showToast('❌ Informe a atividade', 'error');
-            if (!periodo) return this.showToast('❌ Selecione o período', 'error');
-            if (!horarioInicio) return this.showToast('❌ Informe o horário de início', 'error');
-            if (!horarioFim) return this.showToast('❌ Informe o horário de término', 'error');
-            if (horarioInicio >= horarioFim) {
-                return this.showToast('❌ O horário de término deve ser depois do início', 'error');
-            }
-            if (!local) return this.showToast('❌ Informe o local', 'error');
-            if (!dataVisita) return this.showToast('❌ Informe a data', 'error');
-            
-            let localizacao = {};
+        return this._comLock('salvarTermo', async () => {
             try {
-                localizacao = JSON.parse(localizacaoJSON || '{}');
-            } catch (e) {}
-            
-            const dados = {
-                alunos: alunosIDs,
-                professores: professoresIDs,
-                atividade,
-                descricaoAtividade,
-                periodo,
-                horario,              // 👈 "14:00 às 17:00"
-                local,
-                localizacao,
-                dataVisita,
-                cidade: cidade || 'São Luís'
-            };
-            
-            const url = termoId 
-                ? `/api/setor-pedagogico/visitas/termos/${termoId}`
-                : '/api/setor-pedagogico/visitas/termos';
-            
-            const method = termoId ? 'PUT' : 'POST';
-            
-            this.showToast('💾 Salvando...', 'info');
-            
-            const response = await this.apiRequest(url, {
-                method,
-                body: JSON.stringify(dados)
-            });
-            
-            if (response.success) {
-                this.showToast(`✅ Termo ${termoId ? 'atualizado' : 'criado'}!`, 'success');
-                
-                if (this.assinatura.temAssinatura) {
-                    const assinaturaBase64 = this.assinatura.canvas.toDataURL('image/png');
-                    const novoTermoId = termoId || response.termo._id;
-                    
-                    await this.apiRequest(`/api/setor-pedagogico/visitas/termos/${novoTermoId}/assinar-gestor`, {
-                        method: 'POST',
-                        body: JSON.stringify({ assinaturaBase64 })
-                    });
+                const alunosIDs = this.formData.alunosSelecionados;
+                const professoresIDs = this.formData.professoresSelecionados;
+
+                const atividade = document.getElementById('formAtividade')?.value;
+                const descricaoAtividade = document.getElementById('formDescricaoAtividade')?.value || '';
+                const periodo = document.getElementById('formPeriodo')?.value;
+                const local = document.getElementById('formLocal')?.value;
+                const dataVisita = document.getElementById('formDataVisita')?.value;
+                const cidade = document.getElementById('formCidade')?.value;
+                const localizacaoJSON = document.getElementById('formLocalizacaoJSON')?.value;
+
+                const horarioInicio = document.getElementById('formHorarioInicio')?.value;
+                const horarioFim = document.getElementById('formHorarioFim')?.value;
+
+                let horario = '';
+                if (horarioInicio && horarioFim) {
+                    horario = `${horarioInicio} às ${horarioFim}`;
+                } else if (horarioInicio) {
+                    horario = horarioInicio;
+                } else if (horarioFim) {
+                    horario = horarioFim;
                 }
-                
-                this.closeModal();
-                
-                this.formData = {
-                    turmasSelecionadas: [],
-                    alunosSelecionados: [],
-                    professoresSelecionados: [],
-                    localizacao: null
+
+                if (this.formData.turmasSelecionadas.length === 0) {
+                    return this.showToast('❌ Adicione ao menos 1 turma', 'error');
+                }
+                if (alunosIDs.length === 0) {
+                    return this.showToast('❌ Selecione pelo menos 1 aluno', 'error');
+                }
+                if (professoresIDs.length === 0) {
+                    return this.showToast('❌ Selecione pelo menos 1 professor', 'error');
+                }
+                if (!atividade) return this.showToast('❌ Informe a atividade', 'error');
+                if (!periodo) return this.showToast('❌ Selecione o período', 'error');
+                if (!horarioInicio) return this.showToast('❌ Informe o horário de início', 'error');
+                if (!horarioFim) return this.showToast('❌ Informe o horário de término', 'error');
+                if (horarioInicio >= horarioFim) {
+                    return this.showToast('❌ O horário de término deve ser depois do início', 'error');
+                }
+                if (!local) return this.showToast('❌ Informe o local', 'error');
+                if (!dataVisita) return this.showToast('❌ Informe a data', 'error');
+
+                let localizacao = {};
+                try {
+                    localizacao = JSON.parse(localizacaoJSON || '{}');
+                } catch (e) {}
+
+                const dados = {
+                    alunos: alunosIDs,
+                    professores: professoresIDs,
+                    atividade,
+                    descricaoAtividade,
+                    periodo,
+                    horario,
+                    local,
+                    localizacao,
+                    dataVisita,
+                    cidade: cidade || 'São Luís'
                 };
-                
-                await this.carregarTermos();
-                this.renderizar();
-            } else {
-                throw new Error(response.error || 'Erro ao salvar');
+
+                const url = termoId 
+                    ? `/api/setor-pedagogico/visitas/termos/${termoId}`
+                    : '/api/setor-pedagogico/visitas/termos';
+
+                const method = termoId ? 'PUT' : 'POST';
+
+                this.showToast('💾 Salvando...', 'info');
+
+                const response = await this.apiRequest(url, {
+                    method,
+                    body: JSON.stringify(dados)
+                });
+
+                if (response.success) {
+                    this.showToast(`✅ Termo ${termoId ? 'atualizado' : 'criado'}!`, 'success');
+
+                    if (this.assinatura.temAssinatura) {
+                        const assinaturaBase64 = this.assinatura.canvas.toDataURL('image/png');
+                        const novoTermoId = termoId || response.termo._id;
+
+                        await this.apiRequest(`/api/setor-pedagogico/visitas/termos/${novoTermoId}/assinar-gestor`, {
+                            method: 'POST',
+                            body: JSON.stringify({ assinaturaBase64 })
+                        });
+                    }
+
+                    this.closeModal();
+
+                    this.formData = {
+                        turmasSelecionadas: [],
+                        alunosSelecionados: [],
+                        professoresSelecionados: [],
+                        localizacao: null
+                    };
+
+                    // 🧹 Limpa cache (dados podem ter mudado)
+                    this._invalidarCache();
+                    this._limparCacheAlunos();
+
+                    await this.carregarTermos();
+                    this.renderizar();
+                } else {
+                    throw new Error(response.error || 'Erro ao salvar');
+                }
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                this.showToast('❌ ' + error.message, 'error');
             }
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            this.showToast('❌ ' + error.message, 'error');
-        }
+        });
     }
 
     // ============================================
@@ -1751,21 +2060,20 @@ class VisitasAdmin {
         try {
             const response = await this.apiRequest(`/api/setor-pedagogico/visitas/termos/${termoId}`);
             if (!response.success) throw new Error('Termo não encontrado');
-            
+
             const t = response.termo;
             const dataVisita = t.dataVisita 
                 ? new Date(t.dataVisita).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
                 : 'N/A';
-            
+
             const turmasDoTermo = (t.turmas && t.turmas.length > 0)
                 ? t.turmas
                 : (t.turmaPrincipal ? [t.turmaPrincipal] : []);
-            
+
             document.getElementById('modalTitle').innerHTML = `<i class="fas fa-eye"></i> ${t.codigo}`;
-            
+
             document.getElementById('modalBody').innerHTML = `
                 <div style="padding: 10px;">
-                    
                     <div style="text-align: center; margin-bottom: 20px;">
                         <span class="termo-status-badge ${t.status}" style="font-size: 14px; padding: 8px 20px;">
                             ${t.status === 'pendente' ? '⏳ PENDENTE' : 
@@ -1774,12 +2082,12 @@ class VisitasAdmin {
                             '❌ RECUSADO'}
                         </span>
                     </div>
-                    
+
                     <div style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 15px; border-radius: 12px; margin-bottom: 20px;">
                         <div style="font-size: 11px; opacity: 0.85;">ATIVIDADE</div>
                         <div style="font-size: 16px; font-weight: 600;">${this.escapeHtml(t.atividade)}</div>
                     </div>
-                    
+
                     ${t.descricaoAtividade ? `
                         <div style="background: #f8fafc; border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid #e2e8f0; border-left: 4px solid #3b82f6;">
                             <h4 style="margin: 0 0 8px; font-size: 14px; color: #1e293b; display: flex; align-items: center; gap: 8px;">
@@ -1790,7 +2098,7 @@ class VisitasAdmin {
                             </p>
                         </div>
                     ` : ''}
-                    
+
                     <div style="background: #f0f9ff; border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid #bae6fd;">
                         <h4 style="margin: 0 0 12px; font-size: 15px; color: #1e40af; display: flex; align-items: center; gap: 8px;">
                             <i class="fas fa-school"></i>
@@ -1807,7 +2115,7 @@ class VisitasAdmin {
                             `).join('')}
                         </div>
                     </div>
-                    
+
                     <div style="background: #f8fafc; border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid #e2e8f0;">
                         <h4 style="margin: 0 0 12px; font-size: 15px; color: #1e293b; display: flex; align-items: center; gap: 8px;">
                             <i class="fas fa-user-graduate" style="color: #4f46e5;"></i>
@@ -1834,7 +2142,7 @@ class VisitasAdmin {
                             `).join('') || '<p style="text-align: center; color: #9ca3af;">Nenhum aluno</p>'}
                         </div>
                     </div>
-                    
+
                     <div style="background: #fef3c7; border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid #fde68a;">
                         <h4 style="margin: 0 0 12px; font-size: 15px; color: #92400e; display: flex; align-items: center; gap: 8px;">
                             <i class="fas fa-chalkboard-teacher"></i>
@@ -1858,7 +2166,7 @@ class VisitasAdmin {
                             `).join('') || '<p style="text-align: center; color: #9ca3af;">Nenhum professor</p>'}
                         </div>
                     </div>
-                    
+
                     <div style="background: #f8fafc; border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid #e2e8f0;">
                         <h4 style="margin: 0 0 12px; font-size: 15px; color: #1e293b;">
                             <i class="fas fa-info-circle"></i> Detalhes
@@ -1877,7 +2185,7 @@ class VisitasAdmin {
                             ` : ''}
                         </div>
                     </div>
-                    
+
                     ${t.responsaveis && t.responsaveis.length > 0 ? `
                         <div style="background: #f0fdf4; border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid #bbf7d0;">
                             <h4 style="margin: 0 0 12px; font-size: 15px; color: #065f46; display: flex; align-items: center; gap: 8px;">
@@ -1914,7 +2222,7 @@ class VisitasAdmin {
                             </div>
                         </div>
                     ` : ''}
-                    
+
                     <div style="text-align: center; margin-top: 20px;">
                         <button class="btn-filter" onclick="visitasAdmin.imprimirTermo('${t._id}')">
                             <i class="fas fa-print"></i> Imprimir Termo
@@ -1922,7 +2230,7 @@ class VisitasAdmin {
                     </div>
                 </div>
             `;
-            
+
             document.getElementById('modalSaveBtn').style.display = 'none';
             this.openModal();
         } catch (error) {
@@ -1939,16 +2247,17 @@ class VisitasAdmin {
             'Excluir Termo',
             'Tem certeza que deseja excluir este termo? Esta ação não pode ser desfeita.'
         );
-        
+
         if (!confirmar) return;
-        
+
         try {
             const response = await this.apiRequest(`/api/setor-pedagogico/visitas/termos/${termoId}`, {
                 method: 'DELETE'
             });
-            
+
             if (response.success) {
                 this.showToast('✅ Termo excluído!', 'success');
+                this._invalidarCache();
                 await this.carregarTermos();
                 this.renderizar();
             } else {
@@ -1960,122 +2269,126 @@ class VisitasAdmin {
     }
 
     async imprimirTermo(termoId) {
-        try {
-            const termoResponse = await this.apiRequest(`/api/setor-pedagogico/visitas/termos/${termoId}`);
-            const termo = termoResponse.termo;
-            
-            if (!termo) {
-                throw new Error('Termo não encontrado');
+        return this._comLock('imprimir', async () => {
+            try {
+                const termoResponse = await this.apiRequest(`/api/setor-pedagogico/visitas/termos/${termoId}`);
+                const termo = termoResponse.termo;
+
+                if (!termo) {
+                    throw new Error('Termo não encontrado');
+                }
+
+                const autorizados = (termo.responsaveis || []).filter(r => r.status === 'autorizado');
+
+                if (autorizados.length === 0) {
+                    const confirmar = await this.confirmar(
+                        '⚠️ Termo sem autorização',
+                        'Este termo ainda não foi autorizado por nenhum responsável. Deseja imprimir mesmo assim (sem assinatura do responsável)?'
+                    );
+
+                    if (!confirmar) return;
+                }
+
+                this.showToast('📄 Gerando termo...', 'info');
+
+                const response = await fetch(`/api/visitas-publico/termo-oficial/${termoId}`);
+                const data = await response.json();
+
+                if (!data.success) {
+                    throw new Error(data.error || 'Erro ao gerar termo');
+                }
+
+                const win = window.open('', '_blank');
+                win.document.write(data.html);
+                win.document.close();
+
+                win.onload = () => {
+                    setTimeout(() => {
+                        win.print();
+                    }, 800);
+                };
+
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                this.showToast('❌ ' + error.message, 'error');
             }
-            
-            const autorizados = (termo.responsaveis || []).filter(r => r.status === 'autorizado');
-            
-            if (autorizados.length === 0) {
-                const confirmar = await this.confirmar(
-                    '⚠️ Termo sem autorização',
-                    'Este termo ainda não foi autorizado por nenhum responsável. Deseja imprimir mesmo assim (sem assinatura do responsável)?'
-                );
-                
-                if (!confirmar) return;
-            }
-            
-            this.showToast('📄 Gerando termo...', 'info');
-            
-            const response = await fetch(`/api/visitas-publico/termo-oficial/${termoId}`);
-            const data = await response.json();
-            
-            if (!data.success) {
-                throw new Error(data.error || 'Erro ao gerar termo');
-            }
-            
-            const win = window.open('', '_blank');
-            win.document.write(data.html);
-            win.document.close();
-            
-            win.onload = () => {
-                setTimeout(() => {
-                    win.print();
-                }, 800);
-            };
-            
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            this.showToast('❌ ' + error.message, 'error');
-        }
+        });
     }
 
     async imprimirTodosTermos() {
-        try {
-            if (!this.termosFiltrados || this.termosFiltrados.length === 0) {
-                this.showToast('⚠️ Nenhum termo para imprimir', 'warning');
-                return;
+        return this._comLock('imprimirLote', async () => {
+            try {
+                if (!this.termosFiltrados || this.termosFiltrados.length === 0) {
+                    this.showToast('⚠️ Nenhum termo para imprimir', 'warning');
+                    return;
+                }
+
+                const total = this.termosFiltrados.length;
+
+                if (total > 50) {
+                    const continuar = await this.confirmar(
+                        '⚠️ Muitos Termos',
+                        `${total} termos serão gerados. Isso pode demorar um pouco.\n\nDeseja continuar?`
+                    );
+                    if (!continuar) return;
+                }
+
+                const filtrosAtivos = this.filtros.status !== 'todos' 
+                    || this.filtros.turma !== 'todas' 
+                    || this.filtros.search;
+
+                const mensagem = filtrosAtivos
+                    ? `Deseja imprimir os ${total} termo(s) FILTRADO(S)?\n\nFiltros ativos:\n• Status: ${this.filtros.status}\n• Turma: ${this.filtros.turma}\n• Busca: ${this.filtros.search || 'nenhuma'}`
+                    : `Deseja imprimir TODOS os ${total} termo(s)?`;
+
+                const confirmar = await this.confirmar('🖨️ Impressão em Lote', mensagem);
+                if (!confirmar) return;
+
+                this.showToast(`📄 Gerando ${total} termo(s)... Aguarde`, 'info');
+
+                const ids = this.termosFiltrados.map(t => t._id);
+
+                const response = await this.apiRequest('/api/visitas-publico/termos-oficiais-lote', {
+                    method: 'POST',
+                    body: JSON.stringify({ 
+                        termoIds: ids,
+                        incluirSemAutorizacao: true
+                    })
+                });
+
+                if (!response.success) {
+                    console.warn('⚠️ Endpoint em lote falhou, usando fallback...');
+                    return this.imprimirTermosFallback(ids);
+                }
+
+                const win = window.open('', '_blank');
+                win.document.write(response.html);
+                win.document.close();
+
+                win.onload = () => {
+                    setTimeout(() => {
+                        win.focus();
+                        win.print();
+                    }, 1200);
+                };
+
+                const aviso = response.ignorados > 0 
+                    ? ` (${response.ignorados} ignorado(s) sem autorização)`
+                    : '';
+
+                this.showToast(`✅ ${response.total} termo(s) gerado(s)${aviso}!`, 'success');
+
+            } catch (error) {
+                console.error('❌ Erro ao imprimir termos:', error);
+                this.showToast('❌ Erro ao imprimir: ' + error.message, 'error');
             }
-            
-            const total = this.termosFiltrados.length;
-            
-            if (total > 50) {
-                const continuar = await this.confirmar(
-                    '⚠️ Muitos Termos',
-                    `${total} termos serão gerados. Isso pode demorar um pouco.\n\nDeseja continuar?`
-                );
-                if (!continuar) return;
-            }
-            
-            const filtrosAtivos = this.filtros.status !== 'todos' 
-                || this.filtros.turma !== 'todas' 
-                || this.filtros.search;
-            
-            const mensagem = filtrosAtivos
-                ? `Deseja imprimir os ${total} termo(s) FILTRADO(S)?\n\nFiltros ativos:\n• Status: ${this.filtros.status}\n• Turma: ${this.filtros.turma}\n• Busca: ${this.filtros.search || 'nenhuma'}`
-                : `Deseja imprimir TODOS os ${total} termo(s)?`;
-            
-            const confirmar = await this.confirmar('🖨️ Impressão em Lote', mensagem);
-            if (!confirmar) return;
-            
-            this.showToast(`📄 Gerando ${total} termo(s)... Aguarde`, 'info');
-            
-            const ids = this.termosFiltrados.map(t => t._id);
-            
-            const response = await this.apiRequest('/api/visitas-publico/termos-oficiais-lote', {
-                method: 'POST',
-                body: JSON.stringify({ 
-                    termoIds: ids,
-                    incluirSemAutorizacao: true
-                })
-            });
-            
-            if (!response.success) {
-                console.warn('⚠️ Endpoint em lote falhou, usando fallback...');
-                return this.imprimirTermosFallback(ids);
-            }
-            
-            const win = window.open('', '_blank');
-            win.document.write(response.html);
-            win.document.close();
-            
-            win.onload = () => {
-                setTimeout(() => {
-                    win.focus();
-                    win.print();
-                }, 1200);
-            };
-            
-            const aviso = response.ignorados > 0 
-                ? ` (${response.ignorados} ignorado(s) sem autorização)`
-                : '';
-            
-            this.showToast(`✅ ${response.total} termo(s) gerado(s)${aviso}!`, 'success');
-            
-        } catch (error) {
-            console.error('❌ Erro ao imprimir termos:', error);
-            this.showToast('❌ Erro ao imprimir: ' + error.message, 'error');
-        }
+        });
     }
 
     async imprimirTermosFallback(ids) {
         try {
             this.showToast(`📄 Carregando ${ids.length} termo(s)...`, 'info');
-            
+
             const respostas = await Promise.all(
                 ids.map(id => 
                     fetch(`/api/visitas-publico/termo-oficial/${id}`)
@@ -2083,16 +2396,16 @@ class VisitasAdmin {
                         .catch(() => null)
                 )
             );
-            
+
             const termosValidos = respostas.filter(r => r && r.success && r.html);
-            
+
             if (termosValidos.length === 0) {
                 throw new Error('Nenhum termo pôde ser gerado');
             }
-            
+
             const headMatch = termosValidos[0].html.match(/<head[^>]*>([\s\S]*)<\/head>/i);
             const head = headMatch ? headMatch[1] : '';
-            
+
             const htmlFinal = `
                 <!DOCTYPE html>
                 <html lang="pt-BR">
@@ -2119,7 +2432,7 @@ class VisitasAdmin {
                     ${termosValidos.map((r) => {
                         const bodyMatch = r.html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
                         const conteudo = bodyMatch ? bodyMatch[1] : r.html;
-                        
+
                         return `
                             <div class="termo-print">
                                 ${conteudo}
@@ -2129,20 +2442,20 @@ class VisitasAdmin {
                 </body>
                 </html>
             `;
-            
+
             const win = window.open('', '_blank');
             win.document.write(htmlFinal);
             win.document.close();
-            
+
             win.onload = () => {
                 setTimeout(() => {
                     win.focus();
                     win.print();
                 }, 1000);
             };
-            
+
             this.showToast(`✅ ${termosValidos.length} termo(s) pronto(s) para impressão!`, 'success');
-            
+
         } catch (error) {
             console.error('❌ Erro no fallback:', error);
             this.showToast('❌ Erro ao gerar termos: ' + error.message, 'error');
@@ -2179,7 +2492,7 @@ class VisitasAdmin {
 
     async copiarLinkPublico() {
         const link = `${window.location.origin}/visitas-publico.html`;
-        
+
         try {
             if (navigator.clipboard && window.isSecureContext) {
                 await navigator.clipboard.writeText(link);
@@ -2193,7 +2506,7 @@ class VisitasAdmin {
                 document.execCommand('copy');
                 document.body.removeChild(textarea);
             }
-            
+
             this.showToast('✅ Link copiado para a área de transferência!', 'success');
         } catch (error) {
             console.error('Erro ao copiar:', error);
@@ -2211,16 +2524,16 @@ class VisitasAdmin {
         const modalBody = document.getElementById('modalBody');
         const modalTitle = document.getElementById('modalTitle');
         const modalSaveBtn = document.getElementById('modalSaveBtn');
-        
+
         modalTitle.innerHTML = '<i class="fas fa-qrcode"></i> QR Code - Página Pública';
-        
+
         modalBody.innerHTML = `
             <div style="padding: 20px; text-align: center;">
                 <p style="color: #6b7280; margin-bottom: 20px; font-size: 14px;">
                     <i class="fas fa-mobile-alt"></i> 
                     Peça para os responsáveis escanearem este QR Code para autorizar a visita
                 </p>
-                
+
                 <div id="qrCodeContainerVisitas" style="
                     background: white;
                     padding: 25px;
@@ -2242,7 +2555,7 @@ class VisitasAdmin {
                     <img id="qrCodeImgVisitas" src="" alt="QR Code" 
                         style="width: 280px; height: 280px; display: none; border-radius: 12px;">
                 </div>
-                
+
                 <div style="
                     background: #f3f4f6;
                     border-radius: 12px;
@@ -2260,7 +2573,7 @@ class VisitasAdmin {
                         ${url}
                     </span>
                 </div>
-                
+
                 <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
                     <button class="btn-filter" onclick="visitasAdmin.baixarQRCode()" style="padding: 10px 20px;">
                         <i class="fas fa-download"></i> Baixar QR Code
@@ -2275,53 +2588,55 @@ class VisitasAdmin {
                 </div>
             </div>
         `;
-        
+
         modalSaveBtn.style.display = 'none';
         this.openModal();
-        
+
         this.gerarQRCode(url);
     }
 
     async gerarQRCode(url) {
-        try {
-            const QRCodeLib = window.QRCode || (typeof QRCode !== 'undefined' ? QRCode : null);
-            
-            if (QRCodeLib && typeof QRCodeLib.toDataURL === 'function') {
-                const dataUrl = await QRCodeLib.toDataURL(url, {
-                    errorCorrectionLevel: 'H',
-                    margin: 1,
-                    width: 400,
-                    color: { dark: '#1e40af', light: '#ffffff' }
-                });
-                this.mostrarQRCode(dataUrl);
-                return;
+        return this._comLock('gerarQRCode', async () => {
+            try {
+                const QRCodeLib = window.QRCode || (typeof QRCode !== 'undefined' ? QRCode : null);
+
+                if (QRCodeLib && typeof QRCodeLib.toDataURL === 'function') {
+                    const dataUrl = await QRCodeLib.toDataURL(url, {
+                        errorCorrectionLevel: 'H',
+                        margin: 1,
+                        width: 400,
+                        color: { dark: '#1e40af', light: '#ffffff' }
+                    });
+                    this.mostrarQRCode(dataUrl);
+                    return;
+                }
+
+                const apiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(url)}&color=1e40af&bgcolor=ffffff`;
+
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => {
+                    this.mostrarQRCode(img.src);
+                };
+                img.onerror = () => {
+                    this.mostrarQRCode(apiUrl);
+                };
+                img.src = apiUrl;
+
+            } catch (error) {
+                console.error('Erro ao gerar QR Code:', error);
+                document.getElementById('qrCodeLoadingVisitas').innerHTML = `
+                    <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #ef4444; margin-bottom: 15px;"></i>
+                    <p style="color: #ef4444; font-size: 13px;">Erro ao gerar QR Code</p>
+                `;
             }
-            
-            const apiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(url)}&color=1e40af&bgcolor=ffffff`;
-            
-            const img = new Image();
-            img.crossOrigin = 'anonymous';
-            img.onload = () => {
-                this.mostrarQRCode(img.src);
-            };
-            img.onerror = () => {
-                this.mostrarQRCode(apiUrl);
-            };
-            img.src = apiUrl;
-            
-        } catch (error) {
-            console.error('Erro ao gerar QR Code:', error);
-            document.getElementById('qrCodeLoadingVisitas').innerHTML = `
-                <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #ef4444; margin-bottom: 15px;"></i>
-                <p style="color: #ef4444; font-size: 13px;">Erro ao gerar QR Code</p>
-            `;
-        }
+        });
     }
 
     mostrarQRCode(dataUrl) {
         const loading = document.getElementById('qrCodeLoadingVisitas');
         const img = document.getElementById('qrCodeImgVisitas');
-        
+
         if (loading) loading.style.display = 'none';
         if (img) {
             img.src = dataUrl;
@@ -2336,12 +2651,12 @@ class VisitasAdmin {
             this.showToast('❌ QR Code não está pronto', 'error');
             return;
         }
-        
+
         const link = document.createElement('a');
         link.download = `qrcode-visitas-${new Date().toISOString().split('T')[0]}.png`;
         link.href = img.src;
         link.click();
-        
+
         this.showToast('✅ QR Code baixado!', 'success');
     }
 
@@ -2351,7 +2666,7 @@ class VisitasAdmin {
             this.showToast('❌ QR Code não está pronto', 'error');
             return;
         }
-        
+
         const url = `${window.location.origin}/visitas-publico.html`;
         const html = `
             <!DOCTYPE html>
@@ -2437,7 +2752,7 @@ class VisitasAdmin {
             </body>
             </html>
         `;
-        
+
         const win = window.open('', '_blank');
         win.document.write(html);
         win.document.close();
@@ -2450,14 +2765,15 @@ class VisitasAdmin {
                 method: 'PUT',
                 body: JSON.stringify({ visitasAbertas: abertas })
             });
-            
+
             if (response.success) {
                 this.configuracao = response.configuracao;
+                this._cache.configuracao = response.configuracao;
                 this.showToast(
                     abertas ? '✅ Autorizações ABERTAS para os responsáveis' : '🔒 Autorizações FECHADAS',
                     'success'
                 );
-                
+
                 const label = document.querySelector('label:has(#toggleVisitasPublicas) span');
                 if (label) {
                     label.textContent = abertas ? '🟢 Autorizações Abertas' : '🔴 Autorizações Fechadas';
@@ -2475,6 +2791,7 @@ class VisitasAdmin {
             const response = await this.apiRequest('/api/setor-pedagogico/visitas/configuracao');
             if (response.success) {
                 this.configuracao = response.configuracao;
+                this._cache.configuracao = response.configuracao;
             }
         } catch (error) {
             console.error('Erro ao carregar config:', error);
@@ -2487,9 +2804,9 @@ class VisitasAdmin {
             console.error('❌ Modal #modal não encontrado');
             return;
         }
-        
+
         modalEl.style.display = '';
-        
+
         let modal = bootstrap.Modal.getInstance(modalEl);
         if (!modal) {
             modal = new bootstrap.Modal(modalEl, {
@@ -2504,7 +2821,7 @@ class VisitasAdmin {
     closeModal() {
         const modalEl = document.getElementById('modal');
         if (!modalEl) return;
-        
+
         const modal = bootstrap.Modal.getInstance(modalEl);
         if (modal) {
             modal.hide();
@@ -2512,7 +2829,7 @@ class VisitasAdmin {
             modalEl.style.display = 'none';
             modalEl.classList.remove('show');
         }
-        
+
         setTimeout(() => {
             document.querySelectorAll('.modal-backdrop').forEach(b => {
                 if (!document.querySelector('.modal.show')) {
@@ -2532,4 +2849,4 @@ class VisitasAdmin {
 const visitasAdmin = new VisitasAdmin();
 window.visitasAdmin = visitasAdmin;
 
-console.log('✅ visitas-admin.js carregado (v3.0 - horário com input time)');
+console.log('✅ visitas-admin.js carregado (v5.0 - otimizado com cache de alunos, debounce e prefetch)');

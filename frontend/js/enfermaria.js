@@ -1,25 +1,23 @@
 // ============================================
 // ENFERMARIA - SISTEMA DE ATENDIMENTOS
 // Modo Automático (QR) + Modo Manual (Clique direto no aluno)
+// 🚀 VERSÃO OTIMIZADA: Câmera rápida, Retry automático
 // ============================================
 
 // ============================================
 // 🚫 BLOQUEAR ALERTS NATIVOS (KODULAR/WEBVIEW)
 // ============================================
 window.alert = function(mensagem) {
-    console.warn('⚠️ alert() nativo bloqueado. Use mostrarToast()');
     if (typeof window.mostrarToast === 'function') {
         window.mostrarToast(String(mensagem), 'info', 4000);
     }
 };
 
 window.confirm = function(mensagem) {
-    console.warn('⚠️ confirm() nativo bloqueado. Use await confirmar()');
     return true;
 };
 
 window.prompt = function(mensagem, valorPadrao) {
-    console.warn('⚠️ prompt() nativo bloqueado.');
     return null;
 };
 
@@ -32,6 +30,7 @@ let dashboardCharts = {};
 // Scanner Auto
 let scannerAuto = null;
 let scannerAutoAtivo = false;
+let __scannerIniciando = false; 
 
 // Estado
 let modoAtual = 'automatico';
@@ -39,9 +38,7 @@ let turmasDisponiveis = [];
 let alunosPorTurma = [];
 let __atendimentosRecentes = [];
 
-// ============================================
-// ESTADO DA PAGINAÇÃO DOS ATENDIMENTOS RECENTES
-// ============================================
+// Paginação
 let __atendimentosRecentesPaginacao = {
     page: 1,
     total: 0,
@@ -49,10 +46,14 @@ let __atendimentosRecentesPaginacao = {
     limit: 20
 };
 
-// 🔧 CORREÇÃO: Guarda de concorrência + cache curto para evitar carregamentos duplicados
+// Controle de carga
 let __carregandoRecentes = false;
 let __ultimaCargaRecentes = 0;
 const CACHE_RECENTES_MS = 5000;
+
+// Cache de turmas
+let __turmasCache = { dados: null, timestamp: 0 };
+const __TURMAS_CACHE_MS = 60000;
 
 // ============================================
 // UTILITÁRIOS
@@ -86,23 +87,46 @@ function gerarAvatarSVG(nome) {
 }
 
 // ============================================
-// 📄 UTILITÁRIO: GERADOR DE CSV PROFISSIONAL
+// 🚀 FETCH COM TIMEOUT E RETRY
+// ============================================
+async function fetchComRetry(url, options = {}, timeoutMs = 45000, tentativas = 2) {
+    for (let i = 1; i <= tentativas; i++) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+            const response = await fetch(url, { ...options, signal: controller.signal });
+            clearTimeout(timeoutId);
+
+            if (!response.ok && [502, 503, 504].includes(response.status)) {
+                throw new Error(`Servidor acordando (${response.status})`);
+            }
+            return response;
+        } catch (error) {
+            clearTimeout(timeoutId);
+            const isLastTry = (i === tentativas);
+            
+            if (isLastTry || (error.message.includes('acordando') === false && error.name !== 'AbortError')) {
+                if (error.name === 'AbortError') throw new Error(`Tempo esgotado (${timeoutMs / 1000}s)`);
+                throw error;
+            }
+            await new Promise(r => setTimeout(r, 3000));
+        }
+    }
+}
+
+// ============================================
+// 📄 GERADOR DE CSV PROFISSIONAL
 // ============================================
 function gerarBaixarCSV(opts) {
     const {
-        titulo = 'Relatório',
-        subtitulo = '',
-        setor = 'Enfermaria',
-        colunas = [],
-        registros = [],
-        filtros = [],
-        nomeArquivo = 'relatorio',
-        observacoes = '',
-        metricas = null
+        titulo = 'Relatório', subtitulo = '', setor = 'Enfermaria',
+        colunas = [], registros = [], filtros = [], nomeArquivo = 'relatorio',
+        observacoes = '', metricas = null
     } = opts || {};
 
     if (!Array.isArray(colunas) || colunas.length === 0) {
-        if (typeof window.mostrarToast === 'function') window.mostrarToast('⚠️ Nenhuma coluna definida para exportação');
+        if (typeof window.mostrarToast === 'function') window.mostrarToast('⚠️ Nenhuma coluna definida');
         return false;
     }
     if (!Array.isArray(registros) || registros.length === 0) {
@@ -116,10 +140,7 @@ function gerarBaixarCSV(opts) {
 
     const esc = (v) => {
         if (v === null || v === undefined) return '""';
-        let s = String(v)
-            .replace(/\r\n|\r|\n/g, ' ')
-            .replace(/"/g, '""')
-            .trim();
+        let s = String(v).replace(/\r\n|\r|\n/g, ' ').replace(/"/g, '""').trim();
         return `"${s}"`;
     };
 
@@ -132,62 +153,42 @@ function gerarBaixarCSV(opts) {
     const linhasDados = registros.map(reg => {
         return colunas.map(col => {
             let v;
-            try {
-                v = col.format ? col.format(reg) : reg[col.key];
-            } catch (e) {
-                console.warn(`Erro coluna ${col.key}:`, e);
-                v = '';
-            }
+            try { v = col.format ? col.format(reg) : reg[col.key]; } catch (e) { v = ''; }
             return esc(v);
         }).join(';');
     });
 
     const L = [];
-
     L.push(linhaUnica('IEMA PLENO: SÃO LUÍS - CENTRO'));
     L.push(linhaUnica('Sistema de Atendimentos — EducaPleno'));
     L.push(linhaUnica(`Setor: ${setor}`));
     L.push(linhaUnica(''));
-
     L.push(linhaUnica(titulo.toUpperCase()));
     if (subtitulo) L.push(linhaUnica(subtitulo));
     L.push(linhaUnica(''));
-
     L.push(linhaUnica(`Data de geração: ${dataGeracao}`));
     L.push(linhaUnica(`Total de registros: ${registros.length}`));
 
     if (metricas && typeof metricas === 'object') {
         Object.entries(metricas).forEach(([label, valor]) => {
-            if (valor !== null && valor !== undefined && valor !== '') {
-                L.push(linhaUnica(`${label}: ${valor}`));
-            }
+            if (valor !== null && valor !== undefined && valor !== '') L.push(linhaUnica(`${label}: ${valor}`));
         });
     }
 
     if (filtros.length > 0) {
         L.push(linhaUnica('Filtros aplicados:'));
-        filtros.forEach(f => {
-            if (f && f.valor) {
-                L.push(linhaUnica(`  • ${f.label}: ${f.valor}`));
-            }
-        });
+        filtros.forEach(f => { if (f && f.valor) L.push(linhaUnica(`  • ${f.label}: ${f.valor}`)); });
     }
 
-    if (observacoes) {
-        L.push(linhaUnica(`Observações: ${observacoes}`));
-    }
-
+    if (observacoes) L.push(linhaUnica(`Observações: ${observacoes}`));
     L.push(linhaUnica(''));
     L.push(linhaUnica('─'.repeat(40)));
     L.push(linhaUnica(''));
-
     L.push(linhaCabecalho);
     L.push(...linhasDados);
-
     L.push(linhaUnica(''));
     L.push(linhaUnica('─'.repeat(40)));
     L.push(linhaUnica(''));
-
     L.push(linhaUnica('Documento gerado automaticamente pelo EducaPleno'));
     L.push(linhaUnica(`Setor responsável: ${setor}`));
     L.push(linhaUnica(`Gerado em: ${dataGeracao}`));
@@ -204,13 +205,9 @@ function gerarBaixarCSV(opts) {
         link.style.display = 'none';
         document.body.appendChild(link);
         link.click();
-        setTimeout(() => {
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-        }, 100);
+        setTimeout(() => { document.body.removeChild(link); URL.revokeObjectURL(url); }, 100);
         return true;
     } catch (e) {
-        console.error('Erro ao gerar CSV:', e);
         if (typeof window.mostrarToast === 'function') window.mostrarToast('❌ Erro ao gerar CSV');
         return false;
     }
@@ -220,54 +217,40 @@ function gerarBaixarCSV(opts) {
 // INICIALIZAÇÃO
 // ============================================
 document.addEventListener('DOMContentLoaded', async () => {
-    if (!token) { 
-        window.location.href = '/login.html'; 
-        return; 
-    }
+    if (!token) { window.location.href = '/login.html'; return; }
     
     const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
     const allowedRoles = ['enfermaria', 'super_admin', 'admin'];
     
     if (!allowedRoles.includes(userData.role)) {
-        console.warn('❌ Acesso negado. Role:', userData.role);
-        if (typeof window.mostrarToast === 'function') window.mostrarToast('Acesso negado. Você não tem permissão para acessar esta página.');
+        if (typeof window.mostrarToast === 'function') window.mostrarToast('Acesso negado.');
         window.location.href = '/login.html';
         return;
     }
-    
-    console.log('✅ Enfermaria autenticada:', userData.nome);
     
     const verificarAtendimentoId = new URLSearchParams(window.location.search).get('verificar');
     
     safeSetText('userName', userData.nome || 'Usuário');
     safeSetText('dataAtual', new Date().toLocaleDateString('pt-BR'));
     
-    try {
-        await Promise.allSettled([
-            carregarFotoPerfil(),
-            carregarAtendimentosAtivos(),
-            carregarTurmasParaRelatorio(),
-            carregarTurmasParaManual(),
-            carregarTurmasParaDashboardRecentes(), // 🔧 CORREÇÃO: popula filtro de turmas do dashboard
-            carregarDashboard()
-        ]);
-    } catch (error) {
-        console.error('Erro ao carregar dados iniciais:', error);
-    }
-    
     await iniciarScannerAutomatico();
     
-    setTimeout(() => atualizarContadorAtendimentosAntigos(), 5000);
+    setTimeout(async () => {
+        try { await carregarFotoPerfil(); } catch (e) {}
+        setTimeout(() => carregarTurmasParaManual(), 300);
+        setTimeout(() => carregarTurmasParaDashboardRecentes(), 600);
+        setTimeout(() => carregarTurmasParaRelatorio(), 900);
+        setTimeout(() => carregarAtendimentosAtivos(), 1200);
+        setTimeout(() => carregarDashboard(), 1500);
+    }, 100);
+    
+    setTimeout(() => atualizarContadorAtendimentosAntigos(), 3000);
     setInterval(() => atualizarContadorAtendimentosAntigos(), 60000);
     
     setInterval(() => {
-        if (safeGet('ativos')?.classList.contains('active')) {
-            carregarAtendimentosAtivos();
-        }
-        if (safeGet('dashboard')?.classList.contains('active')) {
-            carregarDashboard();
-        }
-    }, 30000);
+        if (safeGet('ativos')?.classList.contains('active')) carregarAtendimentosAtivos();
+        if (safeGet('dashboard')?.classList.contains('active')) carregarDashboard();
+    }, 45000);
     
     if (verificarAtendimentoId) {
         setTimeout(async () => {
@@ -281,7 +264,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     safeGet('dashboard-tab')?.addEventListener('shown.bs.tab', () => {
         carregarDashboard();
         configurarFiltrosAtendimentosRecentes();
-        // 🔧 CORREÇÃO: a guarda interna de carregarAtendimentosRecentes evita chamada duplicada
         carregarAtendimentosRecentes(1);
         atualizarContadorAtendimentosAntigos();
     });
@@ -297,45 +279,42 @@ document.addEventListener('DOMContentLoaded', async () => {
     safeGet('filtroBuscaManual')?.addEventListener('input', () => filtrarAlunosManual());
     
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            if (currentAluno) {
-                limparTela();
-                if (modoAtual === 'automatico') reiniciarScannerAutomatico();
-            }
+        if (e.key === 'Escape' && currentAluno) {
+            limparTela();
+            if (modoAtual === 'automatico') reiniciarScannerAutomatico();
         }
     });
 });
 
-window.addEventListener('beforeunload', () => {
-    pararScannerAutomatico();
-});
+window.addEventListener('beforeunload', () => { pararScannerAutomatico(); });
 
 async function carregarFotoPerfil() {
     try {
-        const response = await fetch('/api/perfil/me', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const response = await fetch('/api/perfil/me', { headers: { 'Authorization': `Bearer ${token}` } });
         const data = await response.json();
         if (data.success && data.perfil?.fotoPerfil) {
             const avatar = safeGet('userAvatar');
             if (avatar) avatar.innerHTML = `<img src="${data.perfil.fotoPerfil}" alt="Foto">`;
         }
-    } catch (error) {
-        console.error('Erro ao carregar foto:', error);
-    }
+    } catch (error) {}
 }
 
-// ============================================
-// 🔧 CORREÇÃO: CARREGAR TURMAS PARA O FILTRO DO DASHBOARD
-// Popula o select 'filtroAtendimentosRecentesTurma' que antes ficava vazio
-// ============================================
 async function carregarTurmasParaDashboardRecentes() {
     try {
-        const response = await fetch('/api/enfermaria/turmas', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        if (__turmasCache.dados && (Date.now() - __turmasCache.timestamp < __TURMAS_CACHE_MS)) {
+            const select = safeGet('filtroAtendimentosRecentesTurma');
+            if (select && select.options.length <= 1) {
+                select.innerHTML = '<option value="">Todas as turmas</option>';
+                __turmasCache.dados.forEach(turma => {
+                    select.innerHTML += `<option value="${escapeHTML(turma)}">${escapeHTML(turma)}</option>`;
+                });
+            }
+            return;
+        }
+        const response = await fetch('/api/enfermaria/turmas', { headers: { 'Authorization': `Bearer ${token}` } });
         const data = await response.json();
         if (data.success && Array.isArray(data.turmas)) {
+            __turmasCache = { dados: data.turmas, timestamp: Date.now() };
             const select = safeGet('filtroAtendimentosRecentesTurma');
             if (select) {
                 const valorAtual = select.value;
@@ -344,48 +323,31 @@ async function carregarTurmasParaDashboardRecentes() {
                     select.innerHTML += `<option value="${escapeHTML(turma)}">${escapeHTML(turma)}</option>`;
                 });
                 if (valorAtual) select.value = valorAtual;
-                console.log(`✅ ${data.turmas.length} turma(s) carregada(s) no filtro do dashboard`);
             }
         }
-    } catch (error) {
-        console.error('Erro ao carregar turmas do dashboard:', error);
-    }
+    } catch (error) {}
 }
 
 // ============================================
-// HEADER DA ENFERMARIA (Relógio, Menu, Perfil, Sino)
+// HEADER (Relógio, Menu, Perfil, Sino)
 // ============================================
-
-// 1. RELÓGIO EM TEMPO REAL
 function atualizarRelogio() {
     const elTempo = document.getElementById('relogioTempoReal');
     const elData = document.getElementById('relogioData');
     if (!elTempo) return;
-
     const agora = new Date();
-    const horas = String(agora.getHours()).padStart(2, '0');
-    const minutos = String(agora.getMinutes()).padStart(2, '0');
-    const segundos = String(agora.getSeconds()).padStart(2, '0');
-
-    elTempo.textContent = `${horas}:${minutos}:${segundos}`;
-
+    elTempo.textContent = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}:${String(agora.getSeconds()).padStart(2, '0')}`;
     if (elData) {
-        const dataFormatada = agora.toLocaleDateString('pt-BR', {
-            weekday: 'short', day: '2-digit', month: 'short', year: 'numeric'
-        });
-        elData.textContent = dataFormatada.replace(/\./g, '').replace(/,/g, ' •');
+        elData.textContent = agora.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }).replace(/\./g, '').replace(/,/g, ' •');
     }
 }
-
 setInterval(atualizarRelogio, 1000);
 atualizarRelogio();
 
-// 2. MENU DO USUÁRIO (Avatar)
 function toggleUserMenu(event) {
     if (event) event.stopPropagation();
     const dropdown = document.getElementById('userDropdown');
     const chevron = document.getElementById('userChevron');
-
     if (dropdown) {
         const isShowing = dropdown.classList.contains('show');
         if (isShowing) {
@@ -402,32 +364,23 @@ document.addEventListener('click', function (event) {
     const container = document.getElementById('userMenuContainer');
     const dropdown = document.getElementById('userDropdown');
     const chevron = document.getElementById('userChevron');
-
     if (container && !container.contains(event.target)) {
         if (dropdown) dropdown.classList.remove('show');
         if (chevron) chevron.style.transform = 'rotate(0deg)';
     }
 });
 
-// 3. NOTIFICAÇÕES NO AVATAR (Badges)
 window.atualizarBadgeUnificado = function () {
     let total = 0;
     try {
-        const naoLidas = (window.__notificacoesCache || []).filter(n => !n.lida).length;
-        const lembretes = (window.__lembretesCache || []).length;
-        total = naoLidas + lembretes;
+        total = (window.__notificacoesCache || []).filter(n => !n.lida).length + (window.__lembretesCache || []).length;
     } catch (e) {}
-
     const badgeDot = document.getElementById('userNotificationBadge');
     const menuBadge = document.getElementById('menuNotifBadge');
     const trigger = document.getElementById('userTrigger');
-
     if (total > 0) {
         if (badgeDot) badgeDot.style.display = 'block';
-        if (menuBadge) {
-            menuBadge.style.display = 'inline-block';
-            menuBadge.textContent = total > 99 ? '99+' : total;
-        }
+        if (menuBadge) { menuBadge.style.display = 'inline-block'; menuBadge.textContent = total > 99 ? '99+' : total; }
         if (trigger) trigger.classList.add('tem-notificacao');
     } else {
         if (badgeDot) badgeDot.style.display = 'none';
@@ -436,179 +389,74 @@ window.atualizarBadgeUnificado = function () {
     }
 };
 
-// 4. BOAS-VINDAS E TURNO
 function atualizarBoasVindasETurno() {
     const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
     const nomeEl = document.getElementById('headerNomeUsuario');
-    if (nomeEl && userData.nome) {
-        nomeEl.textContent = userData.nome.split(' ')[0];
-    }
-
+    if (nomeEl && userData.nome) nomeEl.textContent = userData.nome.split(' ')[0];
     const agora = new Date();
     const hora = agora.getHours();
-    let turno = 'Matutino';
-    let icone = 'fa-sun text-warning';
-
-    if (hora >= 12 && hora < 18) {
-        turno = 'Vespertino';
-        icone = 'fa-cloud-sun text-warning';
-    } else if (hora >= 18 || hora < 5) {
-        turno = 'Noturno';
-        icone = 'fa-moon text-primary';
-    }
-
+    let turno = 'Matutino', icone = 'fa-sun text-warning';
+    if (hora >= 12 && hora < 18) { turno = 'Vespertino'; icone = 'fa-cloud-sun text-warning'; }
+    else if (hora >= 18 || hora < 5) { turno = 'Noturno'; icone = 'fa-moon text-primary'; }
     const turnoEl = document.getElementById('headerTurno');
     const iconeEl = document.getElementById('headerTurnoIcone');
-
     if (turnoEl) turnoEl.textContent = turno;
     if (iconeEl) iconeEl.className = `fas ${icone} me-1`;
 }
+document.addEventListener('DOMContentLoaded', () => { atualizarBoasVindasETurno(); setInterval(atualizarBoasVindasETurno, 60000); });
 
-document.addEventListener('DOMContentLoaded', () => {
-    atualizarBoasVindasETurno();
-    setInterval(atualizarBoasVindasETurno, 60000);
-});
-
-// ============================================
-// 5. BUSCAR E RENDERIZAR NOTIFICAÇÕES NA API (CORRIGIDO)
-// ============================================
 async function carregarNotificacoesHeader() {
-    const token = localStorage.getItem('auth_token');
     const lista = document.getElementById('notificacoesLista');
-    
-    if (!token) {
-        if (lista) lista.innerHTML = '<p style="text-align:center; padding: 20px;">Faça login para ver as notificações.</p>';
-        return;
-    }
-
+    if (!token) return;
     try {
-        // 🔥 1. Buscar contador de não lidas
-        const countRes = await fetch('/api/notificacoes/nao-lidas/contador', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
+        const countRes = await fetch('/api/notificacoes/nao-lidas/contador', { headers: { 'Authorization': `Bearer ${token}` } });
         let totalNaoLidas = 0;
-        if (countRes.ok) {
-            const countData = await countRes.json();
-            totalNaoLidas = countData.count || 0;
-        }
-
-        // 🔥 2. Buscar a lista completa
-        const res = await fetch('/api/notificacoes?limite=20', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        if (countRes.ok) totalNaoLidas = (await countRes.json()).count || 0;
+        
+        const res = await fetch('/api/notificacoes?limite=20', { headers: { 'Authorization': `Bearer ${token}` } });
         const data = await res.json();
-
         if (data.success) {
-            // 🔥 3. Atualizar badge DIRETAMENTE (não depende de cache)
             atualizarBadgeNotificacoes(totalNaoLidas);
-            
-            // 🔥 4. Renderizar lista com LINK
             if (lista) {
                 if (!data.notificacoes || data.notificacoes.length === 0) {
-                    lista.innerHTML = `
-                        <div style="text-align: center; padding: 40px; color: #6c757d;">
-                            <i class="fas fa-bell-slash" style="font-size: 2rem; margin-bottom: 10px; opacity: 0.5;"></i>
-                            <p style="margin: 0;">Nenhuma notificação</p>
-                        </div>
-                    `;
+                    lista.innerHTML = `<div style="text-align: center; padding: 40px; color: #6c757d;"><i class="fas fa-bell-slash" style="font-size: 2rem; margin-bottom: 10px; opacity: 0.5;"></i><p style="margin: 0;">Nenhuma notificação</p></div>`;
                     return;
                 }
-
                 lista.innerHTML = data.notificacoes.map(n => {
-                    const dateObj = new Date(n.createdAt);
-                    const agora = new Date();
-                    const diffMin = Math.floor((agora - dateObj) / 60000);
-                    
+                    const diffMin = Math.floor((new Date() - new Date(n.createdAt)) / 60000);
                     let tempoTexto = 'agora';
                     if (diffMin >= 1 && diffMin < 60) tempoTexto = `há ${diffMin} min`;
                     else if (diffMin >= 60 && diffMin < 1440) tempoTexto = `há ${Math.floor(diffMin / 60)} h`;
                     else if (diffMin >= 1440) tempoTexto = `há ${Math.floor(diffMin / 1440)} d`;
-                    
                     const naoLida = !n.lida ? 'background: #f0fdf4; border-left: 3px solid #10b981;' : '';
-                    
-                    // 🔥 ESCAPAR link para não quebrar HTML
                     const linkSeguro = (n.link || '').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
                     const idSeguro = (n._id || '').replace(/'/g, '');
-                    
                     return `
-                        <div style="
-                            padding: 12px 16px;
-                            border-bottom: 1px solid #f3f4f6;
-                            display: flex;
-                            gap: 12px;
-                            align-items: flex-start;
-                            cursor: pointer;
-                            transition: background 0.15s;
-                            ${naoLida}
-                        " 
-                        onmouseover="this.style.background='#f3f4f6'" 
-                        onmouseout="this.style.background='${n.lida ? 'transparent' : '#f0fdf4'}'"
-                        onclick="abrirNotificacaoEnfermaria('${idSeguro}', '${linkSeguro}')">
-                            <div style="
-                                width: 40px;
-                                height: 40px;
-                                border-radius: 50%;
-                                background: ${n.cor || '#10b981'};
-                                color: white;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                font-size: 16px;
-                                flex-shrink: 0;
-                            ">
-                                <i class="fas ${n.icone || 'fa-bell'}"></i>
-                            </div>
+                        <div style="padding: 12px 16px; border-bottom: 1px solid #f3f4f6; display: flex; gap: 12px; align-items: flex-start; cursor: pointer; transition: background 0.15s; ${naoLida}" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='${n.lida ? 'transparent' : '#f0fdf4'}'" onclick="abrirNotificacaoEnfermaria('${idSeguro}', '${linkSeguro}')">
+                            <div style="width: 40px; height: 40px; border-radius: 50%; background: ${n.cor || '#10b981'}; color: white; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;"><i class="fas ${n.icone || 'fa-bell'}"></i></div>
                             <div style="flex: 1; min-width: 0;">
-                                <div style="font-weight: 700; font-size: 14px; color: #1f2937; margin-bottom: 3px;">
-                                    ${escapeHTML(n.titulo || 'Notificação')}
-                                </div>
-                                <div style="font-size: 13px; color: #4b5563; line-height: 1.4; margin-bottom: 5px;">
-                                    ${escapeHTML(n.mensagem || '')}
-                                </div>
-                                <div style="font-size: 11px; color: #9ca3af;">
-                                    <i class="far fa-clock"></i> ${tempoTexto}
-                                    ${linkSeguro && linkSeguro !== '#' ? '<span style="margin-left: 8px; color: #10b981;"><i class="fas fa-external-link-alt"></i> Abrir</span>' : ''}
-                                </div>
+                                <div style="font-weight: 700; font-size: 14px; color: #1f2937; margin-bottom: 3px;">${escapeHTML(n.titulo || 'Notificação')}</div>
+                                <div style="font-size: 13px; color: #4b5563; line-height: 1.4; margin-bottom: 5px;">${escapeHTML(n.mensagem || '')}</div>
+                                <div style="font-size: 11px; color: #9ca3af;"><i class="far fa-clock"></i> ${tempoTexto} ${linkSeguro && linkSeguro !== '#' ? '<span style="margin-left: 8px; color: #10b981;"><i class="fas fa-external-link-alt"></i> Abrir</span>' : ''}</div>
                             </div>
-                        </div>
-                    `;
+                        </div>`;
                 }).join('');
             }
         }
     } catch (error) {
-        console.error('Erro ao carregar notificações:', error);
         if (lista) {
-            lista.innerHTML = `
-                <div style="text-align: center; padding: 40px; color: #6c757d;">
-                    <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 10px; color: #f59e0b;"></i>
-                    <p>Erro ao carregar as notificações.</p>
-                    <button onclick="carregarNotificacoesHeader()" style="margin-top: 10px; padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                        <i class="fas fa-sync-alt"></i> Tentar novamente
-                    </button>
-                </div>
-            `;
+            lista.innerHTML = `<div style="text-align: center; padding: 40px; color: #6c757d;"><i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 10px; color: #f59e0b;"></i><p>Erro ao carregar.</p><button onclick="carregarNotificacoesHeader()" style="margin-top: 10px; padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;"><i class="fas fa-sync-alt"></i> Tentar novamente</button></div>`;
         }
     }
 }
 
-// ============================================
-// 🔥 5.1 ATUALIZAR BADGE (versão direta, sem cache)
-// ============================================
 function atualizarBadgeNotificacoes(total) {
     const badgeDot = document.getElementById('userNotificationBadge');
     const menuBadge = document.getElementById('menuNotifBadge');
     const trigger = document.getElementById('userTrigger');
-    
     if (total > 0) {
-        if (badgeDot) {
-            badgeDot.style.display = 'block';
-            badgeDot.textContent = total > 9 ? '9+' : total;
-        }
-        if (menuBadge) {
-            menuBadge.style.display = 'inline-block';
-            menuBadge.textContent = total > 99 ? '99+' : total;
-        }
+        if (badgeDot) { badgeDot.style.display = 'block'; badgeDot.textContent = total > 9 ? '9+' : total; }
+        if (menuBadge) { menuBadge.style.display = 'inline-block'; menuBadge.textContent = total > 99 ? '99+' : total; }
         if (trigger) trigger.classList.add('tem-notificacao');
     } else {
         if (badgeDot) badgeDot.style.display = 'none';
@@ -617,84 +465,34 @@ function atualizarBadgeNotificacoes(total) {
     }
 }
 
-// ============================================
-// 🔥 5.2 CLIQUE EM NOTIFICAÇÃO (marca como lida E navega)
-// ============================================
 async function abrirNotificacaoEnfermaria(id, link) {
-    const token = localStorage.getItem('auth_token');
-    
-    console.log('🔔 Clique em notificação:', { id, link });
-    
     try {
-        // 1. Marcar como lida
-        if (id) {
-            await fetch(`/api/notificacoes/${id}/lida`, {
-                method: 'PUT',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-        }
-        
-        // 2. Atualizar badge após marcar como lida
-        const countRes = await fetch('/api/notificacoes/nao-lidas/contador', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (countRes.ok) {
-            const countData = await countRes.json();
-            atualizarBadgeNotificacoes(countData.count || 0);
-        }
-        
-        // 3. Navegar se tiver link
+        if (id) await fetch(`/api/notificacoes/${id}/lida`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
+        const countRes = await fetch('/api/notificacoes/nao-lidas/contador', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (countRes.ok) atualizarBadgeNotificacoes((await countRes.json()).count || 0);
         if (link && link !== '#' && link !== 'null' && link !== 'undefined' && link !== '') {
-            console.log('🚀 Navegando para:', link);
-            
-            // Fechar o dropdown antes de navegar
             fecharNotificacoes();
-            
-            // Navegar (funciona com links absolutos e relativos)
             window.location.href = link;
         } else {
-            console.log('ℹ️ Notificação sem link, apenas marcada como lida');
-            // Recarregar a lista pra atualizar visual
             carregarNotificacoesHeader();
         }
-    } catch (error) {
-        console.error('❌ Erro ao processar clique:', error);
-    }
+    } catch (error) {}
 }
 
-// ============================================
-// 6. ABRIR SINO PELO AVATAR
-// ============================================
 function abrirMenuNotificacoesSeguro(event) {
     if (event) event.stopPropagation();
-
-    // Fecha menu do usuário
     const userDropdown = document.getElementById('userDropdown');
     const chevron = document.getElementById('userChevron');
     if (userDropdown) userDropdown.classList.remove('show');
     if (chevron) chevron.style.transform = 'rotate(0deg)';
-
-    // Abre dropdown do sino
     const notifDropdown = document.getElementById('notificacoesDropdown');
-    if (notifDropdown) {
-        notifDropdown.classList.add('show');
-        notifDropdown.style.display = 'block';
-    }
-
-    // Carrega notificações
+    if (notifDropdown) { notifDropdown.classList.add('show'); notifDropdown.style.display = 'block'; }
     carregarNotificacoesHeader();
 }
 
-// ============================================
-// 7. FECHAR SINO
-// ============================================
 function fecharNotificacoes() {
     const dropdown = document.getElementById('notificacoesDropdown');
-    if (dropdown) {
-        dropdown.classList.remove('show');
-        dropdown.style.display = 'none';
-    }
-
+    if (dropdown) { dropdown.classList.remove('show'); dropdown.style.display = 'none'; }
     const btn = document.getElementById('notificacoesBtn');
     if (btn) btn.classList.remove('active');
 }
@@ -702,96 +500,38 @@ function fecharNotificacoes() {
 document.addEventListener('click', function (event) {
     const notifDropdown = document.getElementById('notificacoesDropdown');
     const containerSino = document.getElementById('containerSinoOriginal');
-
     if (notifDropdown && notifDropdown.classList.contains('show')) {
         if (containerSino && !containerSino.contains(event.target)) {
-            // Não fechar se clicou em um item de notificação (ele já navega)
-            if (!event.target.closest('[onclick*="abrirNotificacaoEnfermaria"]')) {
-                fecharNotificacoes();
-            }
+            if (!event.target.closest('[onclick*="abrirNotificacaoEnfermaria"]')) fecharNotificacoes();
         }
     }
 });
 
-// ============================================
-// 8. MARCAR COMO LIDA (mantido para compatibilidade)
-// ============================================
 async function marcarNotificacaoLidaHeader(id) {
-    const token = localStorage.getItem('auth_token');
-    try {
-        await fetch(`/api/notificacoes/${id}/lida`, {
-            method: 'PUT',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        carregarNotificacoesHeader();
-    } catch (error) {
-        console.error('Erro ao marcar como lida:', error);
-    }
+    try { await fetch(`/api/notificacoes/${id}/lida`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } }); carregarNotificacoesHeader(); } catch (e) {}
 }
 
 async function marcarTodasLidas() {
-    const token = localStorage.getItem('auth_token');
-    try {
-        await fetch('/api/notificacoes/marcar-todas-lidas', {
-            method: 'PUT',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        atualizarBadgeNotificacoes(0);
-        carregarNotificacoesHeader();
-    } catch (error) {
-        console.error('Erro ao marcar todas como lidas:', error);
-    }
+    try { await fetch('/api/notificacoes/marcar-todas-lidas', { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } }); atualizarBadgeNotificacoes(0); carregarNotificacoesHeader(); } catch (e) {}
 }
 
 async function limparMinhasNotificacoes(event) {
     if (event) event.stopPropagation();
     if (!confirm('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.')) return;
-
-    const token = localStorage.getItem('auth_token');
     try {
-        const res = await fetch('/api/notificacoes/limpar-minhas', {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await res.json();
-        
-        if (data.success) {
-            fecharNotificacoes();
-            atualizarBadgeNotificacoes(0);
-            alert('✅ Notificações excluídas!');
-        }
-    } catch (error) {
-        console.error('Erro ao limpar notificações:', error);
-    }
+        const res = await fetch('/api/notificacoes/limpar-minhas', { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+        if ((await res.json()).success) { fecharNotificacoes(); atualizarBadgeNotificacoes(0); alert('✅ Notificações excluídas!'); }
+    } catch (e) {}
 }
 
-// ============================================
-// 🔥 9. INICIALIZAÇÃO (com polling do badge)
-// ============================================
 document.addEventListener('DOMContentLoaded', () => {
-    // Carrega imediatamente após a página carregar
-    setTimeout(() => {
-        carregarNotificacoesHeader();
-    }, 1000);
-    
-    // Polling do badge a cada 30 segundos (sempre atualiza)
+    setTimeout(() => carregarNotificacoesHeader(), 1000);
     setInterval(async () => {
-        const token = localStorage.getItem('auth_token');
         if (!token) return;
-        
         try {
-            const countRes = await fetch('/api/notificacoes/nao-lidas/contador', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
-            if (countRes.ok) {
-                const countData = await countRes.json();
-                atualizarBadgeNotificacoes(countData.count || 0);
-            }
-        } catch (error) {
-            console.warn('Erro ao atualizar badge:', error);
-        }
+            const countRes = await fetch('/api/notificacoes/nao-lidas/contador', { headers: { 'Authorization': `Bearer ${token}` } });
+            if (countRes.ok) atualizarBadgeNotificacoes((await countRes.json()).count || 0);
+        } catch (error) {}
     }, 30000);
 });
 
@@ -801,39 +541,49 @@ document.addEventListener('DOMContentLoaded', () => {
 async function iniciarScannerAutomatico() {
     const qrContainer = safeGet('qr-reader-auto');
     if (!qrContainer) return;
+    if (scannerAutoAtivo || __scannerIniciando) return;
+    __scannerIniciando = true;
     
     qrContainer.innerHTML = '<div id="qr-reader-auto-new" style="width: 100%;"></div>';
     
-    scannerAuto = new Html5Qrcode("qr-reader-auto-new");
-    const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        qrContainer.innerHTML = `<div class="alert alert-warning m-3" style="border-radius: 12px;"><i class="fas fa-video-slash" style="font-size: 32px; display: block; margin-bottom: 10px;"></i><strong>Câmera não disponível</strong><br>Use o <strong>Modo Manual</strong>.<button class="btn btn-sm btn-primary mt-3" onclick="setModo('manual')" style="border-radius: 30px;"><i class="fas fa-users"></i> Modo Manual</button></div>`;
+        __scannerIniciando = false;
+        return;
+    }
     
     try {
+        scannerAuto = new Html5Qrcode("qr-reader-auto-new");
+        const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
         await scannerAuto.start({ facingMode: "environment" }, config, onScanSuccessAuto, () => {});
         scannerAutoAtivo = true;
-        console.log('✅ Scanner Automático iniciado');
     } catch (err) {
-        console.error('Erro ao iniciar scanner automático:', err);
-        qrContainer.innerHTML = `<div class="mostrarToast mostrarToast-warning m-3">Não foi possível acessar a câmera.</div>`;
+        let msg = 'Não foi possível acessar a câmera.';
+        if (err.message?.includes('NotFoundError')) msg = 'Nenhuma câmera encontrada.';
+        else if (err.message?.includes('NotAllowedError')) msg = 'Permissão de câmera negada.';
+        else if (err.message?.includes('NotReadableError')) msg = 'Câmera em uso por outro app.';
+        qrContainer.innerHTML = `<div class="alert alert-warning m-3" style="border-radius: 12px;"><i class="fas fa-video-slash" style="font-size: 32px; display: block; margin-bottom: 10px;"></i><strong>Câmera indisponível</strong><br><span style="font-size: 13px;">${msg}</span><button class="btn btn-sm btn-primary mt-3" onclick="setModo('manual')" style="border-radius: 30px;"><i class="fas fa-users"></i> Modo Manual</button></div>`;
         scannerAutoAtivo = false;
+        scannerAuto = null;
+    } finally {
+        __scannerIniciando = false;
     }
 }
 
 async function pararScannerAutomatico() {
-    if (scannerAuto && scannerAutoAtivo) {
-        try { await scannerAuto.stop(); } catch (e) {}
-    }
+    if (!scannerAuto) { scannerAutoAtivo = false; __scannerIniciando = false; return; }
+    try { if (scannerAutoAtivo) await scannerAuto.stop(); } catch (e) {}
     scannerAutoAtivo = false;
     scannerAuto = null;
+    __scannerIniciando = false;
 }
 
 async function onScanSuccessAuto(decodedText) {
-    console.log('QR Code (Automático):', decodedText);
     const alunoId = extrairAlunoId(decodedText);
     if (!alunoId) { 
         if(typeof window.mostrarToast === 'function') window.mostrarToast('QR Code inválido'); 
         return; 
     }
-    
     await pararScannerAutomatico();
     await buscarAluno(alunoId);
 }
@@ -841,27 +591,19 @@ async function onScanSuccessAuto(decodedText) {
 function extrairAlunoId(decodedText) {
     if (!decodedText || typeof decodedText !== 'string') return null;
     if (decodedText.match(/^[a-f0-9]{24}$/i)) return decodedText;
-    
     const matchAluno = decodedText.match(/[?&]aluno=([a-f0-9]{24})/i);
     if (matchAluno) return matchAluno[1];
-    
     const matchId = decodedText.match(/[?&]id=([a-f0-9]{24})/i);
     if (matchId) return matchId[1];
-    
     return null;
 }
 
-// ============================================
-// GERENCIAMENTO DE MODOS
-// ============================================
 async function setModo(modo) {
     modoAtual = modo;
-    
     safeGet('alunoInfo').style.display = 'none';
     safeGet('formEntrada').style.display = 'none';
     safeGet('formSaida').style.display = 'none';
     currentAluno = null;
-    
     if (modo === 'automatico') {
         safeGet('modoAutomaticoBtn').classList.add('active');
         safeGet('modoManualBtn').classList.remove('active');
@@ -874,117 +616,65 @@ async function setModo(modo) {
         safeGet('modoAutomatico').style.display = 'none';
         safeGet('modoManual').style.display = 'block';
         await pararScannerAutomatico();
-        
         const turmaSelecionada = safeGet('filtroTurmaManual').value;
-        if (turmaSelecionada) {
-            await carregarAlunosPorTurma();
-        } else {
-            safeGet('listaAlunosManual').innerHTML = '<div class="text-center py-3">Selecione uma turma para ver os alunos</div>';
-        }
+        if (turmaSelecionada) await carregarAlunosPorTurma();
+        else safeGet('listaAlunosManual').innerHTML = '<div class="text-center py-3">Selecione uma turma para ver os alunos</div>';
     }
 }
 
-// ============================================
-// MODO MANUAL - TURMAS E ALUNOS
-// ============================================
 async function carregarTurmasParaManual() {
     try {
-        const response = await fetch('/api/enfermaria/turmas', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        if (__turmasCache.dados && (Date.now() - __turmasCache.timestamp < __TURMAS_CACHE_MS)) {
+            const select = safeGet('filtroTurmaManual');
+            if (select && select.options.length <= 1) {
+                select.innerHTML = '<option value="">Selecione uma turma...</option>';
+                __turmasCache.dados.forEach(turma => { select.innerHTML += `<option value="${escapeHTML(turma)}">${escapeHTML(turma)}</option>`; });
+            }
+            return;
+        }
+        const response = await fetch('/api/enfermaria/turmas', { headers: { 'Authorization': `Bearer ${token}` } });
         const data = await response.json();
-        
         if (data.success && Array.isArray(data.turmas)) {
             turmasDisponiveis = data.turmas;
+            __turmasCache = { dados: data.turmas, timestamp: Date.now() };
             const select = safeGet('filtroTurmaManual');
             if (select) {
                 select.innerHTML = '<option value="">Selecione uma turma...</option>';
-                data.turmas.forEach(turma => {
-                    select.innerHTML += `<option value="${escapeHTML(turma)}">${escapeHTML(turma)}</option>`;
-                });
+                data.turmas.forEach(turma => { select.innerHTML += `<option value="${escapeHTML(turma)}">${escapeHTML(turma)}</option>`; });
             }
         }
-    } catch (error) {
-        console.error('Erro ao carregar turmas:', error);
-    }
+    } catch (error) {}
 }
 
 async function carregarAlunosPorTurma() {
     const turma = safeGet('filtroTurmaManual')?.value;
+    if (!turma) { safeGet('listaAlunosManual').innerHTML = '<div class="text-center py-3">Selecione uma turma</div>'; return; }
     
-    if (!turma) {
-        safeGet('listaAlunosManual').innerHTML = '<div class="text-center py-3">Selecione uma turma para ver os alunos</div>';
-        return;
-    }
-    
-    safeGet('listaAlunosManual').innerHTML = 
-        '<div class="text-center py-3"><div class="loading"></div><p>Carregando alunos...</p></div>';
-    
+    safeGet('listaAlunosManual').innerHTML = '<div class="text-center py-3"><div class="loading"></div><p>Carregando...</p></div>';
     try {
-        const response = await fetch(`/api/enfermaria/alunos-por-turma?turma=${encodeURIComponent(turma)}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const response = await fetch(`/api/enfermaria/alunos-por-turma?turma=${encodeURIComponent(turma)}`, { headers: { 'Authorization': `Bearer ${token}` } });
         const data = await response.json();
-        
-        if (data.success && Array.isArray(data.alunos)) {
-            alunosPorTurma = data.alunos;
-            filtrarAlunosManual();
-        } else {
-            safeGet('listaAlunosManual').innerHTML = 
-                '<div class="mostrarToast mostrarToast-warning">Nenhum aluno encontrado nesta turma</div>';
-        }
-    } catch (error) {
-        console.error('Erro:', error);
-        safeGet('listaAlunosManual').innerHTML = 
-            '<div class="mostrarToast mostrarToast-danger">Erro ao carregar alunos</div>';
-    }
+        if (data.success && Array.isArray(data.alunos)) { alunosPorTurma = data.alunos; filtrarAlunosManual(); }
+        else safeGet('listaAlunosManual').innerHTML = '<div class="mostrarToast mostrarToast-warning">Nenhum aluno encontrado</div>';
+    } catch (error) { safeGet('listaAlunosManual').innerHTML = '<div class="mostrarToast mostrarToast-danger">Erro ao carregar</div>'; }
 }
 
 function filtrarAlunosManual() {
     if (!Array.isArray(alunosPorTurma)) return;
-    
     const busca = (safeGet('filtroBuscaManual')?.value || '').toLowerCase();
-    
     let filtrados = alunosPorTurma;
-    if (busca) {
-        filtrados = filtrados.filter(a => (a.nome || '').toLowerCase().includes(busca));
-    }
-    
+    if (busca) filtrados = filtrados.filter(a => (a.nome || '').toLowerCase().includes(busca));
     filtrados.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
-    
     const container = safeGet('listaAlunosManual');
-    
-    if (filtrados.length === 0) {
-        container.innerHTML = '<div class="text-center text-muted py-3">Nenhum aluno encontrado</div>';
-        return;
-    }
-    
-    let html = '<div class="list-group">';
-    filtrados.forEach(aluno => {
-        html += `
-            <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" 
-                 data-aluno-id="${aluno.id}"
-                 data-aluno-nome="${escapeHTML(aluno.nome)}"
-                 style="cursor: pointer;">
-                <div>
-                    <strong>${escapeHTML(aluno.nome)}</strong>
-                    <br>
-                    <small class="text-muted">${escapeHTML(aluno.matricula || 'Sem matrícula')} • ${escapeHTML(aluno.curso || '')}</small>
-                </div>
-                <i class="fas fa-hand-pointer fa-2x text-primary"></i>
-            </div>
-        `;
-    });
-    html += '</div>';
-    
-    container.innerHTML = html;
+    if (filtrados.length === 0) { container.innerHTML = '<div class="text-center text-muted py-3">Nenhum aluno</div>'; return; }
+    container.innerHTML = '<div class="list-group">' + filtrados.map(aluno => `
+        <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" data-aluno-id="${aluno.id}" data-aluno-nome="${escapeHTML(aluno.nome)}" style="cursor: pointer;">
+            <div><strong>${escapeHTML(aluno.nome)}</strong><br><small class="text-muted">${escapeHTML(aluno.matricula || '')} • ${escapeHTML(aluno.curso || '')}</small></div>
+            <i class="fas fa-hand-pointer fa-2x text-primary"></i>
+        </div>`).join('') + '</div>';
     
     container.querySelectorAll('.list-group-item').forEach(item => {
-        item.addEventListener('click', () => {
-            const id = item.getAttribute('data-aluno-id');
-            const nome = item.getAttribute('data-aluno-nome');
-            selecionarAluno(id, nome, item);
-        });
+        item.addEventListener('click', () => selecionarAluno(item.getAttribute('data-aluno-id'), item.getAttribute('data-aluno-nome'), item));
     });
 }
 
@@ -992,50 +682,28 @@ async function selecionarAluno(alunoId, alunoNome, itemEl) {
     if (itemEl) {
         itemEl.style.background = '#d1fae5';
         itemEl.style.borderColor = '#10b981';
-        itemEl.innerHTML = `
-            <div>
-                <strong>${escapeHTML(alunoNome)}</strong>
-                <br>
-                <small class="text-success">Processando...</small>
-            </div>
-            <i class="fas fa-spinner fa-spin fa-2x text-success"></i>
-        `;
+        itemEl.innerHTML = `<div><strong>${escapeHTML(alunoNome)}</strong><br><small class="text-success">Processando...</small></div><i class="fas fa-spinner fa-spin fa-2x text-success"></i>`;
     }
     await buscarAluno(alunoId);
 }
 
-// ============================================
-// BUSCAR E EXIBIR ALUNO
-// ============================================
 async function buscarAluno(alunoId) {
     try {
         await pararScannerAutomatico();
-        
-        const response = await fetch(`/api/enfermaria/aluno/${alunoId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
+        const response = await fetchComRetry(`/api/enfermaria/aluno/${alunoId}`, { headers: { 'Authorization': `Bearer ${token}` } }, 15000);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
-        
         if (data.success && data.aluno) {
             currentAluno = data.aluno;
             exibirAluno(data);
-            
-            if (data.emAtendimento && data.atendimentoAtivo) {
-                currentAtendimento = data.atendimentoAtivo;
-                mostrarFormSaida();
-            } else {
-                currentAtendimento = null;
-                mostrarFormEntrada();
-            }
+            if (data.emAtendimento && data.atendimentoAtivo) { currentAtendimento = data.atendimentoAtivo; mostrarFormSaida(); }
+            else { currentAtendimento = null; mostrarFormEntrada(); }
         } else {
             if(typeof window.mostrarToast === 'function') window.mostrarToast(data.error || 'Aluno não encontrado');
             if (modoAtual === 'automatico') reiniciarScannerAutomatico();
             else carregarAlunosPorTurma();
         }
     } catch (error) {
-        console.error('Erro:', error);
         if(typeof window.mostrarToast === 'function') window.mostrarToast('Erro ao buscar aluno');
         if (modoAtual === 'automatico') reiniciarScannerAutomatico();
         else carregarAlunosPorTurma();
@@ -1044,17 +712,12 @@ async function buscarAluno(alunoId) {
 
 function exibirAluno(data) {
     const aluno = data.aluno;
-    
     const fotoEl = safeGet('alunoFoto');
     if (fotoEl) {
         fotoEl.onerror = null;
         fotoEl.src = aluno.fotoPerfil || gerarAvatarSVG(aluno.nome);
-        fotoEl.onerror = function() {
-            this.onerror = null;
-            this.src = gerarAvatarSVG(aluno.nome);
-        };
+        fotoEl.onerror = function() { this.onerror = null; this.src = gerarAvatarSVG(aluno.nome); };
     }
-    
     safeSetText('alunoNome', aluno.nome || '-');
     safeSetText('alunoMatricula', aluno.matricula || 'Não informada');
     safeSetText('alunoTurma', aluno.turma || 'Não informada');
@@ -1063,39 +726,23 @@ function exibirAluno(data) {
     const statusDiv = safeGet('statusAtendimento');
     if (statusDiv) {
         if (data.emAtendimento && data.atendimentoAtivo) {
-            statusDiv.innerHTML = `
-                <div class="mostrarToast mostrarToast-warning">
-                    <i class="fas fa-clock"></i> Aluno em atendimento desde 
-                    ${new Date(data.atendimentoAtivo.dataHoraEntrada).toLocaleString('pt-BR')}
-                    <br><strong>Queixa:</strong> ${escapeHTML(data.atendimentoAtivo.queixa)}
-                </div>
-            `;
+            statusDiv.innerHTML = `<div class="mostrarToast mostrarToast-warning"><i class="fas fa-clock"></i> Aluno em atendimento desde ${new Date(data.atendimentoAtivo.dataHoraEntrada).toLocaleString('pt-BR')}<br><strong>Queixa:</strong> ${escapeHTML(data.atendimentoAtivo.queixa)}</div>`;
         } else {
-            statusDiv.innerHTML = `
-                <div class="mostrarToast mostrarToast-info">
-                    <i class="fas fa-info-circle"></i> Aluno não está em atendimento no momento.
-                </div>
-            `;
+            statusDiv.innerHTML = `<div class="mostrarToast mostrarToast-info"><i class="fas fa-info-circle"></i> Aluno não está em atendimento no momento.</div>`;
         }
     }
-    
     safeGet('alunoInfo').style.display = 'block';
     safeGet('alunoInfo').scrollIntoView({ behavior: 'smooth' });
 }
 
-// ============================================
-// FORMULÁRIOS
-// ============================================
 function mostrarFormEntrada() {
     safeGet('formEntrada').style.display = 'block';
     safeGet('formSaida').style.display = 'none';
     safeGet('queixa').value = '';
     safeGet('observacoesEntrada').value = '';
-    
     const agora = new Date();
     const offset = agora.getTimezoneOffset() * 60000;
-    const dataLocal = new Date(agora.getTime() - offset);
-    safeGet('dataEntrada').value = dataLocal.toISOString().slice(0, 16);
+    safeGet('dataEntrada').value = new Date(agora.getTime() - offset).toISOString().slice(0, 16);
 }
 
 function mostrarFormSaida() {
@@ -1107,148 +754,59 @@ function mostrarFormSaida() {
     safeGet('observacoesSaida').value = '';
     safeGet('campoCoordenador').style.display = 'none';
     safeGet('campoOutros').style.display = 'none';
-    
     const agora = new Date();
     const offset = agora.getTimezoneOffset() * 60000;
-    const dataLocal = new Date(agora.getTime() - offset);
-    safeGet('dataSaida').value = dataLocal.toISOString().slice(0, 16);
+    safeGet('dataSaida').value = new Date(agora.getTime() - offset).toISOString().slice(0, 16);
 }
 
-// ============================================
-// REGISTRAR ENTRADA
-// ============================================
 async function registrarEntrada() {
     const queixa = (safeGet('queixa')?.value || '').trim();
-    if (!queixa) { 
-        if(typeof window.mostrarToast === 'function') window.mostrarToast('Por favor, descreva a queixa do aluno'); 
-        return; 
-    }
-    
+    if (!queixa) { if(typeof window.mostrarToast === 'function') window.mostrarToast('Descreva a queixa'); return; }
     const dataEntradaInput = safeGet('dataEntrada')?.value;
-    if (!dataEntradaInput) {
-        if(typeof window.mostrarToast === 'function') window.mostrarToast('Por favor, informe a data/hora do atendimento');
-        return;
-    }
-    
+    if (!dataEntradaInput) { if(typeof window.mostrarToast === 'function') window.mostrarToast('Informe a data'); return; }
     const dataEntrada = new Date(dataEntradaInput);
-    
-    if (dataEntrada > new Date()) {
-        if(typeof window.mostrarToast === 'function') window.mostrarToast('⚠️ A data do atendimento não pode ser no futuro');
-        return;
-    }
-    
-    if (!currentAluno || !currentAluno.id) { 
-        if(typeof window.mostrarToast === 'function') window.mostrarToast('Nenhum aluno selecionado'); 
-        return; 
-    }
+    if (dataEntrada > new Date()) { if(typeof window.mostrarToast === 'function') window.mostrarToast('⚠️ Data não pode ser no futuro'); return; }
+    if (!currentAluno || !currentAluno.id) { if(typeof window.mostrarToast === 'function') window.mostrarToast('Nenhum aluno selecionado'); return; }
     
     const btn = document.querySelector('#formEntrada .btn-primary-custom');
     if (btn) btn.disabled = true;
-    
     try {
         const response = await fetch('/api/enfermaria/entrada', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({
-                alunoId: currentAluno.id,
-                queixa,
-                observacoes: safeGet('observacoesEntrada').value,
-                dataEntrada: dataEntrada.toISOString()
-            })
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ alunoId: currentAluno.id, queixa, observacoes: safeGet('observacoesEntrada').value, dataEntrada: dataEntrada.toISOString() })
         });
         const data = await response.json();
-        
-        if (data.success) {
-            if(typeof window.mostrarToast === 'function') window.mostrarToast(`✅ ${data.message}`);
-            finalizarAposSucesso();
-        } else {
-            if(typeof window.mostrarToast === 'function') window.mostrarToast('❌ ' + data.error);
-            if (modoAtual === 'automatico') reiniciarScannerAutomatico();
-        }
-    } catch (error) {
-        console.error('Erro:', error);
-        if(typeof window.mostrarToast === 'function') window.mostrarToast('Erro ao registrar');
-        if (modoAtual === 'automatico') reiniciarScannerAutomatico();
-    } finally {
-        if (btn) btn.disabled = false;
-    }
+        if (data.success) { if(typeof window.mostrarToast === 'function') window.mostrarToast(`✅ ${data.message}`); finalizarAposSucesso(); }
+        else { if(typeof window.mostrarToast === 'function') window.mostrarToast('❌ ' + data.error); if (modoAtual === 'automatico') reiniciarScannerAutomatico(); }
+    } catch (error) { if(typeof window.mostrarToast === 'function') window.mostrarToast('Erro ao registrar'); if (modoAtual === 'automatico') reiniciarScannerAutomatico(); }
+    finally { if (btn) btn.disabled = false; }
 }
 
-// ============================================
-// REGISTRAR SAÍDA
-// ============================================
 async function registrarSaida() {
     const desfecho = safeGet('desfecho').value;
-    if (!desfecho) { 
-        if(typeof window.mostrarToast === 'function') window.mostrarToast('Por favor, selecione o desfecho do atendimento'); 
-        return; 
-    }
-    
+    if (!desfecho) { if(typeof window.mostrarToast === 'function') window.mostrarToast('Selecione o desfecho'); return; }
     const dataSaidaInput = safeGet('dataSaida')?.value;
-    if (!dataSaidaInput) {
-        if(typeof window.mostrarToast === 'function') window.mostrarToast('Por favor, informe a data/hora da saída');
-        return;
-    }
-    
+    if (!dataSaidaInput) { if(typeof window.mostrarToast === 'function') window.mostrarToast('Informe a data de saída'); return; }
     const dataSaida = new Date(dataSaidaInput);
-    
-    if (dataSaida > new Date()) {
-        if(typeof window.mostrarToast === 'function') window.mostrarToast('⚠️ A data da saída não pode ser no futuro');
-        return;
-    }
-    
+    if (dataSaida > new Date()) { if(typeof window.mostrarToast === 'function') window.mostrarToast('⚠️ Data não pode ser no futuro'); return; }
     if (currentAtendimento && currentAtendimento.dataHoraEntrada) {
-        const dataEntrada = new Date(currentAtendimento.dataHoraEntrada);
-        if (dataSaida < dataEntrada) {
-            if(typeof window.mostrarToast === 'function') window.mostrarToast('⚠️ A data da saída não pode ser anterior à data de entrada');
-            return;
-        }
+        if (dataSaida < new Date(currentAtendimento.dataHoraEntrada)) { if(typeof window.mostrarToast === 'function') window.mostrarToast('⚠️ Saída anterior à entrada'); return; }
     }
-    
-    if (desfecho === 'outros' && !(safeGet('outrosTexto').value || '').trim()) {
-        if(typeof window.mostrarToast === 'function') window.mostrarToast('Por favor, descreva o desfecho');
-        return;
-    }
-    
-    if (!currentAluno || !currentAluno.id) { 
-        if(typeof window.mostrarToast === 'function') window.mostrarToast('Nenhum aluno selecionado'); 
-        return; 
-    }
+    if (desfecho === 'outros' && !(safeGet('outrosTexto').value || '').trim()) { if(typeof window.mostrarToast === 'function') window.mostrarToast('Descreva o desfecho'); return; }
+    if (!currentAluno || !currentAluno.id) { if(typeof window.mostrarToast === 'function') window.mostrarToast('Nenhum aluno selecionado'); return; }
     
     const btn = document.querySelector('#formSaida .btn-primary-custom');
     if (btn) btn.disabled = true;
-    
     try {
-        const body = {
-            alunoId: currentAluno.id,
-            desfecho,
-            desfechoOutrosTexto: safeGet('outrosTexto').value,
-            coordenadorPatioNome: safeGet('coordenadorPatioNome').value,
-            observacoes: safeGet('observacoesSaida').value,
-            dataSaida: dataSaida.toISOString()
-        };
-        
         const response = await fetch('/api/enfermaria/saida', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify(body)
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ alunoId: currentAluno.id, desfecho, desfechoOutrosTexto: safeGet('outrosTexto').value, coordenadorPatioNome: safeGet('coordenadorPatioNome').value, observacoes: safeGet('observacoesSaida').value, dataSaida: dataSaida.toISOString() })
         });
         const data = await response.json();
-        
-        if (data.success) {
-            if(typeof window.mostrarToast === 'function') window.mostrarToast(`✅ ${data.message}`);
-            finalizarAposSucesso();
-        } else {
-            if(typeof window.mostrarToast === 'function') window.mostrarToast('❌ ' + data.error);
-            if (modoAtual === 'automatico') reiniciarScannerAutomatico();
-        }
-    } catch (error) {
-        console.error('Erro:', error);
-        if(typeof window.mostrarToast === 'function') window.mostrarToast('Erro ao registrar');
-        if (modoAtual === 'automatico') reiniciarScannerAutomatico();
-    } finally {
-        if (btn) btn.disabled = false;
-    }
+        if (data.success) { if(typeof window.mostrarToast === 'function') window.mostrarToast(`✅ ${data.message}`); finalizarAposSucesso(); }
+        else { if(typeof window.mostrarToast === 'function') window.mostrarToast('❌ ' + data.error); if (modoAtual === 'automatico') reiniciarScannerAutomatico(); }
+    } catch (error) { if(typeof window.mostrarToast === 'function') window.mostrarToast('Erro ao registrar'); if (modoAtual === 'automatico') reiniciarScannerAutomatico(); }
+    finally { if (btn) btn.disabled = false; }
 }
 
 function toggleOutrosCampos() {
@@ -1259,13 +817,8 @@ function toggleOutrosCampos() {
 
 function finalizarAposSucesso() {
     limparTela();
-    
-    if (modoAtual === 'automatico') {
-        reiniciarScannerAutomatico();
-    } else {
-        carregarAlunosPorTurma();
-    }
-    
+    if (modoAtual === 'automatico') reiniciarScannerAutomatico();
+    else carregarAlunosPorTurma();
     carregarAtendimentosAtivos();
     carregarDashboard();
 }
@@ -1279,24 +832,15 @@ function limparTela() {
 }
 
 function reiniciarScannerAutomatico() {
-    setTimeout(() => {
-        if (!scannerAutoAtivo && modoAtual === 'automatico') {
-            iniciarScannerAutomatico();
-        }
-    }, 1000);
+    setTimeout(() => { if (!scannerAutoAtivo && !__scannerIniciando && modoAtual === 'automatico') iniciarScannerAutomatico(); }, 1000);
 }
 
-// ============================================
-// ATENDIMENTOS ATIVOS
-// ============================================
 async function carregarAtendimentosAtivos() {
     const container = safeGet('listaAtendimentosAtivos');
     if (!container) return;
     
     try {
-        const response = await fetch('/api/enfermaria/atendimentos-ativos', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const response = await fetchComRetry('/api/enfermaria/atendimentos-ativos', { headers: { 'Authorization': `Bearer ${token}` } }, 15000);
         const data = await response.json();
         
         if (data.success && Array.isArray(data.atendimentos) && data.atendimentos.length > 0) {
@@ -1683,7 +1227,7 @@ async function verificarAtendimento24h(atendimentoId, acao) {
             atualizarContadorAtendimentosAntigos();
             
             if (acao === 'ja_encerrou') {
-                carregarAtendimentosRecentes(1, true); // 🔧 CORREÇÃO: forçar atualização
+                carregarAtendimentosRecentes(1, true); 
             }
         } else {
             if(typeof window.mostrarToast === 'function') window.mostrarToast('❌ ' + (data.error || 'Erro ao verificar'));
@@ -2081,9 +1625,7 @@ async function editarAtendimento(atendimentoId) {
     if (!atendimentoId) return;
     
     try {
-        const response = await fetch(`/api/enfermaria/atendimento/${atendimentoId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const response = await fetchComRetry(`/api/enfermaria/atendimento/${atendimentoId}`, { headers: { 'Authorization': `Bearer ${token}` } }, 15000);
         const data = await response.json();
         
         if (!data.success || !data.atendimento) {
@@ -2258,7 +1800,7 @@ async function salvarEdicaoAtendimento() {
             setTimeout(() => safeGet('modalEditarAtendimento')?.remove(), 300);
             
             carregarAtendimentosAtivos();
-            carregarAtendimentosRecentes(1, true); // 🔧 CORREÇÃO: forçar atualização
+            carregarAtendimentosRecentes(1, true);
             carregarDashboard();
         } else {
             if(typeof window.mostrarToast === 'function') window.mostrarToast('❌ ' + (data.error || 'Erro ao salvar'));
@@ -2296,12 +1838,8 @@ async function imprimirAtendimentoIndividual(atendimentoId) {
             if (qrR.ok) {
                 const qrD = await qrR.json();
                 if (qrD.success && qrD.qrCode) qrCodeUrl = qrD.qrCode;
-            } else {
-                console.info(`ℹ️ QR Code não disponível (status ${qrR.status})`);
             }
-        } catch (e) {
-            console.info('ℹ️ QR Code não pôde ser carregado');
-        }
+        } catch (e) {}
         
         const html = gerarHTMLAtendimentoIndividual(a, qrCodeUrl);
         
@@ -2728,7 +2266,7 @@ async function excluirAtendimento(atendimentoId, alunoNome) {
             }
             
             carregarAtendimentosAtivos();
-            carregarAtendimentosRecentes(1, true); // 🔧 CORREÇÃO: forçar atualização
+            carregarAtendimentosRecentes(1, true);
             carregarDashboard();
         } else {
             if (data.code === 'ADMIN_NAO_CRIADOR') {
@@ -2944,24 +2482,17 @@ async function carregarDashboard() {
 
 // ============================================
 // 🆕 DASHBOARD - ATENDIMENTOS RECENTES
-// 🔧 CORREÇÃO: guarda de concorrência + cache curto + botão de retry
 // ============================================
 async function carregarAtendimentosRecentes(pagina = 1, forcar = false) {
     const container = safeGet('listaAtendimentosRecentes');
     if (!container) return;
 
-    // 🔧 Evita chamadas simultâneas (resolve o "travamento" do spinner)
-    if (__carregandoRecentes) {
-        console.log('⏳ Já carregando atendimentos recentes, ignorando chamada duplicada');
-        return;
-    }
+    if (__carregandoRecentes) return;
 
-    // 🔧 Cache curto: evita recarregar ao trocar de aba rapidamente
     const agora = Date.now();
     if (!forcar && pagina === __atendimentosRecentesPaginacao.page &&
         (agora - __ultimaCargaRecentes) < CACHE_RECENTES_MS &&
         __atendimentosRecentes.length > 0) {
-        console.log('📦 Usando cache de atendimentos recentes');
         return;
     }
 
@@ -3140,7 +2671,6 @@ function renderizarPaginacaoAtendimentosRecentes() {
     const inicio = (page - 1) * limit + 1;
     const fim = Math.min(page * limit, total);
     
-    // 🔧 CORREÇÃO: forcar=true nos botões de paginação
     pagContainer.innerHTML = `
         <button class="btn btn-sm btn-outline-secondary" 
                 onclick="carregarAtendimentosRecentes(${page - 1}, true)"
@@ -3169,7 +2699,6 @@ function configurarFiltrosAtendimentosRecentes() {
         let timeout;
         busca.addEventListener('input', () => {
             clearTimeout(timeout);
-            // 🔧 CORREÇÃO: forcar=true ao filtrar
             timeout = setTimeout(() => carregarAtendimentosRecentes(1, true), 300);
         });
     }
@@ -3177,7 +2706,6 @@ function configurarFiltrosAtendimentosRecentes() {
     const turma = safeGet('filtroAtendimentosRecentesTurma');
     if (turma && !turma.dataset.listenerAttached) {
         turma.dataset.listenerAttached = 'true';
-        // 🔧 CORREÇÃO: forcar=true ao trocar turma
         turma.addEventListener('change', () => carregarAtendimentosRecentes(1, true));
     }
 }
@@ -3486,9 +3014,6 @@ function exportarCSV() {
     }
 }
 
-// ============================================
-// 📄 EXPORTAR PDF
-// ============================================
 function exportarPDF() {
     if (!relatorioData) { 
         if(typeof window.mostrarToast === 'function') window.mostrarToast('⚠️ Gere um relatório primeiro', 'warning'); 
@@ -3503,9 +3028,6 @@ function exportarPDF() {
     win.onload = () => setTimeout(() => win.print(), 500);
 }
 
-// ============================================
-// 🎨 GERAR HTML DO RELATÓRIO (PADRONIZADO)
-// ============================================
 function gerarHTMLRelatorioEnfermaria(data) {
     const tipo = data.aluno ? 'aluno' : (data.turma ? 'turma' : 'geral');
     const logoIema = '/uploads/logo-iema.png';
@@ -3925,23 +3447,19 @@ window.abrirMenuNotificacoesSeguro = abrirMenuNotificacoesSeguro;
 window.fecharNotificacoes = fecharNotificacoes;
 window.marcarNotificacaoLidaHeader = marcarNotificacaoLidaHeader;
 
-// Dashboard - atendimentos recentes
 window.carregarAtendimentosRecentes = carregarAtendimentosRecentes;
 window.verAtendimento = verAtendimento;
 window.editarAtendimento = editarAtendimento;
 window.imprimirAtendimentoIndividual = imprimirAtendimentoIndividual;
 window.excluirAtendimento = excluirAtendimento;
 
-// 🆕 Verificação 24h
 window.abrirModalVerificacao24h = abrirModalVerificacao24h;
 window.verificarAtendimento24h = verificarAtendimento24h;
 window.atualizarContadorAtendimentosAntigos = atualizarContadorAtendimentosAntigos;
 window.formatarTempoAtendimentoFront = formatarTempoAtendimentoFront;
 
-// 🔧 CORREÇÃO: expor carregador de turmas do dashboard
 window.carregarTurmasParaDashboardRecentes = carregarTurmasParaDashboardRecentes;
 
-// Expor globalmente para o header encontrar
 window.confirmar = confirmar;
 window.logout = function() {
     const confirmarAcao = confirm('Tem certeza que deseja sair do sistema?');

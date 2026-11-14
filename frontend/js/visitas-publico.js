@@ -36,6 +36,50 @@ class VisitasPublico {
         this.localizacao = null;
 
         this.whatsappEscola = '5598983086504';
+
+        // ============================================
+        // 🔒 LOCKS ANTI-CLIQUE-DUPLO
+        // ============================================
+        this._locks = {
+            selecionarAluno: false,
+            abrirTermo: false,
+            buscarPorCodigo: false,
+            verificarTOTP: false,
+            autorizar: false,
+            recusar: false,
+            imprimirTermo: false,
+            gerarQRCode: false,
+            carregarDadosIniciais: false
+        };
+
+        // Cache de termos já carregados (evita refetch)
+        this._termoCache = new Map();
+        this._dadosIniciaisCarregados = false;
+    }
+
+    // ============================================
+    // 🔒 HELPERS DE LOCK
+    // ============================================
+    _adquirirLock(nome) {
+        if (this._locks[nome]) {
+            console.log(`🔒 Lock "${nome}" já ativo — ignorando clique`);
+            return false;
+        }
+        this._locks[nome] = true;
+        return true;
+    }
+
+    _liberarLock(nome) {
+        this._locks[nome] = false;
+    }
+
+    async _comLock(nome, fn) {
+        if (!this._adquirirLock(nome)) return;
+        try {
+            return await fn();
+        } finally {
+            this._liberarLock(nome);
+        }
     }
 
     // ============================================
@@ -87,7 +131,8 @@ class VisitasPublico {
                 }
             }
             
-            await this.carregarTurmasECursos();
+            await this.carregarDadosIniciais();
+            
             this.configurarEventos();
             this.capturarLocalizacao();
             
@@ -96,6 +141,71 @@ class VisitasPublico {
             console.error('❌ Erro:', error);
             this.showToast('Erro ao carregar página', 'error');
         }
+    }
+
+    // ============================================
+    // 🆕 CARREGAMENTO UNIFICADO DE DADOS INICIAIS
+    // ============================================
+    async carregarDadosIniciais() {
+        if (this._dadosIniciaisCarregados) return;
+        
+        return this._comLock('carregarDadosIniciais', async () => {
+            try {
+                const [turmasRes, cursosRes, alunosRes] = await Promise.all([
+                    fetch(`${this.apiBase}/turmas`),
+                    fetch(`${this.apiBase}/cursos`),
+                    fetch(`${this.apiBase}/alunos`)
+                ]);
+                
+                const [turmasData, cursosData, alunosData] = await Promise.all([
+                    turmasRes.json(),
+                    cursosRes.json(),
+                    alunosRes.json()
+                ]);
+                
+                if (turmasData.success && turmasData.turmas) {
+                    this.turmas = turmasData.turmas;
+                    this.preencherSelectTurmas();
+                }
+                
+                if (cursosData.success && cursosData.cursos) {
+                    this.cursos = cursosData.cursos;
+                    this.preencherSelectCursos();
+                }
+                
+                if (alunosData.success && alunosData.alunos) {
+                    this.alunos = alunosData.alunos;
+                    this.renderizarAlunos();
+                    console.log(`✅ ${this.alunos.length} aluno(s) pré-carregados`);
+                }
+                
+                this._dadosIniciaisCarregados = true;
+                console.log('✅ Dados iniciais carregados em paralelo');
+                
+            } catch (error) {
+                console.error('❌ Erro ao carregar dados iniciais:', error);
+                try {
+                    const [turmasRes, cursosRes] = await Promise.all([
+                        fetch(`${this.apiBase}/turmas`),
+                        fetch(`${this.apiBase}/cursos`)
+                    ]);
+                    const [turmasData, cursosData] = await Promise.all([
+                        turmasRes.json(),
+                        cursosRes.json()
+                    ]);
+                    if (turmasData.success && turmasData.turmas) {
+                        this.turmas = turmasData.turmas;
+                        this.preencherSelectTurmas();
+                    }
+                    if (cursosData.success && cursosData.cursos) {
+                        this.cursos = cursosData.cursos;
+                        this.preencherSelectCursos();
+                    }
+                } catch (e) {
+                    console.error('❌ Fallback também falhou:', e);
+                }
+            }
+        });
     }
 
     mostrarIndisponivel(aviso) {
@@ -114,30 +224,6 @@ class VisitasPublico {
                 </p>
             </div>
         `;
-    }
-
-    async carregarTurmasECursos() {
-        try {
-            const [turmasRes, cursosRes] = await Promise.all([
-                fetch(`${this.apiBase}/turmas`),
-                fetch(`${this.apiBase}/cursos`)
-            ]);
-            
-            const turmasData = await turmasRes.json();
-            const cursosData = await cursosRes.json();
-            
-            if (turmasData.success && turmasData.turmas) {
-                this.turmas = turmasData.turmas;
-                this.preencherSelectTurmas();
-            }
-            
-            if (cursosData.success && cursosData.cursos) {
-                this.cursos = cursosData.cursos;
-                this.preencherSelectCursos();
-            }
-        } catch (error) {
-            console.error('❌ Erro ao carregar dados:', error);
-        }
     }
 
     preencherSelectTurmas() {
@@ -248,6 +334,9 @@ class VisitasPublico {
         const nome = document.getElementById('buscaAlunoPublico')?.value;
         
         if (!turma && !curso && !nome) {
+            if (this.alunos.length > 0) {
+                this.renderizarAlunos();
+            }
             return;
         }
         
@@ -270,27 +359,29 @@ class VisitasPublico {
     }
 
     async buscarPorCodigo() {
-        const codigo = document.getElementById('buscaCodigoPublico')?.value?.trim();
-        
-        if (!codigo || codigo.length < 4) {
-            this.showToast('Digite pelo menos 4 caracteres do código', 'error');
-            return;
-        }
-        
-        try {
-            const response = await fetch(`${this.apiBase}/termos-por-codigo/${encodeURIComponent(codigo)}`);
-            const data = await response.json();
+        return this._comLock('buscarPorCodigo', async () => {
+            const codigo = document.getElementById('buscaCodigoPublico')?.value?.trim();
             
-            if (data.success) {
-                this.termosPorCodigo = data.termos || [];
-                this.renderizarTermosPorCodigo();
-            } else {
-                throw new Error(data.error || 'Erro na busca');
+            if (!codigo || codigo.length < 4) {
+                this.showToast('Digite pelo menos 4 caracteres do código', 'error');
+                return;
             }
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            this.showToast('❌ ' + error.message, 'error');
-        }
+            
+            try {
+                const response = await fetch(`${this.apiBase}/termos-por-codigo/${encodeURIComponent(codigo)}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.termosPorCodigo = data.termos || [];
+                    this.renderizarTermosPorCodigo();
+                } else {
+                    throw new Error(data.error || 'Erro na busca');
+                }
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                this.showToast('❌ ' + error.message, 'error');
+            }
+        });
     }
 
     renderizarTermosPorCodigo() {
@@ -334,8 +425,9 @@ class VisitasPublico {
                     <div style="display: flex; gap: 6px; align-items: center;">
                         <span style="color: #6b7280; font-size: 11px;">${a.turma || '-'}</span>
                         ${t.responsaveis.autorizados > 0 ? `
-                            <button class="btn-filter" 
-                                onclick="event.stopPropagation(); visitasPublico.imprimirTermoOficial('${t.id}', '${alunoId}')" 
+                            <button class="btn-filter btn-imprimir-termo" 
+                                data-termo-id="${t.id}" 
+                                data-aluno-id="${alunoId}"
                                 style="padding: 4px 10px; font-size: 11px; background: #3b82f6; border-radius: 20px;"
                                 title="Imprimir termo somente deste aluno">
                                 <i class="fas fa-print"></i> Imprimir
@@ -389,6 +481,15 @@ class VisitasPublico {
                 </div>
             `;
         }).join('');
+
+        container.querySelectorAll('.btn-imprimir-termo').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const termoId = btn.dataset.termoId;
+                const alunoId = btn.dataset.alunoId;
+                this.imprimirTermoOficial(termoId, alunoId);
+            });
+        });
     }
 
     renderizarAlunos() {
@@ -406,7 +507,9 @@ class VisitasPublico {
         }
         
         container.innerHTML = this.alunos.map(a => `
-            <div class="termo-publico-card" onclick="visitasPublico.selecionarAluno('${a.id}')">
+            <div class="termo-publico-card aluno-card-public" 
+                 data-aluno-id="${a.id}" 
+                 style="cursor: pointer;">
                 <h4>${this.escapeHtml(a.nome)}</h4>
                 <div class="info"><i class="fas fa-id-card"></i> ${a.matricula || 'N/A'}</div>
                 <div class="info"><i class="fas fa-school"></i> ${a.turma || 'N/A'}</div>
@@ -418,38 +521,57 @@ class VisitasPublico {
                 </div>
             </div>
         `).join('');
+
+        container.querySelectorAll('.aluno-card-public').forEach(card => {
+            card.addEventListener('click', () => {
+                this.selecionarAluno(card.dataset.alunoId);
+            });
+        });
     }
 
     // ============================================
-    // SELECIONAR ALUNO
+    // SELECIONAR ALUNO (com lock)
     // ============================================
     async selecionarAluno(alunoId) {
-        const aluno = this.alunos.find(a => a.id === alunoId);
-        if (!aluno) return;
-        
-        this.alunoSelecionado = aluno;
-        
-        try {
-            const response = await fetch(`${this.apiBase}/termos/${alunoId}`);
-            const data = await response.json();
+        return this._comLock('selecionarAluno', async () => {
+            const aluno = this.alunos.find(a => a.id === alunoId);
+            if (!aluno) return;
             
-            console.log(`🔍 [FRONTEND] Termos do aluno ${aluno.nome}:`, data);
-            
-            if (data.success && data.termos.length > 0) {
-                this.termos = data.termos;
-                
-                data.termos.forEach(t => {
-                    console.log(`   → ${t.codigo}: status=${t.statusResponsavel} jaAutorizou=${t.jaAutorizou} jaRecusou=${t.jaRecusou}`);
-                });
-                
-                this.mostrarTermos();
-            } else {
-                this.showToast('Nenhum termo encontrado para este aluno', 'info');
+            const container = document.getElementById('listaAlunosPublico');
+            if (container) {
+                container.style.opacity = '0.5';
+                container.style.pointerEvents = 'none';
             }
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            this.showToast('Erro ao buscar termos', 'error');
-        }
+            
+            this.alunoSelecionado = aluno;
+            
+            try {
+                const response = await fetch(`${this.apiBase}/termos/${alunoId}`);
+                const data = await response.json();
+                
+                console.log(`🔍 [FRONTEND] Termos do aluno ${aluno.nome}:`, data);
+                
+                if (data.success && data.termos.length > 0) {
+                    this.termos = data.termos;
+                    
+                    data.termos.forEach(t => {
+                        console.log(`   → ${t.codigo}: status=${t.statusResponsavel} jaAutorizou=${t.jaAutorizou} jaRecusou=${t.jaRecusou}`);
+                    });
+                    
+                    this.mostrarTermos();
+                } else {
+                    this.showToast('Nenhum termo encontrado para este aluno', 'info');
+                }
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                this.showToast('Erro ao buscar termos', 'error');
+            } finally {
+                if (container) {
+                    container.style.opacity = '1';
+                    container.style.pointerEvents = '';
+                }
+            }
+        });
     }
 
     mostrarTermos() {
@@ -469,8 +591,9 @@ class VisitasPublico {
             if (t.jaAutorizou) {
                 badgeStatus = '<span class="badge-termo autorizado">✓ Você já autorizou</span>';
                 acoesHTML = `
-                    <button class="btn-filter" 
-                        onclick="event.stopPropagation(); visitasPublico.imprimirTermoOficial('${t.id}', '${alunoSelecionadoId || ''}')" 
+                    <button class="btn-filter btn-imprimir-termo" 
+                        data-termo-id="${t.id}" 
+                        data-aluno-id="${alunoSelecionadoId || ''}"
                         style="padding: 8px 16px; font-size: 12px; background: #3b82f6;">
                         <i class="fas fa-print"></i> Imprimir Termo
                     </button>
@@ -492,11 +615,11 @@ class VisitasPublico {
             }
             
             const clicavel = t.pendente;
-            const onclickAttr = clicavel ? `onclick="visitasPublico.abrirTermo('${t.id}')"` : '';
             const cursorStyle = clicavel ? 'cursor: pointer;' : 'cursor: default;';
+            const cardClass = clicavel ? 'termo-publico-card termo-card-clicavel' : 'termo-publico-card';
             
             return `
-                <div class="termo-publico-card" ${onclickAttr} style="${cursorStyle}">
+                <div class="${cardClass}" data-termo-id="${t.id}" data-clicavel="${clicavel}" style="${cursorStyle}">
                     <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px; gap: 8px; flex-wrap: wrap;">
                         <h4 style="margin: 0;">${this.escapeHtml(t.atividade)}</h4>
                         ${badgeStatus}
@@ -522,6 +645,20 @@ class VisitasPublico {
             `;
         }).join('');
         
+        container.querySelectorAll('.termo-card-clicavel').forEach(card => {
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('.btn-imprimir-termo')) return;
+                this.abrirTermo(card.dataset.termoId);
+            });
+        });
+
+        container.querySelectorAll('.btn-imprimir-termo').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.imprimirTermoOficial(btn.dataset.termoId, btn.dataset.alunoId);
+            });
+        });
+        
         document.getElementById('passoBusca').style.display = 'none';
         document.getElementById('secaoTermos').style.display = 'block';
         document.getElementById('secaoDetalhes').style.display = 'none';
@@ -542,85 +679,94 @@ class VisitasPublico {
     }
 
     // ============================================
-    // PASSO 2: ABRIR TERMO
+    // PASSO 2: ABRIR TERMO (com lock + cache)
     // ============================================
     async abrirTermo(termoId) {
-        try {
-            const termoEncontrado = this.termos.find(t => t.id === termoId);
-            
-            if (termoEncontrado && (termoEncontrado.jaAutorizou || termoEncontrado.jaRecusou)) {
-                this.showToast('Este termo já foi respondido por você', 'info');
-                return;
-            }
-            
-            const response = await fetch(`${this.apiBase}/termo/${termoId}`);
-            const data = await response.json();
-            
-            if (!data.success) throw new Error('Termo não encontrado');
-            
-            this.termoAtual = data.termo;
-            this.lgpdAceito = false;
-            this.totpSecret = null;
-            
-            if (this.alunoSelecionado) {
-                this.termoAtual.alunoIdFoco = this.alunoSelecionado.id || this.alunoSelecionado._id;
-            } else if (this.termoAtual.alunos?.length === 1) {
-                this.termoAtual.alunoIdFoco = this.termoAtual.alunos[0].alunoId || this.termoAtual.alunos[0]._id;
-            }
-            
-            const container = document.getElementById('detalhesTermo');
-            if (container) {
-                container.innerHTML = `
-                    <div style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
-                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
-                            <i class="fas fa-file-alt" style="font-size: 24px;"></i>
-                            <h3 style="margin: 0; font-size: 18px;">${this.escapeHtml(this.termoAtual.atividade)}</h3>
-                        </div>
-                        
-                        ${this.termoAtual.descricaoAtividade ? `
-                            <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 10px; margin-bottom: 12px; font-size: 13px; text-align: left;">
-                                <strong style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
-                                    <i class="fas fa-align-left"></i> Descrição da Atividade:
-                                </strong>
-                                <p style="margin: 0; opacity: 0.95; white-space: pre-wrap; line-height: 1.5;">${this.escapeHtml(this.termoAtual.descricaoAtividade)}</p>
+        return this._comLock('abrirTermo', async () => {
+            try {
+                const termoEncontrado = this.termos.find(t => t.id === termoId);
+                
+                if (termoEncontrado && (termoEncontrado.jaAutorizou || termoEncontrado.jaRecusou)) {
+                    this.showToast('Este termo já foi respondido por você', 'info');
+                    return;
+                }
+
+                let termoData = this._termoCache.get(termoId);
+                
+                if (!termoData) {
+                    const response = await fetch(`${this.apiBase}/termo/${termoId}`);
+                    termoData = await response.json();
+                    if (termoData.success) {
+                        this._termoCache.set(termoId, termoData);
+                    }
+                }
+                
+                if (!termoData.success) throw new Error('Termo não encontrado');
+                
+                this.termoAtual = termoData.termo;
+                this.lgpdAceito = false;
+                this.totpSecret = null;
+                
+                if (this.alunoSelecionado) {
+                    this.termoAtual.alunoIdFoco = this.alunoSelecionado.id || this.alunoSelecionado._id;
+                } else if (this.termoAtual.alunos?.length === 1) {
+                    this.termoAtual.alunoIdFoco = this.termoAtual.alunos[0].alunoId || this.termoAtual.alunos[0]._id;
+                }
+                
+                const container = document.getElementById('detalhesTermo');
+                if (container) {
+                    container.innerHTML = `
+                        <div style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                                <i class="fas fa-file-alt" style="font-size: 24px;"></i>
+                                <h3 style="margin: 0; font-size: 18px;">${this.escapeHtml(this.termoAtual.atividade)}</h3>
                             </div>
-                        ` : ''}
-                        
-                        <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 10px; font-size: 13px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                            <div><strong>Aluno:</strong> ${this.escapeHtml(this.termoAtual.alunoNome)}</div>
-                            <div><strong>Turma:</strong> ${this.termoAtual.alunoTurma || 'N/A'}</div>
-                            <div><strong>Curso:</strong> ${this.termoAtual.alunoCurso || 'N/A'}</div>
-                            <div><strong>Professor:</strong> ${this.escapeHtml(this.termoAtual.professorNome)}</div>
-                            <div><strong>Data:</strong> ${new Date(this.termoAtual.dataVisita).toLocaleDateString('pt-BR')}</div>
-                            <div><strong>Horário:</strong> ${this.termoAtual.horario}</div>
-                            <div style="grid-column: span 2;"><strong>Local:</strong> ${this.escapeHtml(this.termoAtual.local)}</div>
-                            ${this.termoAtual.localizacao?.enderecoCompleto ? `
-                                <div style="grid-column: span 2; font-size: 12px; opacity: 0.9;">
-                                    <i class="fas fa-map-pin"></i> ${this.escapeHtml(this.termoAtual.localizacao.enderecoCompleto)}
+                            
+                            ${this.termoAtual.descricaoAtividade ? `
+                                <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 10px; margin-bottom: 12px; font-size: 13px; text-align: left;">
+                                    <strong style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                                        <i class="fas fa-align-left"></i> Descrição da Atividade:
+                                    </strong>
+                                    <p style="margin: 0; opacity: 0.95; white-space: pre-wrap; line-height: 1.5;">${this.escapeHtml(this.termoAtual.descricaoAtividade)}</p>
                                 </div>
                             ` : ''}
+                            
+                            <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 10px; font-size: 13px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                <div><strong>Aluno:</strong> ${this.escapeHtml(this.termoAtual.alunoNome)}</div>
+                                <div><strong>Turma:</strong> ${this.termoAtual.alunoTurma || 'N/A'}</div>
+                                <div><strong>Curso:</strong> ${this.termoAtual.alunoCurso || 'N/A'}</div>
+                                <div><strong>Professor:</strong> ${this.escapeHtml(this.termoAtual.professorNome)}</div>
+                                <div><strong>Data:</strong> ${new Date(this.termoAtual.dataVisita).toLocaleDateString('pt-BR')}</div>
+                                <div><strong>Horário:</strong> ${this.termoAtual.horario}</div>
+                                <div style="grid-column: span 2;"><strong>Local:</strong> ${this.escapeHtml(this.termoAtual.local)}</div>
+                                ${this.termoAtual.localizacao?.enderecoCompleto ? `
+                                    <div style="grid-column: span 2; font-size: 12px; opacity: 0.9;">
+                                        <i class="fas fa-map-pin"></i> ${this.escapeHtml(this.termoAtual.localizacao.enderecoCompleto)}
+                                    </div>
+                                ` : ''}
+                            </div>
                         </div>
-                    </div>
-                `;
+                    `;
+                }
+                
+                document.getElementById('etapaLGPD').style.display = 'block';
+                document.getElementById('etapaTOTP').style.display = 'none';
+                document.getElementById('etapaDados').style.display = 'none';
+                document.getElementById('lgpdCheckbox').checked = false;
+                document.getElementById('btnProsseguirLGPD').disabled = true;
+                document.getElementById('totpCodigo').value = '';
+                
+                document.getElementById('passoBusca').style.display = 'none';
+                document.getElementById('secaoTermos').style.display = 'none';
+                document.getElementById('secaoDetalhes').style.display = 'block';
+                
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                this.showToast('Erro ao abrir termo', 'error');
             }
-            
-            document.getElementById('etapaLGPD').style.display = 'block';
-            document.getElementById('etapaTOTP').style.display = 'none';
-            document.getElementById('etapaDados').style.display = 'none';
-            document.getElementById('lgpdCheckbox').checked = false;
-            document.getElementById('btnProsseguirLGPD').disabled = true;
-            document.getElementById('totpCodigo').value = '';
-            
-            document.getElementById('passoBusca').style.display = 'none';
-            document.getElementById('secaoTermos').style.display = 'none';
-            document.getElementById('secaoDetalhes').style.display = 'block';
-            
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-            
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            this.showToast('Erro ao abrir termo', 'error');
-        }
+        });
     }
 
     // ============================================
@@ -649,63 +795,67 @@ class VisitasPublico {
     }
 
     // ============================================
-    // ETAPA 2: TOTP (POR RESPONSÁVEL)
+    // ETAPA 2: TOTP
     // ============================================
     async gerarQRCodeTOTP() {
-        try {
-            document.getElementById('totpLoading').style.display = 'flex';
-            document.getElementById('totpQRCodeBox').style.display = 'none';
-            
-            const secretBox = document.getElementById('totpSecretBox');
-            if (secretBox) secretBox.style.display = 'none';
-            
-            const alunoIdTOTP = this.obterAlunoIdAlvo();
-            
-            const response = await fetch(`${this.apiBase}/gerar-qrcode-totp`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    termoId: this.termoAtual.id,
-                    alunoId: alunoIdTOTP ? String(alunoIdTOTP) : null
-                })
-            });
-            
-            const data = await response.json();
-            
-            if (!data.success) {
-                throw new Error(data.error || 'Erro ao gerar QR Code');
+        return this._comLock('gerarQRCode', async () => {
+            try {
+                document.getElementById('totpLoading').style.display = 'flex';
+                document.getElementById('totpQRCodeBox').style.display = 'none';
+                
+                const secretBox = document.getElementById('totpSecretBox');
+                if (secretBox) secretBox.style.display = 'none';
+                
+                const alunoIdTOTP = this.obterAlunoIdAlvo();
+                
+                const response = await fetch(`${this.apiBase}/gerar-qrcode-totp`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        termoId: this.termoAtual.id,
+                        alunoId: alunoIdTOTP ? String(alunoIdTOTP) : null
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Erro ao gerar QR Code');
+                }
+                
+                if (data.jaVerificado) {
+                    this.showToast('Este aluno já foi autenticado por você', 'info');
+                    this.irParaEtapaDados();
+                    return;
+                }
+                
+                document.getElementById('totpLoading').style.display = 'none';
+                document.getElementById('totpQRCodeBox').style.display = 'block';
+                document.getElementById('totpQRCodeImg').src = data.qrCode;
+                
+                this.totpSecret = data.secret;
+                this.mostrarSecretTOTP(data.secret);
+                
+                console.log('✅ QR Code TOTP pronto para o aluno', data.alunoId);
+                
+                setTimeout(() => {
+                    document.getElementById('totpCodigo')?.focus();
+                }, 300);
+                
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                document.getElementById('totpLoading').innerHTML = `
+                    <i class="fas fa-exclamation-triangle" style="color: #ef4444; font-size: 42px;"></i>
+                    <span style="color: #ef4444;">Erro ao gerar QR Code</span>
+                    <button class="btn-filter btn-tentar-novamente" style="margin-top: 10px;">
+                        <i class="fas fa-sync-alt"></i> Tentar novamente
+                    </button>
+                `;
+                document.querySelector('.btn-tentar-novamente')?.addEventListener('click', () => {
+                    this.gerarQRCodeTOTP();
+                });
             }
-            
-            // ⚠️ Só pula se for o MESMO responsável que já autenticou
-            if (data.jaVerificado) {
-                this.showToast('Este aluno já foi autenticado por você', 'info');
-                this.irParaEtapaDados();
-                return;
-            }
-            
-            document.getElementById('totpLoading').style.display = 'none';
-            document.getElementById('totpQRCodeBox').style.display = 'block';
-            document.getElementById('totpQRCodeImg').src = data.qrCode;
-            
-            this.totpSecret = data.secret;
-            this.mostrarSecretTOTP(data.secret);
-            
-            console.log('✅ QR Code TOTP pronto para o aluno', data.alunoId);
-            
-            setTimeout(() => {
-                document.getElementById('totpCodigo')?.focus();
-            }, 300);
-            
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            document.getElementById('totpLoading').innerHTML = `
-                <i class="fas fa-exclamation-triangle" style="color: #ef4444; font-size: 42px;"></i>
-                <span style="color: #ef4444;">Erro ao gerar QR Code</span>
-                <button class="btn-filter" onclick="visitasPublico.gerarQRCodeTOTP()" style="margin-top: 10px;">
-                    <i class="fas fa-sync-alt"></i> Tentar novamente
-                </button>
-            `;
-        }
+        });
     }
 
     mostrarSecretTOTP(secret) {
@@ -771,53 +921,60 @@ class VisitasPublico {
     }
 
     async verificarTOTP(event) {
-        const codigo = document.getElementById('totpCodigo')?.value;
-        
-        if (!codigo || codigo.length !== 6) {
-            return this.showToast('Digite o código de 6 dígitos do Google Authenticator', 'error');
-        }
-        
-        const btn = event?.target?.closest('button');
-        
-        try {
-            if (btn) {
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando...';
+        return this._comLock('verificarTOTP', async () => {
+            const codigo = document.getElementById('totpCodigo')?.value;
+            
+            if (!codigo || codigo.length !== 6) {
+                this.showToast('Digite o código de 6 dígitos do Google Authenticator', 'error');
+                return;
             }
             
-            const alunoIdTOTP = this.obterAlunoIdAlvo();
+            const btn = event?.target?.closest('button') 
+                || document.querySelector('#etapaTOTP .btn-submit');
             
-            const response = await fetch(`${this.apiBase}/verificar-totp`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    termoId: this.termoAtual.id,
-                    codigo,
-                    alunoId: alunoIdTOTP ? String(alunoIdTOTP) : null
-                })
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                this.showToast('✅ Autenticado com sucesso!', 'success');
-                this.irParaEtapaDados();
-            } else {
-                throw new Error(data.error || 'Código inválido');
+            try {
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando...';
+                }
+                
+                const alunoIdTOTP = this.obterAlunoIdAlvo();
+                
+                const response = await fetch(`${this.apiBase}/verificar-totp`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        termoId: this.termoAtual.id,
+                        codigo,
+                        alunoId: alunoIdTOTP ? String(alunoIdTOTP) : null
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.showToast('✅ Autenticado com sucesso!', 'success');
+                    this.irParaEtapaDados();
+                } else {
+                    throw new Error(data.error || 'Código inválido');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                this.showToast('❌ ' + error.message, 'error');
+                
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-check-circle"></i> Verificar Código';
+                }
+                
+                const input = document.getElementById('totpCodigo');
+                if (input) {
+                    input.value = '';
+                    input.focus();
+                }
             }
-            
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            this.showToast('❌ ' + error.message, 'error');
-            
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-check-circle"></i> Verificar Código';
-            }
-            
-            document.getElementById('totpCodigo').value = '';
-            document.getElementById('totpCodigo').focus();
-        }
+        });
     }
 
     // ============================================
@@ -965,97 +1122,113 @@ class VisitasPublico {
     }
 
     // ============================================
-    // AUTORIZAR
+    // AUTORIZAR (com lock)
     // ============================================
     async autorizar() {
-        const nome = document.getElementById('respNome')?.value?.trim();
-        const rg = document.getElementById('respRG')?.value?.trim();
-        const cpf = document.getElementById('respCPF')?.value?.trim();
-        const telefone = document.getElementById('respTelefone')?.value?.trim();
-        const email = document.getElementById('respEmail')?.value?.trim();
-        
-        if (!nome || nome.length < 5) return this.showToast('Informe seu nome completo', 'error');
-        if (!rg || rg.length < 5) return this.showToast('Informe o RG', 'error');
-        if (!cpf || cpf.replace(/\D/g, '').length !== 11) return this.showToast('CPF inválido', 'error');
-        if (!telefone || telefone.replace(/\D/g, '').length < 10) return this.showToast('Telefone inválido', 'error');
-        
-        if (!this.assinatura.temAssinatura) {
-            return this.showToast('Assine o documento antes de continuar', 'error');
-        }
-        
-        const alunoId = this.obterAlunoIdAlvo();
-        
-        if (!alunoId) {
-            return this.showToast('Erro: aluno não identificado no termo', 'error');
-        }
-        
-        const assinaturaBase64 = this.assinatura.canvas.toDataURL('image/png');
-        
-        try {
-            this.showToast('📝 Salvando autorização...', 'info');
+        return this._comLock('autorizar', async () => {
+            const nome = document.getElementById('respNome')?.value?.trim();
+            const rg = document.getElementById('respRG')?.value?.trim();
+            const cpf = document.getElementById('respCPF')?.value?.trim();
+            const telefone = document.getElementById('respTelefone')?.value?.trim();
+            const email = document.getElementById('respEmail')?.value?.trim();
             
-            const response = await fetch(`${this.apiBase}/autorizar/${this.termoAtual.id}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    nome,
-                    rg,
-                    cpf: cpf.replace(/\D/g, ''),
-                    telefone: telefone.replace(/\D/g, ''),
-                    email: email || '',
-                    lgpdAceito: true,
-                    assinaturaBase64,
-                    localizacao: this.localizacao,
-                    alunoId: alunoId.toString()
-                })
-            });
+            if (!nome || nome.length < 5) return this.showToast('Informe seu nome completo', 'error');
+            if (!rg || rg.length < 5) return this.showToast('Informe o RG', 'error');
+            if (!cpf || cpf.replace(/\D/g, '').length !== 11) return this.showToast('CPF inválido', 'error');
+            if (!telefone || telefone.replace(/\D/g, '').length < 10) return this.showToast('Telefone inválido', 'error');
             
-            const data = await response.json();
-            
-            if (data.success) {
-                this.responsavel = { nome, rg, cpf, telefone, email };
-                this.mostrarSucesso(data.termo);
-            } else {
-                throw new Error(data.error || 'Erro ao autorizar');
+            if (!this.assinatura.temAssinatura) {
+                return this.showToast('Assine o documento antes de continuar', 'error');
             }
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            this.showToast('❌ ' + error.message, 'error');
-        }
+            
+            const alunoId = this.obterAlunoIdAlvo();
+            
+            if (!alunoId) {
+                return this.showToast('Erro: aluno não identificado no termo', 'error');
+            }
+            
+            const assinaturaBase64 = this.assinatura.canvas.toDataURL('image/png');
+            
+            const btn = document.querySelector('.btn-autorizar-grande');
+            const btnOriginalHTML = btn?.innerHTML;
+            
+            try {
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+                }
+                
+                this.showToast('📝 Salvando autorização...', 'info');
+                
+                const response = await fetch(`${this.apiBase}/autorizar/${this.termoAtual.id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        nome,
+                        rg,
+                        cpf: cpf.replace(/\D/g, ''),
+                        telefone: telefone.replace(/\D/g, ''),
+                        email: email || '',
+                        lgpdAceito: true,
+                        assinaturaBase64,
+                        localizacao: this.localizacao,
+                        alunoId: alunoId.toString()
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.responsavel = { nome, rg, cpf, telefone, email };
+                    this.mostrarSucesso(data.termo);
+                } else {
+                    throw new Error(data.error || 'Erro ao autorizar');
+                }
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                this.showToast('❌ ' + error.message, 'error');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = btnOriginalHTML;
+                }
+            }
+        });
     }
 
     async recusar() {
-        const motivo = prompt('Por favor, informe o motivo da recusa (opcional):');
-        
-        if (motivo === null) return;
-        
-        const confirmar = confirm('Tem certeza que deseja RECUSAR a participação?');
-        if (!confirmar) return;
-        
-        const alunoId = this.obterAlunoIdAlvo();
-        
-        try {
-            const response = await fetch(`${this.apiBase}/recusar/${this.termoAtual.id}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    motivo: motivo || 'Não informado',
-                    nome: 'Responsável',
-                    alunoId: alunoId ? alunoId.toString() : undefined
-                })
-            });
+        return this._comLock('recusar', async () => {
+            const motivo = prompt('Por favor, informe o motivo da recusa (opcional):');
             
-            const data = await response.json();
+            if (motivo === null) return;
             
-            if (data.success) {
-                this.showToast('Recusa registrada. O professor será notificado.', 'info');
-            } else {
-                throw new Error(data.error);
+            const confirmar = confirm('Tem certeza que deseja RECUSAR a participação?');
+            if (!confirmar) return;
+            
+            const alunoId = this.obterAlunoIdAlvo();
+            
+            try {
+                const response = await fetch(`${this.apiBase}/recusar/${this.termoAtual.id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        motivo: motivo || 'Não informado',
+                        nome: 'Responsável',
+                        alunoId: alunoId ? alunoId.toString() : undefined
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.showToast('Recusa registrada. O professor será notificado.', 'info');
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                this.showToast('❌ ' + error.message, 'error');
             }
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            this.showToast('❌ ' + error.message, 'error');
-        }
+        });
     }
 
     // ============================================
@@ -1095,12 +1268,13 @@ class VisitasPublico {
                 </div>
                 
                 <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 20px;">
-                    <button class="btn-autorizar-grande" 
-                            onclick="visitasPublico.imprimirTermoOficial('${termo.id}', '${alunoId}')" 
+                    <button class="btn-autorizar-grande btn-imprimir-sucesso" 
+                            data-termo-id="${termo.id}" 
+                            data-aluno-id="${alunoId}"
                             style="max-width: 320px; padding: 15px 30px;">
                         <i class="fas fa-file-pdf"></i> Imprimir Termo Assinado
                     </button>
-                    <button class="btn-filter" onclick="location.reload()" 
+                    <button class="btn-filter btn-nova-consulta" 
                             style="padding: 15px 30px;">
                         <i class="fas fa-home"></i> Nova Consulta
                     </button>
@@ -1112,59 +1286,69 @@ class VisitasPublico {
                 </p>
             </div>
         `;
+
+        document.querySelector('.btn-imprimir-sucesso')?.addEventListener('click', (e) => {
+            const btn = e.currentTarget;
+            this.imprimirTermoOficial(btn.dataset.termoId, btn.dataset.alunoId);
+        });
+        document.querySelector('.btn-nova-consulta')?.addEventListener('click', () => {
+            location.reload();
+        });
         
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     // ============================================
-    // 📄 IMPRIMIR TERMO OFICIAL
+    // 📄 IMPRIMIR TERMO OFICIAL (com lock)
     // ============================================
     async imprimirTermoOficial(termoId, alunoId = null) {
-        try {
-            this.showToast('📄 Gerando termo oficial...', 'info');
-            
-            if (!alunoId) {
-                alunoId = this.obterAlunoIdAlvo();
+        return this._comLock('imprimirTermo', async () => {
+            try {
+                this.showToast('📄 Gerando termo oficial...', 'info');
+                
+                if (!alunoId) {
+                    alunoId = this.obterAlunoIdAlvo();
+                }
+                
+                if (alunoId && typeof alunoId === 'object') {
+                    alunoId = alunoId._id || alunoId.id || alunoId.toString();
+                }
+                
+                let url = `${this.apiBase}/termo-oficial/${termoId}`;
+                if (alunoId) {
+                    url += `?alunoId=${encodeURIComponent(alunoId)}`;
+                }
+                
+                console.log(`🖨️ [FRONTEND] Imprimindo termo ${termoId} | Aluno: ${alunoId || 'TODOS'}`);
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Erro ao gerar termo');
+                }
+                
+                const win = window.open('', '_blank');
+                win.document.write(data.html);
+                win.document.close();
+                
+                win.onload = () => {
+                    setTimeout(() => {
+                        win.print();
+                    }, 800);
+                };
+                
+                if (data.modoIndividual) {
+                    this.showToast(`📄 Termo de ${data.termo.alunoImpresso} gerado!`, 'success');
+                } else {
+                    this.showToast(`📄 ${data.termo.totalPaginas} termo(s) gerado(s)`, 'info');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                this.showToast('❌ ' + error.message, 'error');
             }
-            
-            if (alunoId && typeof alunoId === 'object') {
-                alunoId = alunoId._id || alunoId.id || alunoId.toString();
-            }
-            
-            let url = `${this.apiBase}/termo-oficial/${termoId}`;
-            if (alunoId) {
-                url += `?alunoId=${encodeURIComponent(alunoId)}`;
-            }
-            
-            console.log(`🖨️ [FRONTEND] Imprimindo termo ${termoId} | Aluno: ${alunoId || 'TODOS'}`);
-            
-            const response = await fetch(url);
-            const data = await response.json();
-            
-            if (!data.success) {
-                throw new Error(data.error || 'Erro ao gerar termo');
-            }
-            
-            const win = window.open('', '_blank');
-            win.document.write(data.html);
-            win.document.close();
-            
-            win.onload = () => {
-                setTimeout(() => {
-                    win.print();
-                }, 800);
-            };
-            
-            if (data.modoIndividual) {
-                this.showToast(`📄 Termo de ${data.termo.alunoImpresso} gerado!`, 'success');
-            } else {
-                this.showToast(`📄 ${data.termo.totalPaginas} termo(s) gerado(s)`, 'info');
-            }
-            
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            this.showToast('❌ ' + error.message, 'error');
-        }
+        });
     }
 
     // ============================================

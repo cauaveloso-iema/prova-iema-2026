@@ -89,6 +89,7 @@ class SetorPedagogico {
         this.temPermissaoGestaoProfessores = false;
         this.temPermissaoAEE = false;
         this.temPermissaoProtocoloProvas = false;
+        this._visitasInicializado = false;
 
         this.estadoSegundaChamada = {
             currentAluno: null,
@@ -203,6 +204,9 @@ class SetorPedagogico {
         await this.carregarFotoPerfil();
         await this.carregarNotificacoes();
         await this.verificarPermissoesEspeciais();
+        if (this.temPermissaoVisitas) {
+            this._preaquecerModuloVisitas();
+        }
 
         this.loadBoasVindas();
         this.setupNavigation();
@@ -1575,7 +1579,7 @@ class SetorPedagogico {
     }
 
     // ============================================================================
-    // 🔥 CARREGAR MÓDULO DE AUTORIZAÇÃO DE VISITAS
+    // 🔥 CARREGAR MÓDULO DE AUTORIZAÇÃO DE VISITAS (OTIMIZADO)
     // ============================================================================
     loadVisitas() {
         const content = document.getElementById('content');
@@ -1594,6 +1598,24 @@ class SetorPedagogico {
 
         console.log('📋 Carregando módulo de Autorização de Visitas...');
 
+        // 🚀 Cache: se já inicializou antes, apenas re-renderiza (instantâneo)
+        if (this._visitasInicializado && window.visitasAdmin) {
+            console.log('⚡ Módulo de visitas já carregado — reutilizando');
+
+            content.innerHTML = `<div id="aba-visitas-content"></div>`;
+
+            // Re-renderiza com os dados em cache (sem refetch)
+            try {
+                window.visitasAdmin.renderizar();
+            } catch (e) {
+                // Fallback: re-init completo
+                this._visitasInicializado = false;
+                this.loadVisitas();
+            }
+            return;
+        }
+
+        // 🚀 Renderização imediata com skeleton (sem setTimeout)
         content.innerHTML = `
             <div id="aba-visitas-content">
                 <div style="text-align: center; padding: 60px;">
@@ -1604,31 +1626,65 @@ class SetorPedagogico {
             </div>
         `;
 
-        setTimeout(async () => {
-            try {
-                if (typeof window.visitasAdmin !== 'undefined' && window.visitasAdmin) {
-                    await window.visitasAdmin.init();
-                    console.log('✅ Módulo de visitas inicializado');
-                } else {
-                    console.warn('⚠️ visitasAdmin não encontrado');
-                    content.innerHTML = `
-                        <div class="alert alert-danger m-4">
-                            <i class="fas fa-exclamation-triangle"></i>
-                            <strong>Erro:</strong> Módulo de visitas não carregado.
-                            <br><small>Recarregue a página (F5) e tente novamente.</small>
-                        </div>
-                    `;
-                }
-            } catch (error) {
-                console.error('❌ Erro ao inicializar módulo de visitas:', error);
-                content.innerHTML = `
-                    <div class="alert alert-danger m-4">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <strong>Erro ao carregar módulo:</strong> ${error.message}
-                    </div>
-                `;
+        // 🚀 Executa imediatamente (sem setTimeout) — não bloqueia a UI
+        this._inicializarModuloVisitas(content);
+    }
+
+    // 🔧 Método interno isolado (permite reuso + retry)
+    async _inicializarModuloVisitas(content) {
+        try {
+            // ⏳ Aguarda o script carregar (caso ainda não tenha sido carregado)
+            await this._aguardarModuloVisitas();
+
+            if (typeof window.visitasAdmin !== 'undefined' && window.visitasAdmin) {
+                await window.visitasAdmin.init();
+                this._visitasInicializado = true;
+                console.log('✅ Módulo de visitas inicializado');
+            } else {
+                throw new Error('Módulo de visitas não encontrado. Recarregue a página (F5).');
             }
-        }, 150);
+        } catch (error) {
+            console.error('❌ Erro ao inicializar módulo de visitas:', error);
+            content.innerHTML = `
+                <div class="alert alert-danger m-4">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Erro ao carregar módulo:</strong> ${error.message}
+                    <br><br>
+                    <button class="btn btn-primary btn-sm" onclick="setorPedagogico.loadVisitas()">
+                        <i class="fas fa-sync-alt"></i> Tentar novamente
+                    </button>
+                </div>
+            `;
+        }
+    }
+
+    // 🔧 Aguarda o módulo estar disponível (poll inteligente, sem travar)
+    async _aguardarModuloVisitas(timeoutMs = 8000) {
+        const inicio = Date.now();
+        const intervalo = 50;
+
+        while (Date.now() - inicio < timeoutMs) {
+            if (typeof window.visitasAdmin !== 'undefined' && window.visitasAdmin) {
+                return true;
+            }
+            await new Promise(r => setTimeout(r, intervalo));
+        }
+
+        throw new Error('Tempo esgotado aguardando o módulo de visitas');
+    }
+
+    // 🔥 Preaquece o módulo (baixa + inicializa sem mostrar)
+    async _preaquecerModuloVisitas() {
+        try {
+            console.log('🔥 Prequecendo módulo de visitas...');
+            await this._aguardarModuloVisitas(5000);
+            if (window.visitasAdmin && typeof window.visitasAdmin.preaquecer === 'function') {
+                await window.visitasAdmin.preaquecer();
+                console.log('✅ Módulo de visitas preaquecido');
+            }
+        } catch (e) {
+            console.warn('⚠️ Prequecimento do módulo de visitas falhou:', e.message);
+        }
     }
 
     // ============================================================================

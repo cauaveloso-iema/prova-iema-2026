@@ -281,7 +281,7 @@
                     <input type="text" id="totpCodigo" class="form-input totp-codigo-input" 
                            placeholder="000000" maxlength="6" autocomplete="off"
                            oninput="this.value = this.value.replace(/\D/g, '')">
-                    <button class="btn-submit" onclick="visitasPublico.verificarTOTP()">
+                    <button class="btn-submit" onclick="visitasPublico.verificarTOTP(event)">
                         <i class="fas fa-check-circle"></i> Verificar Código
                     </button>
                 </div>

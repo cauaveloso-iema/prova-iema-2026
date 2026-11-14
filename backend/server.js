@@ -2,10 +2,22 @@
 // SERVIDOR EDUCAPLENO 2026
 // ============================================================================
 // Descrição: Backend principal do EducaPleno (rotas NÃO migradas)
-// Versão:    1.3 (LGPD: CPF removido de /auth/me e /perfil/me)
+// Versão:    1.4 (PERFORMANCE: cache, throttle, autoIndex off, limites)
 //
 // ⚠️ Todas as rotas migradas estão em routes/*.js
 //    Este arquivo contém APENAS as rotas remanescentes.
+//
+// ✅ CORREÇÕES DE PERFORMANCE APLICADAS:
+//    #1  Throttle no rastrearAtividade (60s por usuário)
+//    #2  Cache do manutencaoMiddleware (TTL 30s)
+//    #3  Cache do modoDebug (TTL 5min)
+//    #4  Limite body reduzido para 2MB
+//    #5  Limite multer (files/fields/parts)
+//    #6  bufferTimeoutMS: 10000 (fail-fast)
+//    #7  Filtro de horário no NotificacaoBotaoService
+//    #9  Cache do template corrigir-prova.html
+//    #10 autoIndex: false em produção
+//    #11 HSTS ativo em produção
 //
 // Autor: Equipe de Desenvolvimento
 // ============================================================================
@@ -127,16 +139,22 @@ const QRCode = require('qrcode');
 
 app.set('trust proxy', 1);
 
-// Body parsers (limites altos)
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// ✅ CORREÇÃO #4: Limite body reduzido de 50MB para 2MB
+// (rotas que precisam de mais declaram parser próprio dentro do router)
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
-// Helmet (iframes permitidos do mesmo domínio)
+// ✅ CORREÇÃO #11: HSTS ativo em produção
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
   crossOriginResourcePolicy: false,
-  frameguard: false
+  frameguard: false,
+  hsts: IS_PRODUCTION ? {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  } : false
 }));
 
 // Forçar X-Frame-Options correto
@@ -246,9 +264,16 @@ const uploadStorage = multer.diskStorage({
   }
 });
 
+// ✅ CORREÇÃO #5: Limites extras (files/fields/parts) para evitar DoS
 const uploadMiddleware = multer({
   storage: uploadStorage,
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+    files: 5,
+    fields: 20,
+    parts: 25,
+    headerPairs: 2000
+  },
   fileFilter: (req, file, cb) => {
     const allowedTypes = /jpeg|jpg|png|gif|pdf|doc|docx|txt/;
     const ext = path.extname(file.originalname).toLowerCase();
@@ -453,7 +478,7 @@ const authenticateToken = (req, res, next) => {
     }
 
     try {
-      const user = await User.findById(decoded.id).select('tokenVersion');
+      const user = await User.findById(decoded.id).select('tokenVersion').lean();
 
       if (!user) {
         return res.status(401).json({
@@ -679,7 +704,8 @@ logger.info('✅ Middlewares e funções auxiliares configurados');
 // ============================================================================
 // CONEXÃO COM MONGODB
 // ============================================================================
-mongoose.set('bufferTimeoutMS', 60000);
+// ✅ CORREÇÃO #6: fail-fast em caso de banco desconectado
+mongoose.set('bufferTimeoutMS', 10000);
 
 const connectToDatabase = async () => {
   const ENV = process.env.NODE_ENV || 'development';
@@ -724,7 +750,9 @@ const connectToDatabase = async () => {
     retryReads: true,
     w: 'majority',
     heartbeatFrequencyMS: 10000,
-    family: 4
+    family: 4,
+    // ✅ CORREÇÃO #10: não cria índices automaticamente em produção
+    autoIndex: !isProd
   };
 
   const tentarConectar = async (uri, tentativa = 1, maxTentativas = 3) => {
@@ -986,8 +1014,8 @@ app.get('/api/database-info', async (req, res) => {
 app.get('/api/sistema/status', async (req, res) => {
   try {
     const [configManutencao, configMensagem] = await Promise.all([
-      Config.findOne({ chave: 'sistema.modoManutencao' }),
-      Config.findOne({ chave: 'sistema.manutencaoMensagem' })
+      Config.findOne({ chave: 'sistema.modoManutencao' }).lean(),
+      Config.findOne({ chave: 'sistema.manutencaoMensagem' }).lean()
     ]);
 
     res.json({
@@ -1187,8 +1215,13 @@ try {
 logger.info('✅ Todos os routers migrados foram registrados');
 
 // ============================================================================
-// MIDDLEWARE DE RASTREAMENTO DE ATIVIDADE
+// ✅ CORREÇÃO #1: RASTREAMENTO DE ATIVIDADE COM THROTTLE
 // ============================================================================
+// Antes: fazia findByIdAndUpdate em TODA requisição /api
+// Agora: só atualiza se passou >60s desde a última atualização do mesmo usuário
+const _ultimaAtividade = new Map(); // userId → timestamp
+const ATIVIDADE_THROTTLE_MS = 60 * 1000; // 60s
+
 const rastrearAtividade = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -1198,9 +1231,15 @@ const rastrearAtividade = (req, res, next) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
       if (!decoded.temp && decoded.id) {
-        User.findByIdAndUpdate(decoded.id, {
-          lastActive: new Date()
-        }).catch(() => {});
+        const agora = Date.now();
+        const ultima = _ultimaAtividade.get(decoded.id) || 0;
+
+        if (agora - ultima > ATIVIDADE_THROTTLE_MS) {
+          _ultimaAtividade.set(decoded.id, agora);
+          User.findByIdAndUpdate(decoded.id, {
+            lastActive: new Date()
+          }).catch(() => {});
+        }
       }
     } catch (err) { /* ignora */ }
   }
@@ -1210,9 +1249,46 @@ const rastrearAtividade = (req, res, next) => {
 
 app.use('/api', rastrearAtividade);
 
+// Limpa o cache de atividade a cada 10 min (não cresce infinitamente)
+setInterval(() => {
+  const limite = Date.now() - ATIVIDADE_THROTTLE_MS * 2;
+  for (const [k, v] of _ultimaAtividade) {
+    if (v < limite) _ultimaAtividade.delete(k);
+  }
+}, 10 * 60 * 1000);
+
 // ============================================================================
-// MIDDLEWARE DE MODO MANUTENÇÃO
+// ✅ CORREÇÃO #2: MIDDLEWARE DE MODO MANUTENÇÃO COM CACHE (TTL 30s)
 // ============================================================================
+// Antes: fazia 2 findOne em TODA requisição /api
+// Agora: cache de 30s em memória
+const _cacheManutencao = {
+  modoManutencao: false,
+  mensagem: 'Sistema em manutenção. Volte mais tarde.',
+  timestamp: 0
+};
+const TTL_MANUTENCAO_MS = 30 * 1000;
+
+async function _getConfigManutencao() {
+  const agora = Date.now();
+  if (agora - _cacheManutencao.timestamp < TTL_MANUTENCAO_MS) {
+    return _cacheManutencao;
+  }
+  try {
+    const [cfgModo, cfgMsg] = await Promise.all([
+      Config.findOne({ chave: 'sistema.modoManutencao' }).lean(),
+      Config.findOne({ chave: 'sistema.manutencaoMensagem' }).lean()
+    ]);
+    _cacheManutencao.modoManutencao = cfgModo ? cfgModo.valor : false;
+    _cacheManutencao.mensagem = cfgMsg ? cfgMsg.valor : 'Sistema em manutenção. Volte mais tarde.';
+    _cacheManutencao.timestamp = agora;
+    return _cacheManutencao;
+  } catch (error) {
+    logger.warn('⚠️ Erro ao buscar config manutenção:', error.message);
+    return _cacheManutencao;
+  }
+}
+
 const manutencaoMiddleware = async (req, res, next) => {
   const rotasPublicas = [
     '/api/auth/login',
@@ -1241,10 +1317,9 @@ const manutencaoMiddleware = async (req, res, next) => {
   }
 
   try {
-    const configManutencao = await Config.findOne({ chave: 'sistema.modoManutencao' });
-    const modoManutencao = configManutencao ? configManutencao.valor : false;
+    const cfg = await _getConfigManutencao();
 
-    if (!modoManutencao) return next();
+    if (!cfg.modoManutencao) return next();
 
     const token = req.headers.authorization?.split(' ')[1];
     if (token) {
@@ -1274,7 +1349,7 @@ const manutencaoMiddleware = async (req, res, next) => {
 
     if (req.session?.userId) {
       try {
-        const user = await User.findById(req.session.userId).select('role nome');
+        const user = await User.findById(req.session.userId).select('role nome').lean();
         if (user && (user.role === 'admin' || user.role === 'super_admin')) {
           req.userId = user._id;
           req.userRole = user.role;
@@ -1284,13 +1359,10 @@ const manutencaoMiddleware = async (req, res, next) => {
       } catch (err) { /* ignora */ }
     }
 
-    const configMensagem = await Config.findOne({ chave: 'sistema.manutencaoMensagem' });
-    const mensagem = configMensagem ? configMensagem.valor : 'Sistema em manutenção. Volte mais tarde.';
-
     if (req.path.startsWith('/api/')) {
       return res.status(503).json({
         success: false,
-        error: mensagem,
+        error: cfg.mensagem,
         modoManutencao: true
       });
     }
@@ -1305,14 +1377,30 @@ const manutencaoMiddleware = async (req, res, next) => {
 app.use(manutencaoMiddleware);
 
 // ============================================================================
-// MIDDLEWARE DE MODO DEBUG
+// ✅ CORREÇÃO #3: MIDDLEWARE DE MODO DEBUG COM CACHE (TTL 5 min)
 // ============================================================================
+// Antes: findOne('sistema.modoDebug') em TODA requisição /api
+// Agora: cache de 5min em memória
+let _cacheModoDebug = { valor: false, timestamp: 0 };
+const TTL_DEBUG_MS = 5 * 60 * 1000;
+
 app.use(async (req, res, next) => {
   try {
-    const configDebug = await Config.findOne({ chave: 'sistema.modoDebug' });
-    const modoDebug = configDebug ? configDebug.valor : false;
+    const agora = Date.now();
 
-    if (!modoDebug) return next();
+    if (agora - _cacheModoDebug.timestamp > TTL_DEBUG_MS) {
+      try {
+        const cfg = await Config.findOne({ chave: 'sistema.modoDebug' }).lean();
+        _cacheModoDebug = {
+          valor: cfg ? cfg.valor : false,
+          timestamp: agora
+        };
+      } catch (err) {
+        logger.warn('⚠️ Erro ao buscar modoDebug:', err.message);
+      }
+    }
+
+    if (!_cacheModoDebug.valor) return next();
 
     if (req.path.startsWith('/api/')) {
       const start = Date.now();
@@ -1363,7 +1451,7 @@ logger.info('✅ Middlewares especiais configurados');
 // ---------- /api/config/envio-provas ----------
 app.get('/api/config/envio-provas', authenticateToken, async (req, res) => {
   try {
-    const config = await Config.findOne({ chave: 'provas.habilitarEnvioProva' });
+    const config = await Config.findOne({ chave: 'provas.habilitarEnvioProva' }).lean();
     const habilitarEnvio = config ? config.valor : true;
 
     res.json({
@@ -1386,7 +1474,8 @@ app.get('/api/config/envio-provas', authenticateToken, async (req, res) => {
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
     const user = await User.findById(req.userId)
-      .select('+precisaAcessibilidade +condicaoAcessibilidade +outraCondicao +dataSolicitacaoAcessibilidade +acessibilidadeAprovadaPor +telefone +twoFactorEnabled');
+      .select('+precisaAcessibilidade +condicaoAcessibilidade +outraCondicao +dataSolicitacaoAcessibilidade +acessibilidadeAprovadaPor +telefone +twoFactorEnabled')
+      .lean();
 
     if (!user) {
       return res.status(404).json({
@@ -1442,7 +1531,7 @@ app.get('/api/auth/me/dados-sensiveis', authenticateToken, async (req, res) => {
       });
     }
 
-    const user = await User.findById(req.userId).select('cpf');
+    const user = await User.findById(req.userId).select('cpf').lean();
 
     if (!user) {
       return res.status(404).json({
@@ -1560,10 +1649,10 @@ app.post('/api/auth/trocar-senha', authenticateToken, async (req, res) => {
     }
 
     const [configSenhaTamanho, configSenhaMaiuscula, configSenhaNumero, configSenhaEspecial] = await Promise.all([
-      Config.findOne({ chave: 'seguranca.senha.tamanhoMinimo' }),
-      Config.findOne({ chave: 'seguranca.senha.exigirMaiuscula' }),
-      Config.findOne({ chave: 'seguranca.senha.exigirNumero' }),
-      Config.findOne({ chave: 'seguranca.senha.exigirEspecial' })
+      Config.findOne({ chave: 'seguranca.senha.tamanhoMinimo' }).lean(),
+      Config.findOne({ chave: 'seguranca.senha.exigirMaiuscula' }).lean(),
+      Config.findOne({ chave: 'seguranca.senha.exigirNumero' }).lean(),
+      Config.findOne({ chave: 'seguranca.senha.exigirEspecial' }).lean()
     ]);
 
     const tamanhoMinimo = configSenhaTamanho?.valor || 6;
@@ -1627,7 +1716,8 @@ app.post('/api/auth/trocar-senha', authenticateToken, async (req, res) => {
 app.get('/api/perfil/me', authenticateToken, async (req, res) => {
   try {
     const user = await User.findById(req.userId)
-      .select('-password -twoFactorSecret -twoFactorBackupCodes -twoFactorTempSecret -twoFactorSecretSms');
+      .select('-password -twoFactorSecret -twoFactorBackupCodes -twoFactorTempSecret -twoFactorSecretSms')
+      .lean();
 
     if (!user) {
       return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
@@ -1750,7 +1840,7 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
         if (!mongoose.Types.ObjectId.isValid(dadosAtualizar.cursoId)) {
           return res.status(400).json({ success: false, error: 'cursoId inválido' });
         }
-        const curso = await CursoModel.findById(dadosAtualizar.cursoId).select('nome');
+        const curso = await CursoModel.findById(dadosAtualizar.cursoId).select('nome').lean();
         if (!curso) {
           return res.status(400).json({ success: false, error: 'Curso não encontrado' });
         }
@@ -1767,7 +1857,8 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
         if (mongoose.Types.ObjectId.isValid(dadosAtualizar.turmaId)) {
           const turma = await TurmaModel.findById(dadosAtualizar.turmaId)
             .select('nome codigo')
-            .setOptions({ skipAutopopulate: true });
+            .setOptions({ skipAutopopulate: true })
+            .lean();
 
           if (turma) {
             turmaNome = turma.nome || turma.codigo;
@@ -1777,8 +1868,8 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
 
         if (!turmaNome) {
           const cursosParaBuscar = dadosAtualizar.cursoId
-            ? await CursoModel.find({ _id: dadosAtualizar.cursoId }).select('turmas')
-            : await CursoModel.find({}).select('turmas');
+            ? await CursoModel.find({ _id: dadosAtualizar.cursoId }).select('turmas').lean()
+            : await CursoModel.find({}).select('turmas').lean();
 
           for (const curso of cursosParaBuscar) {
             for (const t of (curso.turmas || [])) {
@@ -1818,7 +1909,7 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
         return res.status(400).json({ success: false, error: 'eixoId inválido' });
       }
       const EixoModel = require('./models/Eixo');
-      const eixo = await EixoModel.findById(dadosAtualizar.eixoId).select('nome codigo');
+      const eixo = await EixoModel.findById(dadosAtualizar.eixoId).select('nome codigo').lean();
       if (!eixo) {
         return res.status(400).json({ success: false, error: 'Eixo não encontrado' });
       }
@@ -1998,7 +2089,7 @@ app.get('/api/perfil/publico/:id', authenticateToken, async (req, res) => {
 
     const user = await User.findById(id).select(
       'nome email fotoPerfil bio role eixo curso turma dataCadastro'
-    );
+    ).lean();
 
     if (!user) {
       return res.status(404).json({
@@ -2356,7 +2447,8 @@ app.get('/api/identificar-usuario/:id', async (req, res) => {
     const { id } = req.params;
 
     const user = await User.findById(id)
-      .select('nome email role matricula curso turma eixo departamento');
+      .select('nome email role matricula curso turma eixo departamento')
+      .lean();
 
     if (!user) {
       return res.status(404).json({
@@ -2470,6 +2562,13 @@ app.get('/realizar-prova.html', async (req, res) => {
   }
 });
 
+// ============================================================================
+// ✅ CORREÇÃO #9: CACHE DO TEMPLATE corrigir-prova.html
+// ============================================================================
+// Antes: fs.readFileSync() em CADA requisição (bloqueia o event loop)
+// Agora: lê 1x e mantém em memória
+let _corrigirProvaTemplateCache = null;
+
 app.get('/corrigir-prova', async (req, res) => {
   try {
     const token = req.query.token || req.headers.authorization?.split(' ')[1];
@@ -2487,7 +2586,7 @@ app.get('/corrigir-prova', async (req, res) => {
       return res.redirect(`/login.html?redirect=${returnUrl}`);
     }
 
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.id).lean();
     if (!user || !user.ativo) {
       return res.redirect('/login.html');
     }
@@ -2544,7 +2643,7 @@ app.get('/corrigir-prova', async (req, res) => {
       `);
     }
 
-    const prova = await Prova.findById(provaId);
+    const prova = await Prova.findById(provaId).lean();
 
     if (!prova) {
       return res.status(404).send(`
@@ -2596,19 +2695,22 @@ app.get('/corrigir-prova', async (req, res) => {
 
     const frontendPath = path.join(__dirname, '../frontend/corrigir-prova.html');
 
-    if (!fs.existsSync(frontendPath)) {
-      logger.error('❌ Arquivo corrigir-prova.html não encontrado:', frontendPath);
-      return res.status(404).send('Página não encontrada');
+    // ✅ CORREÇÃO #9: lê o arquivo 1x e cacheia
+    if (!_corrigirProvaTemplateCache) {
+      if (!fs.existsSync(frontendPath)) {
+        logger.error('❌ Arquivo corrigir-prova.html não encontrado:', frontendPath);
+        return res.status(404).send('Página não encontrada');
+      }
+      _corrigirProvaTemplateCache = fs.readFileSync(frontendPath, 'utf8');
+      logger.info('📄 Template corrigir-prova.html cacheado em memória');
     }
 
-    let html = fs.readFileSync(frontendPath, 'utf8');
-
-    html = html.replace('</head>', `
+    let html = _corrigirProvaTemplateCache.replace('</head>', `
       <script>
         window.PROVA_ID = '${provaId}';
         window.USUARIO_ID = '${user._id}';
         window.USUARIO_ROLE = '${user.role}';
-        window.USUARIO_NOME = '${user.nome || ''}';
+        window.USUARIO_NOME = '${(user.nome || '').replace(/'/g, "\\'")}';
         window.AUTH_TOKEN = '${token}';
       </script>
     </head>`);
@@ -2665,7 +2767,8 @@ function limparTodosTimers() {
 }
 
 // ============================================================================
-// SERVIÇO: NOTIFICAÇÃO BASEADA NO TEMPO DO BOTÃO
+// ✅ CORREÇÃO #7: SERVIÇO DE NOTIFICAÇÃO DO BOTÃO
+// com filtro de horário (só busca provas que começam nos próximos 15 min)
 // ============================================================================
 const NotificacaoBotaoService = {
   notificacoesEnviadas: new Set(),
@@ -2687,11 +2790,24 @@ const NotificacaoBotaoService = {
       const mes = String(agora.getMonth() + 1).padStart(2, '0');
       const dia = String(agora.getDate()).padStart(2, '0');
 
+      // ✅ CORREÇÃO #7: filtro de horário (só provas nos próximos 15 min)
+      const agoraStr = agora.toTimeString().substring(0, 5);
+      const em15min = new Date(agora.getTime() + 15 * 60 * 1000)
+        .toTimeString().substring(0, 5);
+
       const provas = await Prova.find({
         publicada: true,
         status: 'ativa',
-        dataLimite: { $gte: agora }
-      }).populate('turmaId', 'alunos nome').lean();
+        dataLimite: { $gte: agora },
+        horarioInicio: { $gte: agoraStr, $lte: em15min }
+      })
+        .populate('turmaId', 'alunos nome')
+        .lean();
+
+      if (provas.length === 0) {
+        this.limparCache();
+        return;
+      }
 
       for (const prova of provas) {
         if (!prova.horarioInicio) continue;
@@ -2707,12 +2823,13 @@ const NotificacaoBotaoService = {
           logger.info(`   🔔 BOTÃO: "Disponível em ${diffMinutos}min" detectado!`);
 
           const turma = await Turma.findById(prova.turmaId)
-            .populate('alunos', 'nome onesignalPlayerId');
+            .populate('alunos', 'nome onesignalPlayerId')
+            .lean();
           const alunos = turma?.alunos || [];
 
           if (alunos.length === 0) continue;
 
-          const configDoc = await Config.findOne({ chave: 'notificacoes' });
+          const configDoc = await Config.findOne({ chave: 'notificacoes' }).lean();
           const pushAtivado = configDoc?.valor?.push === true;
           const OneSignalService = require('./services/onesignal-service');
           const oneSignal = pushAtivado ? new OneSignalService() : null;
@@ -2842,7 +2959,7 @@ app.get('/', async (req, res) => {
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-      const user = await User.findById(decoded.id).select('role ativo');
+      const user = await User.findById(decoded.id).select('role ativo').lean();
 
       if (!user || !user.ativo) {
         return res.redirect('/login.html');
@@ -2919,6 +3036,14 @@ databaseConnectionPromise.then(() => {
     logger.info(`   • Cron jobs: ✅`);
     logger.info('=================================');
     logger.info(`👥 Modelos carregados: User, Prova, Resultado, ProvaRealizada, Turma`);
+    logger.info('⚡ ===== OTIMIZAÇÕES ATIVAS =====');
+    logger.info(`   • Throttle atividade: ${ATIVIDADE_THROTTLE_MS / 1000}s`);
+    logger.info(`   • Cache manutenção: ${TTL_MANUTENCAO_MS / 1000}s`);
+    logger.info(`   • Cache modoDebug: ${TTL_DEBUG_MS / 60000}min`);
+    logger.info(`   • Body limit: 2MB`);
+    logger.info(`   • autoIndex: ${IS_PRODUCTION ? 'OFF (prod)' : 'ON (dev)'}`);
+    logger.info(`   • HSTS: ${IS_PRODUCTION ? 'ON' : 'OFF'}`);
+    logger.info('=================================');
     logger.info('='.repeat(50));
   });
 });
