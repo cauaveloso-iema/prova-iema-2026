@@ -4,6 +4,7 @@
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0ea5e9">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Supervisão - EducaPleno">
 
@@ -931,9 +932,9 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="js/supervisao.js"></script>
-    <script src="js/acompanhamento-compartilhado.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js" defer></script>
+    <script src="js/supervisao.js" defer></script>
+    <script src="js/acompanhamento-compartilhado.js" defer></script>
 
     <script>
         (function() {
@@ -970,29 +971,6 @@
                     .catch(err => console.log('❌ Erro:', err));
             });
         }
-    </script>
-        <script>
-        // 1. Remove o atraso dos scripts (deixa a página abrir na hora)
-        ['bootstrap.bundle.min.js', 'supervisao.js', 'acompanhamento-compartilhado.js'].forEach(nome => {
-            document.querySelectorAll('script').forEach(tag => {
-                if (tag.src && tag.src.includes(nome) && !tag.hasAttribute('defer')) {
-                    tag.setAttribute('defer', 'true');
-                }
-            });
-        });
-
-        // 2. Evita que o push-client trave a tela pedindo permissão
-        if ('Notification' in window && Notification.permission !== 'granted') {
-            window.pushClient = function() {}; 
-        }
-
-        // 3. Corrige o erro do botão do sino no console sem mexer no HTML
-        window.addEventListener('DOMContentLoaded', () => {
-            const btnSino = document.getElementById('notificacoesBtn');
-            if (btnSino && btnSino.getAttribute('onclick') === 'abrirNotificacoes()') {
-                btnSino.setAttribute('onclick', 'abrirNotificacoes(event)');
-            }
-        });
     </script>
 </body>
 </html>

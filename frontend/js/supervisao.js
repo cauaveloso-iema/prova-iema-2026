@@ -341,7 +341,7 @@ function gerarBaixarCSV(opts) {
 
 function notificar(mensagem, tipo = 'success', duracao = 3500) {
     if (typeof window.mostrarToastConcluido === 'function') {
-        window.mostrarToastConcluido(mensagem, tipo);
+        window.mostrarToastConcluido(mensagem, tipo, duracao);
         return;
     }
     console.log(`[${tipo}] ${mensagem}`);
@@ -351,7 +351,10 @@ window.notificar = notificar;
 // ============================================
 // TOAST
 // ============================================
-function mostrarToastConcluido(mensagem, tipo = 'info') {
+// ============================================
+// TOAST
+// ============================================
+function mostrarToastConcluido(mensagem, tipo = 'info', duracao = 3500) {
     const msg = String(mensagem || '');
     let tipoFinal = tipo;
     if (msg.trim().startsWith('✅')) tipoFinal = 'success';
