@@ -1976,9 +1976,20 @@ class AdminSimples {
             this.filtrarUsuariosServidor();
         }, 400);
     }
-
+    
     filtrarUsuariosServidor() {
-        this.carregarUsuarios(1); // sempre volta à página 1 ao filtrar
+        // 🔥 Lê TODOS os campos de uma vez
+        this.filtros = {
+            role:   document.getElementById('filtroRole')?.value || 'todos',
+            status: document.getElementById('filtroStatus')?.value || 'todos',
+            turma:  document.getElementById('filtroTurma')?.value || 'todas',
+            search: document.getElementById('buscaUsuario')?.value || ''
+        };
+
+        console.log('🔍 Filtros aplicados:', JSON.stringify(this.filtros));
+
+        // 🔥 Sempre recarrega da página 1 com os filtros atualizados
+        this.carregarUsuarios(1);
     }
 
     paginaAnteriorServidor() {
