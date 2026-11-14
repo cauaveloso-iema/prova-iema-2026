@@ -5292,13 +5292,13 @@ class AdminPanel {
     }
 
     // ============================================================================
-    // ✅ LOAD USUÁRIOS (OTIMIZADO: paginação no servidor, turmas via endpoint, stats cacheadas)
+    // ✅ LOAD USUÁRIOS (paginado no servidor + união de turmas + cache de stats)
     // ============================================================================
     async loadUsuarios() {
         const contentArea = document.getElementById('contentArea');
         if (!contentArea) return;
 
-        // Só mostra spinner na primeira carga (evita piscar em cada filtro)
+        // Spinner só na primeira carga (evita piscar em cada filtro)
         if (!this.usuarios || this.usuarios.length === 0) {
             contentArea.innerHTML = `
                 <div style="text-align: center; padding: 60px; background: white; border-radius: 12px;">
@@ -5311,17 +5311,25 @@ class AdminPanel {
 
         try {
             const token = localStorage.getItem('auth_token');
-            const { role, search, status, turma, page, limit } = this.filtros.usuarios;
+            const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+            const isAdminNormal = userData.role === 'admin';
 
-            // ============ 1) PÁGINA DE USUÁRIOS (10 por vez) ============
+            // ============ GARANTIR this.filtros ============
+            if (!this.filtros) this.filtros = {};
+            if (!this.filtros.usuarios) {
+                this.filtros.usuarios = { role: 'todos', search: '', status: 'todos', turma: 'todas', page: 1, limit: 10 };
+            }
+            const filtros = this.filtros.usuarios;
+            const { role, search, status, turma, page, limit } = filtros;
+
+            // ============ 1) PÁGINA DE USUÁRIOS ============
             let url = `${this.apiBase}/usuarios?page=${page}&limit=${limit}`;
-            if (search && search.trim() !== '') url += `&search=${encodeURIComponent(search.trim())}`;
-            if (role && role !== 'todos') url += `&role=${role}`;
-            if (status && status !== 'todos') url += `&status=${status}`;
+            if (search && search.trim() !== '')   url += `&search=${encodeURIComponent(search.trim())}`;
+            if (role && role !== 'todos')         url += `&role=${role}`;
+            if (status && status !== 'todos')     url += `&status=${status}`;
             if (turma && turma !== 'todas' && turma !== '') url += `&turma=${encodeURIComponent(turma)}`;
 
-            // ============ 2) TURMAS (só 1x → cache) ============
-            // ============ 3) DASHBOARD (só 1x → cache) ============
+            // ============ 2) TURMAS + 3) DASHBOARD (só 1x → cache) ============
             const precisaTurmas = !this._turmasCache;
             const precisaStats = !this._statsCache;
 
@@ -5345,18 +5353,40 @@ class AdminPanel {
             const data = await responseUsuarios.json();
             if (!data.success) throw new Error(data.error || 'Erro ao carregar usuários');
 
-            // ============ TURMAS (cache) ============
+            // ============ TURMAS: unir banco + alunos (garante TODAS) ============
+            let turmasDoBanco = this._turmasCache || [];
             if (responseTurmas) {
                 const turmasData = await responseTurmas.json().catch(() => ({ success: false }));
-                this._turmasCache = (turmasData.success ? (turmasData.turmas || []) : [])
+                turmasDoBanco = (turmasData.success ? (turmasData.turmas || []) : [])
                     .map(t => t.nome)
-                    .filter(Boolean)
-                    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
-                console.log(`✅ [Cache] ${this._turmasCache.length} turmas carregadas`);
+                    .filter(Boolean);
+                console.log(`✅ [Cache] ${turmasDoBanco.length} turmas do banco`);
             }
-            const todasTurmas = this._turmasCache || [];
 
-            // ============ ESTATÍSTICAS (cache, via /dashboard) ============
+            // Buscar também turmas dos alunos (pega as órfãs — só roda 1x)
+            let turmasDosAlunos = this._turmasDosAlunosCache || [];
+            if (!this._turmasDosAlunosCache) {
+                try {
+                    const alunosRes = await fetch(`${this.apiBase}/usuarios?role=aluno&limit=2000`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const alunosData = await alunosRes.json();
+                    turmasDosAlunos = [...new Set((alunosData.usuarios || []).map(a => a.turma).filter(Boolean))];
+                    this._turmasDosAlunosCache = turmasDosAlunos;
+                    console.log(`✅ [Cache] ${turmasDosAlunos.length} turmas encontradas nos alunos`);
+                } catch (e) {
+                    console.warn('⚠️ Não foi possível buscar turmas dos alunos:', e.message);
+                }
+            }
+
+            // Unir as duas fontes (sem duplicar)
+            const todasTurmasSet = new Set([...turmasDoBanco, ...turmasDosAlunos]);
+            this._turmasCache = Array.from(todasTurmasSet).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+            console.log(`✅ [Cache] ${this._turmasCache.length} turmas totais (banco + alunos)`);
+
+            const todasTurmas = this._turmasCache;
+
+            // ============ ESTATÍSTICAS (cache via /dashboard) ============
             if (responseStats) {
                 const statsData = await responseStats.json().catch(() => ({ success: false }));
                 if (statsData.success) {
@@ -5395,14 +5425,25 @@ class AdminPanel {
                 contagemPorRole: {}
             };
 
+            // ============ FILTRAR super_admin (se admin normal) ============
+            let usuarios = data.usuarios || [];
+            if (isAdminNormal) {
+                usuarios = usuarios.filter(u => u.role !== 'super_admin');
+            }
+
             // ============ ARMAZENAR ============
-            this.usuarios = data.usuarios || [];
-            this.todosUsuariosStats = this.usuarios; // compatibilidade (mas agora tem só os 10 da página)
+            this.usuarios = usuarios;
+            this.todosUsuariosStats = usuarios; // compatibilidade
             this.todasTurmasUsuarios = todasTurmas;
 
             // ============ RENDERIZAR ============
             contentArea.innerHTML = this.renderUsuariosProfissional({
-                role, search, page, limit, status, turma,
+                role,
+                search,
+                page: data.pagination?.page || page,
+                limit,
+                status,
+                turma,
                 usuarios: this.usuarios,
                 pagination: data.pagination,
                 total: data.pagination?.total || estatisticas.total,
@@ -5412,10 +5453,10 @@ class AdminPanel {
 
             this.configurarEventosFiltrosUsuarios();
 
-            console.log(`✅ Usuários carregados: ${this.usuarios.length} de ${data.pagination?.total || 0}`);
+            console.log(`✅ Usuários carregados: ${this.usuarios.length} de ${data.pagination?.total || 0} (página ${data.pagination?.page || page})`);
 
         } catch (error) {
-            console.error('❌ Erro:', error);
+            console.error('❌ Erro ao carregar usuários:', error);
             contentArea.innerHTML = this.renderErroUsuarios(error.message);
         }
     }

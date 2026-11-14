@@ -2010,7 +2010,6 @@ class AdminSimples {
         const content = document.getElementById('contentArea');
         if (!content) return;
 
-        // Só mostra spinner na primeira carga
         if (!this.usuarios || this.usuarios.length === 0) {
             content.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p>Carregando usuários...</p></div>';
         }
@@ -2020,13 +2019,11 @@ class AdminSimples {
             const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
             const isAdminNormal = userData.role === 'admin';
 
-            // ============ GARANTIR this.filtros EXISTE ============
             if (!this.filtros) {
                 this.filtros = { role: 'todos', status: 'todos', turma: 'todas', search: '' };
             }
             const filtros = this.filtros;
 
-            // ============ 1) PÁGINA DE USUÁRIOS ============
             const qsUsuarios = new URLSearchParams({
                 page: String(pagina),
                 limit: String(this.itensPorPagina || 10),
@@ -2036,7 +2033,6 @@ class AdminSimples {
                 search: filtros.search || ''
             });
 
-            // ============ 2) TURMAS + 3) DASHBOARD (só 1x → cache) ============
             const precisaTurmas = !this._turmasCache;
             const precisaStats = !this._statsCache;
 
@@ -2060,18 +2056,37 @@ class AdminSimples {
             const data = await response.json();
             if (!data.success) throw new Error(data.error || 'Erro ao carregar usuários');
 
-            // ============ TURMAS (cache) ============
+            // ============ TURMAS: unir banco + alunos (garante TODAS) ============
+            let turmasDoBanco = this._turmasCache || [];
             if (turmasRes) {
                 const turmasData = await turmasRes.json().catch(() => ({ success: false }));
-                this._turmasCache = (turmasData.success ? (turmasData.turmas || []) : [])
+                turmasDoBanco = (turmasData.success ? (turmasData.turmas || []) : [])
                     .map(t => t.nome)
-                    .filter(Boolean)
-                    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
-                console.log(`✅ [Cache] ${this._turmasCache.length} turmas carregadas`);
+                    .filter(Boolean);
+                console.log(`✅ [Cache] ${turmasDoBanco.length} turmas do banco`);
             }
-            const todasTurmas = this._turmasCache || [];
 
-            // ============ ESTATÍSTICAS (cache) ============
+            // Buscar também turmas dos alunos (para pegar as órfãs)
+            let turmasDosAlunos = [];
+            try {
+                const alunosRes = await fetch('/api/admin/usuarios?role=aluno&limit=2000', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const alunosData = await alunosRes.json();
+                turmasDosAlunos = [...new Set((alunosData.usuarios || []).map(a => a.turma).filter(Boolean))];
+                console.log(`✅ [Cache] ${turmasDosAlunos.length} turmas encontradas nos alunos`);
+            } catch (e) {
+                console.warn('⚠️ Não foi possível buscar turmas dos alunos:', e.message);
+            }
+
+            // Unir as duas fontes (sem duplicar)
+            const todasTurmasSet = new Set([...turmasDoBanco, ...turmasDosAlunos]);
+            this._turmasCache = Array.from(todasTurmasSet).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+            console.log(`✅ [Cache] ${this._turmasCache.length} turmas totais (banco + alunos)`);
+
+            const todasTurmas = this._turmasCache;
+
+            // ============ ESTATÍSTICAS ============
             if (statsRes) {
                 const statsData = await statsRes.json().catch(() => ({ success: false }));
                 if (statsData.success) {
@@ -2106,7 +2121,7 @@ class AdminSimples {
             }
             const estatisticas = this._statsCache || { total: 0, contagemPorRole: {} };
 
-            // ============ FILTRAR super_admin (se admin normal) ============
+            // ============ FILTRAR super_admin ============
             let usuarios = data.usuarios || [];
             if (isAdminNormal) {
                 usuarios = usuarios.filter(u => u.role !== 'super_admin');
@@ -2128,7 +2143,7 @@ class AdminSimples {
                 filtros
             });
 
-            this.configurarEventosFiltrosUsuarios();
+            // ❌ REMOVIDO: this.configurarEventosFiltrosUsuarios(); (não existe)
 
             console.log(`✅ Usuários carregados: ${this.usuarios.length} de ${this.pagination.total} (página ${this.paginaAtualUsuario})`);
 
