@@ -689,4 +689,12 @@ UserSchema.index({ lastLogin: -1 });
 UserSchema.index({ lgpdConsent: 1 });
 UserSchema.index({ lgpdConsentAt: -1 });
 
+// ============================================
+// 🚀 ÍNDICES COMPOSTOS OTIMIZADOS (módulo Visitas)
+// Adicionados para performance das buscas distinct do módulo Visitas
+// ============================================
+UserSchema.index({ role: 1, ativo: 1, turma: 1 });        // /visitas/turmas (distinct)
+UserSchema.index({ role: 1, ativo: 1, curso: 1 });        // /visitas/cursos (distinct)
+UserSchema.index({ role: 1, ativo: 1, nome: 1 });         // /visitas/professores (sort + filter)
+
 module.exports = mongoose.model('User', UserSchema);

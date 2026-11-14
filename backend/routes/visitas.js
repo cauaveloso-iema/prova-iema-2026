@@ -15,6 +15,35 @@ const NotificacaoVisita = require('../models/NotificacaoVisita');
 const { mascararCPF, mascararRG, mascararTelefone } = require('../utils/crypto-utils');
 
 // ============================================
+// 🚀 CACHE EM MEMÓRIA (5 min) — evita reconsultas pesadas ao Atlas
+// ============================================
+const _cache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 min
+
+function _cacheGet(key) {
+    const entry = _cache.get(key);
+    if (!entry) return null;
+    if (Date.now() - entry.ts > CACHE_TTL) {
+        _cache.delete(key);
+        return null;
+    }
+    return entry.data;
+}
+
+function _cacheSet(key, data) {
+    _cache.set(key, { data, ts: Date.now() });
+    // Limita tamanho para evitar memory leak
+    if (_cache.size > 50) {
+        const primeiro = _cache.keys().next().value;
+        _cache.delete(primeiro);
+    }
+}
+
+function _cacheClear() {
+    _cache.clear();
+}
+
+// ============================================
 // 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
 // ============================================
 function getDataHojeBR() {
@@ -145,7 +174,8 @@ router.get('/health', (req, res) => {
     success: true,
     status: 'online',
     service: 'Autorizacao de Visitas',
-    versao: '3.0-horario-time',
+    versao: '3.1-cache-otimizado',
+    cacheSize: _cache.size,
     _debug: {
       hojeBR: getDataHojeBR(),
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -154,32 +184,44 @@ router.get('/health', (req, res) => {
 });
 
 // ============================================
-// AUXILIARES
+// AUXILIARES (com cache)
 // ============================================
 router.get('/turmas', authenticateToken, verificarPermissaoVisitas, async (req, res) => {
   try {
-    console.log('🔍 Buscando turmas a partir dos alunos...');
-    
-    const turmas = await User.distinct('turma', {
+    // 🔥 Cache de 5min
+    const cached = _cacheGet('visitas:turmas');
+    if (cached) {
+      console.log('⚡ Turmas do cache');
+      return res.json(cached);
+    }
+
+    const t0 = Date.now();
+    console.log('🔍 Buscando turmas...');
+
+    // 🚀 1 única query: distinct em User
+    const turmasDosAlunos = await User.distinct('turma', {
       role: 'aluno',
       ativo: true,
       turma: { $nin: [null, '', 'Não informada'] }
     });
-    
-    let turmasDaCollection = [];
+
+    // 🚀 1 única query: Turma collection
+    let turmasColl = [];
     try {
-      const turmasColl = await Turma.find({ ativa: true }).select('nome').lean();
-      turmasDaCollection = turmasColl.map(t => t.nome).filter(Boolean);
+      turmasColl = await Turma.find({ ativa: true }).select('nome').lean();
     } catch (e) {
       console.warn('⚠️ Erro ao buscar da collection Turma:', e.message);
     }
-    
-    const todasTurmas = [...new Set([...turmas, ...turmasDaCollection])].sort();
-    
-    console.log(`✅ ${todasTurmas.length} turmas encontradas`);
-    
-    res.json({ 
-      success: true, 
+
+    const todasTurmas = [
+      ...new Set([
+        ...turmasDosAlunos,
+        ...turmasColl.map(t => t.nome)
+      ].filter(Boolean))
+    ].sort();
+
+    const response = {
+      success: true,
       turmas: todasTurmas.map(nome => ({
         id: nome,
         nome: nome,
@@ -187,7 +229,12 @@ router.get('/turmas', authenticateToken, verificarPermissaoVisitas, async (req, 
         codigo: ''
       })),
       total: todasTurmas.length
-    });
+    };
+
+    _cacheSet('visitas:turmas', response);
+    console.log(`✅ ${todasTurmas.length} turmas em ${Date.now() - t0}ms`);
+
+    res.json(response);
   } catch (error) {
     console.error('❌ Erro ao buscar turmas:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -196,13 +243,25 @@ router.get('/turmas', authenticateToken, verificarPermissaoVisitas, async (req, 
 
 router.get('/cursos', authenticateToken, verificarPermissaoVisitas, async (req, res) => {
   try {
+    const cached = _cacheGet('visitas:cursos');
+    if (cached) {
+      console.log('⚡ Cursos do cache');
+      return res.json(cached);
+    }
+
     const cursos = await User.distinct('curso', {
       role: 'aluno',
       ativo: true,
       curso: { $nin: [null, '', 'Não informado'] }
     });
-    res.json({ success: true, cursos: cursos.sort() });
+
+    const response = { success: true, cursos: cursos.sort() };
+    _cacheSet('visitas:cursos', response);
+
+    console.log(`✅ ${cursos.length} cursos em cache`);
+    res.json(response);
   } catch (error) {
+    console.error('❌ Erro ao buscar cursos:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -212,12 +271,20 @@ router.get('/alunos-por-turma', authenticateToken, verificarPermissaoVisitas, as
   try {
     const { turma, turmas, curso } = req.query;
     
-    let query = { role: 'aluno', ativo: true };
-    
+    // 🔥 Validação: sem turma e sem curso = erro 400 (evita full scan de 700+ alunos)
     const listaTurmas = (turmas || turma || '')
       .split(',')
       .map(t => t.trim())
       .filter(Boolean);
+    
+    if (listaTurmas.length === 0 && (!curso || curso.trim() === '')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Informe pelo menos o parâmetro "turma" ou "curso" (evita full scan).'
+      });
+    }
+    
+    let query = { role: 'aluno', ativo: true };
     
     if (listaTurmas.length === 1) {
       query.turma = listaTurmas[0];
@@ -259,6 +326,12 @@ router.get('/alunos-por-turma', authenticateToken, verificarPermissaoVisitas, as
 // Buscar professores
 router.get('/professores', authenticateToken, verificarPermissaoVisitas, async (req, res) => {
   try {
+    const cached = _cacheGet('visitas:professores');
+    if (cached) {
+      console.log('⚡ Professores do cache');
+      return res.json(cached);
+    }
+
     const professores = await User.find({ 
       role: 'professor', 
       ativo: true 
@@ -267,9 +340,7 @@ router.get('/professores', authenticateToken, verificarPermissaoVisitas, async (
       .sort({ nome: 1 })
       .lean();
     
-    console.log(`✅ ${professores.length} professores encontrados`);
-    
-    res.json({
+    const response = {
       success: true,
       professores: professores.map(p => ({
         id: p._id,
@@ -278,8 +349,14 @@ router.get('/professores', authenticateToken, verificarPermissaoVisitas, async (
         matricula: p.matricula || '',
         eixo: p.eixo || ''
       }))
-    });
+    };
+
+    _cacheSet('visitas:professores', response);
+    console.log(`✅ ${professores.length} professores em cache`);
+    
+    res.json(response);
   } catch (error) {
+    console.error('❌ Erro ao buscar professores:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -329,10 +406,21 @@ router.get('/buscar-localizacao', authenticateToken, verificarPermissaoVisitas, 
 // CRUD TERMOS
 // ============================================
 
-// Listar todos os termos (🚀 OTIMIZADO COM SELECT)
+// Listar todos os termos (🚀 OTIMIZADO COM $facet + CACHE)
 router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, res) => {
   try {
+    const t0 = Date.now();
     const { status, turma, search, page = 1, limit = 20 } = req.query;
+
+    // 🔥 Cache só quando NÃO há busca textual (search é dinâmico, não cacheia)
+    const cacheKey = search ? null : `visitas:termos:${status || 'todos'}:${turma || 'todas'}:${page}:${limit}`;
+    if (cacheKey) {
+      const cached = _cacheGet(cacheKey);
+      if (cached) {
+        console.log(`⚡ /termos do cache (${cacheKey})`);
+        return res.json(cached);
+      }
+    }
     
     let query = { ativo: true };
     
@@ -368,29 +456,65 @@ router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, 
     }
     
     const skip = (parseInt(page) - 1) * parseInt(limit);
+    const lim = parseInt(limit);
     
     // ============================================
-    // 🚀 OTIMIZAÇÃO: Busca + Contagem + Agregação em paralelo + SELECT
+    // 🚀 OTIMIZAÇÃO CRÍTICA: 1 única pipeline com $facet
+    //    Retorna dados + total + estatísticas em 1 ida ao banco
     // ============================================
-    const [termosRaw, total, aggStats] = await Promise.all([
-      TermoVisita.find(query)
-        .select('-responsaveis.assinaturaBase64 -responsaveis.cpf -responsaveis.rg -responsaveis.telefone -assinaturaGestor.base64')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit))
-        .lean(),
-      
-      TermoVisita.countDocuments(query),
-      
-      // Substitui os 5 countDocuments por uma única agregação rápida
-      TermoVisita.aggregate([
-        { $match: { ativo: true } },
-        { $group: { _id: '$status', count: { $sum: 1 } } }
-      ])
+    const [resultado] = await TermoVisita.aggregate([
+      { $match: query },
+      {
+        $facet: {
+          // 1) Dados paginados (com select via $project)
+          termos: [
+            { $sort: { createdAt: -1 } },
+            { $skip: skip },
+            { $limit: lim },
+            {
+              $project: {
+                codigo: 1,
+                atividade: 1,
+                descricaoAtividade: 1,
+                alunos: 1,
+                turmas: 1,
+                turmaPrincipal: 1,
+                cursoPrincipal: 1,
+                professores: 1,
+                periodo: 1,
+                horario: 1,
+                local: 1,
+                localizacao: 1,
+                dataVisita: 1,
+                cidade: 1,
+                status: 1,
+                statusData: 1,
+                criadoPor: 1,
+                createdAt: 1,
+                updatedAt: 1,
+                // ✅ Só o essencial dos responsáveis (sem base64/CPF/RG/telefone)
+                'responsaveis.alunoId': 1,
+                'responsaveis.alunoNome': 1,
+                'responsaveis.nome': 1,
+                'responsaveis.status': 1,
+                'responsaveis.lgpdAceito': 1,
+                'responsaveis.lgpdAceitoData': 1
+              }
+            }
+          ],
+          // 2) Total (respeitando o filtro)
+          total: [{ $count: 'count' }],
+          // 3) Estatísticas por status (respeitando o filtro)
+          stats: [
+            { $group: { _id: '$status', count: { $sum: 1 } } }
+          ]
+        }
+      }
     ]);
-    
-    // Processa a agregação para montar as estatísticas
-    const statsMap = aggStats.reduce((acc, curr) => {
+
+    const termosRaw = resultado.termos || [];
+    const total = resultado.total[0]?.count || 0;
+    const statsMap = (resultado.stats || []).reduce((acc, curr) => {
       acc[curr._id] = curr.count;
       return acc;
     }, {});
@@ -467,17 +591,22 @@ router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, 
       };
     });
     
-    res.json({
+    const response = {
       success: true,
       termos,
       total,
       paginacao: {
         page: parseInt(page),
-        limit: parseInt(limit),
-        pages: Math.ceil(total / parseInt(limit))
+        limit: lim,
+        pages: Math.ceil(total / lim)
       },
       estatisticas
-    });
+    };
+
+    if (cacheKey) _cacheSet(cacheKey, response);
+
+    console.log(`✅ /termos em ${Date.now() - t0}ms | ${termos.length} termos | total ${total}`);
+    res.json(response);
     
   } catch (error) {
     console.error('❌ Erro ao listar termos:', error);
@@ -601,7 +730,7 @@ router.post('/termos', authenticateToken, verificarPermissaoVisitas, async (req,
       return res.status(400).json({ success: false, error: 'Preencha todos os campos obrigatórios' });
     }
 
-    // 🆕 Normaliza e valida o horário — agora deve ser "HH:MM às HH:MM"
+    // 🆕 Normaliza e valida o horário
     const horarioNormalizado = normalizarHorario(horario);
     if (!horarioNormalizado) {
       return res.status(400).json({
@@ -669,7 +798,7 @@ router.post('/termos', authenticateToken, verificarPermissaoVisitas, async (req,
       })),
       
       periodo,
-      horario: horarioNormalizado,   // 👈 sempre "HH:MM às HH:MM"
+      horario: horarioNormalizado,
       
       local: local.trim(),
       localizacao: localizacao || {},
@@ -684,6 +813,9 @@ router.post('/termos', authenticateToken, verificarPermissaoVisitas, async (req,
     });
     
     await termo.save();
+    
+    // 🔥 Invalida cache de termos (novo termo criado)
+    _invalidateTermosCache();
     
     console.log(`✅ Termo criado: ${codigo} | Turmas: ${turmas.join(', ')} | Horário: ${horarioNormalizado}`);
     
@@ -781,7 +913,6 @@ router.put('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (r
     if (updates.descricaoAtividade !== undefined) termo.descricaoAtividade = (updates.descricaoAtividade || '').trim();
     if (updates.periodo) termo.periodo = updates.periodo;
 
-    // 🆕 Normaliza e valida o horário (se foi enviado)
     if (updates.horario !== undefined) {
       const horarioNormalizado = normalizarHorario(updates.horario);
       if (!horarioNormalizado) {
@@ -800,6 +931,9 @@ router.put('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (r
     
     await termo.save();
     
+    // 🔥 Invalida cache de termos (termo atualizado)
+    _invalidateTermosCache();
+    
     console.log(`✏️ Termo ${termo.codigo} atualizado | Turmas: ${(termo.turmas || []).join(', ')} | Horário: ${termo.horario}`);
     
     res.json({
@@ -817,6 +951,10 @@ router.delete('/termos/:id', authenticateToken, verificarPermissaoVisitas, async
   try {
     const termo = await TermoVisita.findByIdAndDelete(req.params.id);
     if (!termo) return res.status(404).json({ success: false, error: 'Termo não encontrado' });
+    
+    // 🔥 Invalida cache de termos
+    _invalidateTermosCache();
+    
     res.json({ success: true, message: 'Termo excluído!' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -841,6 +979,10 @@ router.post('/termos/:id/assinar-gestor', authenticateToken, verificarPermissaoV
     };
     
     await termo.save();
+    
+    // 🔥 Invalida cache
+    _invalidateTermosCache();
+    
     res.json({ success: true, message: 'Assinatura adicionada!', termo });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -848,12 +990,21 @@ router.post('/termos/:id/assinar-gestor', authenticateToken, verificarPermissaoV
 });
 
 // ============================================
-// CONFIGURAÇÕES
+// CONFIGURAÇÕES (com cache)
 // ============================================
 router.get('/configuracao', authenticateToken, verificarPermissaoVisitas, async (req, res) => {
   try {
+    const cached = _cacheGet('visitas:configuracao');
+    if (cached) {
+      console.log('⚡ Configuração do cache');
+      return res.json(cached);
+    }
+
     const config = await ConfiguracaoVisita.getConfig();
-    res.json({ success: true, configuracao: config });
+    const response = { success: true, configuracao: config };
+    _cacheSet('visitas:configuracao', response);
+
+    res.json(response);
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -872,6 +1023,9 @@ router.put('/configuracao', authenticateToken, verificarPermissaoVisitas, async 
     config.atualizadoPor = req.userId;
     config.updatedAt = new Date();
     await config.save();
+    
+    // 🔥 Invalida cache de configuração
+    _cache.delete('visitas:configuracao');
     
     res.json({ success: true, message: 'Configuração atualizada', configuracao: config });
   } catch (error) {
@@ -926,5 +1080,15 @@ router.get('/estatisticas', authenticateToken, verificarPermissaoVisitas, async 
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+// ============================================
+// 🆕 HELPER — invalida TODO o cache de /termos
+// ============================================
+function _invalidateTermosCache() {
+  const keys = [..._cache.keys()];
+  keys.forEach(k => {
+    if (k.startsWith('visitas:termos:')) _cache.delete(k);
+  });
+}
 
 module.exports = router;

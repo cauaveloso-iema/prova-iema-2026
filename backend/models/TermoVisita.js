@@ -217,6 +217,18 @@ TermoVisitaSchema.index({ turmas: 1 });
 TermoVisitaSchema.index({ ativo: 1, dataVisita: 1 });
 
 // ============================================
+// 🚀 ÍNDICES COMPOSTOS OTIMIZADOS (listagem/paginação/filtros)
+// Adicionados para performance do módulo Visitas
+// ============================================
+TermoVisitaSchema.index({ ativo: 1, createdAt: -1 });              // listagem padrão (query + sort)
+TermoVisitaSchema.index({ ativo: 1, status: 1, createdAt: -1 });    // filtro por status + sort
+TermoVisitaSchema.index({ ativo: 1, turmaPrincipal: 1 });           // filtro por turma principal
+TermoVisitaSchema.index({ ativo: 1, turmas: 1 });                   // filtro por turma (array)
+TermoVisitaSchema.index({ 'alunos.nome': 1 });                      // busca por nome do aluno
+TermoVisitaSchema.index({ 'professores.nome': 1 });                 // busca por nome do professor
+TermoVisitaSchema.index({ atividade: 1 });                          // busca por atividade
+
+// ============================================
 // MÉTODOS ESTÁTICOS
 // ============================================
 TermoVisitaSchema.statics.gerarCodigo = async function() {
