@@ -116,20 +116,17 @@ class AdminSimples {
         this.atualizarDataHora();
         setInterval(() => this.atualizarDataHora(), 1000);
 
-        await this.carregarNotificacoes();
-        setInterval(() => this.carregarNotificacoes(), 30000);
-
-        await this.carregarUsuarios();
-        await this.carregarTurmas();
-        await this.carregarProvas();
-        await this.carregarResultados();
-
+        // Carrega só o dashboard na inicialização (não puxa usuários)
         await this.carregarDashboard();
         await this.carregarFotoPerfilAdmin();
 
+        // Notificações em background (não bloqueia)
+        this.carregarNotificacoes();
+        setInterval(() => this.carregarNotificacoes(), 30000);
+
+        // Recarrega foto se voltou da tela de editar perfil
         window.addEventListener('pageshow', async (event) => {
             if (event.persisted || (document.referrer && document.referrer.includes('editar-perfil'))) {
-                console.log('🔄 Página restaurada, recarregando foto...');
                 setTimeout(() => {
                     if (adminSimples && typeof adminSimples.carregarFotoPerfilAdmin === 'function') {
                         adminSimples.carregarFotoPerfilAdmin();
@@ -2006,12 +2003,24 @@ class AdminSimples {
     // USUÁRIOS
     // ============================================================================
     async carregarUsuarios(pagina = 1) {
-        console.log('📢 CARREGANDO USUÁRIOS (paginado)...');
+        console.log(`📢 CARREGANDO USUÁRIOS (página ${pagina})...`);
         const content = document.getElementById('contentArea');
         if (!content) return;
 
-        if (!this.usuarios || this.usuarios.length === 0) {
-            content.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p>Carregando usuários...</p></div>';
+        // ============ LOADING (sempre, em toda troca) ============
+        const tbodyExistente = document.getElementById('tabelaUsuarios');
+        if (tbodyExistente) {
+            // Já tem tabela na tela → só cobre com overlay
+            this._mostrarLoadingTabelaUsuarios(true);
+        } else {
+            // Primeira carga → loading fullscreen
+            content.innerHTML = `
+                <div style="text-align:center;padding:60px;background:white;border-radius:12px;">
+                    <div style="width:50px;height:50px;border:5px solid #f3f3f3;border-top:5px solid #1e3a8a;border-radius:50%;margin:0 auto 20px;animation:spin 1s linear infinite;"></div>
+                    <p style="color:#6b7280;">Carregando usuários...</p>
+                </div>
+                <style>@keyframes spin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}</style>
+            `;
         }
 
         try {
@@ -2019,9 +2028,7 @@ class AdminSimples {
             const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
             const isAdminNormal = userData.role === 'admin';
 
-            if (!this.filtros) {
-                this.filtros = { role: 'todos', status: 'todos', turma: 'todas', search: '' };
-            }
+            if (!this.filtros) this.filtros = { role: 'todos', status: 'todos', turma: 'todas', search: '' };
             const filtros = this.filtros;
 
             const qsUsuarios = new URLSearchParams({
@@ -2039,51 +2046,40 @@ class AdminSimples {
             const promises = [
                 fetch(`/api/admin/usuarios?${qsUsuarios}`, { headers: { 'Authorization': `Bearer ${token}` } })
             ];
-            if (precisaTurmas) {
-                promises.push(fetch('/api/admin/turmas', { headers: { 'Authorization': `Bearer ${token}` } }));
-            }
-            if (precisaStats) {
-                promises.push(fetch('/api/admin/dashboard', { headers: { 'Authorization': `Bearer ${token}` } }));
-            }
+            if (precisaTurmas) promises.push(fetch('/api/admin/turmas', { headers: { 'Authorization': `Bearer ${token}` } }));
+            if (precisaStats)  promises.push(fetch('/api/admin/dashboard', { headers: { 'Authorization': `Bearer ${token}` } }));
 
             const results = await Promise.all(promises);
             let idx = 0;
             const response = results[idx++];
             const turmasRes = precisaTurmas ? results[idx++] : null;
-            const statsRes = precisaStats ? results[idx++] : null;
+            const statsRes  = precisaStats  ? results[idx++] : null;
 
             if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
             const data = await response.json();
             if (!data.success) throw new Error(data.error || 'Erro ao carregar usuários');
 
-            // ============ TURMAS: unir banco + alunos (garante TODAS) ============
+            // ============ TURMAS (banco + alunos) ============
             let turmasDoBanco = this._turmasCache || [];
             if (turmasRes) {
                 const turmasData = await turmasRes.json().catch(() => ({ success: false }));
-                turmasDoBanco = (turmasData.success ? (turmasData.turmas || []) : [])
-                    .map(t => t.nome)
-                    .filter(Boolean);
-                console.log(`✅ [Cache] ${turmasDoBanco.length} turmas do banco`);
+                turmasDoBanco = (turmasData.success ? (turmasData.turmas || []) : []).map(t => t.nome).filter(Boolean);
             }
 
-            // Buscar também turmas dos alunos (para pegar as órfãs)
-            let turmasDosAlunos = [];
-            try {
-                const alunosRes = await fetch('/api/admin/usuarios?role=aluno&limit=2000', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const alunosData = await alunosRes.json();
-                turmasDosAlunos = [...new Set((alunosData.usuarios || []).map(a => a.turma).filter(Boolean))];
-                console.log(`✅ [Cache] ${turmasDosAlunos.length} turmas encontradas nos alunos`);
-            } catch (e) {
-                console.warn('⚠️ Não foi possível buscar turmas dos alunos:', e.message);
+            let turmasDosAlunos = this._turmasDosAlunosCache || [];
+            if (!this._turmasDosAlunosCache) {
+                try {
+                    const alunosRes = await fetch('/api/admin/usuarios?role=aluno&limit=2000', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const alunosData = await alunosRes.json();
+                    turmasDosAlunos = [...new Set((alunosData.usuarios || []).map(a => a.turma).filter(Boolean))];
+                    this._turmasDosAlunosCache = turmasDosAlunos;
+                } catch (e) { console.warn('⚠️ Turmas dos alunos:', e.message); }
             }
 
-            // Unir as duas fontes (sem duplicar)
             const todasTurmasSet = new Set([...turmasDoBanco, ...turmasDosAlunos]);
             this._turmasCache = Array.from(todasTurmasSet).sort((a, b) => a.localeCompare(b, 'pt-BR'));
-            console.log(`✅ [Cache] ${this._turmasCache.length} turmas totais (banco + alunos)`);
-
             const todasTurmas = this._turmasCache;
 
             // ============ ESTATÍSTICAS ============
@@ -2116,20 +2112,16 @@ class AdminSimples {
                             recepcao: d.totalRecepcao || 0
                         }
                     };
-                    console.log(`✅ [Cache] Estatísticas carregadas`);
                 }
             }
             const estatisticas = this._statsCache || { total: 0, contagemPorRole: {} };
 
             // ============ FILTRAR super_admin ============
             let usuarios = data.usuarios || [];
-            if (isAdminNormal) {
-                usuarios = usuarios.filter(u => u.role !== 'super_admin');
-            }
+            if (isAdminNormal) usuarios = usuarios.filter(u => u.role !== 'super_admin');
 
             // ============ ARMAZENAR ============
             this.usuarios = usuarios;
-            this.usuariosFiltrados = [...usuarios];
             this.pagination = data.pagination || { page: 1, total: 0, pages: 1 };
             this.paginaAtualUsuario = this.pagination.page;
             this.turmas = todasTurmas;
@@ -2143,9 +2135,7 @@ class AdminSimples {
                 filtros
             });
 
-            // ❌ REMOVIDO: this.configurarEventosFiltrosUsuarios(); (não existe)
-
-            console.log(`✅ Usuários carregados: ${this.usuarios.length} de ${this.pagination.total} (página ${this.paginaAtualUsuario})`);
+            console.log(`✅ Usuários carregados: ${this.usuarios.length} de ${this.pagination.total} (página ${this.paginaAtualUsuario}/${this.pagination.pages})`);
 
         } catch (error) {
             console.error('❌ Erro ao carregar usuários:', error);
@@ -2154,7 +2144,7 @@ class AdminSimples {
                     <i class="fas fa-exclamation-triangle" style="font-size:48px;color:#dc3545;margin-bottom:15px;"></i>
                     <h3 style="color:#721c24;">Erro ao carregar usuários</h3>
                     <p style="color:#6c757d;">${error.message}</p>
-                    <button onclick="adminSimples.carregarUsuarios()" class="btn-primary" style="margin-top:15px;">
+                    <button onclick="adminSimples.carregarUsuarios(${pagina})" class="btn-primary" style="margin-top:15px;">
                         <i class="fas fa-sync-alt"></i> Tentar novamente
                     </button>
                 </div>`;
@@ -2162,7 +2152,46 @@ class AdminSimples {
     }
 
     // ============================================================================
-    // ✅ RENDERIZAR TELA DE USUÁRIOS (sem dados inline, tudo via parâmetros)
+    // ✅ Overlay de loading sobre a tabela (para troca de página)
+    // ============================================================================
+    _mostrarLoadingTabelaUsuarios(mostrar) {
+        const tabela = document.getElementById('tabelaUsuarios');
+        if (!tabela) return;
+
+        let overlay = document.getElementById('overlayLoadingUsuarios');
+        if (mostrar) {
+            if (overlay) return;
+            overlay = document.createElement('div');
+            overlay.id = 'overlayLoadingUsuarios';
+            overlay.style.cssText = `
+                position: absolute;
+                top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(255,255,255,0.85);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10;
+                border-radius: 8px;
+            `;
+            overlay.innerHTML = `
+                <div style="text-align: center;">
+                    <div style="width:40px;height:40px;border:4px solid #e5e7eb;border-top:4px solid #1e3a8a;border-radius:50%;margin:0 auto 10px;animation:spin 0.8s linear infinite;"></div>
+                    <p style="margin:0;color:#6b7280;font-size:13px;">Carregando...</p>
+                </div>
+            `;
+
+            const wrapper = tabela.closest('.table-responsive');
+            if (wrapper) {
+                wrapper.style.position = 'relative';
+                wrapper.appendChild(overlay);
+            }
+        } else {
+            if (overlay) overlay.remove();
+        }
+    }
+
+    // ============================================================================
+    // ✅ RENDERIZAR TELA DE USUÁRIOS (com paginação numérica)
     // ============================================================================
     _renderTelaUsuarios({ usuarios, pagination, todasTurmas, estatisticas, filtros }) {
         // ============ OPÇÕES DOS FILTROS ============
@@ -2198,13 +2227,122 @@ class AdminSimples {
             return `<option value="${valor}" ${selected}>${nome}</option>`;
         }).join('');
 
-        // ============ PAGINAÇÃO ============
-        const totalPaginas = pagination?.pages || 1;
+        // ============ PAGINAÇÃO NUMÉRICA ============
         const paginaAtual = pagination?.page || 1;
+        const totalPaginas = pagination?.pages || 1;
         const totalRegistros = pagination?.total || 0;
+
+        // Gera botões de página (mostra no máximo 7)
+        const botoesPagina = [];
+        const maxBotoes = 7;
+        let inicio = Math.max(1, paginaAtual - Math.floor(maxBotoes / 2));
+        let fim = Math.min(totalPaginas, inicio + maxBotoes - 1);
+        if (fim - inicio < maxBotoes - 1) {
+            inicio = Math.max(1, fim - maxBotoes + 1);
+        }
+
+        // Primeira página + "..." se necessário
+        if (inicio > 1) {
+            botoesPagina.push(`
+                <button class="btn-page" onclick="adminSimples.carregarUsuarios(1)" title="Primeira">1</button>
+            `);
+            if (inicio > 2) {
+                botoesPagina.push(`<span style="padding: 0 8px; color: #6b7280;">...</span>`);
+            }
+        }
+
+        // Botões do meio
+        for (let i = inicio; i <= fim; i++) {
+            botoesPagina.push(`
+                <button class="btn-page ${i === paginaAtual ? 'active' : ''}"
+                    onclick="adminSimples.carregarUsuarios(${i})"
+                    ${i === paginaAtual ? 'disabled' : ''}>
+                    ${i}
+                </button>
+            `);
+        }
+
+        // Última página + "..." se necessário
+        if (fim < totalPaginas) {
+            if (fim < totalPaginas - 1) {
+                botoesPagina.push(`<span style="padding: 0 8px; color: #6b7280;">...</span>`);
+            }
+            botoesPagina.push(`
+                <button class="btn-page" onclick="adminSimples.carregarUsuarios(${totalPaginas})" title="Última">${totalPaginas}</button>
+            `);
+        }
 
         // ============ HTML ============
         return `
+            <style>
+                .pagination .btn-page {
+                    min-width: 36px;
+                    height: 36px;
+                    padding: 0 10px;
+                    border: 1px solid #e5e7eb;
+                    background: white;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-size: 13px;
+                    font-weight: 500;
+                    color: #4b5563;
+                    transition: all 0.2s;
+                    margin: 0 2px;
+                }
+                .pagination .btn-page:hover:not(:disabled):not(.active) {
+                    background: #f3f4f6;
+                    border-color: #1e3a8a;
+                    color: #1e3a8a;
+                }
+                .pagination .btn-page.active {
+                    background: #1e3a8a;
+                    border-color: #1e3a8a;
+                    color: white;
+                    cursor: default;
+                }
+                .pagination .btn-page:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                }
+                .pagination .btn-pagination {
+                    padding: 8px 16px;
+                    border: 1px solid #e5e7eb;
+                    background: white;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-size: 13px;
+                    font-weight: 500;
+                    color: #4b5563;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 5px;
+                    transition: all 0.2s;
+                }
+                .pagination .btn-pagination:hover:not(:disabled) {
+                    background: #f3f4f6;
+                    border-color: #1e3a8a;
+                    color: #1e3a8a;
+                }
+                .pagination .btn-pagination:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                }
+                .pagination {
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    gap: 8px;
+                    flex-wrap: wrap;
+                    margin-top: 20px;
+                    padding: 15px;
+                }
+                .pagination #pageInfoUsuario {
+                    color: #6b7280;
+                    font-size: 13px;
+                    margin: 0 10px;
+                }
+            </style>
+
             <div class="section-header">
                 <h2><i class="fas fa-users"></i> Usuários</h2>
                 <button class="btn-primary" onclick="adminSimples.novoUsuario()">
@@ -2248,7 +2386,7 @@ class AdminSimples {
                 </div>
             </div>
 
-            <div class="table-responsive">
+            <div class="table-responsive" style="position: relative; min-height: 300px;">
                 <table>
                     <thead>
                         <tr>
@@ -2262,18 +2400,21 @@ class AdminSimples {
                 </table>
             </div>
 
-            <div class="pagination">
+            <div class="pagination" id="paginacaoUsuarios">
                 <button class="btn-pagination" onclick="adminSimples.paginaAnteriorServidor()"
-                    id="btnAnteriorUsuario" ${paginaAtual <= 1 ? 'disabled' : ''}>
+                    ${paginaAtual <= 1 ? 'disabled' : ''}>
                     <i class="fas fa-chevron-left"></i> Anterior
                 </button>
-                <span id="pageInfoUsuario">
-                    Página ${paginaAtual} de ${totalPaginas} (${totalRegistros} usuários)
-                </span>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                    ${botoesPagina.join('')}
+                </div>
                 <button class="btn-pagination" onclick="adminSimples.proximaPaginaServidor()"
-                    id="btnProximaUsuario" ${paginaAtual >= totalPaginas ? 'disabled' : ''}>
+                    ${paginaAtual >= totalPaginas ? 'disabled' : ''}>
                     Próxima <i class="fas fa-chevron-right"></i>
                 </button>
+                <span id="pageInfoUsuario">
+                    (${totalRegistros} usuários)
+                </span>
             </div>
         `;
     }
