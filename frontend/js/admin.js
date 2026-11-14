@@ -5420,79 +5420,107 @@ class AdminPanel {
         }
     }
 
+    // ============================================================================
+    // ✅ RENDER USUÁRIOS (sem dados inline — tudo via parâmetros)
+    // ============================================================================
     renderUsuariosProfissional({ role, search, page, limit, status, turma, usuarios, pagination, total, todasTurmas, estatisticas }) {
-        const turmasUnicas = todasTurmas && todasTurmas.length > 0 
-            ? todasTurmas 
-            : [...new Set(usuarios.filter(u => u.turma && u.turma !== '').map(u => u.turma))].sort();
-        
-        const contagem = estatisticas.contagemPorRole || {
-            aluno: usuarios.filter(u => u.role === 'aluno').length,
-            professor: usuarios.filter(u => u.role === 'professor').length,
-            admin: usuarios.filter(u => u.role === 'admin' || u.role === 'super_admin').length,
-            setor_pedagogico: usuarios.filter(u => u.role === 'setor_pedagogico').length,
-            coordenacao_patio: usuarios.filter(u => u.role === 'coordenacao_patio').length,
-            cozinha: usuarios.filter(u => u.role === 'cozinha').length,
-            gestao_geral: usuarios.filter(u => u.role === 'gestao_geral').length,
-            enfermaria: usuarios.filter(u => u.role === 'enfermaria').length,
-            supervisao: usuarios.filter(u => u.role === 'supervisao').length,
-            psicologia: usuarios.filter(u => u.role === 'psicologia').length,
-            'assistente-social': usuarios.filter(u => u.role === 'assistente-social').length,
-            protagonismo: usuarios.filter(u => u.role === 'protagonismo').length,
-            biblioteca: usuarios.filter(u => u.role === 'biblioteca').length,
-            secretaria: usuarios.filter(u => u.role === 'secretaria').length,
-            'gestao-adm': usuarios.filter(u => u.role === 'gestao-adm').length,  
-            recepcao: usuarios.filter(u => u.role === 'recepcao').length  
+
+        // ============ TURMAS (do endpoint /api/admin/turmas via cache) ============
+        const turmasUnicas = (todasTurmas && todasTurmas.length > 0)
+            ? todasTurmas
+            : [...new Set((usuarios || []).map(u => u.turma).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+        // ============ CONTAGEM GLOBAL (do /dashboard via cache) ============
+        const contagem = estatisticas?.contagemPorRole || {
+            aluno: 0, professor: 0, admin: 0, super_admin: 0,
+            setor_pedagogico: 0, coordenacao_patio: 0, cozinha: 0,
+            gestao_geral: 0, enfermaria: 0, supervisao: 0, psicologia: 0,
+            'assistente-social': 0, protagonismo: 0, biblioteca: 0,
+            secretaria: 0, 'gestao-adm': 0, recepcao: 0
         };
-        
+
+        // ============ ESTATÍSTICAS GLOBAIS ============
+        const statTotal = estatisticas?.total || 0;
+        const statAtivos = estatisticas?.ativos || 0;
+        const statInativos = estatisticas?.inativos || 0;
+        const statAcessibilidade = estatisticas?.acessibilidade || 0;
+
+        // ============ OPTIONS DE TURMA ============
+        const opcoesTurmasHTML = turmasUnicas.map(t => {
+            const valor = String(t).replace(/"/g, '&quot;');
+            const selected = (turma === t) ? 'selected' : '';
+            return `<option value="${valor}" ${selected}>${t}</option>`;
+        }).join('');
+
+        // ============ OPTIONS DE PERFIL ============
+        const opcoesRole = [
+            { value: 'todos',              label: 'Todos' },
+            { value: 'aluno',              label: '👨‍🎓 Alunos' },
+            { value: 'professor',          label: '👨‍🏫 Professores' },
+            { value: 'setor_pedagogico',   label: '👩‍🏫 Setor Pedagógico' },
+            { value: 'coordenacao_patio',  label: '🏃 Coordenação de Pátio' },
+            { value: 'cozinha',            label: '🍽️ Cozinha' },
+            { value: 'gestao_geral',       label: '📊 Gestão Geral' },
+            { value: 'enfermaria',         label: '🏥 Enfermaria' },
+            { value: 'supervisao',         label: '🛡️ Supervisão' },
+            { value: 'psicologia',         label: '🧠 Psicologia' },
+            { value: 'assistente-social',  label: '🤝 Assistente Social' },
+            { value: 'protagonismo',       label: '⭐ Protagonismo' },
+            { value: 'biblioteca',         label: '📚 Biblioteca' },
+            { value: 'secretaria',         label: '🎓 Secretaria' },
+            { value: 'admin',              label: '👑 Admin' },
+            { value: 'super_admin',        label: '⭐ Super Admin' },
+            { value: 'gestao-adm',         label: '🧑‍💼 Gestão ADM' },
+            { value: 'recepcao',           label: '🛎️ Recepção' }
+        ].map(o => `<option value="${o.value}" ${role === o.value ? 'selected' : ''}>${o.label}</option>`).join('');
+
+        // ============ OPTIONS DE STATUS ============
+        const opcoesStatus = [
+            { value: 'todos',   label: 'Todos' },
+            { value: 'ativo',   label: '✅ Ativos' },
+            { value: 'inativo', label: '⏸️ Inativos' }
+        ].map(o => `<option value="${o.value}" ${status === o.value ? 'selected' : ''}>${o.label}</option>`).join('');
+
+        // ============ HTML ============
         return `
             <div class="usuarios-container">
-                <!-- HEADER PROFISSIONAL -->
+                <!-- HEADER -->
                 <div class="usuarios-header">
                     <div class="header-left">
-                        <div class="header-icon">
-                            <i class="fas fa-users-cog"></i>
-                        </div>
+                        <div class="header-icon"><i class="fas fa-users-cog"></i></div>
                         <div class="header-text">
                             <h1>Gerenciar Usuários</h1>
                             <p>Gerencie todos os usuários do sistema</p>
                         </div>
                     </div>
-                    
+
                     <div class="header-actions">
                         <button class="btn-header btn-refresh" onclick="admin.atualizarUsuarios()" title="Atualizar">
                             <i class="fas fa-sync-alt"></i>
                         </button>
-                        
                         <button class="btn-header" onclick="admin.abrirModalGerenciarTurmas()" title="Gerenciar Turmas" style="background: #f59e0b; color: white;">
-                            <i class="fas fa-school"></i>
-                            <span>Gerenciar Turmas</span>
+                            <i class="fas fa-school"></i><span>Gerenciar Turmas</span>
                         </button>
-                        
                         <button class="btn-header" onclick="admin.abrirModalUploadUsuarios()" title="Upload de Alunos" style="background: #10b981; color: white;">
-                            <i class="fas fa-file-excel"></i>
-                            <span>Upload Alunos</span>
+                            <i class="fas fa-file-excel"></i><span>Upload Alunos</span>
                         </button>
-
                         <button class="btn-header" onclick="admin.abrirModalUploadProfessores()" title="Upload de Professores" style="background: #3b82f6; color: white;">
-                            <i class="fas fa-chalkboard-teacher"></i>
-                            <span>Upload Professores</span>
+                            <i class="fas fa-chalkboard-teacher"></i><span>Upload Professores</span>
                         </button>
-                        
                         <button class="btn-header btn-primary" onclick="admin.abrirModalUsuario()">
-                            <i class="fas fa-plus-circle"></i>
-                            <span>Novo Usuário</span>
+                            <i class="fas fa-plus-circle"></i><span>Novo Usuário</span>
                         </button>
                     </div>
                 </div>
 
-                <!-- CARDS DE ESTATÍSTICAS (AQUI ESTÁ A MUDANÇA PARA perfis-grid) -->
+                <!-- CARDS DE ESTATÍSTICAS -->
                 <div class="perfis-grid">
                     <div class="stat-card primary" onclick="admin.filtrarUsuariosPorRole('todos')">
                         <div class="stat-icon"><i class="fas fa-users"></i></div>
                         <div class="stat-content">
                             <span class="stat-label">Total de Usuários</span>
-                            <span class="stat-value">${estatisticas.total}</span>
-                            <span class="stat-detail">${estatisticas.ativos} ativos • ${estatisticas.inativos} inativos</span>
+                            <span class="stat-value">${statTotal}</span>
+                            <span class="stat-detail">${statAtivos} ativos • ${statInativos} inativos</span>
                         </div>
                     </div>
 
@@ -5501,7 +5529,7 @@ class AdminPanel {
                         <div class="stat-content">
                             <span class="stat-label">Alunos</span>
                             <span class="stat-value">${contagem.aluno || 0}</span>
-                            <span class="stat-detail">${estatisticas.acessibilidade} com acessib.</span>
+                            <span class="stat-detail">${statAcessibilidade} com acessib.</span>
                         </div>
                     </div>
 
@@ -5518,7 +5546,7 @@ class AdminPanel {
                         <div class="stat-icon" style="background: linear-gradient(135deg, #1e3a8a, #1e40af);"><i class="fas fa-user-tie"></i></div>
                         <div class="stat-content">
                             <span class="stat-label">Admins</span>
-                            <span class="stat-value">${contagem.admin || 0}</span>
+                            <span class="stat-value">${(contagem.admin || 0) + (contagem.super_admin || 0)}</span>
                             <span class="stat-detail">Administradores</span>
                         </div>
                     </div>
@@ -5527,7 +5555,7 @@ class AdminPanel {
                         <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
                         <div class="stat-content">
                             <span class="stat-label">Ativos</span>
-                            <span class="stat-value">${estatisticas.ativos}</span>
+                            <span class="stat-value">${statAtivos}</span>
                             <span class="stat-detail">Podem acessar</span>
                         </div>
                     </div>
@@ -5536,7 +5564,7 @@ class AdminPanel {
                         <div class="stat-icon" style="background: rgba(255,255,255,0.2);"><i class="fas fa-layer-group"></i></div>
                         <div class="stat-content">
                             <span class="stat-label" style="color: rgba(255,255,255,0.9);">Todos os Perfis</span>
-                            <span class="stat-value" style="color: white;">14</span>
+                            <span class="stat-value" style="color: white;">${Object.keys(contagem).filter(k => (contagem[k] || 0) > 0).length}</span>
                             <span class="stat-detail" style="color: rgba(255,255,255,0.85);">Clique para ver →</span>
                         </div>
                     </div>
@@ -5546,12 +5574,11 @@ class AdminPanel {
                 <div class="filters-card">
                     <div class="filters-header">
                         <div class="filters-title">
-                            <i class="fas fa-sliders-h"></i>
-                            <h3>Filtros</h3>
+                            <i class="fas fa-sliders-h"></i><h3>Filtros</h3>
                         </div>
                         <span class="filters-badge" id="resultadosBadge">${total} ${total === 1 ? 'usuário' : 'usuários'}</span>
                     </div>
-                    
+
                     <div class="filters-grid">
                         <div class="filter-group">
                             <label><i class="fas fa-search"></i> Buscar</label>
@@ -5561,40 +5588,17 @@ class AdminPanel {
                                 ${search ? `<button class="input-clear" onclick="document.getElementById('searchUsuarios').value=''; admin.aplicarFiltrosUsuarios()"><i class="fas fa-times"></i></button>` : ''}
                             </div>
                         </div>
-                        
+
                         <div class="filter-group">
                             <label><i class="fas fa-user-tag"></i> Perfil</label>
-                            <select id="filterRole" class="filter-select">
-                                <option value="todos" ${role === 'todos' ? 'selected' : ''}>Todos</option>
-                                <option value="aluno" ${role === 'aluno' ? 'selected' : ''}>👨‍🎓 Alunos</option>
-                                <option value="professor" ${role === 'professor' ? 'selected' : ''}>👨‍🏫 Professores</option>
-                                <option value="setor_pedagogico" ${role === 'setor_pedagogico' ? 'selected' : ''}>👩‍🏫 Setor Pedagógico</option>
-                                <option value="coordenacao_patio" ${role === 'coordenacao_patio' ? 'selected' : ''}>🏃 Coordenação de Pátio</option>
-                                <option value="cozinha" ${role === 'cozinha' ? 'selected' : ''}>🍽️ Cozinha</option>
-                                <option value="gestao_geral" ${role === 'gestao_geral' ? 'selected' : ''}>📊 Gestão Geral</option>
-                                <option value="enfermaria" ${role === 'enfermaria' ? 'selected' : ''}>🏥 Enfermaria</option>
-                                <option value="supervisao" ${role === 'supervisao' ? 'selected' : ''}>🛡️ Supervisão</option>
-                                <option value="psicologia" ${role === 'psicologia' ? 'selected' : ''}>🧠 Psicologia</option>
-                                <option value="assistente-social" ${role === 'assistente-social' ? 'selected' : ''}>🤝 Assistente Social</option>
-                                <option value="protagonismo" ${role === 'protagonismo' ? 'selected' : ''}>⭐ Protagonismo</option>
-                                <option value="biblioteca" ${role === 'biblioteca' ? 'selected' : ''}>📚 Biblioteca</option>
-                                <option value="secretaria" ${role === 'secretaria' ? 'selected' : ''}>🎓 Secretaria</option>
-                                <option value="admin" ${role === 'admin' ? 'selected' : ''}>👑 Admin</option>
-                                <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>⭐ Super Admin</option>
-                                <option value="gestao-adm" ${role === 'gestao-adm' ? 'selected' : ''}>🧑‍💼 Gestão ADM</option>
-                                <option value="recepcao" ${role === 'recepcao' ? 'selected' : ''}>🛎️ Recepção</option>
-                            </select>
+                            <select id="filterRole" class="filter-select">${opcoesRole}</select>
                         </div>
-                        
+
                         <div class="filter-group">
                             <label><i class="fas fa-circle"></i> Status</label>
-                            <select id="filterStatus" class="filter-select">
-                                <option value="todos" ${status === 'todos' ? 'selected' : ''}>Todos</option>
-                                <option value="ativo" ${status === 'ativo' ? 'selected' : ''}>✅ Ativos</option>
-                                <option value="inativo" ${status === 'inativo' ? 'selected' : ''}>⏸️ Inativos</option>
-                            </select>
+                            <select id="filterStatus" class="filter-select">${opcoesStatus}</select>
                         </div>
-                        
+
                         <div class="filter-group">
                             <label>
                                 <i class="fas fa-school"></i> Turma
@@ -5602,10 +5606,10 @@ class AdminPanel {
                             </label>
                             <select id="filterTurma" class="filter-select">
                                 <option value="todas" ${turma === 'todas' ? 'selected' : ''}>Todas as turmas (${turmasUnicas.length})</option>
-                                ${turmasUnicas.map(t => `<option value="${t}" ${turma === t ? 'selected' : ''}>${t}</option>`).join('')}
+                                ${opcoesTurmasHTML}
                             </select>
                         </div>
-                        
+
                         <div class="filter-actions">
                             <button class="btn-filter" onclick="admin.aplicarFiltrosUsuarios()">
                                 <i class="fas fa-filter"></i> Filtrar
@@ -5617,18 +5621,17 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- TABELA DE USUÁRIOS -->
+                <!-- TABELA -->
                 <div class="table-professional">
                     <div class="table-header">
                         <div class="table-title">
-                            <i class="fas fa-list"></i>
-                            <h3>Lista de Usuários</h3>
+                            <i class="fas fa-list"></i><h3>Lista de Usuários</h3>
                         </div>
                         <div class="table-info">
-                            <span class="items-counter" id="itemsCounter">${usuarios.length} ${usuarios.length === 1 ? 'registro' : 'registros'}</span>
+                            <span class="items-counter" id="itemsCounter">${(usuarios || []).length} ${(usuarios || []).length === 1 ? 'registro' : 'registros'}</span>
                         </div>
                     </div>
-                    
+
                     <div class="table-responsive">
                         <table class="data-table">
                             <thead>
@@ -5645,7 +5648,7 @@ class AdminPanel {
                                 </tr>
                             </thead>
                             <tbody id="tabelaUsuariosBody">
-                                ${this.gerarLinhasUsuarios(usuarios)}
+                                ${this.gerarLinhasUsuarios(usuarios || [])}
                             </tbody>
                         </table>
                     </div>
@@ -10205,101 +10208,141 @@ class AdminPanel {
 
     // ============ ABRIR MODAL COM TODOS OS PERFIS ============
     abrirModalTodosPerfis() {
-        // 🔥 USAR OS DADOS GLOBAIS (todos os usuários, não só da página)
-        const usuarios = this.todosUsuariosStats && this.todosUsuariosStats.length > 0
-            ? this.todosUsuariosStats
-            : (this.usuarios || []);
-        
-        console.log(`📊 Modal Todos os Perfis: usando ${usuarios.length} usuários`);
-        
-        const contagem = {
-            aluno: usuarios.filter(u => u.role === 'aluno').length,
-            professor: usuarios.filter(u => u.role === 'professor').length,
-            admin: usuarios.filter(u => u.role === 'admin' || u.role === 'super_admin').length,
-            setor_pedagogico: usuarios.filter(u => u.role === 'setor_pedagogico').length,
-            coordenacao_patio: usuarios.filter(u => u.role === 'coordenacao_patio').length,
-            cozinha: usuarios.filter(u => u.role === 'cozinha').length,
-            gestao_geral: usuarios.filter(u => u.role === 'gestao_geral').length,
-            enfermaria: usuarios.filter(u => u.role === 'enfermaria').length,
-            supervisao: usuarios.filter(u => u.role === 'supervisao').length,
-            psicologia: usuarios.filter(u => u.role === 'psicologia').length,
-            'assistente-social': usuarios.filter(u => u.role === 'assistente-social').length,
-            protagonismo: usuarios.filter(u => u.role === 'protagonismo').length,
-            biblioteca: usuarios.filter(u => u.role === 'biblioteca').length,
-            secretaria: usuarios.filter(u => u.role === 'secretaria').length,
-            'gestao-adm': usuarios.filter(u => u.role === 'gestao-adm').length,  
-            recepcao: usuarios.filter(u => u.role === 'recepcao').length  
-        };
-        
+        // ============ CONTAGEM GLOBAL (fonte única de verdade) ============
+        const contagem = this._statsCache?.contagemPorRole || {};
+        const totalGeral = Object.values(contagem).reduce((a, b) => a + b, 0);
+
+        console.log('📊 Contagem global de perfis:', contagem, '| Total:', totalGeral);
+
+        // Se o cache estiver vazio, avisa e recarrega em background
+        if (totalGeral === 0) {
+            console.warn('⚠️ Estatísticas globais vazias. Recarregando /dashboard...');
+            this._statsCache = null;
+
+            fetch(`${this.apiBase}/dashboard`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) return;
+                const d = data.data;
+                this._statsCache = {
+                    contagemPorRole: {
+                        aluno: d.totalAlunos || 0,
+                        professor: d.totalProfessores || 0,
+                        admin: d.totalAdmins || 0,
+                        super_admin: d.totalSuperAdmins || 0,
+                        setor_pedagogico: d.totalSetorPedagogico || 0,
+                        coordenacao_patio: d.totalCoordenacaoPatio || 0,
+                        cozinha: d.totalCozinha || 0,
+                        gestao_geral: d.totalGestaoGeral || 0,
+                        enfermaria: d.totalEnfermaria || 0,
+                        supervisao: d.totalSupervisao || 0,
+                        psicologia: d.totalPsicologia || 0,
+                        'assistente-social': d.totalAssistenteSocial || 0,
+                        protagonismo: d.totalProtagonismo || 0,
+                        biblioteca: d.totalBiblioteca || 0,
+                        secretaria: d.totalSecretaria || 0,
+                        'gestao-adm': d.totalGestaoAdm || 0,
+                        recepcao: d.totalRecepcao || 0
+                    }
+                };
+                // Reabre o modal com dados corretos
+                this.abrirModalTodosPerfis();
+            })
+            .catch(err => console.error('❌ Erro ao recarregar stats:', err));
+
+            this.showToast('🔄 Carregando estatísticas...', 'info');
+            return;
+        }
+
+        // ============ CONFIGURAÇÃO DOS PERFIS (apenas metadados visuais) ============
         const perfis = [
-            { role: 'aluno', label: 'Alunos', icon: '👨‍🎓', cor: '#10b981', bg: '#d1fae5' },
-            { role: 'professor', label: 'Professores', icon: '👨‍🏫', cor: '#f59e0b', bg: '#fef3c7' },
-            { role: 'admin', label: 'Administradores', icon: '👑', cor: '#3b82f6', bg: '#dbeafe' },
-            { role: 'setor_pedagogico', label: 'Setor Pedagógico', icon: '👩‍🏫', cor: '#a855f7', bg: '#f3e8ff' },
-            { role: 'coordenacao_patio', label: 'Coord. Pátio', icon: '🏃', cor: '#f97316', bg: '#ffedd5' },
-            { role: 'cozinha', label: 'Cozinha', icon: '🍽️', cor: '#10b981', bg: '#d1fae5' },
-            { role: 'gestao_geral', label: 'Gestão Geral', icon: '📊', cor: '#1e40af', bg: '#dbeafe' },
-            { role: 'enfermaria', label: 'Enfermaria', icon: '🏥', cor: '#0891b2', bg: '#cffafe' },
-            { role: 'supervisao', label: 'Supervisão', icon: '🛡️', cor: '#1e3a8a', bg: '#dbeafe' },
-            { role: 'psicologia', label: 'Psicologia', icon: '🧠', cor: '#0d9488', bg: '#ccfbf1' },
-            { role: 'assistente-social', label: 'Assist. Social', icon: '🤝', cor: '#7c3aed', bg: '#ede9fe' },
-            { role: 'protagonismo', label: 'Protagonismo', icon: '⭐', cor: '#ea580c', bg: '#ffedd5' },
-            { role: 'biblioteca', label: 'Biblioteca', icon: '📚', cor: '#0284c7', bg: '#e0f2fe' },
-            { role: 'secretaria', label: 'Secretaria', icon: '🎓', cor: '#065f46', bg: '#d1fae5' },
-            { role: 'gestao-adm', label: 'Gestão ADM', icon: '🧑‍💼', cor: '#4f46e5', bg: '#e0e7ff' },
-            { role: 'recepcao', label: 'Recepção', icon: '🛎️', cor: '#0891b2', bg: '#cffafe' }
+            { role: 'aluno',             label: 'Alunos',           icon: '👨‍🎓', cor: '#10b981', bg: '#d1fae5' },
+            { role: 'professor',         label: 'Professores',      icon: '👨‍🏫', cor: '#f59e0b', bg: '#fef3c7' },
+            { role: 'admin',             label: 'Administradores',  icon: '👑', cor: '#3b82f6', bg: '#dbeafe' },
+            { role: 'super_admin',       label: 'Super Admin',      icon: '⭐', cor: '#8b5cf6', bg: '#ede9fe' },
+            { role: 'setor_pedagogico',  label: 'Setor Pedagógico', icon: '👩‍🏫', cor: '#a855f7', bg: '#f3e8ff' },
+            { role: 'coordenacao_patio', label: 'Coord. Pátio',     icon: '🏃', cor: '#f97316', bg: '#ffedd5' },
+            { role: 'cozinha',           label: 'Cozinha',          icon: '🍽️', cor: '#10b981', bg: '#d1fae5' },
+            { role: 'gestao_geral',      label: 'Gestão Geral',     icon: '📊', cor: '#1e40af', bg: '#dbeafe' },
+            { role: 'enfermaria',        label: 'Enfermaria',       icon: '🏥', cor: '#0891b2', bg: '#cffafe' },
+            { role: 'supervisao',        label: 'Supervisão',       icon: '🛡️', cor: '#1e3a8a', bg: '#dbeafe' },
+            { role: 'psicologia',        label: 'Psicologia',       icon: '🧠', cor: '#0d9488', bg: '#ccfbf1' },
+            { role: 'assistente-social', label: 'Assist. Social',   icon: '🤝', cor: '#7c3aed', bg: '#ede9fe' },
+            { role: 'protagonismo',      label: 'Protagonismo',     icon: '⭐', cor: '#ea580c', bg: '#ffedd5' },
+            { role: 'biblioteca',        label: 'Biblioteca',       icon: '📚', cor: '#0284c7', bg: '#e0f2fe' },
+            { role: 'secretaria',        label: 'Secretaria',       icon: '🎓', cor: '#065f46', bg: '#d1fae5' },
+            { role: 'gestao-adm',        label: 'Gestão ADM',       icon: '🧑‍💼', cor: '#4f46e5', bg: '#e0e7ff' },
+            { role: 'recepcao',          label: 'Recepção',         icon: '🛎️', cor: '#0891b2', bg: '#cffafe' }
         ];
-        
-        const modalBody = document.getElementById('modalBody');
-        modalBody.innerHTML = `
-            <div style="padding: 10px;">
-                <p style="color: #6b7280; font-size: 13px; margin-bottom: 20px; text-align: center;">
-                    <i class="fas fa-info-circle"></i> Clique em um perfil para filtrar a tabela
-                </p>
-                
-                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
-                    ${perfis.map(p => `
-                        <div onclick="admin.closeModal(); admin.filtrarUsuariosPorRole('${p.role}');"
-                            style="
-                                display: flex;
-                                align-items: center;
-                                gap: 14px;
-                                padding: 16px;
-                                background: #f9fafb;
-                                border-radius: 12px;
-                                border-left: 4px solid ${p.cor};
-                                cursor: pointer;
-                                transition: all 0.2s;
-                            "
-                            onmouseover="this.style.transform='translateX(4px)'; this.style.background='#f3f4f6'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)';"
-                            onmouseout="this.style.transform='translateX(0)'; this.style.background='#f9fafb'; this.style.boxShadow='none';">
-                            
-                            <div style="
-                                width: 48px;
-                                height: 48px;
-                                background: ${p.bg};
-                                border-radius: 12px;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                font-size: 22px;
-                                flex-shrink: 0;
-                            ">${p.icon}</div>
-                            
-                            <div style="flex: 1; min-width: 0;">
-                                <div style="font-weight: 600; color: #1f2937; font-size: 14px;">${p.label}</div>
-                                <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">
-                                    ${contagem[p.role] || 0} ${contagem[p.role] === 1 ? 'usuário' : 'usuários'}
-                                </div>
-                            </div>
-                            
-                            <i class="fas fa-chevron-right" style="color: #d1d5db; font-size: 12px;"></i>
-                        </div>
-                    `).join('')}
+
+        // ============ HTML DINÂMICO ============
+        const cardsHTML = perfis.map(p => {
+            const count = contagem[p.role] || 0;
+            const labelContagem = `${count} ${count === 1 ? 'usuário' : 'usuários'}`;
+
+            return `
+                <div onclick="admin.closeModal(); admin.filtrarUsuariosPorRole('${p.role}');"
+                    style="
+                        display: flex;
+                        align-items: center;
+                        gap: 14px;
+                        padding: 16px;
+                        background: #f9fafb;
+                        border-radius: 12px;
+                        border-left: 4px solid ${p.cor};
+                        cursor: pointer;
+                        transition: all 0.2s;
+                    "
+                    onmouseover="this.style.transform='translateX(4px)'; this.style.background='#f3f4f6'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)';"
+                    onmouseout="this.style.transform='translateX(0)'; this.style.background='#f9fafb'; this.style.boxShadow='none';">
+
+                    <div style="
+                        width: 48px;
+                        height: 48px;
+                        background: ${p.bg};
+                        border-radius: 12px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 22px;
+                        flex-shrink: 0;
+                    ">${p.icon}</div>
+
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="font-weight: 600; color: #1f2937; font-size: 14px;">${p.label}</div>
+                        <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">${labelContagem}</div>
+                    </div>
+
+                    <i class="fas fa-chevron-right" style="color: #d1d5db; font-size: 12px;"></i>
+                </div>
+            `;
+        }).join('');
+
+        const infoHTML = `
+            <div style="background: #eef2ff; border-left: 4px solid #4f46e5; border-radius: 10px; padding: 12px 15px; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-info-circle" style="color: #4f46e5; font-size: 18px;"></i>
+                    <div style="font-size: 13px; color: #1e40af;">
+                        <strong>Total geral:</strong> ${totalGeral} usuários •
+                        Clique em um perfil para filtrar a tabela
+                    </div>
                 </div>
             </div>
         `;
-        
+
+        // ============ MONTAR NO MODAL ============
+        const modalBody = document.getElementById('modalBody');
+        modalBody.innerHTML = `
+            <div style="padding: 10px;">
+                ${infoHTML}
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                    ${cardsHTML}
+                </div>
+            </div>
+        `;
+
         document.getElementById('modalTitle').innerHTML = '<i class="fas fa-layer-group"></i> Todos os Perfis';
         this.configurarModal({ hideSave: true });
         this.openModal();

@@ -2020,18 +2020,23 @@ class AdminSimples {
             const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
             const isAdminNormal = userData.role === 'admin';
 
-            // ============ 1) PÁGINA DE USUÁRIOS (10 por vez) ============
+            // ============ GARANTIR this.filtros EXISTE ============
+            if (!this.filtros) {
+                this.filtros = { role: 'todos', status: 'todos', turma: 'todas', search: '' };
+            }
+            const filtros = this.filtros;
+
+            // ============ 1) PÁGINA DE USUÁRIOS ============
             const qsUsuarios = new URLSearchParams({
                 page: String(pagina),
                 limit: String(this.itensPorPagina || 10),
-                role: document.getElementById('filtroRole')?.value || 'todos',
-                status: document.getElementById('filtroStatus')?.value || 'todos',
-                turma: document.getElementById('filtroTurma')?.value || 'todas',
-                search: document.getElementById('buscaUsuario')?.value || ''
+                role: filtros.role || 'todos',
+                status: filtros.status || 'todos',
+                turma: filtros.turma || 'todas',
+                search: filtros.search || ''
             });
 
-            // ============ 2) TURMAS (só 1x → cache) ============
-            // ============ 3) DASHBOARD (só 1x → cache) ============
+            // ============ 2) TURMAS + 3) DASHBOARD (só 1x → cache) ============
             const precisaTurmas = !this._turmasCache;
             const precisaStats = !this._statsCache;
 
@@ -2066,7 +2071,7 @@ class AdminSimples {
             }
             const todasTurmas = this._turmasCache || [];
 
-            // ============ ESTATÍSTICAS (cache via /dashboard) ============
+            // ============ ESTATÍSTICAS (cache) ============
             if (statsRes) {
                 const statsData = await statsRes.json().catch(() => ({ success: false }));
                 if (statsData.success) {
@@ -2112,110 +2117,20 @@ class AdminSimples {
             this.usuariosFiltrados = [...usuarios];
             this.pagination = data.pagination || { page: 1, total: 0, pages: 1 };
             this.paginaAtualUsuario = this.pagination.page;
-            this.turmas = todasTurmas; // para compatibilidade
-
-            // ============ SELECT DE TURMAS ============
-            const turmaSelecionada = document.getElementById('filtroTurma')?.value || 'todos';
-            const opcoesTurmas = todasTurmas
-                .map(nome => `<option value="${nome.replace(/"/g, '&quot;')}">${nome}</option>`)
-                .join('');
+            this.turmas = todasTurmas;
 
             // ============ RENDERIZAR ============
-            content.innerHTML = `
-                <div class="section-header">
-                    <h2><i class="fas fa-users"></i> Usuários</h2>
-                    <button class="btn-primary" onclick="adminSimples.novoUsuario()">
-                        <i class="fas fa-plus"></i> Novo
-                    </button>
-                </div>
+            content.innerHTML = this._renderTelaUsuarios({
+                usuarios: this.usuarios,
+                pagination: this.pagination,
+                todasTurmas,
+                estatisticas,
+                filtros
+            });
 
-                <div class="filters-bar">
-                    <div class="filter-group" style="flex: 2;">
-                        <label><i class="fas fa-search"></i> Buscar</label>
-                        <input type="text" id="buscaUsuario" placeholder="Nome, email, CPF ou matrícula..."
-                            class="form-control" value="${document.getElementById('buscaUsuario')?.value || ''}"
-                            onkeyup="adminSimples.debounceBuscaUsuario()" autocomplete="off">
-                    </div>
-                    <div class="filter-group">
-                        <label><i class="fas fa-user-tag"></i> Perfil</label>
-                        <select id="filtroRole" class="form-control" onchange="adminSimples.filtrarUsuariosServidor()">
-                            <option value="todos">Todos</option>
-                            <option value="aluno">Alunos</option>
-                            <option value="professor">Professores</option>
-                            <option value="setor_pedagogico">Setor Pedagógico</option>
-                            <option value="coordenacao_patio">Coordenação de Pátio</option>
-                            <option value="cozinha">Cozinha</option>
-                            <option value="gestao_geral">Gestão Geral</option>
-                            <option value="enfermaria">Enfermaria</option>
-                            <option value="supervisao">Supervisão</option>
-                            <option value="psicologia">Psicologia</option>
-                            <option value="assistente-social">Assistente Social</option>
-                            <option value="protagonismo">Protagonismo</option>
-                            <option value="biblioteca">Biblioteca</option>
-                            <option value="secretaria">Secretaria</option>
-                            <option value="gestao-adm">Gestão ADM</option>
-                            <option value="recepcao">Recepção</option>
-                            <option value="admin">Admins</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label><i class="fas fa-circle"></i> Status</label>
-                        <select id="filtroStatus" class="form-control" onchange="adminSimples.filtrarUsuariosServidor()">
-                            <option value="todos">Todos</option>
-                            <option value="ativo">Ativos</option>
-                            <option value="inativo">Inativos</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label><i class="fas fa-school"></i> Turma (${todasTurmas.length})</label>
-                        <select id="filtroTurma" class="form-control" onchange="adminSimples.filtrarUsuariosServidor()">
-                            <option value="todos">Todas</option>
-                            ${opcoesTurmas}
-                        </select>
-                    </div>
-                    <div class="filter-actions" style="margin-top: 25px;">
-                        <button class="btn-filter" onclick="adminSimples.limparFiltrosUsuarios()">
-                            <i class="fas fa-eraser"></i> Limpar
-                        </button>
-                    </div>
-                </div>
+            this.configurarEventosFiltrosUsuarios();
 
-                <div class="table-responsive">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Nome</th><th>Email</th><th>Perfil</th><th>Matrícula</th>
-                                <th>CPF</th><th>Telefone</th><th>Status</th><th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabelaUsuarios">
-                            ${this.gerarLinhasUsuarios(this.usuarios)}
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="pagination">
-                    <button class="btn-pagination" onclick="adminSimples.paginaAnteriorServidor()"
-                        id="btnAnteriorUsuario" ${this.paginaAtualUsuario <= 1 ? 'disabled' : ''}>
-                        <i class="fas fa-chevron-left"></i> Anterior
-                    </button>
-                    <span id="pageInfoUsuario">
-                        Página ${this.paginaAtualUsuario} de ${this.pagination.pages} (${this.pagination.total} usuários)
-                    </span>
-                    <button class="btn-pagination" onclick="adminSimples.proximaPaginaServidor()"
-                        id="btnProximaUsuario" ${this.paginaAtualUsuario >= this.pagination.pages ? 'disabled' : ''}>
-                        Próxima <i class="fas fa-chevron-right"></i>
-                    </button>
-                </div>
-            `;
-
-            // Restaura filtros selecionados
-            if (turmaSelecionada !== 'todos') {
-                const sel = document.getElementById('filtroTurma');
-                if (sel) sel.value = turmaSelecionada;
-            }
-
-            console.log(`✅ Usuários carregados: ${this.usuarios.length} de ${this.pagination.total}`);
+            console.log(`✅ Usuários carregados: ${this.usuarios.length} de ${this.pagination.total} (página ${this.paginaAtualUsuario})`);
 
         } catch (error) {
             console.error('❌ Erro ao carregar usuários:', error);
@@ -2229,6 +2144,123 @@ class AdminSimples {
                     </button>
                 </div>`;
         }
+    }
+
+    // ============================================================================
+    // ✅ RENDERIZAR TELA DE USUÁRIOS (sem dados inline, tudo via parâmetros)
+    // ============================================================================
+    _renderTelaUsuarios({ usuarios, pagination, todasTurmas, estatisticas, filtros }) {
+        // ============ OPÇÕES DOS FILTROS ============
+        const opcoesRole = [
+            { value: 'todos',             label: 'Todos' },
+            { value: 'aluno',             label: 'Alunos' },
+            { value: 'professor',         label: 'Professores' },
+            { value: 'setor_pedagogico',  label: 'Setor Pedagógico' },
+            { value: 'coordenacao_patio', label: 'Coordenação de Pátio' },
+            { value: 'cozinha',           label: 'Cozinha' },
+            { value: 'gestao_geral',      label: 'Gestão Geral' },
+            { value: 'enfermaria',        label: 'Enfermaria' },
+            { value: 'supervisao',        label: 'Supervisão' },
+            { value: 'psicologia',        label: 'Psicologia' },
+            { value: 'assistente-social', label: 'Assistente Social' },
+            { value: 'protagonismo',      label: 'Protagonismo' },
+            { value: 'biblioteca',        label: 'Biblioteca' },
+            { value: 'secretaria',        label: 'Secretaria' },
+            { value: 'gestao-adm',        label: 'Gestão ADM' },
+            { value: 'recepcao',          label: 'Recepção' },
+            { value: 'admin',             label: 'Admins' }
+        ].map(o => `<option value="${o.value}" ${filtros.role === o.value ? 'selected' : ''}>${o.label}</option>`).join('');
+
+        const opcoesStatus = [
+            { value: 'todos',   label: 'Todos' },
+            { value: 'ativo',   label: 'Ativos' },
+            { value: 'inativo', label: 'Inativos' }
+        ].map(o => `<option value="${o.value}" ${filtros.status === o.value ? 'selected' : ''}>${o.label}</option>`).join('');
+
+        const opcoesTurmas = (todasTurmas || []).map(nome => {
+            const valor = String(nome).replace(/"/g, '&quot;');
+            const selected = filtros.turma === nome ? 'selected' : '';
+            return `<option value="${valor}" ${selected}>${nome}</option>`;
+        }).join('');
+
+        // ============ PAGINAÇÃO ============
+        const totalPaginas = pagination?.pages || 1;
+        const paginaAtual = pagination?.page || 1;
+        const totalRegistros = pagination?.total || 0;
+
+        // ============ HTML ============
+        return `
+            <div class="section-header">
+                <h2><i class="fas fa-users"></i> Usuários</h2>
+                <button class="btn-primary" onclick="adminSimples.novoUsuario()">
+                    <i class="fas fa-plus"></i> Novo
+                </button>
+            </div>
+
+            <div class="filters-bar">
+                <div class="filter-group" style="flex: 2;">
+                    <label><i class="fas fa-search"></i> Buscar</label>
+                    <input type="text" id="buscaUsuario" placeholder="Nome, email, CPF ou matrícula..."
+                        class="form-control" value="${filtros.search || ''}"
+                        onkeyup="adminSimples.debounceBuscaUsuario()" autocomplete="off">
+                </div>
+                <div class="filter-group">
+                    <label><i class="fas fa-user-tag"></i> Perfil</label>
+                    <select id="filtroRole" class="form-control" onchange="adminSimples.filtrarUsuariosServidor()">
+                        ${opcoesRole}
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label><i class="fas fa-circle"></i> Status</label>
+                    <select id="filtroStatus" class="form-control" onchange="adminSimples.filtrarUsuariosServidor()">
+                        ${opcoesStatus}
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>
+                        <i class="fas fa-school"></i> Turma
+                        <span style="background: #1e3a8a; color: white; padding: 1px 6px; border-radius: 10px; font-size: 10px; margin-left: 4px;">${todasTurmas.length}</span>
+                    </label>
+                    <select id="filtroTurma" class="form-control" onchange="adminSimples.filtrarUsuariosServidor()">
+                        <option value="todos" ${filtros.turma === 'todos' ? 'selected' : ''}>Todas as turmas (${todasTurmas.length})</option>
+                        ${opcoesTurmas}
+                    </select>
+                </div>
+                <div class="filter-actions" style="margin-top: 25px;">
+                    <button class="btn-filter" onclick="adminSimples.limparFiltrosUsuarios()">
+                        <i class="fas fa-eraser"></i> Limpar
+                    </button>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nome</th><th>Email</th><th>Perfil</th><th>Matrícula</th>
+                            <th>CPF</th><th>Telefone</th><th>Status</th><th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaUsuarios">
+                        ${this.gerarLinhasUsuarios(usuarios)}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="pagination">
+                <button class="btn-pagination" onclick="adminSimples.paginaAnteriorServidor()"
+                    id="btnAnteriorUsuario" ${paginaAtual <= 1 ? 'disabled' : ''}>
+                    <i class="fas fa-chevron-left"></i> Anterior
+                </button>
+                <span id="pageInfoUsuario">
+                    Página ${paginaAtual} de ${totalPaginas} (${totalRegistros} usuários)
+                </span>
+                <button class="btn-pagination" onclick="adminSimples.proximaPaginaServidor()"
+                    id="btnProximaUsuario" ${paginaAtual >= totalPaginas ? 'disabled' : ''}>
+                    Próxima <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        `;
     }
 
     gerarLinhasUsuarios(usuarios) {
@@ -2523,6 +2555,9 @@ class AdminSimples {
     // ✅ LIMPAR FILTROS
     // ============================================================================
     limparFiltrosUsuarios() {
+        this.filtros = { role: 'todos', status: 'todos', turma: 'todas', search: '' };
+
+        // Limpa campos visuais
         const busca = document.getElementById('buscaUsuario');
         const role = document.getElementById('filtroRole');
         const status = document.getElementById('filtroStatus');
@@ -2531,6 +2566,7 @@ class AdminSimples {
         if (role) role.value = 'todos';
         if (status) status.value = 'todos';
         if (turma) turma.value = 'todos';
+
         this.carregarUsuarios(1);
         this.showToast('✅ Filtros limpos', 'success');
     }
