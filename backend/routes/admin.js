@@ -1651,57 +1651,115 @@ router.get('/turmas/:id/alunos', authenticateTokenLocal, isSuperAdmin, async (re
 // ============================================================
 // 🔥 POST /turmas/:id/alunos — COM SINCRONIZAÇÃO REVERSA
 // ============================================================
+// ============================================================
+// 🔥 POST /turmas/:id/alunos — ADICIONAR ALUNO À TURMA
+// Sincroniza: turma.alunos[] (array) ↔ aluno.turma (string)
+// ============================================================
 router.post('/turmas/:id/alunos', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
     const turmaId = req.params.id;
     const { alunoId } = req.body;
 
+    // 🔒 VALIDAÇÃO DE ENTRADA
+    if (!alunoId) {
+      return res.status(400).json({
+        success: false,
+        error: 'ID do aluno é obrigatório'
+      });
+    }
+
     logger.info(`📝 Admin ${req.userId} adicionando aluno ${alunoId} à turma ${turmaId}`);
 
-    const turma = await Turma.findById(turmaId);
-    if (!turma) return res.status(404).json({ success: false, error: 'Turma não encontrada' });
+    // 🔍 BUSCAR TURMA E ALUNO (em paralelo para performance)
+    const [turma, aluno] = await Promise.all([
+      Turma.findById(turmaId),
+      User.findById(alunoId)
+    ]);
 
-    const aluno = await User.findById(alunoId);
-    if (!aluno) return res.status(404).json({ success: false, error: 'Aluno não encontrado' });
+    if (!turma) {
+      logger.warn(`⚠️ Turma ${turmaId} não encontrada`);
+      return res.status(404).json({
+        success: false,
+        error: 'Turma não encontrada'
+      });
+    }
 
+    if (!aluno) {
+      logger.warn(`⚠️ Aluno ${alunoId} não encontrado`);
+      return res.status(404).json({
+        success: false,
+        error: 'Aluno não encontrado'
+      });
+    }
+
+    // 🔒 VALIDAR QUE É ALUNO
     if (aluno.role !== 'aluno') {
-      return res.status(400).json({ success: false, error: 'O usuário selecionado não é um aluno' });
+      return res.status(400).json({
+        success: false,
+        error: 'O usuário selecionado não é um aluno'
+      });
     }
 
-    if (turma.alunos.includes(alunoId)) {
-      return res.status(400).json({ success: false, error: 'Aluno já está matriculado nesta turma' });
+    // 🔒 VALIDAR DUPLICIDADE
+    // Normaliza: turma.alunos pode ter ObjectIds ou strings
+    const jaEstaNaTurma = (turma.alunos || []).some(id =>
+      id.toString() === alunoId.toString()
+    );
+
+    if (jaEstaNaTurma) {
+      logger.info(`ℹ️ Aluno ${aluno.nome} já está na turma ${turma.nome}`);
+      return res.status(400).json({
+        success: false,
+        error: 'Aluno já está matriculado nesta turma'
+      });
     }
 
-    // 🔥 GUARDAR TURMA ANTIGA (para sincronizar)
+    // 🔥 GUARDAR TURMA ANTIGA (para sincronização reversa)
     const turmaAntiga = (aluno.turma || '').toString().trim();
-    const turmaNova = turma.nome;
+    const turmaNova = (turma.nome || '').toString().trim();
 
-    // 🔥 1. ADICIONAR AO ARRAY DA TURMA
-    turma.alunos.push(alunoId);
-    await turma.save();
+    logger.info(`🔄 Sincronizando: "${turmaAntiga || '(vazio)'}" → "${turmaNova}"`);
+
+    // 🔥 1. ADICIONAR AO ARRAY DA TURMA (com $addToSet para evitar duplicatas em race condition)
+    await Turma.updateOne(
+      { _id: turmaId },
+      { $addToSet: { alunos: alunoId } }
+    );
+
+    // Recarrega para pegar o estado atual
+    await turma.reload();
+
+    logger.info(`   ✅ Array atualizado: turma agora tem ${turma.alunos.length} aluno(s)`);
 
     // 🔥 2. ATUALIZAR O CAMPO STRING DO ALUNO (sincronização reversa)
     await sincronizarTurmaDoAluno(aluno._id, turmaAntiga, turmaNova);
 
-    logger.info(`✅ Aluno ${aluno.nome} adicionado à turma ${turma.nome} (array + string sincronizados)`);
+    logger.info(`✅ Aluno "${aluno.nome}" adicionado à turma "${turma.nome}" (array + string sincronizados)`);
 
-    const configDoc = await Config.findOne({ chave: 'notificacoes' });
-    const pushAtivado = configDoc?.valor?.push === true;
-
+    // 🔔 NOTIFICAÇÃO (não bloqueia a resposta se falhar)
     try {
+      const configDoc = await Config.findOne({ chave: 'notificacoes' });
+      const pushAtivado = configDoc?.valor?.push === true;
+
       const notificacao = new Notificacao({
         usuarioId: alunoId,
         tipo: 'sistema',
         titulo: '📚 Nova Turma',
-        mensagem: `Você foi matriculado na turma ${turma.nome} - ${turma.disciplina}`,
+        mensagem: `Você foi matriculado na turma ${turma.nome} - ${turma.disciplina || 'sem disciplina'}`,
         icone: '🏫',
         cor: '#10b981',
         link: '/aluno.html',
-        prioridade: 3
+        prioridade: 3,
+        dados: {
+          turmaId: turma._id,
+          turmaNome: turma.nome,
+          tipo: 'nova_turma'
+        }
       });
       await notificacao.save();
+      logger.info(`   🔔 Notificação criada para ${aluno.nome}`);
 
-      if (pushAtivado) {
+      if (pushAtivado && aluno.onesignalPlayerId) {
         const OneSignalService = require('../services/onesignal-service');
         const oneSignal = new OneSignalService();
 
@@ -1709,23 +1767,61 @@ router.post('/turmas/:id/alunos', authenticateTokenLocal, isSuperAdmin, async (r
           alunoId,
           '📚 Nova Turma',
           `Você foi matriculado em ${turma.nome}`,
-          { tipo: 'nova_turma', turmaId: turma._id, turmaNome: turma.nome }
+          {
+            tipo: 'nova_turma',
+            turmaId: turma._id.toString(),
+            turmaNome: turma.nome
+          }
         );
+        logger.info(`   📱 Push enviado para ${aluno.nome}`);
       }
     } catch (notifError) {
-      logger.warn('⚠️ Erro ao criar notificação:', notifError.message);
+      // ⚠️ Falha na notificação NÃO quebra a operação principal
+      logger.warn(`⚠️ Erro ao criar notificação (operação continua):`, notifError.message);
     }
 
+    // ✅ RESPOSTA DE SUCESSO
     res.json({
       success: true,
-      message: 'Aluno adicionado à turma com sucesso!',
-      turma: { id: turma._id, nome: turma.nome, totalAlunos: turma.alunos.length },
-      aluno: { id: aluno._id, nome: aluno.nome, email: aluno.email }
+      message: `Aluno "${aluno.nome}" adicionado à turma "${turma.nome}" com sucesso!`,
+      turma: {
+        id: turma._id,
+        nome: turma.nome,
+        codigo: turma.codigo,
+        disciplina: turma.disciplina,
+        totalAlunos: turma.alunos.length
+      },
+      aluno: {
+        id: aluno._id,
+        nome: aluno.nome,
+        email: aluno.email,
+        matricula: aluno.matricula,
+        turmaAnterior: turmaAntiga || null
+      },
+      sincronizacao: {
+        arrayAtualizado: true,
+        stringAtualizada: true,
+        turmaAntiga: turmaAntiga || '(vazio)',
+        turmaNova: turmaNova
+      }
     });
 
   } catch (error) {
-    logger.error('❌ Erro ao adicionar aluno à turma:', error);
-    res.status(500).json({ success: false, error: 'Erro interno: ' + error.message });
+    logger.error(`❌ Erro ao adicionar aluno à turma:`, error);
+    logger.error(`   Stack:`, error.stack);
+
+    // Tratamento específico por tipo de erro
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        error: 'ID inválido fornecido'
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      error: 'Erro interno ao adicionar aluno: ' + error.message
+    });
   }
 });
 
@@ -2045,11 +2141,14 @@ router.delete('/turmas/:id', authenticateTokenLocal, isSuperAdmin, async (req, r
 
     // 🔥 LIMPAR O CAMPO STRING DOS ALUNOS DESTA TURMA
     if (turma.alunos && turma.alunos.length > 0) {
-      await User.updateMany(
-        { _id: { $in: turma.alunos } },
-        { $set: { turma: '' } }
-      );
-      logger.info(`🔓 Campo "turma" limpo para ${turma.alunos.length} alunos`);
+      return res.status(400).json({
+        success: false,
+        error: `Esta turma tem ${turma.alunos.length} aluno(s) matriculado(s).`,
+        detalhes: {
+          totalAlunos: turma.alunos.length,
+          sugestao: 'Remova os alunos da turma antes de excluí-la, OU desative-a ao invés de excluir.'
+        }
+      });
     }
 
     await Turma.findByIdAndDelete(turmaId);
