@@ -14578,34 +14578,32 @@ class AdminPanel {
     // 🗑️ EXCLUIR TURMA
     // ============================================================================
     async excluirTurma(turmaId) {
-        const turma = this.turmas.find(t => (t.id === turmaId || t._id === turmaId));
-        if (!turma) return;
+        const turma = this.turmas.find(t => t.id === turmaId || t._id === turmaId);
+        if (!turma) {
+            this.showToast('❌ Turma não encontrada', 'error');
+            return;
+        }
 
-        const confirmar = await this.confirmar(
-            '🗑️ Excluir Turma',
-            `Tem certeza que deseja excluir a turma <strong>${turma.nome}</strong>?<br><br>
-            <span style="color: #dc3545;">⚠️ Esta ação não pode ser desfeita!</span><br>
-            Todas as provas e resultados associados também serão excluídos.`
-        );
-
-        if (!confirmar) return;
+        // 🔥 MODAL DE CONFIRMAÇÃO DUPLA
+        const resultado = await this.confirmarExclusaoComTexto(turma);
+        if (!resultado) return;
 
         try {
             this.showToast('🗑️ Excluindo turma...', 'info');
 
             const response = await fetch(`${this.apiBase}/turmas/${turmaId}`, {
                 method: 'DELETE',
-                headers: { 
+                headers: {
                     'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
                     'Content-Type': 'application/json'
-                }
+                },
+                body: JSON.stringify({ confirmacao: resultado })
             });
 
             const data = await response.json();
 
             if (data.success) {
                 this.showToast('✅ Turma excluída com sucesso!', 'success');
-                
                 await this.loadTurmas();
                 await this.carregarDadosReais();
             } else {
@@ -14616,6 +14614,167 @@ class AdminPanel {
             console.error('❌ Erro:', error);
             this.showToast('❌ ' + error.message, 'error');
         }
+    }
+
+    // 🔥 NOVO: Modal de confirmação com digitação obrigatória
+    async confirmarExclusaoComTexto(turma) {
+        const totalAlunos = turma.totalAlunos || 0;
+        const totalProvas = turma.totalProvas || 0;
+
+        return new Promise((resolve) => {
+            // Cria o modal
+            const modalId = 'modal-excluir-turma-' + Date.now();
+            const modal = document.createElement('div');
+            modal.id = modalId;
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.7); display: flex; align-items: center;
+                justify-content: center; z-index: 999999; padding: 20px;
+                box-sizing: border-box; animation: fadeIn 0.2s ease;
+            `;
+
+            modal.innerHTML = `
+                <div style="
+                    background: white; border-radius: 16px; padding: 30px;
+                    max-width: 520px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                    animation: slideUp 0.3s ease;
+                ">
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <div style="
+                            width: 80px; height: 80px; margin: 0 auto 15px;
+                            background: linear-gradient(135deg, #fee2e2, #fecaca);
+                            border-radius: 50%; display: flex; align-items: center;
+                            justify-content: center; font-size: 40px;
+                        ">🗑️</div>
+                        <h2 style="margin: 0 0 10px; color: #dc2626; font-size: 22px;">
+                            Excluir Turma Permanentemente
+                        </h2>
+                        <p style="margin: 0; color: #6b7280; font-size: 14px;">
+                            Esta ação <strong>não pode ser desfeita</strong>
+                        </p>
+                    </div>
+
+                    <div style="
+                        background: #fef2f2; border: 1px solid #fecaca;
+                        border-radius: 10px; padding: 15px; margin-bottom: 20px;
+                    ">
+                        <p style="margin: 0 0 10px; font-weight: 600; color: #991b1b;">
+                            ⚠️ Você está prestes a excluir:
+                        </p>
+                        <p style="margin: 0 0 8px; color: #7f1d1d;">
+                            <strong>Turma:</strong> ${turma.nome} (${turma.codigo})
+                        </p>
+                        ${totalAlunos > 0 ? `<p style="margin: 0 0 8px; color: #7f1d1d;"><strong>👥 Alunos:</strong> ${totalAlunos} aluno(s) serão desvinculados</p>` : ''}
+                        ${totalProvas > 0 ? `<p style="margin: 0 0 8px; color: #7f1d1d;"><strong>📝 Provas:</strong> ${totalProvas} prova(s) serão excluídas</p>` : ''}
+                        <p style="margin: 0; color: #7f1d1d;">
+                            <strong>📊 Resultados:</strong> Todos os resultados serão removidos
+                        </p>
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label style="
+                            display: block; margin-bottom: 8px;
+                            font-weight: 600; color: #374151; font-size: 14px;
+                        ">
+                            Para confirmar, digite <span style="color: #dc2626; font-family: monospace;">EXCLUIR TURMA</span>:
+                        </label>
+                        <input type="text" id="input-confirmacao-exclusao" 
+                            placeholder="Digite aqui..."
+                            autocomplete="off"
+                            style="
+                                width: 100%; padding: 12px; border: 2px solid #e5e7eb;
+                                border-radius: 8px; font-size: 15px;
+                                text-transform: uppercase; font-family: monospace;
+                                letter-spacing: 1px; box-sizing: border-box;
+                            ">
+                        <p id="msg-validacao" style="
+                            margin: 8px 0 0; font-size: 13px; color: #6b7280;
+                            min-height: 18px;
+                        "></p>
+                    </div>
+
+                    <div style="display: flex; gap: 10px;">
+                        <button id="btn-cancelar-exclusao" style="
+                            flex: 1; padding: 14px; background: #f3f4f6;
+                            color: #374151; border: none; border-radius: 10px;
+                            font-size: 15px; font-weight: 600; cursor: pointer;
+                        ">Cancelar</button>
+                        <button id="btn-confirmar-exclusao" disabled style="
+                            flex: 1; padding: 14px; background: #dc2626;
+                            color: white; border: none; border-radius: 10px;
+                            font-size: 15px; font-weight: 600; cursor: not-allowed;
+                            opacity: 0.5;
+                        ">Excluir</button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+
+            // Elementos
+            const input = modal.querySelector('#input-confirmacao-exclusao');
+            const btnConfirmar = modal.querySelector('#btn-confirmar-exclusao');
+            const btnCancelar = modal.querySelector('#btn-cancelar-exclusao');
+            const msgValidacao = modal.querySelector('#msg-validacao');
+
+            // Validação em tempo real
+            input.addEventListener('input', () => {
+                const valor = input.value.trim().toUpperCase();
+                const valido = valor === 'EXCLUIR TURMA';
+
+                if (valido) {
+                    btnConfirmar.disabled = false;
+                    btnConfirmar.style.cursor = 'pointer';
+                    btnConfirmar.style.opacity = '1';
+                    btnConfirmar.style.background = '#dc2626';
+                    msgValidacao.textContent = '✅ Confirmação correta';
+                    msgValidacao.style.color = '#16a34a';
+                    input.style.borderColor = '#16a34a';
+                } else {
+                    btnConfirmar.disabled = true;
+                    btnConfirmar.style.cursor = 'not-allowed';
+                    btnConfirmar.style.opacity = '0.5';
+                    msgValidacao.textContent = valor.length > 0 ? '❌ Digite exatamente: EXCLUIR TURMA' : '';
+                    msgValidacao.style.color = valor.length > 0 ? '#dc2626' : '#6b7280';
+                    input.style.borderColor = valor.length > 0 ? '#dc2626' : '#e5e7eb';
+                }
+            });
+
+            // Focar no input
+            setTimeout(() => input.focus(), 100);
+
+            // Confirmar
+            btnConfirmar.addEventListener('click', () => {
+                const valor = input.value.trim().toUpperCase();
+                if (valor === 'EXCLUIR TURMA') {
+                    modal.remove();
+                    resolve(valor);
+                }
+            });
+
+            // Enter no input
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !btnConfirmar.disabled) {
+                    btnConfirmar.click();
+                } else if (e.key === 'Escape') {
+                    btnCancelar.click();
+                }
+            });
+
+            // Cancelar
+            btnCancelar.addEventListener('click', () => {
+                modal.remove();
+                resolve(null);
+            });
+
+            // Fechar ao clicar fora
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                    resolve(null);
+                }
+            });
+        });
     }
 
     // ============================================================================

@@ -596,94 +596,158 @@ router.delete('/:id', authenticateTokenLocal, async (req, res) => {
     const turmaId = req.params.id;
     const usuarioId = req.userId;
     const usuarioRole = req.userRole;
+    const { confirmacao } = req.body;
 
-    logger.info(`🗑️ Tentativa de exclusão da turma ${turmaId} pelo usuário ${usuarioId} (${usuarioRole})`);
+    logger.info(`🗑️ Tentativa de exclusão da turma ${turmaId} por ${usuarioRole} ${usuarioId}`);
+    logger.info(`   Confirmação recebida: "${confirmacao || '(nenhuma)'}"`);
 
+    // ========================================================================
+    // 1️⃣ VALIDAR CONFIRMAÇÃO OBRIGATÓRIA
+    // ========================================================================
+    if (!confirmacao || confirmacao.trim().toUpperCase() !== 'EXCLUIR TURMA') {
+      logger.warn(`⚠️ Confirmação inválida: "${confirmacao}"`);
+      return res.status(400).json({
+        success: false,
+        error: 'Para confirmar a exclusão, digite exatamente: EXCLUIR TURMA',
+        codigo: 'CONFIRMACAO_INVALIDA',
+        esperado: 'EXCLUIR TURMA'
+      });
+    }
+
+    // ========================================================================
+    // 2️⃣ BUSCAR TURMA
+    // ========================================================================
     const turma = await Turma.findById(turmaId);
     if (!turma) {
+      logger.warn(`⚠️ Turma ${turmaId} não encontrada`);
       return res.status(404).json({
         success: false,
         error: 'Turma não encontrada'
       });
     }
 
-    logger.info('📊 Dados da turma encontrada:');
-    logger.info('   professorId:', turma.professorId);
-    logger.info('   usuarioId:', usuarioId);
+    logger.info(`📊 Turma encontrada: "${turma.nome}" (${turma.codigo || 'sem código'})`);
 
+    // ========================================================================
+    // 3️⃣ VERIFICAR PERMISSÕES
+    // ========================================================================
     const isAdmin = usuarioRole === 'admin' || usuarioRole === 'super_admin';
 
-    let isProfessorDaTurma = false;
-
+    // Extrai o ID do professor de forma robusta (string, ObjectId ou objeto populado)
+    let professorIdDaTurma = null;
     if (turma.professorId) {
-      const professorIdStr = turma.professorId.toString();
-      const usuarioIdStr = usuarioId.toString();
-      isProfessorDaTurma = professorIdStr === usuarioIdStr;
+      professorIdDaTurma = (turma.professorId._id || turma.professorId).toString();
     }
 
-    if (!isProfessorDaTurma && turma.professorId && turma.professorId._id) {
-      isProfessorDaTurma = turma.professorId._id.toString() === usuarioId.toString();
-    }
+    const isProfessorDaTurma = professorIdDaTurma && professorIdDaTurma === usuarioId.toString();
 
-    if (!isProfessorDaTurma && turma.professor) {
-      if (typeof turma.professor === 'string') {
-        isProfessorDaTurma = turma.professor === usuarioId.toString();
-      } else if (turma.professor.id) {
-        isProfessorDaTurma = turma.professor.id.toString() === usuarioId.toString();
-      } else if (turma.professor._id) {
-        isProfessorDaTurma = turma.professor._id.toString() === usuarioId.toString();
-      }
-    }
-
-    logger.info(`📊 Resultado: Admin: ${isAdmin}, Professor: ${isProfessorDaTurma}`);
+    logger.info(`🔍 Permissões: Admin=${isAdmin}, ProfessorDaTurma=${isProfessorDaTurma}`);
 
     if (!isAdmin && !isProfessorDaTurma) {
+      logger.warn(`⛔ ${usuarioId} (${usuarioRole}) tentou excluir turma de ${professorIdDaTurma}`);
       return res.status(403).json({
         success: false,
         error: 'Você não tem permissão para excluir esta turma'
       });
     }
 
+    // ========================================================================
+    // 4️⃣ ESTATÍSTICAS PRÉ-EXCLUSÃO
+    // ========================================================================
+    const totalAlunos = (turma.alunos || []).length;
+    const totalProvas = (turma.provas || []).length;
+
+    logger.warn(`⚠️ EXCLUSÃO CONFIRMADA`);
+    logger.warn(`   Nome: "${turma.nome}"`);
+    logger.warn(`   Código: ${turma.codigo || '(sem código)'}`);
+    logger.warn(`   Alunos no array: ${totalAlunos}`);
+    logger.warn(`   Provas no array: ${totalProvas}`);
+
+    // ========================================================================
+    // 5️⃣ BUSCAR E REMOVER PROVAS ASSOCIADAS
+    // ========================================================================
     const provasAssociadas = await Prova.find({ turmaId: turmaId });
+    logger.info(`📝 ${provasAssociadas.length} prova(s) encontrada(s) na coleção Prova`);
 
-    if (isAdmin) {
-      logger.info(`🔧 Admin removendo ${provasAssociadas.length} provas associadas...`);
+    let resultadosRemovidos = 0;
+    let provasRealizadasRemovidas = 0;
 
-      for (const prova of provasAssociadas) {
-        await Resultado.deleteMany({ provaId: prova._id });
-        await ProvaRealizada.deleteMany({ provaId: prova._id });
-        await Prova.findByIdAndDelete(prova._id);
-      }
-    } else if (provasAssociadas.length > 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Esta turma possui provas associadas. Exclua as provas primeiro.',
-        detalhes: { totalProvas: provasAssociadas.length }
-      });
+    for (const prova of provasAssociadas) {
+      const resRes = await Resultado.deleteMany({ provaId: prova._id });
+      resultadosRemovidos += resRes.deletedCount || 0;
+
+      const resPR = await ProvaRealizada.deleteMany({ provaId: prova._id });
+      provasRealizadasRemovidas += resPR.deletedCount || 0;
+
+      await Prova.findByIdAndDelete(prova._id);
+
+      logger.info(`   ✅ Prova "${prova.titulo}" removida (${resRes.deletedCount || 0} resultados, ${resPR.deletedCount || 0} provas realizadas)`);
     }
 
-    if (turma.alunos && turma.alunos.length > 0) {
-      await User.updateMany(
-        { _id: { $in: turma.alunos } },
-        { $pull: { turmas: turmaId } }
+    // ========================================================================
+    // 6️⃣ DESVINCULAR ALUNOS
+    // ========================================================================
+    // ⚠️ IMPORTANTE: o schema do User tem campo `turma` (string),
+    //    NÃO tem campo `turmas` (array). O código antigo usava
+    //    `$pull: { turmas: turmaId }` — que não fazia NADA.
+    // ========================================================================
+    let alunosDesvinculados = 0;
+
+    if (totalAlunos > 0) {
+      logger.info(`👥 Desvinculando ${totalAlunos} aluno(s)...`);
+
+      const resultadoLimpeza = await User.updateMany(
+        {
+          _id: { $in: turma.alunos },
+          turma: turma.nome // ⚠️ Só limpa se ainda estiver nessa turma
+        },
+        { $set: { turma: '' } }
       );
+
+      alunosDesvinculados = resultadoLimpeza.modifiedCount || 0;
+      logger.info(`   ✅ ${alunosDesvinculados} aluno(s) desvinculados (turma = "")`);
+
+      if (alunosDesvinculados < totalAlunos) {
+        logger.warn(`   ⚠️ ${totalAlunos - alunosDesvinculados} aluno(s) já tinham outra turma (não foram afetados)`);
+      }
     }
 
+    // ========================================================================
+    // 7️⃣ EXCLUIR A TURMA
+    // ========================================================================
     await Turma.findByIdAndDelete(turmaId);
 
-    logger.info(`✅ Turma ${turmaId} excluída com sucesso`);
+    logger.info(`✅ Turma "${turma.nome}" (${turma.codigo}) EXCLUÍDA com sucesso`);
 
+    // ========================================================================
+    // 8️⃣ RESPOSTA COM ESTATÍSTICAS
+    // ========================================================================
     res.json({
       success: true,
-      message: 'Turma excluída com sucesso!',
+      message: `Turma "${turma.nome}" excluída com sucesso!`,
       detalhes: {
-        provasRemovidas: isAdmin ? provasAssociadas.length : 0,
-        alunosRemovidos: turma.alunos?.length || 0
+        turmaId: turma._id,
+        turmaNome: turma.nome,
+        turmaCodigo: turma.codigo,
+        alunosDesvinculados,
+        provasRemovidas: provasAssociadas.length,
+        resultadosRemovidos,
+        provasRealizadasRemovidas
       }
     });
 
   } catch (error) {
     logger.error('❌ Erro ao excluir turma:', error);
+    logger.error('   Stack:', error.stack);
+
+    // Tratamento específico por tipo de erro
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        error: 'ID da turma inválido'
+      });
+    }
+
     res.status(500).json({
       success: false,
       error: 'Erro interno ao excluir turma: ' + error.message

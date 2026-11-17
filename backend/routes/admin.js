@@ -2145,49 +2145,89 @@ router.put('/turmas/:id', authenticateTokenLocal, isSuperAdmin, async (req, res)
 router.delete('/turmas/:id', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
     const turmaId = req.params.id;
+    const { confirmacao } = req.body; // 🔥 NOVO: receber confirmação
+
     logger.info(`🗑️ Admin ${req.userId} excluindo turma ${turmaId}`);
+    logger.info(`   Confirmação recebida: "${confirmacao || '(nenhuma)'}"`);
+
+    // 🔥 VALIDAR CONFIRMAÇÃO (deve ser "EXCLUIR TURMA" exatamente)
+    if (!confirmacao || confirmacao.trim().toUpperCase() !== 'EXCLUIR TURMA') {
+      logger.warn(`⚠️ Confirmação inválida: "${confirmacao}"`);
+      return res.status(400).json({
+        success: false,
+        error: 'Para confirmar, digite exatamente: EXCLUIR TURMA',
+        codigo: 'CONFIRMACAO_INVALIDA',
+        esperado: 'EXCLUIR TURMA'
+      });
+    }
 
     const turma = await Turma.findById(turmaId);
-    if (!turma) return res.status(404).json({ success: false, error: 'Turma não encontrada' });
+    if (!turma) {
+      return res.status(404).json({
+        success: false,
+        error: 'Turma não encontrada'
+      });
+    }
 
+    // 🔥 LOG: registrar o que será excluído
+    const totalAlunos = (turma.alunos || []).length;
+    const totalProvas = (turma.provas || []).length;
+
+    logger.warn(`⚠️ EXCLUSÃO CONFIRMADA: "${turma.nome}" (${turma.codigo})`);
+    logger.warn(`   👥 ${totalAlunos} aluno(s) matriculado(s)`);
+    logger.warn(`   📝 ${totalProvas} prova(s) associada(s)`);
+
+    // Busca provas associadas
     const provasAssociadas = await Prova.find({ turmaId });
+    logger.warn(`   📝 ${provasAssociadas.length} prova(s) encontrada(s) na coleção Prova`);
 
-    logger.info(`🔧 Removendo ${provasAssociadas.length} provas associadas...`);
-
+    // Remove provas + resultados + provas realizadas
     for (const prova of provasAssociadas) {
       await Resultado.deleteMany({ provaId: prova._id });
       await ProvaRealizada.deleteMany({ provaId: prova._id });
       await Prova.findByIdAndDelete(prova._id);
     }
 
-    // 🔥 LIMPAR O CAMPO STRING DOS ALUNOS DESTA TURMA
-    if (turma.alunos && turma.alunos.length > 0) {
-      return res.status(400).json({
-        success: false,
-        error: `Esta turma tem ${turma.alunos.length} aluno(s) matriculado(s).`,
-        detalhes: {
-          totalAlunos: turma.alunos.length,
-          sugestao: 'Remova os alunos da turma antes de excluí-la, OU desative-a ao invés de excluir.'
-        }
-      });
+    // 🔥 Limpa o campo `turma` dos alunos (com cuidado)
+    if (totalAlunos > 0) {
+      const resultadoLimpeza = await User.updateMany(
+        {
+          _id: { $in: turma.alunos },
+          turma: turma.nome // ⚠️ Só limpa se ainda estiver nessa turma
+        },
+        { $set: { turma: '' } }
+      );
+
+      logger.info(`🔓 Campo "turma" limpo em ${resultadoLimpeza.modifiedCount} aluno(s)`);
+
+      if (resultadoLimpeza.modifiedCount < totalAlunos) {
+        logger.warn(`⚠️ ${totalAlunos - resultadoLimpeza.modifiedCount} aluno(s) já tinham outra turma (não foram afetados)`);
+      }
     }
 
+    // Exclui a turma
     await Turma.findByIdAndDelete(turmaId);
 
-    logger.info(`✅ Turma ${turmaId} excluída com sucesso`);
+    logger.info(`✅ Turma "${turma.nome}" (${turma.codigo}) EXCLUÍDA com sucesso`);
 
     res.json({
       success: true,
-      message: 'Turma excluída com sucesso!',
+      message: `Turma "${turma.nome}" excluída com sucesso!`,
       detalhes: {
-        provasRemovidas: provasAssociadas.length,
-        alunosRemovidos: turma.alunos?.length || 0
+        turmaId: turma._id,
+        turmaNome: turma.nome,
+        turmaCodigo: turma.codigo,
+        alunosDesvinculados: totalAlunos,
+        provasRemovidas: provasAssociadas.length
       }
     });
 
   } catch (error) {
     logger.error('❌ Erro ao excluir turma:', error);
-    res.status(500).json({ success: false, error: 'Erro interno ao excluir turma: ' + error.message });
+    res.status(500).json({
+      success: false,
+      error: 'Erro interno ao excluir turma: ' + error.message
+    });
   }
 });
 
