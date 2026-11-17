@@ -813,6 +813,15 @@ const connectToDatabase = async () => {
       logger.warn('⚠️ Erro ao iniciar agendador de lembretes de visita:', error.message);
     }
 
+    // 🧹 Worker de limpeza de rascunhos de provas (TTL 24h)
+    try {
+      const { iniciarLimpezaRascunhos } = require('./utils/limparRascunhos');
+      iniciarLimpezaRascunhos();
+      logger.info('✅ Worker de limpeza de rascunhos iniciado (TTL 24h)');
+    } catch (error) {
+      logger.warn('⚠️ Erro ao iniciar worker de rascunhos:', error.message);
+    }
+
     let reconectando = false;
 
     mongoose.connection.on('disconnected', () => {

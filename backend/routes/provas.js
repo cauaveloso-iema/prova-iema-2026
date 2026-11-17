@@ -20,6 +20,10 @@
 //   - GET    /api/config/envio-provas            - Verificar config de envio
 //   - GET    /realizar-prova.html                - Página protegida para realizar prova
 //
+// 🆕 Rotas administrativas de rascunhos:
+//   - GET    /api/provas/rascunhos/status         - Status dos rascunhos
+//   - POST   /api/provas/rascunhos/limpar         - Forçar limpeza agora
+//
 // Autor: Equipe de Desenvolvimento
 // ============================================================================
 
@@ -40,8 +44,6 @@ try {
 
 // ============================================================================
 // 🆕 HELPERS DE FUSO HORÁRIO BRASÍLIA (UTC-3)
-// Usados para garantir que "hoje" e horários sejam sempre BRT,
-// independentemente do fuso do servidor (UTC, Alpine sem tzdata, etc).
 // ============================================================================
 function getDataHojeBR() {
   return new Intl.DateTimeFormat('en-CA', {
@@ -62,6 +64,30 @@ function getPartesDataBR(dateObj) {
     dia: parseInt(partes[2], 10),
     str: partes.join('-')
   };
+}
+
+// ============================================================================
+// 🆕 HELPER: calcular expiração de rascunho (configurável via Config)
+// ============================================================================
+async function calcularExpiracaoRascunho() {
+  try {
+    const Config = mongoose.models.Config;
+    if (!Config) {
+      return new Date(Date.now() + 24 * 60 * 60 * 1000);
+    }
+    const config = await Config.findOne({ chave: 'provas.ttlRascunhoHoras' });
+    let horas = 24;
+    if (config && typeof config.valor === 'number' && config.valor > 0) {
+      horas = config.valor;
+    } else if (config && typeof config.valor === 'string') {
+      const parsed = parseInt(config.valor, 10);
+      if (!isNaN(parsed) && parsed > 0) horas = parsed;
+    }
+    return new Date(Date.now() + horas * 60 * 60 * 1000);
+  } catch (err) {
+    logger.warn?.('[provas] Fallback expiraEm 24h:', err.message);
+    return new Date(Date.now() + 24 * 60 * 60 * 1000);
+  }
 }
 
 // ============================================================================
@@ -122,37 +148,30 @@ try {
 // ============================================================================
 // MIDDLEWARE DE AUTENTICAÇÃO
 // ============================================================================
-// 🔥 CORRIGIDO: Agora aceita token de 3 fontes:
-//   1. Header Authorization: Bearer <token>  (padrão)
-//   2. Query string: ?token=<token>          (para links diretos)
-//   3. Cookie: token=<token>                 (opcional)
-// ============================================================================
-
 const authenticateToken = (req, res, next) => {
   let token = null;
 
-  // ========== 1️⃣ Tentar pelo header Authorization ==========
+  // 1️⃣ Header Authorization
   const authHeader = req.headers['authorization'];
   if (authHeader && authHeader.startsWith('Bearer ')) {
     token = authHeader.substring(7);
   }
 
-  // ========== 2️⃣ Tentar pela query string (?token=...) ==========
+  // 2️⃣ Query string
   if (!token && req.query && req.query.token) {
     token = req.query.token;
   }
 
-  // ========== 3️⃣ Tentar pelo body (para POST com token no corpo) ==========
+  // 3️⃣ Body
   if (!token && req.body && req.body.token) {
     token = req.body.token;
   }
 
-  // ========== 4️⃣ Tentar pelo cookie ==========
+  // 4️⃣ Cookie
   if (!token && req.cookies && req.cookies.token) {
     token = req.cookies.token;
   }
 
-  // ========== VALIDAÇÃO ==========
   if (!token) {
     return res.status(401).json({
       success: false,
@@ -231,7 +250,7 @@ router.get('/health', (req, res) => {
     success: true,
     status: 'online',
     service: 'Provas',
-    versao: '2.0-fuso-br',
+    versao: '2.1-ttl-rascunhos',
     _debug: {
       hojeBR: getDataHojeBR(),
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -249,7 +268,82 @@ router.get('/health', (req, res) => {
 });
 
 // ============================================================================
+// 🆕 GET /rascunhos/status - Status dos rascunhos (admin)
+// ============================================================================
+router.get('/rascunhos/status', authenticateToken, async (req, res) => {
+  try {
+    if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Apenas administradores podem consultar o status dos rascunhos'
+      });
+    }
+
+    const agora = new Date();
+    const em1h = new Date(agora.getTime() + 60 * 60 * 1000);
+    const em24h = new Date(agora.getTime() + 24 * 60 * 60 * 1000);
+
+    const [totalRascunhos, expirados, expirandoEm1h, expirandoEm24h] = await Promise.all([
+      Prova.countDocuments({ publicada: false }),
+      Prova.countDocuments({ publicada: false, expiraEm: { $ne: null, $lte: agora } }),
+      Prova.countDocuments({ publicada: false, expiraEm: { $ne: null, $gt: agora, $lte: em1h } }),
+      Prova.countDocuments({ publicada: false, expiraEm: { $ne: null, $gt: agora, $lte: em24h } })
+    ]);
+
+    // TTL configurado
+    let ttlHoras = 24;
+    try {
+      const config = await Config.findOne({ chave: 'provas.ttlRascunhoHoras' });
+      if (config && config.valor) ttlHoras = Number(config.valor) || 24;
+    } catch (_) {}
+
+    res.json({
+      success: true,
+      ttlHoras,
+      totalRascunhos,
+      expirados,
+      expirandoEm1h,
+      expirandoEm24h,
+      agora: agora.toISOString()
+    });
+  } catch (error) {
+    logger.error('❌ Erro ao consultar status dos rascunhos:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================================
+// 🆕 POST /rascunhos/limpar - Forçar limpeza agora (admin)
+// ============================================================================
+router.post('/rascunhos/limpar', authenticateToken, async (req, res) => {
+  try {
+    if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Apenas administradores podem forçar a limpeza'
+      });
+    }
+
+    const { limparRascunhosExpirados } = require('../utils/limparRascunhos');
+    const resultado = await limparRascunhosExpirados();
+
+    res.json({
+      success: resultado.success,
+      removidos: resultado.removidos,
+      timestamp: resultado.timestamp,
+      message: resultado.success
+        ? `${resultado.removidos} rascunho(s) removido(s)`
+        : `Erro: ${resultado.error}`
+    });
+  } catch (error) {
+    logger.error('❌ Erro ao forçar limpeza:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================================
 // PUT /:id/questoes - Editar questões de uma prova
+// 🆕 Ao editar/regenerar, o prazo de expiração do rascunho é RENOVADO
 // ============================================================================
 router.put('/:id/questoes', authenticateToken, async (req, res) => {
   try {
@@ -304,15 +398,20 @@ router.put('/:id/questoes', authenticateToken, async (req, res) => {
     prova.quantidadeQuestoes = questoes.length;
     prova.updatedAt = new Date();
 
+    // 🆕 RENOVA O PRAZO DO RASCUNHO (evita perder prova em edição)
+    prova.expiraEm = await calcularExpiracaoRascunho();
+
     await prova.save();
 
     res.json({
       success: true,
       mensagem: 'Questões atualizadas com sucesso',
+      expiraEm: prova.expiraEm,
       prova: {
         id: prova._id,
         titulo: prova.titulo,
-        quantidadeQuestoes: prova.quantidadeQuestoes
+        quantidadeQuestoes: prova.quantidadeQuestoes,
+        expiraEm: prova.expiraEm
       }
     });
 
@@ -476,8 +575,7 @@ router.post('/:id/responder', authenticateToken, async (req, res) => {
 });
 
 // ============================================================================
-// 🆕 GET /:id/realizar - Aluno obtém prova para realizar
-// CORRIGIDO: data "hoje" e cálculo de tempo restante agora usam BRT
+// GET /:id/realizar - Aluno obtém prova para realizar
 // ============================================================================
 router.get('/:id/realizar', authenticateToken, async (req, res) => {
   try {
@@ -508,7 +606,6 @@ router.get('/:id/realizar', authenticateToken, async (req, res) => {
     }
 
     const agora = new Date();
-    // 🆕 Data "hoje" calculada em BRT (antes usava toISOString, que é UTC)
     const hoje = getDataHojeBR();
     const partes = getPartesDataBR(agora);
 
@@ -549,7 +646,6 @@ router.get('/:id/realizar', authenticateToken, async (req, res) => {
       });
     }
 
-    // 🆕 Tempo restante calculado em BRT (antes usava horário sem offset → fuso do servidor)
     let tempoRestanteMinutos = null;
     if (prova.horarioTermino) {
       const terminoHoje = new Date(`${partes.str}T${prova.horarioTermino}:00.000-03:00`);
@@ -588,8 +684,7 @@ router.get('/:id/realizar', authenticateToken, async (req, res) => {
 });
 
 // ============================================================================
-// 🆕 GET /:id/acesso - Validar acesso à prova (com Face ID)
-// CORRIGIDO: cálculo de horário início/término e expiração do token agora usam BRT
+// GET /:id/acesso - Validar acesso à prova (com Face ID)
 // ============================================================================
 router.get('/:id/acesso', authenticateToken, async (req, res) => {
   try {
@@ -598,7 +693,6 @@ router.get('/:id/acesso', authenticateToken, async (req, res) => {
 
     logger.info(`🔐 Validando acesso à prova ${provaId} para aluno ${alunoId}`);
 
-    // ========== BUSCAR DADOS DO ALUNO ==========
     const aluno = await User.findById(alunoId).select('precisaAcessibilidade condicaoAcessibilidade role nome email');
 
     if (!aluno) {
@@ -608,13 +702,11 @@ router.get('/:id/acesso', authenticateToken, async (req, res) => {
       });
     }
 
-    // ========== BUSCAR CONFIGURAÇÕES DE SEGURANÇA ==========
     const configFaceId = await Config.findOne({ chave: 'seguranca.exigirFaceIdProvas' });
     const exigirFaceId = configFaceId ? configFaceId.valor : false;
 
     logger.info(`   👤 Face ID: ${exigirFaceId ? 'ATIVADO' : 'DESATIVADO'}`);
 
-    // ========== BUSCAR PROVA ==========
     const prova = await Prova.findById(provaId)
       .populate('turmaId', 'nome disciplina alunos')
       .populate('userId', 'nome email')
@@ -627,14 +719,12 @@ router.get('/:id/acesso', authenticateToken, async (req, res) => {
       });
     }
 
-    // ========== DETECÇÃO DE PROVA ADAPTADA ==========
     const isAdaptada =
       prova.tipoProva === 'adaptada' ||
       prova.adaptada === true ||
       prova.alternativas === 3 ||
       false;
 
-    // ========== REGRAS DE ACESSIBILIDADE ==========
     if (isAdaptada && !aluno.precisaAcessibilidade) {
       return res.status(403).json({
         success: false,
@@ -651,7 +741,6 @@ router.get('/:id/acesso', authenticateToken, async (req, res) => {
       });
     }
 
-    // ========== VERIFICAR SE ESTÁ PUBLICADA ==========
     if (!prova.publicada) {
       return res.status(400).json({
         success: false,
@@ -659,7 +748,6 @@ router.get('/:id/acesso', authenticateToken, async (req, res) => {
       });
     }
 
-    // ========== VERIFICAR SE O ALUNO ESTÁ NA TURMA ==========
     if (prova.turmaId) {
       const turma = await Turma.findById(prova.turmaId).populate('alunos');
 
@@ -680,7 +768,6 @@ router.get('/:id/acesso', authenticateToken, async (req, res) => {
       }
     }
 
-    // ========== VERIFICAR SE JÁ REALIZOU ==========
     const provaRealizada = await ProvaRealizada.findOne({
       provaId: provaId,
       alunoId: alunoId
@@ -706,7 +793,6 @@ router.get('/:id/acesso', authenticateToken, async (req, res) => {
       });
     }
 
-    // ========== VERIFICAÇÃO DE DATA LIMITE ==========
     const hoje = new Date();
     const partesHoje = getPartesDataBR(hoje);
 
@@ -730,8 +816,6 @@ router.get('/:id/acesso', authenticateToken, async (req, res) => {
       }
     }
 
-    // ========== VERIFICAÇÃO DE HORÁRIO ==========
-    // 🆕 Usa data de hoje em BRT + offset -03:00 explícito (antes usava fuso do servidor)
     if (prova.horarioInicio && prova.horarioTermino) {
       const inicioProva = new Date(`${partesHoje.str}T${prova.horarioInicio}:00.000-03:00`);
       const terminoProva = new Date(`${partesHoje.str}T${prova.horarioTermino}:00.000-03:00`);
@@ -752,7 +836,6 @@ router.get('/:id/acesso', authenticateToken, async (req, res) => {
       }
     }
 
-    // ========== APLICAR TEMPO ADICIONAL ==========
     let duracaoFinal = prova.duracaoMinutos;
 
     if (isAdaptada && aluno.precisaAcessibilidade) {
@@ -773,8 +856,6 @@ router.get('/:id/acesso', authenticateToken, async (req, res) => {
       }
     }
 
-    // ========== GERAR TOKEN DE ACESSO ==========
-    // 🆕 Expiração calculada em BRT
     let expiracaoToken;
 
     if (prova.horarioTermino && prova.dataLimite) {
@@ -958,11 +1039,9 @@ router.get('/:provaId/resultados', authenticateToken, async (req, res) => {
       });
     }
 
-    // ========== BUSCAR ALUNOS DA TURMA ==========
     const turma = await Turma.findById(prova.turmaId).populate('alunos', 'nome email matricula');
     const todosAlunosTurma = turma?.alunos || [];
 
-    // ========== BUSCAR RESULTADOS ==========
     let query = { provaId: provaId };
 
     if (req.userRole === 'aluno') {
@@ -981,7 +1060,6 @@ router.get('/:provaId/resultados', authenticateToken, async (req, res) => {
       .populate('alunoId', 'nome email matricula')
       .sort({ dataRealizacao: -1 });
 
-    // ========== CRIAR MAPA ==========
     const resultadosMap = new Map();
 
     resultados.forEach(r => {
@@ -1059,7 +1137,6 @@ router.get('/:provaId/resultados', authenticateToken, async (req, res) => {
       }
     });
 
-    // ========== ADICIONAR ALUNOS SEM RESULTADO ==========
     todosAlunosTurma.forEach(aluno => {
       const alunoIdStr = aluno._id.toString();
 
@@ -1099,7 +1176,6 @@ router.get('/:provaId/resultados', authenticateToken, async (req, res) => {
       }
     });
 
-    // ========== CALCULAR ESTATÍSTICAS ==========
     const resultadosCompletos = Array.from(resultadosMap.values());
 
     const alunosComNotaAutomatica = resultadosCompletos.filter(r =>
@@ -1214,6 +1290,8 @@ router.get('/:id', authenticateToken, async (req, res) => {
       quantidadeQuestoes: prova.questoes.length,
       codigo: prova.codigo,
       status: prova.status,
+      publicada: prova.publicada,
+      expiraEm: prova.expiraEm,
       fonteGeracao: prova.fonteGeracao,
       turma: prova.turmaId ? {
         id: prova.turmaId._id,
@@ -1226,7 +1304,6 @@ router.get('/:id', authenticateToken, async (req, res) => {
       } : null
     };
 
-    // ADMIN — vê tudo
     if (isAdmin) {
       const questoes = prova.questoes.map((questao, index) => ({
         id: questao._id,
@@ -1247,7 +1324,6 @@ router.get('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    // Professor da prova — vê tudo
     if (isProfessorDaProva) {
       const questoes = prova.questoes.map((questao, index) => ({
         id: questao._id,
@@ -1268,7 +1344,6 @@ router.get('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    // Aluno — vê sem respostas
     if (userRole === 'aluno' && prova.turmaId) {
       const turma = await Turma.findById(prova.turmaId._id);
       if (!turma || !turma.alunos.includes(userId)) {
@@ -1521,7 +1596,6 @@ router.post('/:provaId/cancelar', authenticateToken, async (req, res) => {
     logger.info(`🚫 Cancelamento - Prova: ${provaId}, Aluno: ${alunoId}`);
     logger.info(`📝 Motivo: "${motivo}"`);
 
-    // Verificar se já finalizou
     const [resultadoExistente, provaRealizadaExistente] = await Promise.all([
       Resultado.findOne({ provaId, userId: alunoId }),
       ProvaRealizada.findOne({ provaId, alunoId })
@@ -1535,7 +1609,6 @@ router.post('/:provaId/cancelar', authenticateToken, async (req, res) => {
       });
     }
 
-    // Verificar se já foi cancelada
     const [canceladaExistente, resultadoCanceladoExistente] = await Promise.all([
       ProvaRealizada.findOne({ provaId, alunoId, cancelada: true }),
       Resultado.findOne({ provaId, userId: alunoId, cancelada: true })
@@ -1561,7 +1634,6 @@ router.post('/:provaId/cancelar', authenticateToken, async (req, res) => {
       });
     }
 
-    // Processar respostas
     let respostasArray = [];
     if (respostasAtuais) {
       try {
@@ -1573,7 +1645,6 @@ router.post('/:provaId/cancelar', authenticateToken, async (req, res) => {
       }
     }
 
-    // Detectar tipo
     const motivoLower = motivo.toLowerCase();
     const palavrasViolacao = [
       'violação', 'violacao', 'multiplas', 'múltiplas',
@@ -1587,7 +1658,6 @@ router.post('/:provaId/cancelar', authenticateToken, async (req, res) => {
 
     logger.info(`⚠️ Tipo: ${isViolacao ? 'VIOLAÇÃO' : 'PRAZO'}`);
 
-    // Criar registros
     const provaCancelada = new ProvaRealizada({
       provaId,
       alunoId,
@@ -1627,7 +1697,6 @@ router.post('/:provaId/cancelar', authenticateToken, async (req, res) => {
 
     await Promise.all([provaCancelada.save(), resultadoCancelado.save()]);
 
-    // Notificar professor
     if (prova.userId) {
       try {
         const professor = await User.findById(prova.userId).select('nome email');
@@ -1711,7 +1780,6 @@ router.post('/registrar-localizacao', authenticateToken, async (req, res) => {
       });
     }
 
-    // Atualizar na ProvaRealizada se existir
     const ProvaRealizadaModel = mongoose.models.ProvaRealizada;
     if (ProvaRealizadaModel) {
       try {
@@ -1737,7 +1805,6 @@ router.post('/registrar-localizacao', authenticateToken, async (req, res) => {
       }
     }
 
-    // Salvar na coleção Localizacao
     const localizacao = new LocalizacaoModel({
       alunoId,
       provaId,
@@ -1774,17 +1841,6 @@ router.post('/offline/save', authenticateToken, async (req, res) => {
 
     logger.info(`💾 Salvando prova offline - Aluno: ${alunoId}, Prova: ${provaId}`);
 
-    const syncData = {
-      provaId,
-      respostas,
-      tempoGasto,
-      alunoId,
-      timestamp: new Date().toISOString()
-    };
-
-    // Aqui usaria o backupService se disponível
-    // Por enquanto retorna dados offline
-
     const offlineData = {
       provaId,
       respostas,
@@ -1815,7 +1871,6 @@ router.post('/offline/save', authenticateToken, async (req, res) => {
 // ============================================================================
 router.get('/offline/pending', authenticateToken, async (req, res) => {
   try {
-    // Sem fila de sincronização por enquanto
     res.json({
       success: true,
       pending: 0,

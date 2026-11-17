@@ -58,7 +58,7 @@ const ProvaSchema = new mongoose.Schema({
     min: 1,
     max: 50
   },
-  
+
   // ========== 🔴 CAMPOS DE TIPO DE PROVA (ADICIONADOS) ==========
   tipoProva: {
     type: String,
@@ -66,12 +66,12 @@ const ProvaSchema = new mongoose.Schema({
     default: 'simples',
     required: true
   },
-  
+
   adaptada: {
     type: Boolean,
     default: false
   },
-  
+
   alternativas: {
     type: Number,
     default: 5,
@@ -79,24 +79,24 @@ const ProvaSchema = new mongoose.Schema({
     max: 5
   },
   // ============================================================
-  
+
   periodo: {
-  type: String,
-  enum: ['1', '2', '3', '4'],
-  default: '1',
-  required: true
-},
+    type: String,
+    enum: ['1', '2', '3', '4'],
+    default: '1',
+    required: true
+  },
 
   eixo: {
-  type: String,
-  enum: ['natureza', 'humanas', 'linguagens', 'desenvolvimento', 'redes', 'turismo', 'gestao', 'producao', 'ambiente'],
-  required: true
+    type: String,
+    enum: ['natureza', 'humanas', 'linguagens', 'desenvolvimento', 'redes', 'turismo', 'gestao', 'producao', 'ambiente'],
+    required: true
   },
   disciplina: {
-  type: String,
-  default: ''
+    type: String,
+    default: ''
   },
-  
+
   dificuldade: {
     type: String,
     enum: ['facil', 'media', 'dificil'],
@@ -144,7 +144,7 @@ const ProvaSchema = new mongoose.Schema({
     enum: ['rascunho', 'ativa', 'concluida', 'pendente'],
     default: 'rascunho'
   },
-  
+
   // === CAMPOS PARA CONTROLE DE PUBLICAÇÃO ===
   publicada: {
     type: Boolean,
@@ -154,7 +154,15 @@ const ProvaSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
-  
+
+  // 🆕 TTL PARA RASCUNHOS
+  // Quando `publicada === false`, o worker `utils/limparRascunhos.js`
+  // deleta a prova após esta data. Ao publicar, o campo é zerado (null).
+  expiraEm: {
+    type: Date,
+    default: null
+  },
+
   // 🔥 🔥 🔥 NOVO CAMPO ADICIONADO 🔥 🔥 🔥
   enviadaParaAlunos: {
     type: Boolean,
@@ -162,29 +170,29 @@ const ProvaSchema = new mongoose.Schema({
     description: 'Indica se a prova foi efetivamente enviada para os alunos (considerando configuração do admin)'
   },
   // ==========================================
-  
+
   // ========== 🔴 CAMPOS DE ATRIBUIÇÃO DE ALUNOS (ADICIONADOS) ==========
   alunosAtribuidos: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
-  
+
   totalAlunosAlvo: {
     type: Number,
     default: 0
   },
-  
+
   alunosComAcessibilidade: {
     type: Number,
     default: 0
   },
-  
+
   recursosAcessibilidade: [{
     type: String,
     enum: ['fonte_ampliada', 'alto_contraste', 'leitor_tela', 'tempo_adicional', 'libras', 'ledor']
   }],
   // ================================================================
-  
+
   totalParticipantes: {
     type: Number,
     default: 0
@@ -201,6 +209,9 @@ const ProvaSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// 🆕 Índice para o worker de limpeza
+ProvaSchema.index({ publicada: 1, expiraEm: 1 });
+
 // Gerar código único antes de salvar
 ProvaSchema.pre('save', async function(next) {
   if (!this.codigo) {
@@ -211,13 +222,24 @@ ProvaSchema.pre('save', async function(next) {
     }
     this.codigo = code;
   }
-  
+
   // ========== 🔴 GARANTIR QUE alternativas SEJA 3 PARA PROVA ADAPTADA ==========
   if (this.tipoProva === 'adaptada' || this.adaptada === true) {
     this.alternativas = 3;
     this.adaptada = true;
   }
-  
+
+  // 🆕 Se a prova foi publicada, não faz sentido ter data de expiração
+  if (this.publicada === true && this.expiraEm) {
+    this.expiraEm = null;
+  }
+
+  // 🆕 Se for rascunho e não tem prazo ainda, define o padrão (24h)
+  //    (o cálculo real com Config é feito na rota de criação/regeneração)
+  if (this.publicada === false && !this.expiraEm) {
+    this.expiraEm = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  }
+
   next();
 });
 
@@ -226,10 +248,10 @@ ProvaSchema.pre('save', function(next) {
   if (this.horarioInicio && this.horarioTermino) {
     const [h1, m1] = this.horarioInicio.split(':').map(Number);
     const [h2, m2] = this.horarioTermino.split(':').map(Number);
-    
+
     const inicioMinutos = h1 * 60 + m1;
     const terminoMinutos = h2 * 60 + m2;
-    
+
     if (terminoMinutos <= inicioMinutos) {
       next(new Error('Horário de término deve ser depois do horário de início'));
     } else {
@@ -263,7 +285,7 @@ ProvaSchema.methods.editarQuestao = function(questaoId, dadosAtualizados) {
 ProvaSchema.methods.atualizarQuestoes = function(novasQuestoes) {
   if (Array.isArray(novasQuestoes)) {
     this.questoes = [];
-    
+
     novasQuestoes.forEach((q, index) => {
       const novaQuestao = {
         pergunta: q.pergunta,
@@ -272,14 +294,14 @@ ProvaSchema.methods.atualizarQuestoes = function(novasQuestoes) {
         explicacao: q.explicacao || '',
         tipo: q.tipo || 'editada'
       };
-      
+
       if (q._id) {
         novaQuestao._id = q._id;
       }
-      
+
       this.questoes.push(novaQuestao);
     });
-    
+
     this.quantidadeQuestoes = this.questoes.length;
     this.fonteGeracao = 'mista';
   }
