@@ -2005,12 +2005,31 @@ router.post('/turmas', authenticateTokenLocal, isSuperAdmin, async (req, res) =>
   try {
     const { nome, disciplina, eixo, professorId, descricao, ativa } = req.body;
 
+    logger.info(`📝 Admin ${req.userId} criando turma "${nome}"`);
+
+    // 🔥 1. BUSCA ALUNOS QUE JÁ TÊM User.turma = nome
+    const alunosComTurma = await User.find({
+      role: 'aluno',
+      turma: nome
+    }).select('_id');
+
+    const idsAlunos = alunosComTurma.map(a => a._id);
+    logger.info(`   👥 ${idsAlunos.length} aluno(s) encontrados com User.turma="${nome}"`);
+
+    // 🔥 2. CRIA A TURMA COM O ARRAY PREENCHIDO
     const turma = new Turma({
-      nome, disciplina, eixo, professorId, descricao,
-      ativa: ativa !== false
+      nome,
+      disciplina,
+      eixo,
+      professorId: professorId || null,
+      descricao,
+      ativa: ativa !== false,
+      alunos: idsAlunos  // ✅ PREENCHIDO NA CRIAÇÃO
     });
 
     await turma.save();
+
+    logger.info(`✅ Turma "${turma.nome}" (${turma.codigo}) criada com ${idsAlunos.length} aluno(s) no array`);
 
     res.status(201).json({
       success: true,
@@ -2018,7 +2037,9 @@ router.post('/turmas', authenticateTokenLocal, isSuperAdmin, async (req, res) =>
         id: turma._id,
         nome: turma.nome,
         codigo: turma.codigo,
-        disciplina: turma.disciplina
+        disciplina: turma.disciplina,
+        professorId: turma.professorId,
+        totalAlunos: turma.alunos.length  // ✅ Retorna o total real
       }
     });
 
