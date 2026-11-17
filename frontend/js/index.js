@@ -7833,11 +7833,7 @@ async function criarNovaTurma(dadosTurma) {
 
 // ============================================================================
 // 🗑️ EXCLUSÃO DE TURMA — PROFESSOR
-// ============================================================================
-// Modal de confirmação dupla (digitar "EXCLUIR TURMA")
-// Compatível com DELETE /api/turmas/:id que exige { confirmacao: "EXCLUIR TURMA" }
-// ============================================================================
-
+// ===========================================================================
 async function excluirTurma(turmaId) {
     try {
         const token = localStorage.getItem('auth_token');
@@ -7845,7 +7841,7 @@ async function excluirTurma(turmaId) {
         console.log('🗑️ Solicitando exclusão da turma:', turmaId);
 
         // ====================================================================
-        // 1️⃣ BUSCAR DADOS DA TURMA (para mostrar no modal)
+        // 1️⃣ BUSCAR DADOS DA TURMA
         // ====================================================================
         let turma = null;
 
@@ -7863,45 +7859,30 @@ async function excluirTurma(turmaId) {
             console.warn('⚠️ Não foi possível buscar detalhes da turma:', fetchErr.message);
         }
 
-        // Fallback: usa dados do cache local
         if (!turma) {
             const turmaDoCache = (window.turmasProfessorCache?.dados || [])
                 .find(t => (t.id || t._id) === turmaId);
-
-            if (turmaDoCache) {
-                turma = turmaDoCache;
-                console.log('📦 Usando dados do cache local para o modal');
-            }
+            if (turmaDoCache) turma = turmaDoCache;
         }
 
-        // Se ainda não tem dados, monta um objeto mínimo para o modal
         if (!turma) {
-            turma = {
-                id: turmaId,
-                nome: '(turma)',
-                codigo: '—',
-                totalAlunos: 0,
-                totalProvas: 0
-            };
-            console.warn('⚠️ Turma não encontrada — modal mostra dados genéricos');
+            turma = { id: turmaId, nome: '(turma)', codigo: '—', totalAlunos: 0, totalProvas: 0 };
         }
 
         // ====================================================================
-        // 2️⃣ MODAL DE CONFIRMAÇÃO DUPLA
+        // 2️⃣ MODAL DE CONFIRMAÇÃO
         // ====================================================================
         const confirmacao = await confirmarExclusaoComTextoProfessor(turma);
+        if (!confirmacao) return { success: false, error: 'cancelado' };
 
-        if (!confirmacao) {
-            console.log('❌ Exclusão cancelada pelo usuário');
-            return { success: false, error: 'cancelado' };
+        console.log('✅ Confirmação aceita');
+
+        // ====================================================================
+        // 3️⃣ DELETE
+        // ====================================================================
+        if (typeof window.showToast === 'function') {
+            try { window.showToast('🗑️ Excluindo turma...', 'info'); } catch (e) {}
         }
-
-        console.log('✅ Confirmação aceita:', confirmacao);
-
-        // ====================================================================
-        // 3️⃣ CHAMAR DELETE
-        // ====================================================================
-        showToast('🗑️ Excluindo turma...', 'info');
 
         const response = await fetch(`/api/turmas/${turmaId}`, {
             method: 'DELETE',
@@ -7914,107 +7895,193 @@ async function excluirTurma(turmaId) {
 
         const data = await response.json().catch(() => ({}));
 
-        if (!response.ok) {
-            throw new Error(data.error || `Erro HTTP ${response.status}`);
-        }
-
-        if (!data.success) {
-            throw new Error(data.error || 'Erro desconhecido ao excluir turma');
-        }
+        if (!response.ok) throw new Error(data.error || `Erro HTTP ${response.status}`);
+        if (!data.success) throw new Error(data.error || 'Erro desconhecido');
 
         // ====================================================================
-        // 4️⃣ SUCESSO — TOAST DETALHADO + LIMPEZA DE CACHE
+        // 4️⃣ TOAST DE SUCESSO
         // ====================================================================
         const detalhes = data.detalhes || {};
         const partes = [];
+        if (detalhes.alunosDesvinculados > 0) partes.push(`${detalhes.alunosDesvinculados} aluno(s)`);
+        if (detalhes.provasRemovidas > 0) partes.push(`${detalhes.provasRemovidas} prova(s)`);
 
-        if (detalhes.alunosDesvinculados > 0) {
-            partes.push(`${detalhes.alunosDesvinculados} aluno(s) desvinculado(s)`);
+        const msg = partes.length > 0
+            ? `✅ Turma excluída! (${partes.join(' • ')})`
+            : '✅ Turma excluída!';
+
+        if (typeof window.showToast === 'function') {
+            try { window.showToast(msg, 'success'); } catch (e) {}
         }
-        if (detalhes.provasRemovidas > 0) {
-            partes.push(`${detalhes.provasRemovidas} prova(s) removida(s)`);
-        }
-        if (detalhes.resultadosRemovidos > 0) {
-            partes.push(`${detalhes.resultadosRemovidos} resultado(s) removido(s)`);
-        }
-
-        const mensagemToast = partes.length > 0
-            ? `✅ Turma excluída! ${partes.join(' • ')}`
-            : '✅ Turma excluída com sucesso!';
-
-        showToast(mensagemToast, 'success');
-
-        console.log('✅ Exclusão concluída:', data);
 
         // ====================================================================
-        // 5️⃣ LIMPAR CACHE E RECARREGAR LISTA
+        // 5️⃣ FORÇAR LIMPEZA DO CACHE (ANTES de qualquer recarregamento)
         // ====================================================================
+        console.log('🔄 Limpando cache de turmas...');
+
+        // Limpa cache global
         if (window.turmasProfessorCache) {
             window.turmasProfessorCache.dados = [];
             window.turmasProfessorCache.timestamp = 0;
-            console.log('🔄 Cache de turmas limpo');
         }
+
+        // Limpa variável `turmasProfessor` (array global)
+        if (typeof turmasProfessor !== 'undefined' && Array.isArray(turmasProfessor)) {
+            const antes = turmasProfessor.length;
+            // Remove a turma do array LOCAL (sem esperar backend)
+            for (let i = turmasProfessor.length - 1; i >= 0; i--) {
+                const t = turmasProfessor[i];
+                if ((t.id || t._id) === turmaId) {
+                    turmasProfessor.splice(i, 1);
+                }
+            }
+            console.log(`   Array local: ${antes} → ${turmasProfessor.length}`);
+        }
+
+        // ====================================================================
+        // 6️⃣ REMOVER A TURMA DO DOM (SEM esperar requisição)
+        // ====================================================================
+        console.log('🎨 Removendo turma do DOM...');
+
+        // Estratégia 1: procurar por data-turma-id ou data-id
+        const seletores = [
+            `[data-turma-id="${turmaId}"]`,
+            `[data-id="${turmaId}"]`,
+            `[data-turma="${turmaId}"]`
+        ];
+
+        let elementoRemovido = false;
+        for (const sel of seletores) {
+            const el = document.querySelector(sel);
+            if (el) {
+                el.remove();
+                elementoRemovido = true;
+                console.log(`   ✅ Removido do DOM via seletor: ${sel}`);
+                break;
+            }
+        }
+
+        // Estratégia 2: procurar dentro dos containers conhecidos
+        if (!elementoRemovido) {
+            const containers = [
+                'listaTurmasProfessor',
+                'turmasList',
+                'listaTurmas',
+                'gridTurmas',
+                'tab-turmas',
+                'turmas-container'
+            ];
+
+            for (const id of containers) {
+                const container = document.getElementById(id);
+                if (container) {
+                    // Procura cards ou elementos que contenham o turmaId
+                    const cards = container.querySelectorAll('[onclick*="' + turmaId + '"], .turma-card, [data-turma]');
+                    cards.forEach(card => {
+                        if (card.outerHTML.includes(turmaId)) {
+                            card.remove();
+                            elementoRemovido = true;
+                            console.log(`   ✅ Removido do DOM via container #${id}`);
+                        }
+                    });
+                }
+            }
+        }
+
+        if (!elementoRemovido) {
+            console.warn('   ⚠️ Não encontrei o elemento no DOM — vai depender do re-render');
+        }
+
+        // ====================================================================
+        // 7️⃣ RECARREGAR DO BACKEND (garante que lista fique sincronizada)
+        // ====================================================================
+        console.log('🔄 Recarregando lista do backend...');
 
         if (typeof carregarTurmasProfessor === 'function') {
             try {
                 await carregarTurmasProfessor();
-                console.log('🔄 Lista de turmas recarregada');
+                console.log('   ✅ Lista recarregada');
             } catch (reloadErr) {
-                console.warn('⚠️ Erro ao recarregar turmas:', reloadErr.message);
-                // Força recarregamento da página como fallback
-                setTimeout(() => window.location.reload(), 1500);
+                console.warn('   ⚠️ Erro ao recarregar lista:', reloadErr.message);
             }
-        } else {
-            // Fallback: recarrega a página
-            setTimeout(() => window.location.reload(), 1500);
+        } else if (typeof carregarTurmas === 'function') {
+            try {
+                await carregarTurmas();
+                console.log('   ✅ Lista recarregada (carregarTurmas)');
+            } catch (reloadErr) {
+                console.warn('   ⚠️ Erro ao recarregar lista:', reloadErr.message);
+            }
         }
 
-        return {
-            success: true,
-            mensagem: data.message,
-            detalhes: data.detalhes
-        };
+        // ====================================================================
+        // 8️⃣ TAMBÉM ATUALIZA O SELECT DE FILTROS (se existir)
+        // ====================================================================
+        try {
+            const selectTurma = document.getElementById('filtroTurmaProvas');
+            if (selectTurma) {
+                const options = selectTurma.querySelectorAll('option');
+                options.forEach(opt => {
+                    if (opt.value === turmaId) {
+                        opt.remove();
+                        console.log('   ✅ Removido do filtro de turmas');
+                    }
+                });
+            }
+        } catch (e) {}
+
+        // ====================================================================
+        // 9️⃣ ATUALIZA AS ESTATÍSTICAS (contadores no topo)
+        // ====================================================================
+        try {
+            if (typeof atualizarEstatisticas === 'function') {
+                atualizarEstatisticas();
+            } else if (typeof atualizarEstatisticasProfessor === 'function') {
+                atualizarEstatisticasProfessor();
+            }
+        } catch (e) {}
+
+        return { success: true, mensagem: data.message, detalhes: data.detalhes };
 
     } catch (error) {
         console.error('❌ Erro ao excluir turma:', error);
-        showToast('❌ ' + error.message, 'error');
+        if (typeof window.showToast === 'function') {
+            try { window.showToast('❌ ' + error.message, 'error'); } catch (e) {}
+        } else {
+            alert('Erro: ' + error.message);
+        }
         return { success: false, error: error.message };
     }
 }
 
 // ============================================================================
-// 🎨 MODAL DE CONFIRMAÇÃO COM DIGITAÇÃO OBRIGATÓRIA ("EXCLUIR TURMA")
+// 🔧 COMPATIBILIDADE: função antiga agora chama a nova
+// ============================================================================
+function solicitarExclusaoTurma(turmaId, turmaNome) {
+    console.log('🔄 solicitarExclusaoTurma() chamada — redirecionando para excluirTurma()');
+    return excluirTurma(turmaId);
+}
+
+// ============================================================================
+// MODAL DE CONFIRMAÇÃO COM DIGITAÇÃO OBRIGATÓRIA
 // ============================================================================
 function confirmarExclusaoComTextoProfessor(turma) {
-    const totalAlunos = turma.totalAlunos || 0;
-    const totalProvas = turma.totalProvas || 0;
-
     return new Promise((resolve) => {
-        const modalId = 'modal-excluir-turma-prof-' + Date.now();
+        const totalAlunos = turma.totalAlunos || 0;
+        const totalProvas = turma.totalProvas || 0;
+
         const modal = document.createElement('div');
-        modal.id = modalId;
         modal.style.cssText = `
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.75); display: flex; align-items: center;
             justify-content: center; z-index: 999999; padding: 20px;
-            box-sizing: border-box; animation: fadeInModal 0.2s ease;
+            box-sizing: border-box;
         `;
 
         modal.innerHTML = `
-            <style>
-                @keyframes fadeInModal {
-                    from { opacity: 0; }
-                    to { opacity: 1; }
-                }
-                @keyframes slideUpModal {
-                    from { transform: translateY(30px); opacity: 0; }
-                    to { transform: translateY(0); opacity: 1; }
-                }
-            </style>
             <div style="
                 background: white; border-radius: 16px; padding: 30px;
                 max-width: 520px; width: 100%; box-shadow: 0 25px 80px rgba(0,0,0,0.4);
-                animation: slideUpModal 0.3s ease; max-height: 90vh; overflow-y: auto;
+                max-height: 90vh; overflow-y: auto;
             ">
                 <div style="text-align: center; margin-bottom: 20px;">
                     <div style="
@@ -8041,10 +8108,10 @@ function confirmarExclusaoComTextoProfessor(turma) {
                     <p style="margin: 0 0 8px; color: #7f1d1d; font-size: 14px;">
                         <strong>Turma:</strong> ${turma.nome || '—'} (${turma.codigo || 'sem código'})
                     </p>
-                    ${totalAlunos > 0 ? `<p style="margin: 0 0 8px; color: #7f1d1d; font-size: 14px;"><strong>👥 Alunos:</strong> ${totalAlunos} aluno(s) serão desvinculados</p>` : ''}
+                    ${totalAlunos > 0 ? `<p style="margin: 0 0 8px; color: #7f1d1d; font-size: 14px;"><strong>👥 Alunos:</strong> ${totalAlunos} aluno(s) ficarão sem turma</p>` : ''}
                     ${totalProvas > 0 ? `<p style="margin: 0 0 8px; color: #7f1d1d; font-size: 14px;"><strong>📝 Provas:</strong> ${totalProvas} prova(s) serão excluídas</p>` : ''}
                     <p style="margin: 0; color: #7f1d1d; font-size: 14px;">
-                        <strong>📊 Resultados:</strong> Todos os resultados associados serão removidos
+                        <strong>📊 Resultados:</strong> Serão removidos
                     </p>
                 </div>
 
@@ -8061,17 +8128,16 @@ function confirmarExclusaoComTextoProfessor(turma) {
                     <input type="text" id="input-confirmacao-prof"
                         placeholder="Digite aqui..."
                         autocomplete="off"
-                        autofocus
                         style="
                             width: 100%; padding: 12px 14px; border: 2px solid #e5e7eb;
                             border-radius: 8px; font-size: 15px; font-weight: 600;
                             text-transform: uppercase; font-family: monospace;
                             letter-spacing: 1px; box-sizing: border-box;
-                            transition: border-color 0.2s, box-shadow 0.2s;
+                            transition: border-color 0.2s;
                         ">
                     <p id="msg-validacao-prof" style="
                         margin: 8px 0 0; font-size: 13px; color: #6b7280;
-                        min-height: 18px; transition: color 0.2s;
+                        min-height: 18px;
                     "></p>
                 </div>
 
@@ -8080,34 +8146,31 @@ function confirmarExclusaoComTextoProfessor(turma) {
                         flex: 1; padding: 14px; background: #f3f4f6;
                         color: #374151; border: none; border-radius: 10px;
                         font-size: 15px; font-weight: 600; cursor: pointer;
-                        transition: background 0.2s;
-                    " onmouseover="this.style.background='#e5e7eb'"
-                       onmouseout="this.style.background='#f3f4f6'">
-                        Cancelar
-                    </button>
+                    ">Cancelar</button>
                     <button id="btn-confirmar-prof" type="button" disabled style="
                         flex: 1; padding: 14px; background: #dc2626;
                         color: white; border: none; border-radius: 10px;
                         font-size: 15px; font-weight: 600; cursor: not-allowed;
-                        opacity: 0.4; transition: opacity 0.2s, background 0.2s;
-                    ">
-                        Excluir
-                    </button>
+                        opacity: 0.4;
+                    ">Excluir</button>
                 </div>
             </div>
         `;
 
         document.body.appendChild(modal);
 
-        // Referências aos elementos
+        // ⚠️ IMPORTANTE: pega os elementos DEPOIS do appendChild
         const input = modal.querySelector('#input-confirmacao-prof');
         const btnConfirmar = modal.querySelector('#btn-confirmar-prof');
         const btnCancelar = modal.querySelector('#btn-cancelar-prof');
         const msgValidacao = modal.querySelector('#msg-validacao-prof');
 
-        // ====================================================================
-        // VALIDAÇÃO EM TEMPO REAL
-        // ====================================================================
+        // Foco via JS (não usar autofocus no HTML, que pode travar)
+        setTimeout(() => {
+            try { input.focus(); } catch (e) {}
+        }, 50);
+
+        // Validação em tempo real
         input.addEventListener('input', () => {
             const valor = input.value.trim().toUpperCase();
             const valido = valor === 'EXCLUIR TURMA';
@@ -8116,11 +8179,9 @@ function confirmarExclusaoComTextoProfessor(turma) {
                 btnConfirmar.disabled = false;
                 btnConfirmar.style.cursor = 'pointer';
                 btnConfirmar.style.opacity = '1';
-                btnConfirmar.style.background = '#dc2626';
                 msgValidacao.textContent = '✅ Confirmação correta';
                 msgValidacao.style.color = '#16a34a';
                 input.style.borderColor = '#16a34a';
-                input.style.boxShadow = '0 0 0 3px rgba(22, 163, 74, 0.15)';
             } else {
                 btnConfirmar.disabled = true;
                 btnConfirmar.style.cursor = 'not-allowed';
@@ -8128,26 +8189,18 @@ function confirmarExclusaoComTextoProfessor(turma) {
                 msgValidacao.textContent = valor.length > 0 ? '❌ Digite exatamente: EXCLUIR TURMA' : '';
                 msgValidacao.style.color = valor.length > 0 ? '#dc2626' : '#6b7280';
                 input.style.borderColor = valor.length > 0 ? '#dc2626' : '#e5e7eb';
-                input.style.boxShadow = 'none';
             }
         });
 
-        // Foco automático após renderizar
-        setTimeout(() => input.focus(), 100);
-
-        // ====================================================================
-        // AÇÕES
-        // ====================================================================
+        // Fechar modal
         const fechar = (resultado) => {
-            modal.remove();
+            try { modal.remove(); } catch (e) {}
             resolve(resultado);
         };
 
         btnConfirmar.addEventListener('click', () => {
             const valor = input.value.trim().toUpperCase();
-            if (valor === 'EXCLUIR TURMA') {
-                fechar(valor);
-            }
+            if (valor === 'EXCLUIR TURMA') fechar(valor);
         });
 
         input.addEventListener('keydown', (e) => {
@@ -8169,65 +8222,7 @@ function confirmarExclusaoComTextoProfessor(turma) {
 }
 
 // ============================================================================
-// 🔔 TOAST (fallback se não existir)
-// ============================================================================
-function showToast(mensagem, tipo = 'info') {
-    // Se já existe um showToast global, usa ele
-    if (window.showToast && window.showToast !== showToast) {
-        return window.showToast(mensagem, tipo);
-    }
-
-    // Fallback: cria toast simples
-    const cores = {
-        success: '#10b981',
-        error: '#ef4444',
-        info: '#3b82f6',
-        warning: '#f59e0b'
-    };
-
-    const icones = {
-        success: '✅',
-        error: '❌',
-        info: 'ℹ️',
-        warning: '⚠️'
-    };
-
-    const toast = document.createElement('div');
-    toast.style.cssText = `
-        position: fixed; top: 20px; right: 20px; z-index: 9999999;
-        background: ${cores[tipo] || cores.info}; color: white;
-        padding: 14px 20px; border-radius: 10px; font-size: 14px;
-        font-weight: 600; box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        animation: slideInToast 0.3s ease; max-width: 400px;
-    `;
-    toast.textContent = `${icones[tipo] || ''} ${mensagem}`;
-
-    if (!document.getElementById('toast-animations')) {
-        const style = document.createElement('style');
-        style.id = 'toast-animations';
-        style.textContent = `
-            @keyframes slideInToast {
-                from { transform: translateX(400px); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-            }
-        `;
-        document.head.appendChild(style);
-    }
-
-    document.body.appendChild(toast);
-
-    setTimeout(() => {
-        toast.style.transition = 'all 0.3s ease';
-        toast.style.transform = 'translateX(400px)';
-        toast.style.opacity = '0';
-        setTimeout(() => toast.remove(), 300);
-    }, 4000);
-
-    console.log(`[${tipo.toUpperCase()}] ${mensagem}`);
-}
-
-// ============================================================================
-// 📦 MODAL HELPERS (fallback se não existirem)
+// 📦 HELPERS (com fallback seguro)
 // ============================================================================
 function mostrarModal(id) {
     const modal = document.getElementById(id);

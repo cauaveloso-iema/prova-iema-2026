@@ -2173,10 +2173,6 @@ router.delete('/turmas/:id', authenticateTokenLocal, isSuperAdmin, async (req, r
     const totalAlunos = (turma.alunos || []).length;
     const totalProvas = (turma.provas || []).length;
 
-    logger.warn(`⚠️ EXCLUSÃO CONFIRMADA: "${turma.nome}" (${turma.codigo})`);
-    logger.warn(`   👥 ${totalAlunos} aluno(s) matriculado(s)`);
-    logger.warn(`   📝 ${totalProvas} prova(s) associada(s)`);
-
     // Busca provas associadas
     const provasAssociadas = await Prova.find({ turmaId });
     logger.warn(`   📝 ${provasAssociadas.length} prova(s) encontrada(s) na coleção Prova`);
@@ -2188,21 +2184,9 @@ router.delete('/turmas/:id', authenticateTokenLocal, isSuperAdmin, async (req, r
       await Prova.findByIdAndDelete(prova._id);
     }
 
-    // 🔥 Limpa o campo `turma` dos alunos (com cuidado)
+    // ✅ MANTER O VÍNCULO
     if (totalAlunos > 0) {
-      const resultadoLimpeza = await User.updateMany(
-        {
-          _id: { $in: turma.alunos },
-          turma: turma.nome // ⚠️ Só limpa se ainda estiver nessa turma
-        },
-        { $set: { turma: '' } }
-      );
-
-      logger.info(`🔓 Campo "turma" limpo em ${resultadoLimpeza.modifiedCount} aluno(s)`);
-
-      if (resultadoLimpeza.modifiedCount < totalAlunos) {
-        logger.warn(`⚠️ ${totalAlunos - resultadoLimpeza.modifiedCount} aluno(s) já tinham outra turma (não foram afetados)`);
-      }
+      logger.info(`📌 Mantendo vínculo: ${totalAlunos} aluno(s) permanecem com turma="${turma.nome}"`);
     }
 
     // Exclui a turma

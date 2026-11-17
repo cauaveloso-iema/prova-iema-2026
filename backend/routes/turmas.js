@@ -657,12 +657,6 @@ router.delete('/:id', authenticateTokenLocal, async (req, res) => {
     const totalAlunos = (turma.alunos || []).length;
     const totalProvas = (turma.provas || []).length;
 
-    logger.warn(`⚠️ EXCLUSÃO CONFIRMADA`);
-    logger.warn(`   Nome: "${turma.nome}"`);
-    logger.warn(`   Código: ${turma.codigo || '(sem código)'}`);
-    logger.warn(`   Alunos no array: ${totalAlunos}`);
-    logger.warn(`   Provas no array: ${totalProvas}`);
-
     // ========================================================================
     // 5️⃣ BUSCAR E REMOVER PROVAS ASSOCIADAS
     // ========================================================================
@@ -694,22 +688,8 @@ router.delete('/:id', authenticateTokenLocal, async (req, res) => {
     let alunosDesvinculados = 0;
 
     if (totalAlunos > 0) {
-      logger.info(`👥 Desvinculando ${totalAlunos} aluno(s)...`);
-
-      const resultadoLimpeza = await User.updateMany(
-        {
-          _id: { $in: turma.alunos },
-          turma: turma.nome // ⚠️ Só limpa se ainda estiver nessa turma
-        },
-        { $set: { turma: '' } }
-      );
-
-      alunosDesvinculados = resultadoLimpeza.modifiedCount || 0;
-      logger.info(`   ✅ ${alunosDesvinculados} aluno(s) desvinculados (turma = "")`);
-
-      if (alunosDesvinculados < totalAlunos) {
-        logger.warn(`   ⚠️ ${totalAlunos - alunosDesvinculados} aluno(s) já tinham outra turma (não foram afetados)`);
-      }
+      logger.info(`📌 Mantendo vínculo: ${totalAlunos} aluno(s) permanecem com turma="${turma.nome}"`);
+      logger.info(`   ➜ Use POST /api/admin/turmas/:id/alunos para vinculá-los a outra turma`);
     }
 
     // ========================================================================
