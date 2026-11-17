@@ -7831,35 +7831,78 @@ async function criarNovaTurma(dadosTurma) {
     }
 }
 
+// ============================================================================
+// 🗑️ EXCLUSÃO DE TURMA — PROFESSOR
+// ============================================================================
+// Modal de confirmação dupla (digitar "EXCLUIR TURMA")
+// Compatível com DELETE /api/turmas/:id que exige { confirmacao: "EXCLUIR TURMA" }
+// ============================================================================
+
 async function excluirTurma(turmaId) {
     try {
         const token = localStorage.getItem('auth_token');
-        
-        // Busca dados da turma para mostrar no modal
-        const turmaResponse = await fetch(`/api/turmas/${turmaId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        const turmaData = await turmaResponse.json();
-        const turma = turmaData.turma;
-        
-        if (!turma) {
-            showToast('❌ Turma não encontrada', 'error');
-            return;
-        }
-        
+
         console.log('🗑️ Solicitando exclusão da turma:', turmaId);
-        
-        // 🔥 MODAL DE CONFIRMAÇÃO DUPLA
+
+        // ====================================================================
+        // 1️⃣ BUSCAR DADOS DA TURMA (para mostrar no modal)
+        // ====================================================================
+        let turma = null;
+
+        try {
+            const turmaResponse = await fetch(`/api/turmas/${turmaId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            const turmaData = await turmaResponse.json();
+
+            if (turmaResponse.ok && turmaData.success && turmaData.turma) {
+                turma = turmaData.turma;
+            }
+        } catch (fetchErr) {
+            console.warn('⚠️ Não foi possível buscar detalhes da turma:', fetchErr.message);
+        }
+
+        // Fallback: usa dados do cache local
+        if (!turma) {
+            const turmaDoCache = (window.turmasProfessorCache?.dados || [])
+                .find(t => (t.id || t._id) === turmaId);
+
+            if (turmaDoCache) {
+                turma = turmaDoCache;
+                console.log('📦 Usando dados do cache local para o modal');
+            }
+        }
+
+        // Se ainda não tem dados, monta um objeto mínimo para o modal
+        if (!turma) {
+            turma = {
+                id: turmaId,
+                nome: '(turma)',
+                codigo: '—',
+                totalAlunos: 0,
+                totalProvas: 0
+            };
+            console.warn('⚠️ Turma não encontrada — modal mostra dados genéricos');
+        }
+
+        // ====================================================================
+        // 2️⃣ MODAL DE CONFIRMAÇÃO DUPLA
+        // ====================================================================
         const confirmacao = await confirmarExclusaoComTextoProfessor(turma);
-        
+
         if (!confirmacao) {
             console.log('❌ Exclusão cancelada pelo usuário');
-            return;
+            return { success: false, error: 'cancelado' };
         }
-        
+
         console.log('✅ Confirmação aceita:', confirmacao);
-        
+
+        // ====================================================================
+        // 3️⃣ CHAMAR DELETE
+        // ====================================================================
+        showToast('🗑️ Excluindo turma...', 'info');
+
         const response = await fetch(`/api/turmas/${turmaId}`, {
             method: 'DELETE',
             headers: {
@@ -7868,58 +7911,110 @@ async function excluirTurma(turmaId) {
             },
             body: JSON.stringify({ confirmacao: confirmacao })
         });
-        
+
         const data = await response.json().catch(() => ({}));
-        
+
         if (!response.ok) {
             throw new Error(data.error || `Erro HTTP ${response.status}`);
         }
-        
-        if (data.success) {
-            showToast('✅ Turma excluída com sucesso!', 'success');
-            
-            // Atualiza cache e recarrega
-            if (window.turmasProfessorCache) {
-                window.turmasProfessorCache.dados = [];
-                window.turmasProfessorCache.timestamp = 0;
-            }
-            
-            if (typeof carregarTurmasProfessor === 'function') {
-                await carregarTurmasProfessor();
-            }
-            
-            return { success: true, mensagem: data.message };
-        } else {
-            throw new Error(data.error || 'Erro desconhecido');
+
+        if (!data.success) {
+            throw new Error(data.error || 'Erro desconhecido ao excluir turma');
         }
-        
+
+        // ====================================================================
+        // 4️⃣ SUCESSO — TOAST DETALHADO + LIMPEZA DE CACHE
+        // ====================================================================
+        const detalhes = data.detalhes || {};
+        const partes = [];
+
+        if (detalhes.alunosDesvinculados > 0) {
+            partes.push(`${detalhes.alunosDesvinculados} aluno(s) desvinculado(s)`);
+        }
+        if (detalhes.provasRemovidas > 0) {
+            partes.push(`${detalhes.provasRemovidas} prova(s) removida(s)`);
+        }
+        if (detalhes.resultadosRemovidos > 0) {
+            partes.push(`${detalhes.resultadosRemovidos} resultado(s) removido(s)`);
+        }
+
+        const mensagemToast = partes.length > 0
+            ? `✅ Turma excluída! ${partes.join(' • ')}`
+            : '✅ Turma excluída com sucesso!';
+
+        showToast(mensagemToast, 'success');
+
+        console.log('✅ Exclusão concluída:', data);
+
+        // ====================================================================
+        // 5️⃣ LIMPAR CACHE E RECARREGAR LISTA
+        // ====================================================================
+        if (window.turmasProfessorCache) {
+            window.turmasProfessorCache.dados = [];
+            window.turmasProfessorCache.timestamp = 0;
+            console.log('🔄 Cache de turmas limpo');
+        }
+
+        if (typeof carregarTurmasProfessor === 'function') {
+            try {
+                await carregarTurmasProfessor();
+                console.log('🔄 Lista de turmas recarregada');
+            } catch (reloadErr) {
+                console.warn('⚠️ Erro ao recarregar turmas:', reloadErr.message);
+                // Força recarregamento da página como fallback
+                setTimeout(() => window.location.reload(), 1500);
+            }
+        } else {
+            // Fallback: recarrega a página
+            setTimeout(() => window.location.reload(), 1500);
+        }
+
+        return {
+            success: true,
+            mensagem: data.message,
+            detalhes: data.detalhes
+        };
+
     } catch (error) {
-        console.error('Erro ao excluir turma:', error);
+        console.error('❌ Erro ao excluir turma:', error);
         showToast('❌ ' + error.message, 'error');
         return { success: false, error: error.message };
     }
 }
 
-// 🔥 NOVO: Modal de confirmação com digitação obrigatória (versão professor)
-async function confirmarExclusaoComTextoProfessor(turma) {
+// ============================================================================
+// 🎨 MODAL DE CONFIRMAÇÃO COM DIGITAÇÃO OBRIGATÓRIA ("EXCLUIR TURMA")
+// ============================================================================
+function confirmarExclusaoComTextoProfessor(turma) {
     const totalAlunos = turma.totalAlunos || 0;
     const totalProvas = turma.totalProvas || 0;
-    
+
     return new Promise((resolve) => {
         const modalId = 'modal-excluir-turma-prof-' + Date.now();
         const modal = document.createElement('div');
         modal.id = modalId;
         modal.style.cssText = `
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.7); display: flex; align-items: center;
+            background: rgba(0,0,0,0.75); display: flex; align-items: center;
             justify-content: center; z-index: 999999; padding: 20px;
-            box-sizing: border-box;
+            box-sizing: border-box; animation: fadeInModal 0.2s ease;
         `;
-        
+
         modal.innerHTML = `
+            <style>
+                @keyframes fadeInModal {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                @keyframes slideUpModal {
+                    from { transform: translateY(30px); opacity: 0; }
+                    to { transform: translateY(0); opacity: 1; }
+                }
+            </style>
             <div style="
                 background: white; border-radius: 16px; padding: 30px;
-                max-width: 520px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                max-width: 520px; width: 100%; box-shadow: 0 25px 80px rgba(0,0,0,0.4);
+                animation: slideUpModal 0.3s ease; max-height: 90vh; overflow-y: auto;
             ">
                 <div style="text-align: center; margin-bottom: 20px;">
                     <div style="
@@ -7928,239 +8023,227 @@ async function confirmarExclusaoComTextoProfessor(turma) {
                         border-radius: 50%; display: flex; align-items: center;
                         justify-content: center; font-size: 40px;
                     ">🗑️</div>
-                    <h2 style="margin: 0 0 10px; color: #dc2626; font-size: 22px;">
+                    <h2 style="margin: 0 0 10px; color: #dc2626; font-size: 22px; font-weight: 700;">
                         Excluir Turma Permanentemente
                     </h2>
                     <p style="margin: 0; color: #6b7280; font-size: 14px;">
-                        Esta ação <strong>não pode ser desfeita</strong>
+                        Esta ação <strong style="color: #dc2626;">não pode ser desfeita</strong>
                     </p>
                 </div>
-                
+
                 <div style="
                     background: #fef2f2; border: 1px solid #fecaca;
                     border-radius: 10px; padding: 15px; margin-bottom: 20px;
                 ">
-                    <p style="margin: 0 0 10px; font-weight: 600; color: #991b1b;">
+                    <p style="margin: 0 0 10px; font-weight: 600; color: #991b1b; font-size: 14px;">
                         ⚠️ Você está prestes a excluir:
                     </p>
-                    <p style="margin: 0 0 8px; color: #7f1d1d;">
-                        <strong>Turma:</strong> ${turma.nome} (${turma.codigo || 'sem código'})
+                    <p style="margin: 0 0 8px; color: #7f1d1d; font-size: 14px;">
+                        <strong>Turma:</strong> ${turma.nome || '—'} (${turma.codigo || 'sem código'})
                     </p>
-                    ${totalAlunos > 0 ? `<p style="margin: 0 0 8px; color: #7f1d1d;"><strong>👥 Alunos:</strong> ${totalAlunos} aluno(s) serão desvinculados</p>` : ''}
-                    ${totalProvas > 0 ? `<p style="margin: 0 0 8px; color: #7f1d1d;"><strong>📝 Provas:</strong> ${totalProvas} prova(s) serão excluídas</p>` : ''}
-                    <p style="margin: 0; color: #7f1d1d;">
-                        <strong>📊 Resultados:</strong> Todos os resultados serão removidos
+                    ${totalAlunos > 0 ? `<p style="margin: 0 0 8px; color: #7f1d1d; font-size: 14px;"><strong>👥 Alunos:</strong> ${totalAlunos} aluno(s) serão desvinculados</p>` : ''}
+                    ${totalProvas > 0 ? `<p style="margin: 0 0 8px; color: #7f1d1d; font-size: 14px;"><strong>📝 Provas:</strong> ${totalProvas} prova(s) serão excluídas</p>` : ''}
+                    <p style="margin: 0; color: #7f1d1d; font-size: 14px;">
+                        <strong>📊 Resultados:</strong> Todos os resultados associados serão removidos
                     </p>
                 </div>
-                
+
                 <div style="margin-bottom: 20px;">
                     <label style="
                         display: block; margin-bottom: 8px;
                         font-weight: 600; color: #374151; font-size: 14px;
                     ">
-                        Para confirmar, digite <span style="color: #dc2626; font-family: monospace;">EXCLUIR TURMA</span>:
+                        Para confirmar, digite <span style="
+                            color: #dc2626; font-family: monospace; font-weight: 700;
+                            background: #fef2f2; padding: 2px 6px; border-radius: 4px;
+                        ">EXCLUIR TURMA</span>:
                     </label>
-                    <input type="text" id="input-confirmacao-prof" 
+                    <input type="text" id="input-confirmacao-prof"
                         placeholder="Digite aqui..."
                         autocomplete="off"
+                        autofocus
                         style="
-                            width: 100%; padding: 12px; border: 2px solid #e5e7eb;
-                            border-radius: 8px; font-size: 15px;
+                            width: 100%; padding: 12px 14px; border: 2px solid #e5e7eb;
+                            border-radius: 8px; font-size: 15px; font-weight: 600;
                             text-transform: uppercase; font-family: monospace;
                             letter-spacing: 1px; box-sizing: border-box;
+                            transition: border-color 0.2s, box-shadow 0.2s;
                         ">
                     <p id="msg-validacao-prof" style="
                         margin: 8px 0 0; font-size: 13px; color: #6b7280;
-                        min-height: 18px;
+                        min-height: 18px; transition: color 0.2s;
                     "></p>
                 </div>
-                
+
                 <div style="display: flex; gap: 10px;">
-                    <button id="btn-cancelar-prof" style="
+                    <button id="btn-cancelar-prof" type="button" style="
                         flex: 1; padding: 14px; background: #f3f4f6;
                         color: #374151; border: none; border-radius: 10px;
                         font-size: 15px; font-weight: 600; cursor: pointer;
-                    ">Cancelar</button>
-                    <button id="btn-confirmar-prof" disabled style="
+                        transition: background 0.2s;
+                    " onmouseover="this.style.background='#e5e7eb'"
+                       onmouseout="this.style.background='#f3f4f6'">
+                        Cancelar
+                    </button>
+                    <button id="btn-confirmar-prof" type="button" disabled style="
                         flex: 1; padding: 14px; background: #dc2626;
                         color: white; border: none; border-radius: 10px;
                         font-size: 15px; font-weight: 600; cursor: not-allowed;
-                        opacity: 0.5;
-                    ">Excluir</button>
+                        opacity: 0.4; transition: opacity 0.2s, background 0.2s;
+                    ">
+                        Excluir
+                    </button>
                 </div>
             </div>
         `;
-        
+
         document.body.appendChild(modal);
-        
+
+        // Referências aos elementos
         const input = modal.querySelector('#input-confirmacao-prof');
         const btnConfirmar = modal.querySelector('#btn-confirmar-prof');
         const btnCancelar = modal.querySelector('#btn-cancelar-prof');
         const msgValidacao = modal.querySelector('#msg-validacao-prof');
-        
+
+        // ====================================================================
+        // VALIDAÇÃO EM TEMPO REAL
+        // ====================================================================
         input.addEventListener('input', () => {
             const valor = input.value.trim().toUpperCase();
             const valido = valor === 'EXCLUIR TURMA';
-            
+
             if (valido) {
                 btnConfirmar.disabled = false;
                 btnConfirmar.style.cursor = 'pointer';
                 btnConfirmar.style.opacity = '1';
+                btnConfirmar.style.background = '#dc2626';
                 msgValidacao.textContent = '✅ Confirmação correta';
                 msgValidacao.style.color = '#16a34a';
                 input.style.borderColor = '#16a34a';
+                input.style.boxShadow = '0 0 0 3px rgba(22, 163, 74, 0.15)';
             } else {
                 btnConfirmar.disabled = true;
                 btnConfirmar.style.cursor = 'not-allowed';
-                btnConfirmar.style.opacity = '0.5';
+                btnConfirmar.style.opacity = '0.4';
                 msgValidacao.textContent = valor.length > 0 ? '❌ Digite exatamente: EXCLUIR TURMA' : '';
                 msgValidacao.style.color = valor.length > 0 ? '#dc2626' : '#6b7280';
                 input.style.borderColor = valor.length > 0 ? '#dc2626' : '#e5e7eb';
+                input.style.boxShadow = 'none';
             }
         });
-        
+
+        // Foco automático após renderizar
         setTimeout(() => input.focus(), 100);
-        
+
+        // ====================================================================
+        // AÇÕES
+        // ====================================================================
+        const fechar = (resultado) => {
+            modal.remove();
+            resolve(resultado);
+        };
+
         btnConfirmar.addEventListener('click', () => {
             const valor = input.value.trim().toUpperCase();
             if (valor === 'EXCLUIR TURMA') {
-                modal.remove();
-                resolve(valor);
+                fechar(valor);
             }
         });
-        
+
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !btnConfirmar.disabled) {
+                e.preventDefault();
                 btnConfirmar.click();
             } else if (e.key === 'Escape') {
+                e.preventDefault();
                 btnCancelar.click();
             }
         });
-        
-        btnCancelar.addEventListener('click', () => {
-            modal.remove();
-            resolve(null);
-        });
-        
+
+        btnCancelar.addEventListener('click', () => fechar(null));
+
         modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                modal.remove();
-                resolve(null);
-            }
+            if (e.target === modal) fechar(null);
         });
     });
 }
 
-function solicitarExclusaoTurma(turmaId, turmaNome) {
-    turmaParaExcluir = { id: turmaId, nome: turmaNome };
-    
-    // 🔥 Cria o modal se não existir
-    let modal = document.getElementById('modalExcluirTurma');
-    if (!modal) {
-        console.log('📦 Criando modal de exclusão de turma dinamicamente...');
-        
-        modal = document.createElement('div');
-        modal.className = 'modal';
-        modal.id = 'modalExcluirTurma';
-        modal.innerHTML = `
-            <div class="modal-content" style="max-width: 500px;">
-                <div class="modal-header">
-                    <h3 style="margin: 0; color: #dc2626; display: flex; align-items: center; gap: 10px;">
-                        <i class="fas fa-exclamation-triangle"></i> Excluir Turma
-                    </h3>
-                    <button class="modal-close" onclick="fecharModal('modalExcluirTurma')">&times;</button>
-                </div>
-                <div id="modalExcluirConteudo" style="margin: 1.5rem 0; line-height: 1.6;"></div>
-                <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-                    <button class="btn btn-danger" onclick="confirmarExclusaoTurma()" style="flex: 1;">
-                        <i class="fas fa-trash"></i> Excluir Turma
-                    </button>
-                    <button class="btn" onclick="fecharModal('modalExcluirTurma')" 
-                            style="flex: 1; background: #e5e7eb; color: #374151;">
-                        <i class="fas fa-times"></i> Cancelar
-                    </button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modal);
-        console.log('✅ Modal criado com sucesso');
+// ============================================================================
+// 🔔 TOAST (fallback se não existir)
+// ============================================================================
+function showToast(mensagem, tipo = 'info') {
+    // Se já existe um showToast global, usa ele
+    if (window.showToast && window.showToast !== showToast) {
+        return window.showToast(mensagem, tipo);
     }
-    
-    // Preenche o conteúdo
-    const modalConteudo = document.getElementById('modalExcluirConteudo');
-    if (modalConteudo) {
-        modalConteudo.innerHTML = `
-            <p>Tem certeza que deseja excluir a turma <strong>"${turmaNome}"</strong>?</p>
-            <div style="margin-top: 15px; padding: 15px; background: #fef2f2; border-radius: 8px; border-left: 4px solid #ef4444;">
-                <i class="fas fa-exclamation-circle" style="color: #ef4444; margin-right: 10px;"></i>
-                <div style="display: inline-block; vertical-align: middle;">
-                    <strong style="color: #7f1d1d;">Atenção:</strong> 
-                    <ul style="margin: 10px 0 0 20px; color: #7f1d1d;">
-                        <li>Se houver provas, a exclusão será bloqueada</li>
-                        <li>Exclua as provas primeiro ou peça para um admin</li>
-                        <li>Alunos serão removidos da turma</li>
-                    </ul>
-                </div>
-            </div>
-        `;
-    }
-    
-    mostrarModal('modalExcluirTurma');
-}
 
-async function testarRotaExclusao() {
-    try {
-        const token = localStorage.getItem('auth_token');
-        const testeId = 'teste';
-        
-        console.log('🔍 Testando rota de exclusão...');
-        
-        const response = await fetch(`/api/professor/provas/${testeId}`, {
-            method: 'DELETE',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
+    // Fallback: cria toast simples
+    const cores = {
+        success: '#10b981',
+        error: '#ef4444',
+        info: '#3b82f6',
+        warning: '#f59e0b'
+    };
+
+    const icones = {
+        success: '✅',
+        error: '❌',
+        info: 'ℹ️',
+        warning: '⚠️'
+    };
+
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+        position: fixed; top: 20px; right: 20px; z-index: 9999999;
+        background: ${cores[tipo] || cores.info}; color: white;
+        padding: 14px 20px; border-radius: 10px; font-size: 14px;
+        font-weight: 600; box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        animation: slideInToast 0.3s ease; max-width: 400px;
+    `;
+    toast.textContent = `${icones[tipo] || ''} ${mensagem}`;
+
+    if (!document.getElementById('toast-animations')) {
+        const style = document.createElement('style');
+        style.id = 'toast-animations';
+        style.textContent = `
+            @keyframes slideInToast {
+                from { transform: translateX(400px); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
             }
-        });
-        
-        console.log('Status da resposta:', response.status);
-        console.log('Headers:', Object.fromEntries(response.headers.entries()));
-        
-        const text = await response.text();
-        console.log('Conteúdo da resposta:', text);
-        
-        try {
-            const json = JSON.parse(text);
-            console.log('JSON parseado:', json);
-        } catch (e) {
-            console.log('Resposta não é JSON válido:', e.message);
-        }
-        
-    } catch (error) {
-        console.error('Erro no teste:', error);
+        `;
+        document.head.appendChild(style);
     }
+
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.transition = 'all 0.3s ease';
+        toast.style.transform = 'translateX(400px)';
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
+
+    console.log(`[${tipo.toUpperCase()}] ${mensagem}`);
 }
 
+// ============================================================================
+// 📦 MODAL HELPERS (fallback se não existirem)
+// ============================================================================
 function mostrarModal(id) {
     const modal = document.getElementById(id);
-    
     if (!modal) {
-        console.warn(`⚠️ Modal não encontrado no DOM: "${id}"`);
-        console.warn(`   → Verifique se o <div id="${id}"> existe no HTML`);
-        return; // ⚠️ Retorna sem erro ao invés de quebrar
+        console.warn(`⚠️ Modal não encontrado: "${id}"`);
+        return;
     }
-    
     modal.style.display = 'flex';
 }
 
 function fecharModal(id) {
     const modal = document.getElementById(id);
-    
     if (!modal) {
-        console.warn(`⚠️ Modal não encontrado no DOM: "${id}"`);
+        console.warn(`⚠️ Modal não encontrado: "${id}"`);
         return;
     }
-    
     modal.style.display = 'none';
 }
 
