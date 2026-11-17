@@ -412,7 +412,7 @@ router.get('/', authenticateTokenLocal, async (req, res) => {
 router.post('/', authenticateTokenLocal, async (req, res) => {
   try {
     const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
-    if (!isAdmin && req.userRole !== 'professor') {
+    if (!isAdmin && req.userRole !== 'professor') {fv
       return res.status(403).json({
         success: false,
         error: 'Apenas professores e administradores podem criar turmas'
@@ -429,16 +429,53 @@ router.post('/', authenticateTokenLocal, async (req, res) => {
       });
     }
 
+    // 🔥 1. Busca alunos que JÁ estão na turma "nome" (pelo campo string)
+    const alunosComTurma = await User.find({
+      role: 'aluno',
+      turma: nome
+    }).select('_id');
+
+    const idsAlunos = alunosComTurma.map(a => a._id);
+    logger.info(`👥 POST /turmas: ${idsAlunos.length} aluno(s) com turma="${nome}" encontrados`);
+
+    // 🔥 2. Cria a turma COM o array alunos preenchido
     const turma = new Turma({
       nome,
       disciplina,
       eixo: eixo,
       eixoId: eixoExistente._id,
       descricao,
-      professorId: req.userId
+      professorId: req.userId,
+      alunos: idsAlunos  // ✅ Preenche o array
     });
 
     await turma.save();
+
+    // 🔥 3. Busca também alunos do CURSO correspondente (nome da turma = código tipo "204")
+    //    Se o admin cria curso.turmas[] com código "204", o aluno.turma pode ser "204"
+    //    ou pode ser "204" via aluno.curso. Vamos varrer os alunos sem turma definida
+    //    e do mesmo eixo para incluí-los.
+    if (idsAlunos.length === 0) {
+      logger.info(`🔍 POST /turmas: nenhum aluno com turma="${nome}". Tentando buscar por curso do eixo "${eixo}"`);
+
+      // Busca cursos desse eixo para pegar nomes
+      const cursosDoEixo = await Curso.find({ eixo: eixo }).select('nome').lean();
+      const nomesCursos = cursosDoEixo.map(c => c.nome);
+
+      if (nomesCursos.length > 0) {
+        const alunosDoEixo = await User.find({
+          role: 'aluno',
+          curso: { $in: nomesCursos }
+        }).select('_id');
+
+        if (alunosDoEixo.length > 0) {
+          const novosIds = alunosDoEixo.map(a => a._id);
+          turma.alunos = novosIds;
+          await turma.save();
+          logger.info(`🔗 POST /turmas: ${novosIds.length} aluno(s) do eixo "${eixo}" adicionados ao array`);
+        }
+      }
+    }
 
     res.status(201).json({
       success: true,
@@ -448,7 +485,8 @@ router.post('/', authenticateTokenLocal, async (req, res) => {
         disciplina: turma.disciplina,
         eixo: turma.eixo,
         codigo: turma.codigo,
-        professorId: turma.professorId
+        professorId: turma.professorId,
+        totalAlunos: turma.alunos.length  // ✅ Agora retorna o total correto
       }
     });
 
@@ -662,12 +700,13 @@ router.get('/:id/alunos', authenticateTokenLocal, async (req, res) => {
     const userId = req.userId;
     const userRole = req.userRole;
 
-    const isPermitted = userRole === 'professor' ||
-      userRole === 'admin' ||
-      userRole === 'super_admin' ||
-      userRole === 'setor_pedagogico';
+    logger.info(`👥 GET /turmas/${turmaId}/alunos - role: ${userRole}, userId: ${userId}`);
 
-    if (!isPermitted) {
+    const isAdmin = userRole === 'admin' || userRole === 'super_admin';
+    const isPedagogico = userRole === 'setor_pedagogico';
+    const isProfessor = userRole === 'professor';
+
+    if (!isAdmin && !isPedagogico && !isProfessor) {
       return res.status(403).json({
         success: false,
         error: 'Você não tem permissão para ver os alunos desta turma'
@@ -675,7 +714,8 @@ router.get('/:id/alunos', authenticateTokenLocal, async (req, res) => {
     }
 
     const turma = await Turma.findById(turmaId)
-      .populate('alunos', 'nome email matricula');
+      .populate('alunos', 'nome email matricula')
+      .lean();
 
     if (!turma) {
       return res.status(404).json({
@@ -684,23 +724,61 @@ router.get('/:id/alunos', authenticateTokenLocal, async (req, res) => {
       });
     }
 
-    if (userRole !== 'setor_pedagogico' && turma.professorId.toString() !== userId && userRole !== 'admin' && userRole !== 'super_admin') {
+    // 🔥 Extrai ID do professor de forma robusta (string, ObjectId, ou objeto populado)
+    let professorIdDaTurma = null;
+    if (turma.professorId) {
+      professorIdDaTurma = (turma.professorId._id || turma.professorId).toString();
+    }
+
+    const isDonoDaTurma = professorIdDaTurma && professorIdDaTurma === userId.toString();
+
+    logger.info(`🔍 Verificação: dono=${isDonoDaTurma}, admin=${isAdmin}, pedagogico=${isPedagogico}`);
+
+    if (!isAdmin && !isPedagogico && !isDonoDaTurma) {
       return res.status(403).json({
         success: false,
         error: 'Você não tem permissão para ver os alunos desta turma'
       });
     }
 
-    const alunos = turma.alunos ? turma.alunos.map(aluno => ({
-      id: aluno._id,
-      nome: aluno.nome,
-      email: aluno.email,
-      matricula: aluno.matricula
-    })) : [];
+    // 🔥 CORREÇÃO: se o array `turma.alunos` está vazio, buscar por `aluno.turma` (string)
+    //    Isso resolve o caso das 35 alunos que estão no campo string mas não no array
+    let alunos = turma.alunos || [];
+
+    if (alunos.length === 0) {
+      logger.info(`⚠️ Array turma.alunos vazio. Buscando por aluno.turma = "${turma.nome}"`);
+
+      const alunosPorString = await User.find({
+        role: 'aluno',
+        turma: turma.nome
+      }).select('nome email matricula');
+
+      alunos = alunosPorString.map(a => ({
+        _id: a._id,
+        nome: a.nome,
+        email: a.email,
+        matricula: a.matricula
+      }));
+
+      logger.info(`🔗 Encontrados ${alunos.length} aluno(s) via campo string`);
+
+      // 🔥 Auto-correção: sincroniza o array para não precisar buscar de novo
+      if (alunos.length > 0) {
+        turma.alunos = alunos.map(a => a._id);
+        await Turma.findByIdAndUpdate(turmaId, { alunos: turma.alunos });
+        logger.info(`✅ Array turma.alunos sincronizado com ${alunos.length} aluno(s)`);
+      }
+    }
 
     res.json({
       success: true,
-      alunos
+      alunos: alunos.map(a => ({
+        id: a._id,
+        nome: a.nome,
+        email: a.email,
+        matricula: a.matricula
+      })),
+      total: alunos.length
     });
 
   } catch (error) {
