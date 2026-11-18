@@ -43,7 +43,6 @@ async function limparRascunhosExpirados() {
         `🧹 [limparRascunhos] ${resultado.deletedCount} rascunho(s) expirado(s) removido(s) em ${agora.toISOString()}`
       );
     } else {
-      logger.debug?.('[limparRascunhos] Nenhum rascunho expirado encontrado');
     }
 
     return {

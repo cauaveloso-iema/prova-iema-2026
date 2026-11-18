@@ -10,7 +10,14 @@ const NotificacaoVisitaSchema = new mongoose.Schema({
   
   tipo: {
     type: String,
-    enum: ['solicitacao', 'autorizacao', 'recusa', 'lembrete', 'expiracao'],
+    enum: [
+      'solicitacao',
+      'autorizacao',
+      'recusa',
+      'lembrete',
+      'expiracao',
+      'novo_termo'        // 🆕 criação de termo (admin + gestão + professor)
+    ],
     required: true
   },
   
@@ -28,6 +35,7 @@ const NotificacaoVisitaSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 NotificacaoVisitaSchema.index({ usuarioId: 1, lida: 1 });
+NotificacaoVisitaSchema.index({ usuarioId: 1, createdAt: -1 });
 NotificacaoVisitaSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('NotificacaoVisita', NotificacaoVisitaSchema);

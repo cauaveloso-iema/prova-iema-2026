@@ -10,6 +10,7 @@ const Turma = require('../models/Turma');
 const TermoVisita = require('../models/TermoVisita');
 const ConfiguracaoVisita = require('../models/ConfiguracaoVisita');
 const NotificacaoVisita = require('../models/NotificacaoVisita');
+const Notificacao = require('../models/Notificacao'); // 🆕 notificações gerais (as que o sino lê)
 
 // 🔐 Utilitários de mascaramento (sem criptografia — o schema cuida)
 const { mascararCPF, mascararRG, mascararTelefone } = require('../utils/crypto-utils');
@@ -118,6 +119,194 @@ function normalizarHorario(horario) {
 }
 
 // ============================================
+// 🔔 NOTIFICA CRIAÇÃO DE TERMO
+// Notifica: Professor(es) + Admin + Gestão-Geral + Criador
+// Grava em:
+//   - NotificacaoVisita (histórico do módulo)
+//   - Notificacao       (sino geral do sistema)  🆕
+//   - OneSignal         (push)
+// ============================================
+async function notificarCriacaoTermo(termo) {
+  try {
+    // ============================================
+    // 1) MONTAR MENSAGEM
+    // ============================================
+    const alunosNomes = (termo.alunos || []).map(a => a.nome).filter(Boolean);
+    const totalAlunos = alunosNomes.length;
+
+    let alunoTexto = '';
+    if (totalAlunos === 0) {
+      alunoTexto = 'Nenhum aluno';
+    } else if (totalAlunos === 1) {
+      alunoTexto = alunosNomes[0];
+    } else if (totalAlunos === 2) {
+      alunoTexto = `${alunosNomes[0]} e ${alunosNomes[1]}`;
+    } else {
+      alunoTexto = `${alunosNomes[0]}, ${alunosNomes[1]} e mais ${totalAlunos - 2}`;
+    }
+
+    const dataVisita = termo.dataVisita
+      ? new Date(termo.dataVisita).toLocaleDateString('pt-BR')
+      : 'data não definida';
+
+    const nomesProfs = (termo.professores || []).map(p => p.nome).filter(Boolean);
+    const profTexto = nomesProfs.length > 0 ? nomesProfs.join(', ') : 'Professor(a)';
+
+    const titulo = '📝 Novo Termo de Visita Criado';
+    const mensagem =
+      `Foi criado um termo de visita para "${termo.atividade}" ` +
+      `(${alunoTexto}) em ${dataVisita}. ` +
+      `Professor(a): ${profTexto}. ` +
+      `Código: ${termo.codigo}.`;
+
+    // ============================================
+    // 2) MONTAR LISTA DE DESTINATÁRIOS
+    // ============================================
+    const destinatariosSet = new Set();
+
+    // 2.1) Professores do termo
+    (termo.professores || []).forEach(p => {
+      const pid =
+        p.professorId?._id?.toString() ||
+        p.professorId?.toString() ||
+        p._id?.toString();
+      if (pid) destinatariosSet.add(pid);
+    });
+
+    // 2.2) Admin + Gestão-Geral
+    try {
+      const gestores = await User.find({
+        role: { $in: ['admin', 'super_admin', 'gestao-geral', 'gestor', 'gestao_geral'] },
+        ativo: true
+      }).select('_id').lean();
+
+      gestores.forEach(g => destinatariosSet.add(g._id.toString()));
+    } catch (e) {
+      console.warn('⚠️ Erro ao buscar admins/gestão:', e.message);
+    }
+
+    // 2.3) Criador do termo
+    if (termo.criadoPor) {
+      destinatariosSet.add(termo.criadoPor.toString());
+    }
+
+    if (destinatariosSet.size === 0) {
+      console.warn(`⚠️ Termo ${termo.codigo} sem destinatários válidos`);
+      return { notificado: false, motivo: 'Sem destinatários' };
+    }
+
+    // 🆕 Busca o role dos destinatários (para decidir o link e facilitar diagnóstico)
+    const roleMap = new Map();
+    try {
+      const usuariosDest = await User.find({ _id: { $in: [...destinatariosSet] } })
+        .select('nome role')
+        .lean();
+      usuariosDest.forEach(u => roleMap.set(u._id.toString(), u.role));
+
+      console.log(
+        `🔔 Termo ${termo.codigo} criado — notificando ${destinatariosSet.size} destinatário(s):`,
+        usuariosDest.map(u => `${u.nome} (${u.role})`).join(' | ')
+      );
+    } catch (e) {
+      console.warn('⚠️ Erro ao buscar roles dos destinatários:', e.message);
+      console.log(
+        `🔔 Termo ${termo.codigo} criado — notificando ${destinatariosSet.size} destinatário(s)`
+      );
+    }
+
+    // ============================================
+    // 3) SALVAR NOTIFICAÇÕES + ENVIAR PUSH
+    // ============================================
+    const criadas = [];
+    const criadasGerais = [];
+    const pushes = [];
+
+    let oneSignal = null;
+    try {
+      const OneSignalService = require('../services/onesignal-service');
+      oneSignal = new OneSignalService();
+    } catch (e) {
+      console.warn('⚠️ OneSignalService indisponível:', e.message);
+    }
+
+    for (const usuarioId of destinatariosSet) {
+      // 3.1) Notificação do módulo (NotificacaoVisita)
+      try {
+        const notificacao = new NotificacaoVisita({
+          usuarioId,
+          tipo: 'novo_termo',
+          titulo,
+          mensagem,
+          termoId: termo._id
+        });
+        await notificacao.save();
+        criadas.push(usuarioId);
+      } catch (err) {
+        console.warn(`⚠️ Erro ao salvar notificação para ${usuarioId}:`, err.message);
+      }
+
+      // 3.1b) 🆕 Notificação geral (a que o sino do sistema lê)
+      try {
+        const role = roleMap.get(usuarioId);
+        // Professor não tem acesso ao módulo de visitas — não manda link
+        const link = role === 'professor' ? null : '/setor-pedagogico#visitas';
+
+        await Notificacao.create({
+          usuarioId,
+          tipo: 'visita_novo_termo',
+          titulo,
+          mensagem,
+          icone: '🗺️',
+          cor: '#3b82f6',
+          prioridade: 3,
+          link,
+          dados: {
+            termoId: termo._id.toString(),
+            codigo: termo.codigo,
+            totalAlunos
+          }
+        });
+        criadasGerais.push(usuarioId);
+      } catch (err) {
+        console.warn(`⚠️ Erro ao salvar Notificacao geral para ${usuarioId}:`, err.message);
+      }
+
+      // 3.2) Push (OneSignal)
+      if (oneSignal) {
+        try {
+          const ok = await oneSignal.enviarPush(
+            usuarioId,
+            titulo,
+            mensagem,
+            {
+              tipo: 'visita_novo_termo',
+              termoId: termo._id.toString(),
+              codigo: termo.codigo,
+              totalAlunos
+            }
+          );
+          if (ok) pushes.push(usuarioId);
+        } catch (pushErr) {
+          console.warn(`⚠️ Erro no push para ${usuarioId}:`, pushErr.message);
+        }
+      }
+    }
+
+    return {
+      notificado: criadas.length > 0 || criadasGerais.length > 0 || pushes.length > 0,
+      destinatarios: Array.from(destinatariosSet),
+      notificacoesCriadas: criadas.length,
+      notificacoesGeraisCriadas: criadasGerais.length,
+      pushesEnviados: pushes.length
+    };
+
+  } catch (error) {
+    console.error('❌ Erro em notificarCriacaoTermo:', error.message);
+    return { notificado: false, erro: error.message };
+  }
+}
+
+// ============================================
 // MIDDLEWARES
 // ============================================
 const authenticateToken = (req, res, next) => {
@@ -184,7 +373,7 @@ router.get('/health', (req, res) => {
     success: true,
     status: 'online',
     service: 'Autorizacao de Visitas',
-    versao: '3.2-cache-select-otimizado',
+    versao: '3.3-notificacao-geral',
     cacheSize: _cache.size,
     _debug: {
       hojeBR: getDataHojeBR(),
@@ -839,22 +1028,22 @@ router.post('/termos', authenticateToken, verificarPermissaoVisitas, async (req,
     
     console.log(`✅ Termo criado: ${codigo} | Turmas: ${turmas.join(', ')} | Horário: ${horarioNormalizado}`);
     
+    // ============================================
+    // 🔔 NOTIFICAR CRIAÇÃO
+    //    Professor(es) + Admin + Gestão-Geral + Criador
+    // ============================================
+    let resultadoNotificacao = { notificado: false };
     try {
-      const notificacao = new NotificacaoVisita({
-        usuarioId: req.userId,
-        tipo: 'solicitacao',
-        titulo: '📋 Termo Criado',
-        mensagem: `Termo "${codigo}" criado para ${alunosData.length} aluno(s) de ${turmas.length} turma(s). Aguardando autorização dos responsáveis.`,
-        termoId: termo._id
-      });
-      await notificacao.save();
-    } catch (notifError) {
-      console.warn('⚠️ Erro ao criar notificação:', notifError.message);
+      resultadoNotificacao = await notificarCriacaoTermo(termo);
+    } catch (notifErr) {
+      console.warn('⚠️ Erro ao notificar criação:', notifErr.message);
     }
     
     res.status(201).json({
       success: true,
       message: `Termo criado com ${alunosData.length} aluno(s), ${turmas.length} turma(s) e ${professoresData.length} professor(es)!`,
+      notificacaoDisparada: resultadoNotificacao.notificado === true,
+      destinatariosNotificados: resultadoNotificacao.destinatarios || [],
       termo
     });
     
@@ -1105,6 +1294,101 @@ router.get('/estatisticas', authenticateToken, verificarPermissaoVisitas, async 
     });
   } catch (error) {
     console.error('❌ Erro ao calcular estatísticas:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// NOTIFICAÇÕES — consulta do usuário logado
+// ============================================
+
+// GET /notificacoes
+router.get('/notificacoes', authenticateToken, async (req, res) => {
+  try {
+    const { apenasNaoLidas, limite = 50 } = req.query;
+    const query = { usuarioId: req.userId };
+    if (apenasNaoLidas === 'true') query.lida = false;
+
+    const [notificacoes, naoLidas] = await Promise.all([
+      NotificacaoVisita.find(query)
+        .sort({ createdAt: -1 })
+        .limit(parseInt(limite))
+        .populate('termoId', 'codigo atividade dataVisita status')
+        .lean(),
+      NotificacaoVisita.countDocuments({ usuarioId: req.userId, lida: false })
+    ]);
+
+    res.json({
+      success: true,
+      notificacoes,
+      total: notificacoes.length,
+      naoLidas
+    });
+  } catch (error) {
+    console.error('❌ Erro ao buscar notificações:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /notificacoes/nao-lidas/contador
+router.get('/notificacoes/nao-lidas/contador', authenticateToken, async (req, res) => {
+  try {
+    const count = await NotificacaoVisita.countDocuments({
+      usuarioId: req.userId,
+      lida: false
+    });
+    res.json({ success: true, count });
+  } catch (error) {
+    console.error('❌ Erro ao contar notificações:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT /notificacoes/marcar-todas-lidas
+router.put('/notificacoes/marcar-todas-lidas', authenticateToken, async (req, res) => {
+  try {
+    const result = await NotificacaoVisita.updateMany(
+      { usuarioId: req.userId, lida: false },
+      { lida: true, lidaEm: new Date() }
+    );
+    res.json({ success: true, modificadas: result.modifiedCount });
+  } catch (error) {
+    console.error('❌ Erro ao marcar todas como lidas:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT /notificacoes/:id/lida
+router.put('/notificacoes/:id/lida', authenticateToken, async (req, res) => {
+  try {
+    const notificacao = await NotificacaoVisita.findOneAndUpdate(
+      { _id: req.params.id, usuarioId: req.userId },
+      { lida: true, lidaEm: new Date() },
+      { new: true }
+    );
+    if (!notificacao) {
+      return res.status(404).json({ success: false, error: 'Notificação não encontrada' });
+    }
+    res.json({ success: true, notificacao });
+  } catch (error) {
+    console.error('❌ Erro ao marcar como lida:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// DELETE /notificacoes/:id
+router.delete('/notificacoes/:id', authenticateToken, async (req, res) => {
+  try {
+    const result = await NotificacaoVisita.findOneAndDelete({
+      _id: req.params.id,
+      usuarioId: req.userId
+    });
+    if (!result) {
+      return res.status(404).json({ success: false, error: 'Notificação não encontrada' });
+    }
+    res.json({ success: true, message: 'Notificação removida' });
+  } catch (error) {
+    console.error('❌ Erro ao deletar notificação:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

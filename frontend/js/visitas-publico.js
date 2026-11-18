@@ -135,6 +135,7 @@ class VisitasPublico {
             
             this.configurarEventos();
             this.capturarLocalizacao();
+            this.renderizarEstadoInicial();
             
             console.log('✅ Página pública inicializada');
         } catch (error) {
@@ -151,16 +152,15 @@ class VisitasPublico {
         
         return this._comLock('carregarDadosIniciais', async () => {
             try {
-                const [turmasRes, cursosRes, alunosRes] = await Promise.all([
+                // ✅ Carrega APENAS turmas e cursos (leves, poucos registros)
+                const [turmasRes, cursosRes] = await Promise.all([
                     fetch(`${this.apiBase}/turmas`),
-                    fetch(`${this.apiBase}/cursos`),
-                    fetch(`${this.apiBase}/alunos`)
+                    fetch(`${this.apiBase}/cursos`)
                 ]);
                 
-                const [turmasData, cursosData, alunosData] = await Promise.all([
+                const [turmasData, cursosData] = await Promise.all([
                     turmasRes.json(),
-                    cursosRes.json(),
-                    alunosRes.json()
+                    cursosRes.json()
                 ]);
                 
                 if (turmasData.success && turmasData.turmas) {
@@ -173,37 +173,12 @@ class VisitasPublico {
                     this.preencherSelectCursos();
                 }
                 
-                if (alunosData.success && alunosData.alunos) {
-                    this.alunos = alunosData.alunos;
-                    this.renderizarAlunos();
-                    console.log(`✅ ${this.alunos.length} aluno(s) pré-carregados`);
-                }
-                
+                // ❌ NÃO carrega alunos aqui
                 this._dadosIniciaisCarregados = true;
-                console.log('✅ Dados iniciais carregados em paralelo');
+                console.log('✅ Turmas e cursos carregados');
                 
             } catch (error) {
                 console.error('❌ Erro ao carregar dados iniciais:', error);
-                try {
-                    const [turmasRes, cursosRes] = await Promise.all([
-                        fetch(`${this.apiBase}/turmas`),
-                        fetch(`${this.apiBase}/cursos`)
-                    ]);
-                    const [turmasData, cursosData] = await Promise.all([
-                        turmasRes.json(),
-                        cursosRes.json()
-                    ]);
-                    if (turmasData.success && turmasData.turmas) {
-                        this.turmas = turmasData.turmas;
-                        this.preencherSelectTurmas();
-                    }
-                    if (cursosData.success && cursosData.cursos) {
-                        this.cursos = cursosData.cursos;
-                        this.preencherSelectCursos();
-                    }
-                } catch (e) {
-                    console.error('❌ Fallback também falhou:', e);
-                }
             }
         });
     }
@@ -333,10 +308,9 @@ class VisitasPublico {
         const curso = document.getElementById('filtroCursoPublico')?.value;
         const nome = document.getElementById('buscaAlunoPublico')?.value;
         
+        // ✅ Se não tem filtro, mostra estado inicial (não busca nada)
         if (!turma && !curso && !nome) {
-            if (this.alunos.length > 0) {
-                this.renderizarAlunos();
-            }
+            this.renderizarEstadoInicial();
             return;
         }
         
@@ -356,6 +330,24 @@ class VisitasPublico {
         } catch (error) {
             console.error('❌ Erro:', error);
         }
+    }
+
+    renderizarEstadoInicial() {
+        const container = document.getElementById('listaAlunosPublico');
+        if (!container) return;
+        
+        this.alunos = [];
+        container.innerHTML = `
+            <div style="text-align: center; padding: 40px 20px; color: #9ca3af;">
+                <i class="fas fa-filter" style="font-size: 42px; margin-bottom: 15px; display: block; color: #d1d5db;"></i>
+                <p style="margin: 0 0 8px; font-weight: 600; color: #6b7280;">
+                    Selecione uma turma ou curso
+                </p>
+                <p style="margin: 0; font-size: 13px;">
+                    Use os filtros acima ou busque pelo nome do aluno para encontrar a autorização
+                </p>
+            </div>
+        `;
     }
 
     async buscarPorCodigo() {
@@ -496,6 +488,9 @@ class VisitasPublico {
         const container = document.getElementById('listaAlunosPublico');
         if (!container) return;
         
+        // ============================================
+        // ESTADO VAZIO
+        // ============================================
         if (this.alunos.length === 0) {
             container.innerHTML = `
                 <div style="text-align: center; padding: 30px; color: #9ca3af;">
@@ -506,10 +501,21 @@ class VisitasPublico {
             return;
         }
         
-        container.innerHTML = this.alunos.map(a => `
+        // ============================================
+        // ✅ LIMITE DE RENDERIZAÇÃO (evita DOM pesado)
+        // ============================================
+        const limite = 50;
+        const lista = this.alunos.slice(0, limite);
+        const temMais = this.alunos.length > limite;
+        const totalRestante = this.alunos.length - limite;
+        
+        // ============================================
+        // CARDS DOS ALUNOS
+        // ============================================
+        const cardsHTML = lista.map(a => `
             <div class="termo-publico-card aluno-card-public" 
-                 data-aluno-id="${a.id}" 
-                 style="cursor: pointer;">
+                data-aluno-id="${a.id}" 
+                style="cursor: pointer;">
                 <h4>${this.escapeHtml(a.nome)}</h4>
                 <div class="info"><i class="fas fa-id-card"></i> ${a.matricula || 'N/A'}</div>
                 <div class="info"><i class="fas fa-school"></i> ${a.turma || 'N/A'}</div>
@@ -521,7 +527,26 @@ class VisitasPublico {
                 </div>
             </div>
         `).join('');
+        
+        // ============================================
+        // AVISO DE "TEM MAIS" (se passou do limite)
+        // ============================================
+        const avisoHTML = temMais ? `
+            <div style="text-align: center; padding: 20px 15px; color: #6b7280; font-size: 13px; background: #f9fafb; border-radius: 12px; margin-top: 10px; border: 1px dashed #d1d5db;">
+                <i class="fas fa-info-circle" style="color: #667eea;"></i>
+                Mostrando <strong>${limite}</strong> de <strong>${this.alunos.length}</strong> alunos encontrados.
+                <br>
+                <span style="font-size: 12px; color: #9ca3af;">
+                    Refine os filtros (turma, curso ou nome) para ver os outros <strong>${totalRestante}</strong>.
+                </span>
+            </div>
+        ` : '';
+        
+        container.innerHTML = cardsHTML + avisoHTML;
 
+        // ============================================
+        // EVENT LISTENERS
+        // ============================================
         container.querySelectorAll('.aluno-card-public').forEach(card => {
             card.addEventListener('click', () => {
                 this.selecionarAluno(card.dataset.alunoId);

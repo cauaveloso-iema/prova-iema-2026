@@ -350,6 +350,16 @@ router.get('/alunos', async (req, res) => {
   try {
     const { turma, curso, nome } = req.query;
     
+    // ✅ Exige pelo menos um filtro (evita dump de todos)
+    if (!turma && !curso && !nome) {
+      return res.json({
+        success: true,
+        alunos: [],
+        total: 0,
+        mensagem: 'Informe turma, curso ou nome para buscar alunos'
+      });
+    }
+    
     let query = { role: 'aluno', ativo: true };
     
     if (turma && turma.trim() !== '') query.turma = turma;
@@ -361,7 +371,7 @@ router.get('/alunos', async (req, res) => {
     const alunos = await User.find(query)
       .select('nome matricula turma curso')
       .sort({ nome: 1 })
-      .limit(100)
+      .limit(50)            // ✅ reduzido de 100 para 50
       .lean();
     
     res.json({

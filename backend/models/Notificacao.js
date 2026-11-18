@@ -20,8 +20,9 @@ const NotificacaoSchema = new mongoose.Schema({
             'sistema', 
             'cancelamento',
             'lembrete',
-            'aniversario',        // 🆕 ADICIONADO
-            'aniversario_equipe'  // 🆕 ADICIONADO
+            'aniversario',
+            'aniversario_equipe',
+            'visita_novo_termo'     // 🆕 termo de visita criado
         ],
         required: true
     },
