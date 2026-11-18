@@ -358,6 +358,13 @@ class VisitasPublico {
                 this.showToast('Digite pelo menos 4 caracteres do código', 'error');
                 return;
             }
+
+            // ✅ Efeito de loading no container
+            const container = document.getElementById('listaTermosCodigoPublico');
+            if (container) {
+                container.style.opacity = '0.5';
+                container.style.pointerEvents = 'none';
+            }
             
             try {
                 const response = await fetch(`${this.apiBase}/termos-por-codigo/${encodeURIComponent(codigo)}`);
@@ -372,6 +379,12 @@ class VisitasPublico {
             } catch (error) {
                 console.error('❌ Erro:', error);
                 this.showToast('❌ ' + error.message, 'error');
+            } finally {
+                // ✅ Remove o loading
+                if (container) {
+                    container.style.opacity = '1';
+                    container.style.pointerEvents = '';
+                }
             }
         });
     }
@@ -607,6 +620,9 @@ class VisitasPublico {
             || this.alunoSelecionado?._id 
             || null;
         
+        // ✅ Pega apenas o nome do aluno que foi selecionado
+        const nomeAlunoExibicao = this.alunoSelecionado?.nome || 'Aluno Selecionado';
+        
         container.innerHTML = this.termos.map(t => {
             const dataVisita = new Date(t.dataVisita).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
             
@@ -657,6 +673,9 @@ class VisitasPublico {
                         </div>
                     ` : ''}
                     
+                    <!-- ✅ Nome do aluno selecionado sendo exibido -->
+                    <div class="info"><i class="fas fa-user-graduate"></i> <strong>Aluno:</strong> ${this.escapeHtml(nomeAlunoExibicao)}</div>
+                    
                     <div class="info"><i class="fas fa-barcode"></i> <code style="font-size: 11px;">${t.codigo}</code></div>
                     <div class="info"><i class="fas fa-chalkboard-teacher"></i> ${this.escapeHtml(t.professor)}</div>
                     <div class="info"><i class="fas fa-calendar-alt"></i> ${dataVisita}</div>
@@ -671,9 +690,23 @@ class VisitasPublico {
         }).join('');
         
         container.querySelectorAll('.termo-card-clicavel').forEach(card => {
-            card.addEventListener('click', (e) => {
+            card.addEventListener('click', async (e) => {
                 if (e.target.closest('.btn-imprimir-termo')) return;
-                this.abrirTermo(card.dataset.termoId);
+                
+                // ✅ Efeito de loading no card clicado
+                const allCards = container.querySelectorAll('.termo-card-clicavel');
+                allCards.forEach(c => {
+                    c.style.opacity = '0.5';
+                    c.style.pointerEvents = 'none';
+                });
+
+                await this.abrirTermo(card.dataset.termoId);
+
+                // Restaura (embora a tela mude, é bom garantir)
+                allCards.forEach(c => {
+                    c.style.opacity = '1';
+                    c.style.pointerEvents = '';
+                });
             });
         });
 
@@ -714,6 +747,13 @@ class VisitasPublico {
                 if (termoEncontrado && (termoEncontrado.jaAutorizou || termoEncontrado.jaRecusou)) {
                     this.showToast('Este termo já foi respondido por você', 'info');
                     return;
+                }
+
+                // ✅ Efeito de loading global na seção de termos
+                const secaoTermos = document.getElementById('secaoTermos');
+                if (secaoTermos) {
+                    secaoTermos.style.opacity = '0.5';
+                    secaoTermos.style.pointerEvents = 'none';
                 }
 
                 let termoData = this._termoCache.get(termoId);
@@ -790,6 +830,13 @@ class VisitasPublico {
             } catch (error) {
                 console.error('❌ Erro:', error);
                 this.showToast('Erro ao abrir termo', 'error');
+            } finally {
+                // ✅ Remove o loading global
+                const secaoTermos = document.getElementById('secaoTermos');
+                if (secaoTermos) {
+                    secaoTermos.style.opacity = '1';
+                    secaoTermos.style.pointerEvents = '';
+                }
             }
         });
     }
@@ -1328,6 +1375,15 @@ class VisitasPublico {
     // ============================================
     async imprimirTermoOficial(termoId, alunoId = null) {
         return this._comLock('imprimirTermo', async () => {
+            // ✅ Efeito de loading no botão clicado
+            const btn = document.activeElement;
+            const originalHTML = btn ? btn.innerHTML : '';
+            
+            if (btn && (btn.classList.contains('btn-imprimir-termo') || btn.classList.contains('btn-imprimir-sucesso'))) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando...';
+            }
+
             try {
                 this.showToast('📄 Gerando termo oficial...', 'info');
                 
@@ -1372,6 +1428,12 @@ class VisitasPublico {
             } catch (error) {
                 console.error('❌ Erro:', error);
                 this.showToast('❌ ' + error.message, 'error');
+            } finally {
+                // ✅ Restaura o botão
+                if (btn && (btn.classList.contains('btn-imprimir-termo') || btn.classList.contains('btn-imprimir-sucesso'))) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHTML;
+                }
             }
         });
     }
