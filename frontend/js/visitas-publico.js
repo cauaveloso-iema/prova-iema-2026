@@ -739,6 +739,9 @@ class VisitasPublico {
     // ============================================
     // PASSO 2: ABRIR TERMO (com lock + cache)
     // ============================================
+    // ============================================
+    // ABRIR TERMO (com efeito de loading + Nome corrigido)
+    // ============================================
     async abrirTermo(termoId) {
         return this._comLock('abrirTermo', async () => {
             try {
@@ -772,9 +775,16 @@ class VisitasPublico {
                 this.lgpdAceito = false;
                 this.totpSecret = null;
                 
+                // ✅ CORREÇÃO DEFINITIVA DO NOME DO ALUNO
+                let nomeAlunoExibicao = this.termoAtual.alunoNome || 'Aluno';
+
                 if (this.alunoSelecionado) {
+                    // Prioridade 1: O aluno que o usuário clicou na tela anterior
+                    nomeAlunoExibicao = this.alunoSelecionado.nome;
                     this.termoAtual.alunoIdFoco = this.alunoSelecionado.id || this.alunoSelecionado._id;
-                } else if (this.termoAtual.alunos?.length === 1) {
+                } else if (this.termoAtual.alunos?.length > 0) {
+                    // Prioridade 2: Se não tiver selecionado, pega o primeiro do array
+                    nomeAlunoExibicao = this.termoAtual.alunos[0].nome || this.termoAtual.alunos[0].alunoNome;
                     this.termoAtual.alunoIdFoco = this.termoAtual.alunos[0].alunoId || this.termoAtual.alunos[0]._id;
                 }
                 
@@ -797,7 +807,8 @@ class VisitasPublico {
                             ` : ''}
                             
                             <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 10px; font-size: 13px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                                <div><strong>Aluno:</strong> ${this.escapeHtml(this.termoAtual.alunoNome)}</div>
+                                <!-- ✅ AQUI ESTÁ A CORREÇÃO DO NOME -->
+                                <div><strong>Aluno:</strong> ${this.escapeHtml(nomeAlunoExibicao)}</div>
                                 <div><strong>Turma:</strong> ${this.termoAtual.alunoTurma || 'N/A'}</div>
                                 <div><strong>Curso:</strong> ${this.termoAtual.alunoCurso || 'N/A'}</div>
                                 <div><strong>Professor:</strong> ${this.escapeHtml(this.termoAtual.professorNome)}</div>
