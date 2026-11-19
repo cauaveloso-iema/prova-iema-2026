@@ -44333,6 +44333,9 @@ class AdminPanel {
                     { icone: 'fa-graduation-cap', label: 'Cursos', section: 'cursos' },
                     { icone: 'fa-database', label: 'Backups', section: 'backups' },
                     { icone: 'fa-user-lock', label: 'Permissões', section: 'permissoes-especiais' },
+                    // ✅ NOVOS LINKS EXTERNOS
+                    { icone: 'fa-calendar-check', label: 'Eventos', href: '/eventos/eventos.html' },
+                    { icone: 'fa-clipboard-user', label: 'Inscrições', href: '/inscricoes/gerenciar.html' },
                     { icone: 'fa-cog', label: 'Configurações', section: 'configuracoes' },
                 ]
             }
@@ -44341,8 +44344,13 @@ class AdminPanel {
         categorias.forEach(cat => {
             html += `<div class="mobile-menu-category">${cat.titulo}</div>`;
             cat.itens.forEach(item => {
+                // Se tem href → link externo; senão → seção interna
+                const onclick = item.href
+                    ? `admin.fecharMenuCompleto(); setTimeout(() => window.location.href='${item.href}', 300);`
+                    : `admin.selecionarMenuMobile('${item.section}', this)`;
+
                 html += `
-                    <button class="mobile-menu-item" onclick="admin.selecionarMenuMobile('${item.section}', this)">
+                    <button class="mobile-menu-item" onclick="${onclick}">
                         <i class="fas ${item.icone}"></i>
                         <span>${item.label}</span>
                     </button>
