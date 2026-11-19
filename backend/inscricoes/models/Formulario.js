@@ -1,6 +1,6 @@
 // ============================================================================
 // backend/inscricoes/models/Formulario.js
-// Inscrição socioeconômica (aluno + responsável + família)
+// Inscrição socioeconômica (aluno + responsável + família + biometria)
 //
 // NOTA: o model foi renomeado de "Inscricao" para "Formulario" para evitar
 // colisão com o model "Inscricao" do módulo de eventos (que exige
@@ -148,6 +148,22 @@ const LgpdSchema = new mongoose.Schema({
     userAgent: { type: String, default: '' }
 }, { _id: false });
 
+// ---------------------------------------------------------------- Biometria
+// O envelope cifrado é armazenado como recebido do navegador.
+// O payload em claro (credencial WebAuthn) NÃO é persistido.
+const BiometriaSchema = new mongoose.Schema({
+    aceito: { type: Boolean, default: false },
+    versaoTermo: { type: String, default: '1.0' },
+    algoritmo: { type: String, default: '' },          // ex.: AES-GCM+RSA-OAEP-256
+    iv: { type: String, default: '' },                  // base64
+    chaveAesCifrada: { type: String, default: '' },     // base64 (RSA-OAEP)
+    dadosCifrados: { type: String, default: '' },       // base64 (payload cifrado)
+    capturadoEm: { type: Date, default: null },
+    credentialId: { type: String, default: '' },        // ID WebAuthn (auditoria)
+    ip: { type: String, default: '' },
+    userAgent: { type: String, default: '' }
+}, { _id: false });
+
 // ---------------------------------------------------------------- Histórico
 const HistoricoSchema = new mongoose.Schema({
     status: { type: String, default: '' },
@@ -174,6 +190,7 @@ const FormularioSchema = new mongoose.Schema({
     informacoesAdicionais: { type: InformacoesAdicionaisSchema, default: () => ({}) },
 
     lgpd: { type: LgpdSchema, default: () => ({}) },
+    biometria: { type: BiometriaSchema, default: () => ({}) },
 
     status: { type: String, enum: STATUS, default: 'Pendente', index: true },
     observacoesAdmin: { type: String, default: '' },
@@ -192,6 +209,7 @@ const FormularioSchema = new mongoose.Schema({
 FormularioSchema.index({ anoLetivo: 1, status: 1 });
 FormularioSchema.index({ cpfHash: 1, anoLetivo: 1 });
 FormularioSchema.index({ createdAt: -1 });
+FormularioSchema.index({ 'biometria.aceito': 1 });
 FormularioSchema.index({ 'aluno.nomeCompleto': 'text', 'responsavel.nomeCompleto': 'text' });
 
 // ---------------------------------------------------------------- Hooks

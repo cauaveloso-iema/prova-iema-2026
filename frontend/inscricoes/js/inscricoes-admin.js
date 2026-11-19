@@ -1,5 +1,7 @@
 /* ============================================================================
    inscricoes-admin.js — Painel de gestão de inscrições
+   Carregado por: gerenciar.html
+   Inclui: config de biometria, filtro e coluna de biometria
    ============================================================================ */
 'use strict';
 
@@ -18,7 +20,6 @@ const API = {
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => Array.from(document.querySelectorAll(s));
 
-// ---------------------------------------------------------------- perfil
 function getToken() {
     return localStorage.getItem('auth_token')
         || sessionStorage.getItem('auth_token')
@@ -31,25 +32,14 @@ function getPerfil() {
         const token = getToken();
         if (!token || token.split('.').length !== 3) return null;
         const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-        return {
-            id: payload.id || payload._id,
-            role: payload.role || '',
-            nome: payload.nome || payload.name || ''
-        };
-    } catch (_) {
-        return null;
-    }
+        return { id: payload.id || payload._id, role: payload.role || '', nome: payload.nome || payload.name || '' };
+    } catch (_) { return null; }
 }
 
 function normalizarRole(role) {
     if (!role) return '';
-    return String(role)
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase().trim()
-        .replace(/\s+/g, '_')
-        .replace(/-/g, '_')
-        .replace(/_geral$/i, '')
-        .replace(/^gestao_geral$/i, 'gestao');
+    return String(role).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+        .replace(/\s+/g, '_').replace(/-/g, '_').replace(/_geral$/i, '').replace(/^gestao_geral$/i, 'gestao');
 }
 
 function isAdmin() {
@@ -59,11 +49,8 @@ function isAdmin() {
 
 function escapeHtml(s) {
     return String(s == null ? '' : s)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 async function api(url, options = {}) {
@@ -73,7 +60,6 @@ async function api(url, options = {}) {
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         ...(options.headers || {})
     };
-
     const resp = await fetch(url, { ...options, headers, credentials: 'include' });
 
     if (resp.status === 401) {
@@ -87,15 +73,12 @@ async function api(url, options = {}) {
             throw new Error('Sessão encerrada.');
         }
     }
-
     if (resp.status === 403) {
         const data = await resp.clone().json().catch(() => ({}));
         const err = new Error(data.error || 'Seu perfil não tem permissão para executar esta ação.');
-        err.status = 403;
-        err.debug = data.debug || null;
+        err.status = 403; err.debug = data.debug || null;
         throw err;
     }
-
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) throw new Error(data.error || `Erro ${resp.status}`);
     return data;
@@ -104,17 +87,12 @@ async function api(url, options = {}) {
 function toast(msg, tipo = 'info', duracao = 4000) {
     const wrap = document.getElementById('adm-toast-wrap');
     if (!wrap) return;
-
     const el = document.createElement('div');
     el.className = `adm-toast adm-toast-${tipo}`;
-    const icones = { info: 'fa-circle-info', success: 'fa-circle-check', error: 'fa-circle-exclamation', warning: 'fa-triangle-exclamation' };
+    const icones = { info:'fa-circle-info', success:'fa-circle-check', error:'fa-circle-exclamation', warning:'fa-triangle-exclamation' };
     el.innerHTML = `<i class="fas ${icones[tipo] || icones.info}"></i><span>${escapeHtml(msg)}</span>`;
     wrap.appendChild(el);
-
-    const remover = () => {
-        el.classList.add('saindo');
-        setTimeout(() => el.remove(), 220);
-    };
+    const remover = () => { el.classList.add('saindo'); setTimeout(() => el.remove(), 220); };
     setTimeout(remover, duracao);
     el.addEventListener('click', remover);
 }
@@ -122,43 +100,22 @@ function toast(msg, tipo = 'info', duracao = 4000) {
 function loader(ativo, texto) {
     const el = document.getElementById('adm-loader');
     if (!el) return;
-    if (texto) {
-        const p = el.querySelector('p');
-        if (p) p.textContent = texto;
-    }
+    if (texto) { const p = el.querySelector('p'); if (p) p.textContent = texto; }
     el.classList.toggle('ativo', !!ativo);
 }
 
-function fmtData(d) {
-    if (!d) return '—';
-    const dt = new Date(d);
-    return isNaN(dt) ? '—' : dt.toLocaleDateString('pt-BR');
-}
-
-function fmtDataHora(d) {
-    if (!d) return '—';
-    const dt = new Date(d);
-    return isNaN(dt) ? '—' : dt.toLocaleString('pt-BR');
-}
-
-function fmtBool(v) {
-    return v ? 'Sim' : 'Não';
-}
+function fmtData(d) { if (!d) return '—'; const dt = new Date(d); return isNaN(dt) ? '—' : dt.toLocaleDateString('pt-BR'); }
+function fmtDataHora(d) { if (!d) return '—'; const dt = new Date(d); return isNaN(dt) ? '—' : dt.toLocaleString('pt-BR'); }
+function fmtBool(v) { return v ? 'Sim' : 'Não'; }
 
 function badgeStatus(status) {
-    const slug = String(status || '')
-        .toLowerCase()
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-        .replace(/\s+/g, '-');
+    const slug = String(status || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-');
     return `<span class="adm-badge adm-badge-${slug}">${escapeHtml(status)}</span>`;
 }
 
 function debounce(fn, delay = 350) {
     let t;
-    return function (...args) {
-        clearTimeout(t);
-        t = setTimeout(() => fn.apply(this, args), delay);
-    };
+    return function (...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), delay); };
 }
 
 function confirmar({ titulo = 'Confirmar', mensagem = 'Tem certeza?', textoOk = 'Confirmar' } = {}) {
@@ -182,7 +139,6 @@ function confirmar({ titulo = 'Confirmar', mensagem = 'Tem certeza?', textoOk = 
             modal.querySelectorAll('[data-fechar="modal-confirmar"]').forEach(b => b.removeEventListener('click', onCancel));
             resolve(valor);
         };
-
         const onOk = () => fechar(true);
         const onCancel = () => fechar(false);
 
@@ -199,7 +155,7 @@ const estado = {
     limite: 20,
     totalPaginas: 1,
     total: 0,
-    filtros: { busca: '', status: '', faixaRenda: '', cadUnico: '', deficiencia: '', anoLetivo: '', ordenar: 'recentes' },
+    filtros: { busca:'', status:'', faixaRenda:'', cadUnico:'', deficiencia:'', biometria:'', anoLetivo:'', ordenar:'recentes' },
     opcoes: null,
     listaAtual: [],
     editandoId: null,
@@ -212,7 +168,6 @@ const estado = {
 function esconderControlesAdmin() {
     if (isAdmin()) return;
 
-    // 1) Abas de configuração
     document.querySelectorAll('.adm-tab').forEach(tab => {
         const alvo = (tab.dataset.tab || '').toLowerCase();
         const texto = (tab.textContent || '').toLowerCase();
@@ -222,27 +177,17 @@ function esconderControlesAdmin() {
         }
     });
 
-    // 2) Painéis de configuração
     ['#panel-config', '#panel-configuracoes', '#tab-config', '#tab-configuracoes'].forEach(sel => {
         const p = document.querySelector(sel);
-        if (p) {
-            p.classList.remove('active', 'show');
-            p.style.display = 'none';
-            p.setAttribute('aria-hidden', 'true');
-        }
+        if (p) { p.classList.remove('active', 'show'); p.style.display = 'none'; p.setAttribute('aria-hidden', 'true'); }
     });
 
-    // 3) Botão de exportar CSV — só esconde se NÃO for admin nem gestão
     const role = normalizarRole(getPerfil()?.role);
-    const podeExportar = ['admin', 'super_admin', 'gestao'].includes(role);
+    const podeExportar = ['admin','super_admin','gestao'].includes(role);
     if (!podeExportar) {
         const btnExportar = document.getElementById('btn-exportar');
-        if (btnExportar) {
-            btnExportar.style.display = 'none';
-            btnExportar.setAttribute('aria-hidden', 'true');
-        }
+        if (btnExportar) { btnExportar.style.display = 'none'; btnExportar.setAttribute('aria-hidden', 'true'); }
     }
-
     console.log('🛡️ [inscricoes-admin] Controles de admin ocultados para perfil:', getPerfil()?.role);
 }
 
@@ -253,10 +198,8 @@ function configurarAbas() {
     $$('.adm-tab').forEach(tab => {
         tab.addEventListener('click', () => {
             const alvo = tab.dataset.tab;
-
             $$('.adm-tab').forEach(t => t.classList.remove('active'));
             $$('.adm-panel').forEach(p => p.classList.remove('active'));
-
             tab.classList.add('active');
             const painel = document.getElementById(`panel-${alvo}`);
             if (painel) painel.classList.add('active');
@@ -264,10 +207,7 @@ function configurarAbas() {
             if (alvo === 'dashboard') carregarDashboard();
             if (alvo === 'inscricoes') carregarLista(1);
             if (alvo === 'config') {
-                if (!isAdmin()) {
-                    toast('Apenas administradores podem acessar as configurações.', 'warning');
-                    return;
-                }
+                if (!isAdmin()) { toast('Apenas administradores podem acessar as configurações.', 'warning'); return; }
                 carregarConfig();
             }
         });
@@ -275,28 +215,16 @@ function configurarAbas() {
 }
 
 // ============================================================================
-// BOTÃO VOLTAR — retorna para a página de origem
+// BOTÃO VOLTAR
 // ============================================================================
 function configurarBotaoVoltar() {
     const btn = document.getElementById('btn-voltar');
     if (!btn) return;
-
     btn.addEventListener('click', () => {
-        // 1) Se veio com parâmetro ?origem=/caminho, respeita
         const params = new URLSearchParams(window.location.search);
         const origem = params.get('origem');
-        if (origem && origem.startsWith('/')) {
-            window.location.href = origem;
-            return;
-        }
-
-        // 2) Se houver histórico anterior, volta para ele
-        if (window.history.length > 1) {
-            window.history.back();
-            return;
-        }
-
-        // 3) Fallback
+        if (origem && origem.startsWith('/')) { window.location.href = origem; return; }
+        if (window.history.length > 1) { window.history.back(); return; }
         window.location.href = '/gestao-geral.html';
     });
 }
@@ -309,11 +237,7 @@ async function carregarDashboard() {
         const data = await api(API.dashboard);
         const r = data.resumo || {};
 
-        const set = (id, v) => {
-            const el = document.getElementById(id);
-            if (el) el.textContent = v ?? 0;
-        };
-
+        const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v ?? 0; };
         set('st-total', r.total);
         set('st-pendentes', r.pendentes);
         set('st-analise', r.emAnalise);
@@ -322,7 +246,6 @@ async function carregarDashboard() {
         set('st-canceladas', r.canceladas);
         set('st-cadunico', r.comCadUnico);
         set('st-deficiencia', r.comDeficiencia);
-
         set('hero-total', r.total);
         set('hero-pendentes', r.pendentes);
         set('hero-aprovadas', r.aprovadas);
@@ -335,15 +258,9 @@ async function carregarDashboard() {
                 ? '<div class="adm-empty"><i class="fas fa-chart-simple"></i> Sem dados ainda.</div>'
                 : renda.map(x => `
                     <div class="adm-bar-row">
-                        <div class="adm-bar-top">
-                            <span>${escapeHtml(x.faixa)}</span>
-                            <span>${x.total}</span>
-                        </div>
-                        <div class="adm-bar-track">
-                            <div class="adm-bar-fill" style="width:${Math.round((x.total / maxRenda) * 100)}%"></div>
-                        </div>
-                    </div>
-                `).join('');
+                        <div class="adm-bar-top"><span>${escapeHtml(x.faixa)}</span><span>${x.total}</span></div>
+                        <div class="adm-bar-track"><div class="adm-bar-fill" style="width:${Math.round((x.total/maxRenda)*100)}%"></div></div>
+                    </div>`).join('');
         }
 
         const bairros = data.porBairro || [];
@@ -354,15 +271,9 @@ async function carregarDashboard() {
                 ? '<div class="adm-empty"><i class="fas fa-location-dot"></i> Sem dados ainda.</div>'
                 : bairros.map(x => `
                     <div class="adm-bar-row">
-                        <div class="adm-bar-top">
-                            <span>${escapeHtml(x.bairro)}</span>
-                            <span>${x.total}</span>
-                        </div>
-                        <div class="adm-bar-track">
-                            <div class="adm-bar-fill" style="width:${Math.round((x.total / maxB) * 100)}%"></div>
-                        </div>
-                    </div>
-                `).join('');
+                        <div class="adm-bar-top"><span>${escapeHtml(x.bairro)}</span><span>${x.total}</span></div>
+                        <div class="adm-bar-track"><div class="adm-bar-fill" style="width:${Math.round((x.total/maxB)*100)}%"></div></div>
+                    </div>`).join('');
         }
 
         const ultimas = data.ultimas || [];
@@ -387,8 +298,7 @@ async function carregarDashboard() {
                                 <i class="fas fa-eye"></i>
                             </button>
                         </div>
-                    </div>
-                `).join('');
+                    </div>`).join('');
         }
     } catch (err) {
         console.error(err);
@@ -404,16 +314,13 @@ async function carregarLista(pagina = 1) {
     if (!tbody) return;
 
     estado.pagina = pagina;
-    tbody.innerHTML = `<tr><td colspan="10"><div class="adm-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11"><div class="adm-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div></td></tr>`;
 
     try {
         const params = new URLSearchParams();
         params.set('pagina', estado.pagina);
         params.set('limite', estado.limite);
-
-        Object.entries(estado.filtros).forEach(([k, v]) => {
-            if (v) params.set(k, v);
-        });
+        Object.entries(estado.filtros).forEach(([k, v]) => { if (v) params.set(k, v); });
 
         const data = await api(`${API.admin}?${params.toString()}`);
         const lista = data.inscricoes || [];
@@ -424,7 +331,7 @@ async function carregarLista(pagina = 1) {
         estado.total = pag.total || 0;
 
         if (lista.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="10"><div class="adm-empty"><i class="fas fa-user-slash"></i> Nenhuma inscrição encontrada com os filtros atuais.</div></td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="11"><div class="adm-empty"><i class="fas fa-user-slash"></i> Nenhuma inscrição encontrada com os filtros atuais.</div></td></tr>`;
             renderPaginacao();
             return;
         }
@@ -442,9 +349,7 @@ async function carregarLista(pagina = 1) {
                     <span class="adm-cell-strong">${escapeHtml(i.responsavel)}</span>
                     <span class="adm-cell-sub">${escapeHtml(i.responsavelTelefone)}</span>
                 </td>
-                <td>
-                    <span class="adm-cell-strong">${escapeHtml(i.telefoneMascarado)}</span>
-                </td>
+                <td><span class="adm-cell-strong">${escapeHtml(i.telefoneMascarado)}</span></td>
                 <td>
                     <span class="adm-cell-strong">${escapeHtml(i.bairro || '—')}</span>
                     <span class="adm-cell-sub">${escapeHtml(i.cidade || '')}</span>
@@ -453,6 +358,11 @@ async function carregarLista(pagina = 1) {
                 <td>
                     <span class="adm-tag ${i.cadUnico ? 'adm-tag-yes' : ''}">${i.cadUnico ? 'Sim' : 'Não'}</span>
                     ${i.deficiencia ? '<span class="adm-tag adm-tag-yes" title="Possui deficiência"><i class="fas fa-universal-access"></i></span>' : ''}
+                </td>
+                <td>
+                    ${i.biometria
+                        ? `<span class="adm-tag adm-tag-yes" title="Biometria capturada"><i class="fas fa-fingerprint"></i></span>`
+                        : '<span class="adm-cell-sub" style="margin:0">—</span>'}
                 </td>
                 <td>${badgeStatus(i.status)}</td>
                 <td><span class="adm-cell-sub" style="margin:0">${fmtData(i.createdAt)}</span></td>
@@ -473,34 +383,26 @@ async function carregarLista(pagina = 1) {
                             </button>` : ''}
                     </div>
                 </td>
-            </tr>
-        `).join('');
+            </tr>`).join('');
 
         renderPaginacao();
     } catch (err) {
         console.error(err);
-        tbody.innerHTML = `<tr><td colspan="10"><div class="adm-empty"><i class="fas fa-circle-exclamation"></i> ${escapeHtml(err.message)}</div></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="11"><div class="adm-empty"><i class="fas fa-circle-exclamation"></i> ${escapeHtml(err.message)}</div></td></tr>`;
     }
 }
 
 function renderPaginacao() {
     const el = document.getElementById('paginacao');
     if (!el) return;
-
     const { pagina, totalPaginas, total } = estado;
-    if (total === 0) {
-        el.innerHTML = '';
-        return;
-    }
+    if (total === 0) { el.innerHTML = ''; return; }
 
     const inicio = (pagina - 1) * estado.limite + 1;
     const fim = Math.min(pagina * estado.limite, total);
 
     const botoes = [];
-    botoes.push(`<button class="adm-page-btn" ${pagina === 1 ? 'disabled' : ''} data-pagina="${pagina - 1}">
-        <i class="fas fa-chevron-left"></i>
-    </button>`);
-
+    botoes.push(`<button class="adm-page-btn" ${pagina === 1 ? 'disabled' : ''} data-pagina="${pagina-1}"><i class="fas fa-chevron-left"></i></button>`);
     const janela = 2;
     for (let p = 1; p <= totalPaginas; p++) {
         if (p === 1 || p === totalPaginas || (p >= pagina - janela && p <= pagina + janela)) {
@@ -509,17 +411,11 @@ function renderPaginacao() {
             botoes.push('<span style="align-self:center;color:#94a3b8">…</span>');
         }
     }
-
-    botoes.push(`<button class="adm-page-btn" ${pagina === totalPaginas ? 'disabled' : ''} data-pagina="${pagina + 1}">
-        <i class="fas fa-chevron-right"></i>
-    </button>`);
+    botoes.push(`<button class="adm-page-btn" ${pagina === totalPaginas ? 'disabled' : ''} data-pagina="${pagina+1}"><i class="fas fa-chevron-right"></i></button>`);
 
     el.innerHTML = `
-        <div class="adm-pagination-info">
-            Exibindo <strong>${inicio}–${fim}</strong> de <strong>${total}</strong> inscrição(ões)
-        </div>
-        <div class="adm-pagination-btns">${botoes.join('')}</div>
-    `;
+        <div class="adm-pagination-info">Exibindo <strong>${inicio}–${fim}</strong> de <strong>${total}</strong> inscrição(ões)</div>
+        <div class="adm-pagination-btns">${botoes.join('')}</div>`;
 
     el.querySelectorAll('[data-pagina]').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -532,25 +428,20 @@ function renderPaginacao() {
 }
 
 // ============================================================================
-// DETALHE
+// DETALHE (com bloco de biometria)
 // ============================================================================
 function blocoDetalhe(titulo, icone, itens) {
-    const validos = itens.filter(([, v]) => v !== '' && v !== null && v !== undefined && v !== '—');
+    const validos = itens.filter(([,v]) => v !== '' && v !== null && v !== undefined && v !== '—');
     return `
         <div class="adm-det-bloco">
             <h4><i class="fas ${icone}"></i> ${titulo}</h4>
             <div class="adm-det-grid">
                 ${validos.length === 0
                     ? '<div class="adm-det-item"><strong>Sem informações.</strong></div>'
-                    : validos.map(([k, v]) => `
-                        <div class="adm-det-item">
-                            <span>${escapeHtml(k)}</span>
-                            <strong>${escapeHtml(String(v))}</strong>
-                        </div>
-                    `).join('')}
+                    : validos.map(([k,v]) => `
+                        <div class="adm-det-item"><span>${escapeHtml(k)}</span><strong>${escapeHtml(String(v))}</strong></div>`).join('')}
             </div>
-        </div>
-    `;
+        </div>`;
 }
 
 async function verDetalhe(id) {
@@ -568,8 +459,9 @@ async function verDetalhe(id) {
         const rf = i.rendaFamiliar || {};
         const ia = i.informacoesAdicionais || {};
         const lg = i.lgpd || {};
+        const bio = i.biometria || {};
 
-        const iniciais = (a.nomeCompleto || '?').split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+        const iniciais = (a.nomeCompleto || '?').split(' ').map(n => n[0]).slice(0,2).join('').toUpperCase();
 
         const html = `
             <div class="adm-det-head">
@@ -615,13 +507,8 @@ async function verDetalhe(id) {
             ])}
 
             ${blocoDetalhe('Endereço', 'fa-location-dot', [
-                ['CEP', f.cep || e.cep],
-                ['Logradouro', e.logradouro],
-                ['Número', e.numero],
-                ['Complemento', e.complemento],
-                ['Bairro', e.bairro],
-                ['Cidade', e.cidade],
-                ['UF', e.estado]
+                ['CEP', f.cep || e.cep], ['Logradouro', e.logradouro], ['Número', e.numero],
+                ['Complemento', e.complemento], ['Bairro', e.bairro], ['Cidade', e.cidade], ['UF', e.estado]
             ])}
 
             ${blocoDetalhe('Composição familiar', 'fa-people-roof', [
@@ -653,6 +540,18 @@ async function verDetalhe(id) {
                 ['Acesso a dispositivos', fmtBool(ia.acessoDispositivos)]
             ])}
 
+            ${bio && bio.aceito ? `
+                <div class="adm-det-bloco">
+                    <h4><i class="fas fa-fingerprint"></i> Biometria</h4>
+                    <div class="adm-det-grid">
+                        <div class="adm-det-item"><span>Consentimento</span><strong>Sim</strong></div>
+                        <div class="adm-det-item"><span>Capturada em</span><strong>${fmtDataHora(bio.capturadoEm)}</strong></div>
+                        <div class="adm-det-item"><span>Algoritmo</span><strong>${escapeHtml(bio.algoritmo || '—')}</strong></div>
+                        <div class="adm-det-item"><span>Credencial (ID)</span><strong>${escapeHtml(bio.credentialId || '—')}</strong></div>
+                        <div class="adm-det-item"><span>Armazenamento</span><strong>Criptografado (AES-GCM + RSA-OAEP)</strong></div>
+                    </div>
+                </div>` : ''}
+
             ${blocoDetalhe('LGPD e auditoria', 'fa-shield-halved', [
                 ['Consentimento aceito', fmtBool(lg.aceito)],
                 ['Aceito em', fmtDataHora(lg.aceitoEm)],
@@ -667,8 +566,7 @@ async function verDetalhe(id) {
                 <div class="adm-det-bloco">
                     <h4><i class="fas fa-note-sticky"></i> Observações administrativas</h4>
                     <div class="adm-det-item"><strong>${escapeHtml(i.observacoesAdmin)}</strong></div>
-                </div>
-            ` : ''}
+                </div>` : ''}
 
             <div class="adm-det-bloco">
                 <h4><i class="fas fa-clock-rotate-left"></i> Histórico de status</h4>
@@ -676,15 +574,12 @@ async function verDetalhe(id) {
                     ? '<div class="adm-empty">Sem histórico.</div>'
                     : `<ul class="adm-timeline">
                         ${i.historico.map(h => `
-                            <li>
-                                <strong>${escapeHtml(h.status)}</strong>
+                            <li><strong>${escapeHtml(h.status)}</strong>
                                 ${fmtDataHora(h.em)}${h.por ? ' · por ' + escapeHtml(h.por) : ''}
                                 ${h.observacao ? '<br>' + escapeHtml(h.observacao) : ''}
-                            </li>
-                        `).join('')}
+                            </li>`).join('')}
                     </ul>`}
-            </div>
-        `;
+            </div>`;
 
         const conteudo = document.getElementById('detalhe-conteudo');
         if (conteudo) conteudo.innerHTML = html;
@@ -700,43 +595,38 @@ async function verDetalhe(id) {
 // EDIÇÃO
 // ============================================================================
 const CAMPOS_EDICAO = [
-    { grupo: 'aluno', campo: 'nomeCompleto', label: 'Nome do aluno', tipo: 'text' },
-    { grupo: 'aluno', campo: 'cpf', label: 'CPF do aluno', tipo: 'text' },
-    { grupo: 'aluno', campo: 'dataNascimento', label: 'Nascimento do aluno', tipo: 'date' },
-    { grupo: 'aluno', campo: 'telefone', label: 'Telefone do aluno', tipo: 'text' },
-    { grupo: 'aluno', campo: 'email', label: 'E-mail do aluno', tipo: 'text' },
-    { grupo: 'aluno', campo: 'sexo', label: 'Sexo do aluno', tipo: 'select', opcoes: ['Masculino', 'Feminino', 'Outro', 'Prefiro não informar'] },
-    { grupo: 'aluno', campo: 'rg', label: 'RG do aluno', tipo: 'text' },
-    { grupo: 'aluno', campo: 'temCadUnico', label: 'Aluno possui CadÚnico', tipo: 'bool' },
-    { grupo: 'aluno', campo: 'nis', label: 'NIS do aluno', tipo: 'text' },
-
-    { grupo: 'responsavel', campo: 'nomeCompleto', label: 'Nome do responsável', tipo: 'text' },
-    { grupo: 'responsavel', campo: 'cpf', label: 'CPF do responsável', tipo: 'text' },
-    { grupo: 'responsavel', campo: 'telefone', label: 'Telefone do responsável', tipo: 'text' },
-    { grupo: 'responsavel', campo: 'email', label: 'E-mail do responsável', tipo: 'text' },
-    { grupo: 'responsavel', campo: 'grauParentesco', label: 'Grau de parentesco', tipo: 'select', opcoes: ['Mãe', 'Pai', 'Avó/Avô', 'Tia/Tio', 'Irmã/Irmão', 'Tutor(a) legal', 'Outro'] },
-
-    { grupo: 'endereco', campo: 'cep', label: 'CEP', tipo: 'text' },
-    { grupo: 'endereco', campo: 'logradouro', label: 'Logradouro', tipo: 'text' },
-    { grupo: 'endereco', campo: 'numero', label: 'Número', tipo: 'text' },
-    { grupo: 'endereco', campo: 'complemento', label: 'Complemento', tipo: 'text' },
-    { grupo: 'endereco', campo: 'bairro', label: 'Bairro', tipo: 'text' },
-    { grupo: 'endereco', campo: 'cidade', label: 'Cidade', tipo: 'text' },
-    { grupo: 'endereco', campo: 'estado', label: 'UF', tipo: 'text' },
-
-    { grupo: 'composicaoFamiliar', campo: 'pessoasResidem', label: 'Pessoas na residência', tipo: 'number' },
-    { grupo: 'composicaoFamiliar', campo: 'dependentesMenores', label: 'Dependentes menores', tipo: 'number' },
-    { grupo: 'composicaoFamiliar', campo: 'escolaridadePai', label: 'Escolaridade do pai', tipo: 'select', opcoesDinamicas: 'escolaridades' },
-    { grupo: 'composicaoFamiliar', campo: 'escolaridadeMae', label: 'Escolaridade da mãe', tipo: 'select', opcoesDinamicas: 'escolaridades' },
-    { grupo: 'composicaoFamiliar', campo: 'ocupacaoPai', label: 'Ocupação do pai', tipo: 'text' },
-    { grupo: 'composicaoFamiliar', campo: 'ocupacaoMae', label: 'Ocupação da mãe', tipo: 'text' },
-
-    { grupo: 'rendaFamiliar', campo: 'faixaRenda', label: 'Faixa de renda', tipo: 'select', opcoesDinamicas: 'faixasRenda' },
-    { grupo: 'rendaFamiliar', campo: 'programaOutro', label: 'Outro programa social', tipo: 'text' },
-
-    { grupo: 'informacoesAdicionais', campo: 'possuiDeficiencia', label: 'Possui deficiência', tipo: 'bool' },
-    { grupo: 'informacoesAdicionais', campo: 'deficienciaQual', label: 'Qual deficiência', tipo: 'textarea' },
-    { grupo: 'informacoesAdicionais', campo: 'acessoDispositivos', label: 'Acesso a dispositivos', tipo: 'bool' }
+    { grupo:'aluno', campo:'nomeCompleto', label:'Nome do aluno', tipo:'text' },
+    { grupo:'aluno', campo:'cpf', label:'CPF do aluno', tipo:'text' },
+    { grupo:'aluno', campo:'dataNascimento', label:'Nascimento do aluno', tipo:'date' },
+    { grupo:'aluno', campo:'telefone', label:'Telefone do aluno', tipo:'text' },
+    { grupo:'aluno', campo:'email', label:'E-mail do aluno', tipo:'text' },
+    { grupo:'aluno', campo:'sexo', label:'Sexo do aluno', tipo:'select', opcoes:['Masculino','Feminino','Outro','Prefiro não informar'] },
+    { grupo:'aluno', campo:'rg', label:'RG do aluno', tipo:'text' },
+    { grupo:'aluno', campo:'temCadUnico', label:'Aluno possui CadÚnico', tipo:'bool' },
+    { grupo:'aluno', campo:'nis', label:'NIS do aluno', tipo:'text' },
+    { grupo:'responsavel', campo:'nomeCompleto', label:'Nome do responsável', tipo:'text' },
+    { grupo:'responsavel', campo:'cpf', label:'CPF do responsável', tipo:'text' },
+    { grupo:'responsavel', campo:'telefone', label:'Telefone do responsável', tipo:'text' },
+    { grupo:'responsavel', campo:'email', label:'E-mail do responsável', tipo:'text' },
+    { grupo:'responsavel', campo:'grauParentesco', label:'Grau de parentesco', tipo:'select', opcoes:['Mãe','Pai','Avó/Avô','Tia/Tio','Irmã/Irmão','Tutor(a) legal','Outro'] },
+    { grupo:'endereco', campo:'cep', label:'CEP', tipo:'text' },
+    { grupo:'endereco', campo:'logradouro', label:'Logradouro', tipo:'text' },
+    { grupo:'endereco', campo:'numero', label:'Número', tipo:'text' },
+    { grupo:'endereco', campo:'complemento', label:'Complemento', tipo:'text' },
+    { grupo:'endereco', campo:'bairro', label:'Bairro', tipo:'text' },
+    { grupo:'endereco', campo:'cidade', label:'Cidade', tipo:'text' },
+    { grupo:'endereco', campo:'estado', label:'UF', tipo:'text' },
+    { grupo:'composicaoFamiliar', campo:'pessoasResidem', label:'Pessoas na residência', tipo:'number' },
+    { grupo:'composicaoFamiliar', campo:'dependentesMenores', label:'Dependentes menores', tipo:'number' },
+    { grupo:'composicaoFamiliar', campo:'escolaridadePai', label:'Escolaridade do pai', tipo:'select', opcoesDinamicas:'escolaridades' },
+    { grupo:'composicaoFamiliar', campo:'escolaridadeMae', label:'Escolaridade da mãe', tipo:'select', opcoesDinamicas:'escolaridades' },
+    { grupo:'composicaoFamiliar', campo:'ocupacaoPai', label:'Ocupação do pai', tipo:'text' },
+    { grupo:'composicaoFamiliar', campo:'ocupacaoMae', label:'Ocupação da mãe', tipo:'text' },
+    { grupo:'rendaFamiliar', campo:'faixaRenda', label:'Faixa de renda', tipo:'select', opcoesDinamicas:'faixasRenda' },
+    { grupo:'rendaFamiliar', campo:'programaOutro', label:'Outro programa social', tipo:'text' },
+    { grupo:'informacoesAdicionais', campo:'possuiDeficiencia', label:'Possui deficiência', tipo:'bool' },
+    { grupo:'informacoesAdicionais', campo:'deficienciaQual', label:'Qual deficiência', tipo:'textarea' },
+    { grupo:'informacoesAdicionais', campo:'acessoDispositivos', label:'Acesso a dispositivos', tipo:'bool' }
 ];
 
 function valorParaInput(v, tipo) {
@@ -755,61 +645,39 @@ async function editar(id) {
         loader(true, 'Carregando inscrição...');
         const data = await api(`${API.admin}/${id}`);
         const i = data.inscricao;
-
         estado.editandoId = id;
 
         const camposHtml = CAMPOS_EDICAO.map(c => {
             const valor = (i[c.grupo] || {})[c.campo];
             const inputId = `edit-${c.grupo}-${c.campo}`;
-
             let input = '';
-
             if (c.tipo === 'bool') {
-                input = `
-                    <select id="${inputId}">
-                        <option value="true" ${valor ? 'selected' : ''}>Sim</option>
-                        <option value="false" ${!valor ? 'selected' : ''}>Não</option>
-                    </select>`;
+                input = `<select id="${inputId}"><option value="true" ${valor ? 'selected' : ''}>Sim</option><option value="false" ${!valor ? 'selected' : ''}>Não</option></select>`;
             } else if (c.tipo === 'select') {
                 const opcoes = c.opcoes || (estado.opcoes && estado.opcoes[c.opcoesDinamicas]) || [];
-                input = `
-                    <select id="${inputId}">
-                        <option value="">Selecione...</option>
-                        ${opcoes.map(o => `<option value="${escapeHtml(o)}" ${valor === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')}
-                    </select>`;
+                input = `<select id="${inputId}"><option value="">Selecione...</option>${opcoes.map(o => `<option value="${escapeHtml(o)}" ${valor === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')}</select>`;
             } else if (c.tipo === 'textarea') {
                 input = `<textarea id="${inputId}" rows="2">${escapeHtml(valor || '')}</textarea>`;
             } else if (c.tipo === 'number') {
-                input = `<input type="number" id="${inputId}" value="${escapeHtml(valorParaInput(valor, 'number'))}" min="0">`;
+                input = `<input type="number" id="${inputId}" value="${escapeHtml(valorParaInput(valor,'number'))}" min="0">`;
             } else if (c.tipo === 'date') {
-                input = `<input type="date" id="${inputId}" value="${escapeHtml(valorParaInput(valor, 'date'))}">`;
+                input = `<input type="date" id="${inputId}" value="${escapeHtml(valorParaInput(valor,'date'))}">`;
             } else {
-                input = `<input type="text" id="${inputId}" value="${escapeHtml(valorParaInput(valor, 'text'))}">`;
+                input = `<input type="text" id="${inputId}" value="${escapeHtml(valorParaInput(valor,'text'))}">`;
             }
-
-            return `
-                <div class="adm-field" data-grupo="${c.grupo}" data-campo="${c.campo}">
-                    <label for="${inputId}">${escapeHtml(c.label)}</label>
-                    ${input}
-                </div>
-            `;
+            return `<div class="adm-field" data-grupo="${c.grupo}" data-campo="${c.campo}"><label for="${inputId}">${escapeHtml(c.label)}</label>${input}</div>`;
         }).join('');
 
         const html = `
             <div class="adm-det-head" style="padding-bottom:12px;margin-bottom:14px">
                 <div class="adm-det-avatar">${escapeHtml((i.aluno?.nomeCompleto || '?').split(' ').map(n => n[0]).slice(0,2).join('').toUpperCase())}</div>
-                <div>
-                    <h2 style="font-size:15px">${escapeHtml(i.aluno?.nomeCompleto || '—')}</h2>
-                    <p><span class="adm-proto">${escapeHtml(i.protocolo)}</span></p>
-                </div>
+                <div><h2 style="font-size:15px">${escapeHtml(i.aluno?.nomeCompleto || '—')}</h2><p><span class="adm-proto">${escapeHtml(i.protocolo)}</span></p></div>
             </div>
-
             <div class="adm-grid-2" style="margin-bottom:14px">
                 <div class="adm-field">
                     <label for="edit-status">Status</label>
                     <select id="edit-status">
-                        ${['Pendente', 'Em análise', 'Aprovada', 'Concluída', 'Cancelada']
-                            .map(s => `<option value="${s}" ${i.status === s ? 'selected' : ''}>${s}</option>`).join('')}
+                        ${['Pendente','Em análise','Aprovada','Concluída','Cancelada'].map(s => `<option value="${s}" ${i.status === s ? 'selected' : ''}>${s}</option>`).join('')}
                     </select>
                 </div>
                 <div class="adm-field">
@@ -817,15 +685,10 @@ async function editar(id) {
                     <textarea id="edit-obs" rows="2">${escapeHtml(i.observacoesAdmin || '')}</textarea>
                 </div>
             </div>
-
             <h4 style="margin:6px 0 12px;font-size:12.5px;text-transform:uppercase;letter-spacing:.05em;color:#0f766e">
                 <i class="fas fa-pen-to-square"></i> Dados da inscrição
             </h4>
-
-            <div class="adm-grid-3">
-                ${camposHtml}
-            </div>
-        `;
+            <div class="adm-grid-3">${camposHtml}</div>`;
 
         const conteudo = document.getElementById('editar-conteudo');
         if (conteudo) conteudo.innerHTML = html;
@@ -839,10 +702,8 @@ async function editar(id) {
 
 async function salvarEdicao() {
     if (!estado.editandoId) return;
-
     const btn = document.getElementById('btn-salvar-edicao');
     const original = btn ? btn.innerHTML : '';
-
     try {
         const status = document.getElementById('edit-status').value;
         const observacoesAdmin = document.getElementById('edit-obs').value;
@@ -853,21 +714,15 @@ async function salvarEdicao() {
             const campo = el.dataset.campo;
             const input = el.querySelector('input, select, textarea');
             if (!input) return;
-
             if (!dados[grupo]) dados[grupo] = {};
-
             const spec = CAMPOS_EDICAO.find(c => c.grupo === grupo && c.campo === campo);
             const tipo = spec ? spec.tipo : 'text';
-
             if (tipo === 'bool') dados[grupo][campo] = input.value === 'true';
             else if (tipo === 'number') dados[grupo][campo] = input.value === '' ? 0 : Number(input.value);
             else dados[grupo][campo] = input.value.trim();
         });
 
-        if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Salvando...';
-        }
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Salvando...'; }
 
         await api(`${API.admin}/${estado.editandoId}`, {
             method: 'PUT',
@@ -881,10 +736,7 @@ async function salvarEdicao() {
     } catch (err) {
         toast('Erro ao salvar: ' + err.message, 'error');
     } finally {
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = original;
-        }
+        if (btn) { btn.disabled = false; btn.innerHTML = original; }
     }
 }
 
@@ -892,18 +744,13 @@ async function salvarEdicao() {
 // EXCLUIR
 // ============================================================================
 async function excluir(id, protocolo) {
-    if (!isAdmin()) {
-        toast('Apenas administradores podem excluir inscrições.', 'warning');
-        return;
-    }
-
+    if (!isAdmin()) { toast('Apenas administradores podem excluir inscrições.', 'warning'); return; }
     const ok = await confirmar({
         titulo: 'Excluir inscrição',
         mensagem: `Deseja realmente excluir a inscrição ${protocolo}? Esta ação é irreversível e remove todos os dados coletados.`,
         textoOk: 'Excluir permanentemente'
     });
     if (!ok) return;
-
     try {
         loader(true, 'Excluindo...');
         await api(`${API.admin}/${id}`, { method: 'DELETE' });
@@ -918,73 +765,50 @@ async function excluir(id, protocolo) {
 }
 
 // ============================================================================
-// EXPORTAR CSV (admin + gestão)
+// EXPORTAR CSV
 // ============================================================================
 async function exportarCSV() {
     const role = normalizarRole(getPerfil()?.role);
-    if (!['admin', 'super_admin', 'gestao'].includes(role)) {
+    if (!['admin','super_admin','gestao'].includes(role)) {
         toast('Seu perfil não tem permissão para exportar os dados completos.', 'warning');
         return;
     }
-
     const btn = document.getElementById('btn-exportar');
     const original = btn ? btn.innerHTML : '';
-
     try {
-        if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Gerando...';
-        }
-
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Gerando...'; }
         const params = new URLSearchParams();
         if (estado.filtros.status) params.set('status', estado.filtros.status);
         if (estado.filtros.anoLetivo) params.set('anoLetivo', estado.filtros.anoLetivo);
-
         const token = getToken();
-        const resp = await fetch(`${API.exportar}?${params.toString()}`, {
-            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-        });
-
-        if (!resp.ok) {
-            const data = await resp.json().catch(() => ({}));
-            throw new Error(data.error || 'Não foi possível exportar.');
-        }
-
+        const resp = await fetch(`${API.exportar}?${params.toString()}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+        if (!resp.ok) { const data = await resp.json().catch(() => ({})); throw new Error(data.error || 'Não foi possível exportar.'); }
         const blob = await resp.blob();
         const url = URL.createObjectURL(blob);
-
         const a = document.createElement('a');
         a.href = url;
-        a.download = `inscricoes-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.download = `inscricoes-${new Date().toISOString().slice(0,10)}.csv`;
         document.body.appendChild(a);
         a.click();
         a.remove();
         URL.revokeObjectURL(url);
-
         toast('Exportação concluída!', 'success');
     } catch (err) {
         toast('Erro ao exportar: ' + err.message, 'error');
     } finally {
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = original;
-        }
+        if (btn) { btn.disabled = false; btn.innerHTML = original; }
     }
 }
 
 // ============================================================================
-// CONFIGURAÇÃO
+// CONFIGURAÇÃO — inclui o switch de biometria (c-biometria)
 // ============================================================================
 async function carregarConfig() {
     try {
         const data = await api(API.config);
         const c = data.config;
 
-        const set = (id, v) => {
-            const el = document.getElementById(id);
-            if (el) el.value = v ?? '';
-        };
-
+        const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
         set('c-ano', c.anoLetivo);
         set('c-serie', c.serie);
         set('c-vagas', c.vagas);
@@ -996,45 +820,27 @@ async function carregarConfig() {
         set('c-mensagem', c.mensagemEncerrado);
         set('c-versao', c.versaoTermo);
 
-        const chk = (id, v) => {
-            const el = document.getElementById(id);
-            if (el) el.checked = !!v;
-        };
+        const chk = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
         chk('c-ativo', c.ativo);
         chk('c-bloquear', c.bloquearDuplicadas);
         chk('c-consulta', c.permiteConsultaPublica);
+        chk('c-biometria', c.solicitarBiometria);
 
         const ano = document.getElementById('hero-ano');
         if (ano) ano.textContent = `Ano letivo ${c.anoLetivo}`;
-
         const periodo = document.getElementById('hero-periodo');
         if (periodo) periodo.textContent = `${fmtData(c.dataInicio)} a ${fmtData(c.dataFim)}`;
-
         const chip = document.getElementById('hero-status-chip');
         if (chip) {
-            if (data.aberto) {
-                chip.className = 'adm-chip ok';
-                chip.innerHTML = '<i class="fas fa-circle-check"></i> Inscrições abertas';
-            } else {
-                chip.className = 'adm-chip off';
-                chip.innerHTML = '<i class="fas fa-lock"></i> Inscrições encerradas';
-            }
+            if (data.aberto) { chip.className = 'adm-chip ok'; chip.innerHTML = '<i class="fas fa-circle-check"></i> Inscrições abertas'; }
+            else             { chip.className = 'adm-chip off'; chip.innerHTML = '<i class="fas fa-lock"></i> Inscrições encerradas'; }
         }
     } catch (err) {
-        // 🆕 Fallback para gestão geral (quando o endpoint retorna 403)
         if (!isAdmin()) {
-            const ano = document.getElementById('hero-ano');
-            if (ano) ano.textContent = 'Ano letivo 2026';
-
-            const periodo = document.getElementById('hero-periodo');
-            if (periodo) periodo.textContent = '19/11/2026 a 19/01/2027';
-
+            const ano = document.getElementById('hero-ano'); if (ano) ano.textContent = 'Ano letivo 2026';
+            const periodo = document.getElementById('hero-periodo'); if (periodo) periodo.textContent = '19/11/2026 a 19/01/2027';
             const chip = document.getElementById('hero-status-chip');
-            if (chip) {
-                chip.className = 'adm-chip ok';
-                chip.innerHTML = '<i class="fas fa-circle-check"></i> Inscrições abertas';
-            }
-
+            if (chip) { chip.className = 'adm-chip ok'; chip.innerHTML = '<i class="fas fa-circle-check"></i> Inscrições abertas'; }
             console.log('ℹ️ [inscricoes-admin] Config não acessível para gestão — usando fallback fixo no hero.');
             return;
         }
@@ -1047,25 +853,16 @@ function toDatetimeLocal(valor) {
     const d = new Date(valor);
     if (isNaN(d)) return '';
     const pad = n => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 async function salvarConfig(e) {
     e.preventDefault();
-
-    if (!isAdmin()) {
-        toast('Apenas administradores podem alterar a configuração.', 'warning');
-        return;
-    }
-
+    if (!isAdmin()) { toast('Apenas administradores podem alterar a configuração.', 'warning'); return; }
     const btn = document.getElementById('btn-salvar-config');
     const original = btn ? btn.innerHTML : '';
-
     try {
-        if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Salvando...';
-        }
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Salvando...'; }
 
         const payload = {
             anoLetivo: Number(document.getElementById('c-ano').value) || undefined,
@@ -1080,20 +877,17 @@ async function salvarConfig(e) {
             versaoTermo: document.getElementById('c-versao').value,
             ativo: document.getElementById('c-ativo').checked,
             bloquearDuplicadas: document.getElementById('c-bloquear').checked,
-            permiteConsultaPublica: document.getElementById('c-consulta').checked
+            permiteConsultaPublica: document.getElementById('c-consulta').checked,
+            solicitarBiometria: document.getElementById('c-biometria').checked
         };
 
-        await api(API.config, { method: 'PUT', body: JSON.stringify(payload) });
-
+        await api(API.config, { method:'PUT', body: JSON.stringify(payload) });
         toast('Configuração salva com sucesso!', 'success');
         carregarConfig();
     } catch (err) {
         toast('Erro ao salvar: ' + err.message, 'error');
     } finally {
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = original;
-        }
+        if (btn) { btn.disabled = false; btn.innerHTML = original; }
     }
 }
 
@@ -1102,37 +896,16 @@ async function salvarConfig(e) {
 // ============================================================================
 function abrirModal(id) {
     const el = document.getElementById(id);
-    if (el) {
-        el.classList.add('aberto');
-        document.body.style.overflow = 'hidden';
-    }
+    if (el) { el.classList.add('aberto'); document.body.style.overflow = 'hidden'; }
 }
-
 function fecharModal(id) {
     const el = document.getElementById(id);
-    if (el) {
-        el.classList.remove('aberto');
-        document.body.style.overflow = '';
-    }
+    if (el) { el.classList.remove('aberto'); document.body.style.overflow = ''; }
 }
-
 function configurarModais() {
-    $$('[data-fechar]').forEach(btn => {
-        btn.addEventListener('click', () => fecharModal(btn.dataset.fechar));
-    });
-
-    $$('.adm-modal').forEach(modal => {
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) fecharModal(modal.id);
-        });
-    });
-
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            $$('.adm-modal.aberto').forEach(m => fecharModal(m.id));
-        }
-    });
-
+    $$('[data-fechar]').forEach(btn => btn.addEventListener('click', () => fecharModal(btn.dataset.fechar)));
+    $$('.adm-modal').forEach(modal => modal.addEventListener('click', e => { if (e.target === modal) fecharModal(modal.id); }));
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') $$('.adm-modal.aberto').forEach(m => fecharModal(m.id)); });
     const btnSalvar = document.getElementById('btn-salvar-edicao');
     if (btnSalvar) btnSalvar.addEventListener('click', salvarEdicao);
 }
@@ -1147,123 +920,58 @@ function lerFiltros() {
         faixaRenda: document.getElementById('f-renda')?.value || '',
         cadUnico: document.getElementById('f-cadunico')?.value || '',
         deficiencia: document.getElementById('f-deficiencia')?.value || '',
+        biometria: document.getElementById('f-biometria')?.value || '',
         anoLetivo: document.getElementById('f-ano')?.value || '',
         ordenar: document.getElementById('f-ordenar')?.value || 'recentes'
     };
 }
 
 function configurarFiltros() {
-    const buscarDebounce = debounce(() => {
-        lerFiltros();
-        carregarLista(1);
-    }, 400);
-
-    const busca = document.getElementById('f-busca');
-    if (busca) busca.addEventListener('input', buscarDebounce);
-
-    ['f-status', 'f-renda', 'f-cadunico', 'f-deficiencia', 'f-ano', 'f-ordenar'].forEach(id => {
+    const recarregar = debounce(() => { lerFiltros(); carregarLista(1); }, 400);
+    ['f-busca','f-status','f-renda','f-cadunico','f-deficiencia','f-biometria','f-ano','f-ordenar'].forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.addEventListener('change', () => {
-            lerFiltros();
-            carregarLista(1);
-        });
+        if (el) el.addEventListener('change', recarregar);
     });
+    const busca = document.getElementById('f-busca');
+    if (busca) busca.addEventListener('input', recarregar);
 
     const limpar = document.getElementById('btn-limpar-filtros');
-    if (limpar) {
-        limpar.addEventListener('click', () => {
-            ['f-busca', 'f-status', 'f-renda', 'f-cadunico', 'f-deficiencia', 'f-ano'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.value = '';
-            });
-            const ord = document.getElementById('f-ordenar');
-            if (ord) ord.value = 'recentes';
-
-            lerFiltros();
-            carregarLista(1);
+    if (limpar) limpar.addEventListener('click', () => {
+        ['f-busca','f-status','f-renda','f-cadunico','f-deficiencia','f-biometria','f-ano','f-ordenar'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = el.tagName === 'SELECT' ? (el.options[0]?.value || '') : '';
         });
-    }
+        lerFiltros();
+        carregarLista(1);
+    });
 
     const atualizar = document.getElementById('btn-atualizar');
-    if (atualizar) {
-        atualizar.addEventListener('click', () => {
-            carregarLista(estado.pagina);
-            toast('Lista atualizada.', 'info', 2200);
-        });
-    }
+    if (atualizar) atualizar.addEventListener('click', () => carregarLista(estado.pagina));
 
     const exportar = document.getElementById('btn-exportar');
     if (exportar) exportar.addEventListener('click', exportarCSV);
 }
 
-async function carregarOpcoes() {
-    try {
-        const data = await api(API.opcoes);
-        estado.opcoes = data.opcoes;
-
-        const selectAno = document.getElementById('f-ano');
-        if (selectAno && Array.isArray(data.opcoes.anosLetivos)) {
-            selectAno.innerHTML = '<option value="">Todos os anos</option>' +
-                data.opcoes.anosLetivos.map(a => `<option value="${a}">${a}</option>`).join('');
-        }
-    } catch (err) {
-        console.warn('Não foi possível carregar opções:', err.message);
-    }
-}
-
-// ============================================================================
-// API PÚBLICA
-// ============================================================================
-const adm = {
-    verDetalhe,
-    editar,
-    excluir,
-    carregarLista,
-    carregarDashboard,
-    carregarConfig,
-    exportarCSV,
-    irParaInscricoes() {
-        const tab = document.querySelector('.adm-tab[data-tab="inscricoes"]');
-        if (tab) tab.click();
-    },
-    isAdmin,
-    getPerfil
-};
-window.adm = adm;
-
 // ============================================================================
 // INIT
 // ============================================================================
-document.addEventListener('DOMContentLoaded', async () => {
-    if (!getToken()) {
-        window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
-        return;
-    }
-
-    estado.perfil = getPerfil();
-
-    // Esconde aba de configurações e botões admin-only ANTES de qualquer render
+document.addEventListener('DOMContentLoaded', () => {
     esconderControlesAdmin();
-
     configurarAbas();
+    configurarBotaoVoltar();
     configurarModais();
     configurarFiltros();
-    configurarBotaoVoltar();   // ✅ botão voltar dinâmico
 
-    const formConfig = document.getElementById('form-config');
-    if (formConfig) formConfig.addEventListener('submit', salvarConfig);
+    const form = document.getElementById('form-config');
+    if (form) form.addEventListener('submit', salvarConfig);
 
-    await carregarOpcoes();
-
-    // Carrega config para TODOS (o painel do hero precisa aparecer para gestão também)
-    // Se o endpoint retornar 403 para gestão, o catch interno aplica fallback fixo
-    await carregarConfig();
-
-    await carregarDashboard();
-    await carregarLista(1);
-
-    // Reaplica caso o DOM tenha sido alterado entre o init e agora
-    esconderControlesAdmin();
-
-    console.log('[inscricoes-admin] Perfil:', estado.perfil?.role, '| isAdmin:', isAdmin());
+    carregarDashboard();
 });
+
+window.adm = {
+    verDetalhe, editar, excluir,
+    irParaInscricoes: () => {
+        const tab = document.querySelector('.adm-tab[data-tab="inscricoes"]');
+        if (tab) tab.click();
+    }
+};

@@ -1,5 +1,6 @@
 /* ============================================================================
    inscricoes-publico.js — Formulário público de inscrição socioeconômica
+   Inclui captura de biometria do responsável (WebAuthn) criptografada
    ============================================================================ */
 'use strict';
 
@@ -12,34 +13,28 @@ const UFS = [
 ];
 
 const ESCOLARIDADES = [
-    'Ensino Fundamental Incompleto',
-    'Ensino Fundamental Completo',
-    'Ensino Médio Incompleto',
-    'Ensino Médio Completo',
-    'Ensino Superior Incompleto',
-    'Ensino Superior Completo',
-    'Não Alfabetizado'
+    'Ensino Fundamental Incompleto','Ensino Fundamental Completo',
+    'Ensino Médio Incompleto','Ensino Médio Completo',
+    'Ensino Superior Incompleto','Ensino Superior Completo','Não Alfabetizado'
 ];
 
-const GRAUS_PARENTESCO = [
-    'Pai', 'Mãe', 'Padrasto/Madrasta', 'Avô/Avó',
-    'Irmãos', 'Tios', 'Primos', 'Filhos', 'Outros'
-];
+const GRAUS_PARENTESCO = ['Pai','Mãe','Padrasto/Madrasta','Avô/Avó','Irmãos','Tios','Primos','Filhos','Outros'];
 
 const FAIXAS_RENDA = [
-    'Até 1 salário mínimo',
-    'De 1 a 2 salários mínimos',
-    'De 2 a 3 salários mínimos',
-    'Acima de 3 salários mínimos'
+    'Até 1 salário mínimo','De 1 a 2 salários mínimos',
+    'De 2 a 3 salários mínimos','Acima de 3 salários mínimos'
 ];
 
-const PROGRAMAS_SOCIAIS = ['Bolsa Família', 'Auxílio Brasil', 'Nenhum', 'Outro'];
+const PROGRAMAS_SOCIAIS = ['Bolsa Família','Auxílio Brasil','Nenhum','Outro'];
 
 const state = {
     config: null,
     passo: 1,
     enviando: false,
-    lgpdAceito: false
+    lgpdAceito: false,
+    biometriaHabilitada: false,
+    biometriaCapturada: false,
+    biometriaCredential: null
 };
 
 // ============================================================================
@@ -50,27 +45,19 @@ const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
 function escapeHtml(s) {
     return String(s == null ? '' : s)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function toast(msg, tipo = 'info', duracao = 4200) {
     const wrap = document.getElementById('ins-toast-wrap');
     if (!wrap) return;
-
     const el = document.createElement('div');
     el.className = `ins-toast ins-toast-${tipo}`;
-    const icones = { info: 'fa-circle-info', success: 'fa-circle-check', error: 'fa-circle-exclamation', warning: 'fa-triangle-exclamation' };
+    const icones = { info:'fa-circle-info', success:'fa-circle-check', error:'fa-circle-exclamation', warning:'fa-triangle-exclamation' };
     el.innerHTML = `<i class="fas ${icones[tipo] || icones.info}"></i><span>${escapeHtml(msg)}</span>`;
     wrap.appendChild(el);
-
-    const remover = () => {
-        el.classList.add('saindo');
-        setTimeout(() => el.remove(), 220);
-    };
+    const remover = () => { el.classList.add('saindo'); setTimeout(() => el.remove(), 220); };
     setTimeout(remover, duracao);
     el.addEventListener('click', remover);
 }
@@ -100,50 +87,38 @@ function pushArray(obj, path, valor) {
 function formatarData(d) {
     if (!d) return '—';
     const data = new Date(d);
-    if (isNaN(data)) return '—';
-    return data.toLocaleDateString('pt-BR');
+    return isNaN(data) ? '—' : data.toLocaleDateString('pt-BR');
 }
-
 function formatarDataHora(d) {
     if (!d) return '—';
     const data = new Date(d);
-    if (isNaN(data)) return '—';
-    return data.toLocaleString('pt-BR');
+    return isNaN(data) ? '—' : data.toLocaleString('pt-BR');
 }
 
 // ============================================================================
 // MÁSCARAS
 // ============================================================================
 function mascaraCPF(v) {
-    return v.replace(/\D/g, '').slice(0, 11)
-        .replace(/(\d{3})(\d)/, '$1.$2')
-        .replace(/(\d{3})(\d)/, '$1.$2')
-        .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    return v.replace(/\D/g,'').slice(0,11)
+        .replace(/(\d{3})(\d)/,'$1.$2')
+        .replace(/(\d{3})(\d)/,'$1.$2')
+        .replace(/(\d{3})(\d{1,2})$/,'$1-$2');
 }
-
 function mascaraTelefone(v) {
-    const d = v.replace(/\D/g, '').slice(0, 11);
-    if (d.length <= 10) {
-        return d.replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{4})(\d)/, '$1-$2');
-    }
-    return d.replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2');
+    const d = v.replace(/\D/g,'').slice(0,11);
+    if (d.length <= 10) return d.replace(/(\d{2})(\d)/,'($1) $2').replace(/(\d{4})(\d)/,'$1-$2');
+    return d.replace(/(\d{2})(\d)/,'($1) $2').replace(/(\d{5})(\d)/,'$1-$2');
 }
-
 function mascaraCEP(v) {
-    return v.replace(/\D/g, '').slice(0, 8).replace(/(\d{5})(\d)/, '$1-$2');
+    return v.replace(/\D/g,'').slice(0,8).replace(/(\d{5})(\d)/,'$1-$2');
 }
 
 function aplicarMascaras() {
     document.querySelectorAll('[data-mascara]').forEach(input => {
         const tipo = input.dataset.mascara;
         const fn = tipo === 'cpf' ? mascaraCPF : tipo === 'tel' ? mascaraTelefone : mascaraCEP;
-
-        input.addEventListener('input', () => {
-            input.value = fn(input.value);
-            limparErro(input);
-        });
+        input.addEventListener('input', () => { input.value = fn(input.value); limparErro(input); });
     });
-
     document.querySelectorAll('input, select, textarea').forEach(el => {
         el.addEventListener('input', () => limparErro(el));
         el.addEventListener('change', () => limparErro(el));
@@ -151,7 +126,7 @@ function aplicarMascaras() {
 }
 
 // ============================================================================
-// ERROS DE CAMPO
+// ERROS
 // ============================================================================
 function marcarErro(el, msg) {
     const field = el.closest('.ins-field') || el;
@@ -159,7 +134,6 @@ function marcarErro(el, msg) {
     const err = field.querySelector('.ins-err');
     if (err) err.textContent = msg;
 }
-
 function limparErro(el) {
     const field = el.closest ? el.closest('.ins-field') : null;
     if (!field) return;
@@ -173,64 +147,28 @@ function limparErro(el) {
 // ============================================================================
 function renderOpcoes() {
     const uf = document.getElementById('end-estado');
-    if (uf) {
-        uf.innerHTML = '<option value="">UF</option>' +
-            UFS.map(u => `<option value="${u}">${u}</option>`).join('');
-    }
+    if (uf) uf.innerHTML = '<option value="">UF</option>' + UFS.map(u => `<option value="${u}">${u}</option>`).join('');
 
     const pai = document.getElementById('opcoes-escolaridade-pai');
-    if (pai) {
-        pai.innerHTML = ESCOLARIDADES.map((e, i) => `
-            <label class="ins-radio">
-                <input type="radio" name="composicaoFamiliar.escolaridadePai" value="${escapeHtml(e)}" id="esc-pai-${i}">
-                <span>${escapeHtml(e)}</span>
-            </label>
-        `).join('');
-    }
+    if (pai) pai.innerHTML = ESCOLARIDADES.map((e,i) => `
+        <label class="ins-radio"><input type="radio" name="composicaoFamiliar.escolaridadePai" value="${escapeHtml(e)}" id="esc-pai-${i}"><span>${escapeHtml(e)}</span></label>`).join('');
 
     const mae = document.getElementById('opcoes-escolaridade-mae');
-    if (mae) {
-        mae.innerHTML = ESCOLARIDADES.map((e, i) => `
-            <label class="ins-radio">
-                <input type="radio" name="composicaoFamiliar.escolaridadeMae" value="${escapeHtml(e)}" id="esc-mae-${i}">
-                <span>${escapeHtml(e)}</span>
-            </label>
-        `).join('');
-    }
+    if (mae) mae.innerHTML = ESCOLARIDADES.map((e,i) => `
+        <label class="ins-radio"><input type="radio" name="composicaoFamiliar.escolaridadeMae" value="${escapeHtml(e)}" id="esc-mae-${i}"><span>${escapeHtml(e)}</span></label>`).join('');
 
     const graus = document.getElementById('opcoes-graus-parentesco');
-    if (graus) {
-        graus.innerHTML = GRAUS_PARENTESCO.map((g, i) => `
-            <label class="ins-check">
-                <input type="checkbox" name="composicaoFamiliar.grausParentesco" data-tipo="array"
-                       value="${escapeHtml(g)}" id="grau-${i}">
-                <span>${escapeHtml(g)}</span>
-            </label>
-        `).join('');
-    }
+    if (graus) graus.innerHTML = GRAUS_PARENTESCO.map((g,i) => `
+        <label class="ins-check"><input type="checkbox" name="composicaoFamiliar.grausParentesco" data-tipo="array" value="${escapeHtml(g)}" id="grau-${i}"><span>${escapeHtml(g)}</span></label>`).join('');
 
     const renda = document.getElementById('opcoes-faixa-renda');
-    if (renda) {
-        renda.innerHTML = FAIXAS_RENDA.map((f, i) => `
-            <label class="ins-radio">
-                <input type="radio" name="rendaFamiliar.faixaRenda" value="${escapeHtml(f)}" id="renda-${i}">
-                <span>${escapeHtml(f)}</span>
-            </label>
-        `).join('');
-    }
+    if (renda) renda.innerHTML = FAIXAS_RENDA.map((f,i) => `
+        <label class="ins-radio"><input type="radio" name="rendaFamiliar.faixaRenda" value="${escapeHtml(f)}" id="renda-${i}"><span>${escapeHtml(f)}</span></label>`).join('');
 
     const programas = document.getElementById('opcoes-programas-sociais');
-    if (programas) {
-        programas.innerHTML = PROGRAMAS_SOCIAIS.map((p, i) => `
-            <label class="ins-radio">
-                <input type="radio" name="rendaFamiliar.programasSociais" data-tipo="array"
-                       value="${escapeHtml(p)}" id="prog-${i}">
-                <span>${escapeHtml(p)}</span>
-            </label>
-        `).join('');
-    }
+    if (programas) programas.innerHTML = PROGRAMAS_SOCIAIS.map((p,i) => `
+        <label class="ins-radio"><input type="radio" name="rendaFamiliar.programasSociais" data-tipo="array" value="${escapeHtml(p)}" id="prog-${i}"><span>${escapeHtml(p)}</span></label>`).join('');
 
-    // Reaplica listeners de limpar erro nos elementos recém-criados
     document.querySelectorAll('input, select, textarea').forEach(el => {
         el.addEventListener('input', () => limparErro(el));
         el.addEventListener('change', () => limparErro(el));
@@ -255,19 +193,9 @@ function configurarCondicionais() {
         atualizar();
     };
 
-    // CadÚnico → NIS
-    toggle(
-        document.getElementById('aluno-cadunico'),
-        document.getElementById('aluno-nis-field'),
-        (el) => el.value === 'true'
-    );
-    toggle(
-        document.getElementById('resp-cadunico'),
-        document.getElementById('resp-nis-field'),
-        (el) => el.value === 'true'
-    );
+    toggle(document.getElementById('aluno-cadunico'), document.getElementById('aluno-nis-field'), el => el.value === 'true');
+    toggle(document.getElementById('resp-cadunico'),  document.getElementById('resp-nis-field'),  el => el.value === 'true');
 
-    // Deficiência → qual
     const radiosDef = document.querySelectorAll('input[name="informacoesAdicionais.possuiDeficiencia"]');
     const campoDef = document.getElementById('info-deficiencia-field');
     const atualizarDef = () => {
@@ -279,7 +207,6 @@ function configurarCondicionais() {
     radiosDef.forEach(r => r.addEventListener('change', atualizarDef));
     atualizarDef();
 
-    // Programa social "Outro" → campo texto
     const radiosProg = document.querySelectorAll('input[name="rendaFamiliar.programasSociais"]');
     const campoOutro = document.getElementById('renda-outro-field');
     const atualizarOutro = () => {
@@ -293,7 +220,7 @@ function configurarCondicionais() {
 }
 
 // ============================================================================
-// NAVEGAÇÃO ENTRE PASSOS
+// NAVEGAÇÃO
 // ============================================================================
 function atualizarStepper() {
     $$('.ins-step').forEach(step => {
@@ -317,16 +244,26 @@ function atualizarStepper() {
 function irParaPasso(n) {
     if (n < 1 || n > TOTAL_PASSOS) return;
     state.passo = n;
-    $$('.ins-passo').forEach(p => {
-        p.classList.toggle('ativo', Number(p.dataset.passo) === n);
-    });
+    $$('.ins-passo').forEach(p => p.classList.toggle('ativo', Number(p.dataset.passo) === n));
     atualizarStepper();
-
     const alvo = document.querySelector('.ins-steps');
     if (alvo) {
         const topo = alvo.getBoundingClientRect().top + window.scrollY - 20;
         window.scrollTo({ top: topo, behavior: 'smooth' });
     }
+}
+
+function validarCPF(cpf) {
+    const d = String(cpf || '').replace(/\D/g, '');
+    if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+    let soma = 0;
+    for (let i = 0; i < 9; i++) soma += Number(d[i]) * (10 - i);
+    let dv1 = (soma * 10) % 11; if (dv1 === 10) dv1 = 0;
+    if (dv1 !== Number(d[9])) return false;
+    soma = 0;
+    for (let i = 0; i < 10; i++) soma += Number(d[i]) * (11 - i);
+    let dv2 = (soma * 10) % 11; if (dv2 === 10) dv2 = 0;
+    return dv2 === Number(d[10]);
 }
 
 function validarPasso(n) {
@@ -337,121 +274,69 @@ function validarPasso(n) {
     let primeiro = null;
 
     passo.querySelectorAll('[data-obrigatorio]').forEach(el => {
-        // Ignora elementos escondidos (condicionais)
         if (el.offsetParent === null) return;
 
         if (el.dataset.obrigatorio === 'grupo') {
             const marcado = el.querySelector('input[type="radio"]:checked')
                 || el.querySelector('input[type="checkbox"]:checked');
-            if (!marcado) {
-                marcarErro(el, 'Selecione uma opção.');
-                ok = false;
-                primeiro = primeiro || el;
-            } else {
-                limparErro(el);
-            }
+            if (!marcado) { marcarErro(el, 'Selecione uma opção.'); ok = false; primeiro = primeiro || el; }
+            else limparErro(el);
             return;
         }
 
         const valor = (el.value || '').trim();
-        if (!valor) {
-            marcarErro(el, 'Campo obrigatório.');
-            ok = false;
-            primeiro = primeiro || el;
-        } else {
-            limparErro(el);
-        }
+        if (!valor) { marcarErro(el, 'Campo obrigatório.'); ok = false; primeiro = primeiro || el; }
+        else limparErro(el);
     });
 
-    // Validações extras de formato
     if (n === 1) {
         const cpf = document.getElementById('aluno-cpf');
-        if (cpf && cpf.value && !validarCPF(cpf.value)) {
-            marcarErro(cpf, 'CPF inválido.');
-            ok = false;
-            primeiro = primeiro || cpf;
-        }
+        if (cpf && cpf.value && !validarCPF(cpf.value)) { marcarErro(cpf, 'CPF inválido.'); ok = false; primeiro = primeiro || cpf; }
         const nasc = document.getElementById('aluno-nascimento');
         if (nasc && nasc.value) {
             const d = new Date(nasc.value);
-            if (d > new Date()) {
-                marcarErro(nasc, 'A data de nascimento não pode ser no futuro.');
+            if (d > new Date()) { marcarErro(nasc, 'A data de nascimento não pode ser no futuro.'); ok = false; primeiro = primeiro || nasc; }
+        }
+    }
+    if (n === 2) {
+        const cpf = document.getElementById('resp-cpf');
+        if (cpf && cpf.value && !validarCPF(cpf.value)) { marcarErro(cpf, 'CPF inválido.'); ok = false; primeiro = primeiro || cpf; }
+    }
+    if (n === 6) {
+        const aceite = document.getElementById('lgpd-aceite');
+        if (aceite && !aceite.checked) { marcarErro(aceite, 'É necessário aceitar o termo para enviar.'); ok = false; primeiro = primeiro || aceite; }
+
+        if (state.biometriaHabilitada) {
+            const bioAceite = document.getElementById('biometria-aceite');
+            if (bioAceite && bioAceite.checked && !state.biometriaCapturada) {
+                toast('Você autorizou a biometria. Toque em "Capturar biometria" antes de enviar.', 'warning');
                 ok = false;
-                primeiro = primeiro || nasc;
+                primeiro = primeiro || document.getElementById('btn-capturar-biometria');
             }
         }
     }
 
-    if (n === 2) {
-        const cpf = document.getElementById('resp-cpf');
-        if (cpf && cpf.value && !validarCPF(cpf.value)) {
-            marcarErro(cpf, 'CPF inválido.');
-            ok = false;
-            primeiro = primeiro || cpf;
-        }
-    }
-
-    if (n === 6) {
-        const aceite = document.getElementById('lgpd-aceite');
-        if (aceite && !aceite.checked) {
-            marcarErro(aceite, 'É necessário aceitar o termo para enviar.');
-            ok = false;
-            primeiro = primeiro || aceite;
-        }
-    }
-
     if (primeiro) {
-        const alvo = primeiro.closest('.ins-field') || primeiro;
-        alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const alvo = primeiro.closest && primeiro.closest('.ins-field') ? primeiro.closest('.ins-field') : primeiro;
+        if (alvo.scrollIntoView) alvo.scrollIntoView({ behavior:'smooth', block:'center' });
         toast('Verifique os campos destacados.', 'warning');
     }
-
     return ok;
-}
-
-function validarCPF(cpf) {
-    const d = String(cpf || '').replace(/\D/g, '');
-    if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
-
-    let soma = 0;
-    for (let i = 0; i < 9; i++) soma += Number(d[i]) * (10 - i);
-    let dv1 = (soma * 10) % 11;
-    if (dv1 === 10) dv1 = 0;
-    if (dv1 !== Number(d[9])) return false;
-
-    soma = 0;
-    for (let i = 0; i < 10; i++) soma += Number(d[i]) * (11 - i);
-    let dv2 = (soma * 10) % 11;
-    if (dv2 === 10) dv2 = 0;
-    return dv2 === Number(d[10]);
 }
 
 function configurarNavegacao() {
     const btnProximo = document.getElementById('btn-proximo');
     const btnVoltar = document.getElementById('btn-voltar');
 
-    if (btnProximo) {
-        btnProximo.addEventListener('click', () => {
-            if (!validarPasso(state.passo)) return;
-            irParaPasso(state.passo + 1);
-        });
-    }
-
-    if (btnVoltar) {
-        btnVoltar.addEventListener('click', () => irParaPasso(state.passo - 1));
-    }
+    if (btnProximo) btnProximo.addEventListener('click', () => { if (!validarPasso(state.passo)) return; irParaPasso(state.passo + 1); });
+    if (btnVoltar) btnVoltar.addEventListener('click', () => irParaPasso(state.passo - 1));
 
     $$('.ins-step').forEach(step => {
         step.addEventListener('click', () => {
             const n = Number(step.dataset.passo);
             if (n <= state.passo) return irParaPasso(n);
-
-            // Avançar só se todos os passos anteriores forem válidos
             for (let i = state.passo; i < n; i++) {
-                if (!validarPasso(i)) {
-                    irParaPasso(i);
-                    return;
-                }
+                if (!validarPasso(i)) { irParaPasso(i); return; }
             }
             irParaPasso(n);
         });
@@ -467,35 +352,23 @@ function configurarCEP() {
     if (!cep) return;
 
     let ultimoBuscado = '';
-
     const buscar = async () => {
         const digitos = cep.value.replace(/\D/g, '');
         if (digitos.length !== 8 || digitos === ultimoBuscado) return;
         ultimoBuscado = digitos;
-
         if (status) status.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
-
         try {
             const resp = await fetch(`${API_BASE}/publica/cep/${digitos}`);
             const data = await resp.json();
-
             if (!data.success) throw new Error(data.error || 'CEP não encontrado.');
-
             const e = data.endereco;
-            const set = (id, valor) => {
-                const el = document.getElementById(id);
-                if (el && valor) el.value = valor;
-            };
-
+            const set = (id, valor) => { const el = document.getElementById(id); if (el && valor) el.value = valor; };
             set('end-logradouro', e.logradouro);
             set('end-bairro', e.bairro);
             set('end-cidade', e.cidade);
-
             const uf = document.getElementById('end-estado');
             if (uf && e.estado) uf.value = e.estado;
-
             if (status) status.innerHTML = '<i class="fas fa-circle-check" style="color:#16a34a"></i>';
-
             const numero = document.getElementById('end-numero');
             if (numero && !numero.value) numero.focus();
         } catch (err) {
@@ -503,15 +376,136 @@ function configurarCEP() {
             toast(err.message, 'warning');
         }
     };
-
     cep.addEventListener('blur', buscar);
-    cep.addEventListener('input', () => {
-        if (cep.value.replace(/\D/g, '').length === 8) buscar();
+    cep.addEventListener('input', () => { if (cep.value.replace(/\D/g, '').length === 8) buscar(); });
+}
+
+// ============================================================================
+// BIOMETRIA — WebAuthn + criptografia híbrida (RSA-OAEP + AES-GCM)
+// ============================================================================
+function b64encode(buf) {
+    return btoa(String.fromCharCode(...new Uint8Array(buf)));
+}
+
+async function obterChavePublicaBiometria() {
+    const resp = await fetch(`${API_BASE}/publica/biometria/chave`);
+    const data = await resp.json();
+    if (!data.success || !data.chavePublica) throw new Error('Chave pública de biometria indisponível.');
+    return data.chavePublica;
+}
+
+async function criptografarBiometria(payloadTexto) {
+    const aesKey = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt']);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const cipherBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aesKey, new TextEncoder().encode(payloadTexto));
+
+    const rawAes = await crypto.subtle.exportKey('raw', aesKey);
+    const jwk = await obterChavePublicaBiometria();
+    const rsaKey = await crypto.subtle.importKey('jwk', jwk, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['encrypt']);
+    const aesCifrada = await crypto.subtle.encrypt({ name: 'RSA-OAEP' }, rsaKey, rawAes);
+
+    return {
+        alg: 'AES-GCM+RSA-OAEP-256',
+        iv: b64encode(iv),
+        chaveAesCifrada: b64encode(aesCifrada),
+        dadosCifrados: b64encode(cipherBuf)
+    };
+}
+
+async function capturarBiometriaWebAuthn() {
+    if (!window.PublicKeyCredential) throw new Error('Este dispositivo/navegador não suporta biometria WebAuthn.');
+    const disponivel = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(() => false);
+    if (!disponivel) throw new Error('Nenhum autenticador biométrico de plataforma disponível neste dispositivo.');
+
+    const respNome = (document.getElementById('resp-nome').value || '').trim();
+    const respCpf  = (document.getElementById('resp-cpf').value || '').replace(/\D/g, '');
+    if (!respNome || respCpf.length !== 11) throw new Error('Preencha nome e CPF do responsável antes de capturar a biometria.');
+
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    const userId = crypto.getRandomValues(new Uint8Array(16));
+
+    const cred = await navigator.credentials.create({
+        publicKey: {
+            challenge,
+            rp: { name: 'IEMA EducaPleno', id: location.hostname },
+            user: { id: userId, name: respCpf, displayName: respNome },
+            pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+            authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'preferred' },
+            timeout: 60000,
+            attestation: 'none'
+        }
+    });
+
+    if (!cred) throw new Error('Captura cancelada.');
+
+    return {
+        credentialId: cred.id,
+        rawId: b64encode(cred.rawId),
+        clientDataJSON: b64encode(cred.response.clientDataJSON),
+        attestationObject: b64encode(cred.response.attestationObject),
+        tipo: cred.type,
+        transports: (cred.response.getTransports && cred.response.getTransports()) || []
+    };
+}
+
+function configurarBiometria() {
+    const aceite   = document.getElementById('biometria-aceite');
+    const captura  = document.getElementById('biometria-captura');
+    const btnCap   = document.getElementById('btn-capturar-biometria');
+    const btnRef   = document.getElementById('btn-refazer-biometria');
+    const preview  = document.getElementById('biometria-preview');
+    const statusEl = document.getElementById('biometria-status');
+
+    if (!aceite) return;
+
+    const atualizarVisibilidadeCaptura = () => {
+        if (!captura) return;
+        captura.classList.toggle('ins-hidden', !aceite.checked);
+        if (!aceite.checked) {
+            state.biometriaCapturada = false;
+            state.biometriaCredential = null;
+            preview.innerHTML = '<i class="fas fa-fingerprint"></i><span>Biometria não capturada</span>';
+            btnRef.classList.add('ins-hidden');
+            statusEl.textContent = '';
+        }
+    };
+    aceite.addEventListener('change', atualizarVisibilidadeCaptura);
+    atualizarVisibilidadeCaptura();
+
+    btnCap.addEventListener('click', async () => {
+        statusEl.textContent = 'Solicitando autenticação biométrica...';
+        btnCap.disabled = true;
+        const original = btnCap.innerHTML;
+        btnCap.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Capturando...';
+        try {
+            const cred = await capturarBiometriaWebAuthn();
+            state.biometriaCredential = cred;
+            state.biometriaCapturada = true;
+            preview.innerHTML = `<i class="fas fa-circle-check" style="color:#16a34a"></i><span>Biometria capturada com sucesso</span>`;
+            btnRef.classList.remove('ins-hidden');
+            statusEl.textContent = 'Credencial registrada. Ela será criptografada antes do envio.';
+            toast('Biometria capturada!', 'success');
+        } catch (err) {
+            statusEl.textContent = '';
+            toast(err.message || 'Falha na captura biométrica.', 'error', 6000);
+        } finally {
+            btnCap.disabled = false;
+            btnCap.innerHTML = original;
+        }
+    });
+
+    btnRef.addEventListener('click', () => {
+        state.biometriaCapturada = false;
+        state.biometriaCredential = null;
+        preview.innerHTML = '<i class="fas fa-fingerprint"></i><span>Biometria não capturada</span>';
+        btnRef.classList.add('ins-hidden');
+        statusEl.textContent = '';
+        toast('Captura reiniciada. Toque em "Capturar biometria" novamente.', 'info');
     });
 }
 
 // ============================================================================
-// COLETA DOS DADOS
+// COLETA
 // ============================================================================
 function coletar() {
     const form = document.getElementById('form-inscricao');
@@ -528,30 +522,16 @@ function coletar() {
             else setPath(dados, nome, el.value);
             return;
         }
-
         if (el.type === 'checkbox') {
-            if (tipo === 'array') {
-                if (el.checked) pushArray(dados, nome, el.value);
-                return;
-            }
+            if (tipo === 'array') { if (el.checked) pushArray(dados, nome, el.value); return; }
             setPath(dados, nome, el.checked);
             return;
         }
-
-        if (tipo === 'bool') {
-            setPath(dados, nome, el.value === 'true');
-            return;
-        }
-
-        if (tipo === 'num') {
-            setPath(dados, nome, el.value === '' ? 0 : Number(el.value));
-            return;
-        }
-
+        if (tipo === 'bool') { setPath(dados, nome, el.value === 'true'); return; }
+        if (tipo === 'num')  { setPath(dados, nome, el.value === '' ? 0 : Number(el.value)); return; }
         setPath(dados, nome, (el.value || '').trim());
     });
 
-    // Garante estruturas mínimas
     if (!dados.composicaoFamiliar) dados.composicaoFamiliar = {};
     if (!Array.isArray(dados.composicaoFamiliar.grausParentesco)) dados.composicaoFamiliar.grausParentesco = [];
     if (!dados.rendaFamiliar) dados.rendaFamiliar = {};
@@ -562,142 +542,86 @@ function coletar() {
         aceito: !!(document.getElementById('lgpd-aceite') || {}).checked,
         versaoTermo: (state.config && state.config.versaoTermo) || '1.0'
     };
-
     return dados;
 }
 
 // ============================================================================
-// LGPD
+// LGPD (modal)
 // ============================================================================
 function configurarLGPD() {
     const modal = document.getElementById('modal-lgpd');
-    const iframe = document.getElementById('iframe-lgpd');
     const abrir = document.getElementById('btn-abrir-lgpd');
     const fechar1 = document.getElementById('btn-fechar-lgpd');
     const fechar2 = document.getElementById('btn-fechar-lgpd-2');
 
-    const abrirModal = () => {
-        if (!modal) return;
-        modal.classList.remove('ins-hidden');
-        document.body.style.overflow = 'hidden';
-    };
-
-    const fecharModal = () => {
-        if (!modal) return;
-        modal.classList.add('ins-hidden');
-        document.body.style.overflow = '';
-    };
+    const abrirModal = () => { if (!modal) return; modal.classList.remove('ins-hidden'); document.body.style.overflow = 'hidden'; };
+    const fecharModal = () => { if (!modal) return; modal.classList.add('ins-hidden'); document.body.style.overflow = ''; };
 
     if (abrir) abrir.addEventListener('click', abrirModal);
     if (fechar1) fechar1.addEventListener('click', fecharModal);
     if (fechar2) fechar2.addEventListener('click', fecharModal);
-    if (modal) {
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) fecharModal();
-        });
-    }
+    if (modal) modal.addEventListener('click', e => { if (e.target === modal) fecharModal(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharModal(); });
 
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') fecharModal();
-    });
-
-    // Mensagem do iframe
     window.addEventListener('message', (event) => {
         const data = event.data || {};
         if (data.tipo !== 'lgpd-inscricoes') return;
-
         if (data.aceito) {
             state.lgpdAceito = true;
             const chk = document.getElementById('lgpd-aceite');
-            if (chk) {
-                chk.checked = true;
-                limparErro(chk);
-            }
+            if (chk) { chk.checked = true; limparErro(chk); }
             const versao = document.getElementById('lgpd-versao');
             if (versao && data.versao) versao.textContent = `Versão do termo: ${data.versao}`;
             toast('Termo LGPD aceito.', 'success');
         }
-
         if (data.fechar) fecharModal();
     });
-
-    if (iframe) {
-        iframe.addEventListener('load', () => {
-            // Fallback: se o termo não carregar, permite aceitar direto no checkbox
-            try {
-                const doc = iframe.contentDocument;
-                if (doc && !doc.body.innerHTML.trim()) {
-                    iframe.src = 'lgpd-inscricoes.html';
-                }
-            } catch (_) { /* cross-origin — ignora */ }
-        });
-    }
 }
 
 // ============================================================================
-// CONFIGURAÇÃO
+// CONFIG
 // ============================================================================
 async function carregarConfig() {
     try {
         const resp = await fetch(`${API_BASE}/publica/config`);
         const data = await resp.json();
-
         if (!data.success) throw new Error(data.error || 'Erro ao carregar configuração.');
-
         state.config = data.config;
-
         const cfg = data.config;
 
-        const set = (id, txt) => {
-            const el = document.getElementById(id);
-            if (el && txt) el.textContent = txt;
-        };
-
+        const set = (id, txt) => { const el = document.getElementById(id); if (el && txt) el.textContent = txt; };
         set('cfg-titulo', cfg.titulo);
         set('cfg-serie', cfg.subtitulo || cfg.serie);
         set('cfg-objetivo', cfg.objetivo);
 
-        // Período
         const badge = document.getElementById('cfg-badge-periodo');
         if (badge) {
-            if (cfg.aberto) {
-                badge.className = 'ins-hero-badge aberto';
-                badge.innerHTML = '<i class="fas fa-circle-check"></i> Inscrições abertas';
-            } else {
-                badge.className = 'ins-hero-badge fechado';
-                badge.innerHTML = '<i class="fas fa-lock"></i> Inscrições encerradas';
-            }
+            if (cfg.aberto) { badge.className = 'ins-hero-badge aberto'; badge.innerHTML = '<i class="fas fa-circle-check"></i> Inscrições abertas'; }
+            else            { badge.className = 'ins-hero-badge fechado'; badge.innerHTML = '<i class="fas fa-lock"></i> Inscrições encerradas'; }
         }
 
         const prazo = document.getElementById('cfg-prazo');
-        if (prazo) {
-            const ini = formatarData(cfg.dataInicio);
-            const fim = formatarData(cfg.dataFim);
-            prazo.textContent = `${ini} a ${fim}`;
-        }
+        if (prazo) prazo.textContent = `${formatarData(cfg.dataInicio)} a ${formatarData(cfg.dataFim)}`;
 
         const versao = document.getElementById('lgpd-versao');
         if (versao) versao.textContent = `Versão do termo: ${cfg.versaoTermo || '1.0'}`;
 
-        // Bloqueio de envio
+        // Biometria: exibe bloco somente se o admin habilitou
+        state.biometriaHabilitada = !!cfg.solicitarBiometria;
+        const bioBox = document.getElementById('biometria-box');
+        if (bioBox) bioBox.classList.toggle('ins-hidden', !state.biometriaHabilitada);
+
         if (!cfg.aberto) {
             const aviso = document.getElementById('ins-aviso-fechado');
             const texto = document.getElementById('ins-aviso-texto');
             if (aviso) aviso.classList.remove('ins-hidden');
-            if (texto) {
-                texto.textContent = cfg.vagasRestantes === 0
-                    ? 'As vagas para este processo foram esgotadas.'
-                    : (cfg.mensagemEncerrado || 'As inscrições estão encerradas no momento.');
-            }
-
+            if (texto) texto.textContent = cfg.vagasRestantes === 0
+                ? 'As vagas para este processo foram esgotadas.'
+                : (cfg.mensagemEncerrado || 'As inscrições estão encerradas no momento.');
             const btn = document.getElementById('btn-enviar');
-            if (btn) {
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-lock"></i> Inscrições encerradas';
-            }
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-lock"></i> Inscrições encerradas'; }
         }
 
-        // Contador de vagas no chip
         if (cfg.vagas > 0) {
             const chips = document.querySelector('.ins-chips');
             if (chips) {
@@ -722,55 +646,61 @@ function configurarEnvio() {
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
-
         if (state.enviando) return;
 
-        // Valida todos os passos
         for (let i = 1; i <= TOTAL_PASSOS; i++) {
-            if (!validarPasso(i)) {
-                irParaPasso(i);
-                return;
-            }
+            if (!validarPasso(i)) { irParaPasso(i); return; }
         }
 
         const btn = document.getElementById('btn-enviar');
-        const conteudoOriginal = btn ? btn.innerHTML : '';
-
+        const original = btn ? btn.innerHTML : '';
         state.enviando = true;
-        if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Enviando...';
-        }
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Enviando...'; }
 
         try {
             const payload = coletar();
+
+            if (state.biometriaHabilitada) {
+                const aceiteBio = !!(document.getElementById('biometria-aceite') || {}).checked;
+                if (aceiteBio) {
+                    if (!state.biometriaCapturada || !state.biometriaCredential) {
+                        throw new Error('Autorize a biometria e toque em "Capturar biometria" antes de enviar.');
+                    }
+                    const envelope = await criptografarBiometria(JSON.stringify({
+                        credential: state.biometriaCredential,
+                        responsavelCpf: (document.getElementById('resp-cpf').value || '').replace(/\D/g, ''),
+                        capturadoEm: new Date().toISOString()
+                    }));
+                    payload.biometria = {
+                        aceito: true,
+                        versaoTermo: '1.0',
+                        algoritmo: envelope.alg,
+                        iv: envelope.iv,
+                        chaveAesCifrada: envelope.chaveAesCifrada,
+                        dadosCifrados: envelope.dadosCifrados,
+                        capturadoEm: new Date().toISOString()
+                    };
+                } else {
+                    payload.biometria = { aceito: false };
+                }
+            }
 
             const resp = await fetch(`${API_BASE}/publica`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-
             const data = await resp.json();
-
-            if (!resp.ok || !data.success) {
-                throw new Error(data.error || 'Não foi possível enviar a inscrição.');
-            }
+            if (!resp.ok || !data.success) throw new Error(data.error || 'Não foi possível enviar a inscrição.');
 
             mostrarSucesso(data.protocolo);
         } catch (err) {
             console.error(err);
             toast(err.message, 'error', 7000);
-            // Se for erro de validação do backend, volta ao passo 1
-            if (/CPF|obrigat|inválid|Informe|Selecione/i.test(err.message)) {
-                irParaPasso(1);
-            }
+            if (/CPF|obrigat|inválid|Informe|Selecione|biometria/i.test(err.message)) irParaPasso(1);
         } finally {
             state.enviando = false;
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = conteudoOriginal;
-            }
+            if (btn) { btn.disabled = false; btn.innerHTML = original; }
         }
     });
 }
@@ -806,12 +736,8 @@ function configurarSucesso() {
         copiar.addEventListener('click', async () => {
             const valor = document.getElementById('ins-protocolo-valor');
             if (!valor) return;
-            try {
-                await navigator.clipboard.writeText(valor.textContent.trim());
-                toast('Protocolo copiado!', 'success');
-            } catch (_) {
-                toast('Não foi possível copiar. Anote o protocolo.', 'warning');
-            }
+            try { await navigator.clipboard.writeText(valor.textContent.trim()); toast('Protocolo copiado!', 'success'); }
+            catch (_) { toast('Não foi possível copiar. Anote o protocolo.', 'warning'); }
         });
     }
 
@@ -823,18 +749,16 @@ function configurarSucesso() {
             const progress = document.querySelector('.ins-progress');
             const sucesso = document.getElementById('ins-sucesso');
 
-            if (form) {
-                form.reset();
-                form.classList.remove('ins-hidden');
-            }
+            if (form) { form.reset(); form.classList.remove('ins-hidden'); }
             if (steps) steps.classList.remove('ins-hidden');
             if (progress) progress.classList.remove('ins-hidden');
             if (sucesso) sucesso.classList.add('ins-hidden');
 
             state.lgpdAceito = false;
+            state.biometriaCapturada = false;
+            state.biometriaCredential = null;
             document.querySelectorAll('.ins-field').forEach(f => f.classList.remove('invalido'));
             document.querySelectorAll('.ins-err').forEach(e => e.textContent = '');
-
             irParaPasso(1);
         });
     }
@@ -849,7 +773,6 @@ function configurarConsulta() {
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
-
         const protocolo = (document.getElementById('consulta-protocolo').value || '').trim().toUpperCase();
         const cpf = (document.getElementById('consulta-cpf').value || '').replace(/\D/g, '');
         const resultado = document.getElementById('consulta-resultado');
@@ -862,25 +785,16 @@ function configurarConsulta() {
         try {
             const resp = await fetch(`${API_BASE}/publica/consulta/${encodeURIComponent(protocolo)}?cpf=${cpf}`);
             const data = await resp.json();
-
             if (!resp.ok || !data.success) throw new Error(data.error || 'Não foi possível consultar.');
 
             const i = data.inscricao;
             const statusClasse = `ins-status-${String(i.status).toLowerCase().replace(/\s+/g, '-').normalize('NFD').replace(/[\u0300-\u036f]/g, '')}`;
-
             const historico = (i.historico || []).map(h => `
-                <li>
-                    <strong>${escapeHtml(h.status)}</strong>
-                    ${formatarDataHora(h.em)}${h.observacao ? ' — ' + escapeHtml(h.observacao) : ''}
-                </li>
-            `).join('');
+                <li><strong>${escapeHtml(h.status)}</strong> ${formatarDataHora(h.em)}${h.observacao ? ' — ' + escapeHtml(h.observacao) : ''}</li>`).join('');
 
             resultado.innerHTML = `
                 <div class="ins-consulta-resultado">
-                    <h3>
-                        ${escapeHtml(i.aluno)}
-                        <span class="ins-status-badge ${statusClasse}">${escapeHtml(i.status)}</span>
-                    </h3>
+                    <h3>${escapeHtml(i.aluno)} <span class="ins-status-badge ${statusClasse}">${escapeHtml(i.status)}</span></h3>
                     <p style="margin:0;font-size:13px;color:#64748b">
                         Protocolo <span class="ins-protocolo-mini">${escapeHtml(i.protocolo)}</span>
                         · ${escapeHtml(String(i.anoLetivo))} · ${escapeHtml(i.serie || '')}
@@ -890,8 +804,7 @@ function configurarConsulta() {
                         · Inscrição em ${formatarDataHora(i.createdAt)}
                     </p>
                     ${historico ? `<ul class="ins-timeline">${historico}</ul>` : ''}
-                </div>
-            `;
+                </div>`;
         } catch (err) {
             resultado.innerHTML = `<div class="ins-alert ins-alert-error"><i class="fas fa-circle-exclamation"></i><div>${escapeHtml(err.message)}</div></div>`;
         }
@@ -908,6 +821,7 @@ document.addEventListener('DOMContentLoaded', () => {
     configurarNavegacao();
     configurarCEP();
     configurarLGPD();
+    configurarBiometria();
     configurarEnvio();
     configurarSucesso();
     configurarConsulta();

@@ -1,6 +1,7 @@
 // ============================================================================
 // backend/inscricoes/models/ConfiguracaoInscricao.js
 // Configuração global (singleton) do processo de inscrição socioeconômica
+// Inclui a flag solicitarBiometria
 // ============================================================================
 'use strict';
 
@@ -59,6 +60,9 @@ const ConfiguracaoInscricaoSchema = new mongoose.Schema({
 
     bloquearDuplicadas: { type: Boolean, default: true },  // 1 inscrição por CPF/ano
     permiteConsultaPublica: { type: Boolean, default: true },
+
+    // Biometria — aparece no formulário público APENAS quando true
+    solicitarBiometria: { type: Boolean, default: false },
 
     versaoTermo: { type: String, default: '1.0' },
 

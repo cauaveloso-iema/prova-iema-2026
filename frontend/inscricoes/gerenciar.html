@@ -151,6 +151,12 @@
                     <option value="nao">Somente sem deficiência</option>
                 </select>
 
+                <select id="f-biometria">
+                    <option value="">Biometria: todos</option>
+                    <option value="sim">Somente com biometria</option>
+                    <option value="nao">Somente sem biometria</option>
+                </select>
+
                 <select id="f-ano">
                     <option value="">Todos os anos</option>
                 </select>
@@ -178,13 +184,14 @@
                             <th>Bairro</th>
                             <th>Renda</th>
                             <th>CadÚnico</th>
+                            <th>Biometria</th>
                             <th>Status</th>
                             <th>Data</th>
                             <th class="adm-th-acoes">Ações</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-inscricoes">
-                        <tr><td colspan="10"><div class="adm-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div></td></tr>
+                        <tr><td colspan="11"><div class="adm-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div></td></tr>
                     </tbody>
                 </table>
             </div>
@@ -261,6 +268,10 @@
                 <label class="adm-switch">
                     <input type="checkbox" id="c-consulta">
                     <span>Permitir consulta pública</span>
+                </label>
+                <label class="adm-switch">
+                    <input type="checkbox" id="c-biometria">
+                    <span>Solicitar biometria do responsável</span>
                 </label>
             </div>
 

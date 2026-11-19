@@ -3,6 +3,10 @@
 // Base: /api/inscricoes
 //   Público : /publica/*
 //   Admin   : /admin/*
+//
+// Biometria: usa a MESMA ENCRYPTION_KEY do .env (criptografia simétrica
+// feita no servidor). O navegador envia o payload em JSON normal; o
+// servidor cifra e grava no Mongo no formato enc:v1:...
 // ============================================================================
 'use strict';
 
@@ -67,6 +71,15 @@ const {
     formatarTelefone, formatarCEP, validarCPF, gerarProtocolo,
     texto, textoLongo, booleano, numero, paraData, escaparRegex
 } = require('../utils/seguranca');
+
+// Biometria (mesma ENCRYPTION_KEY do .env)
+let biometriaCrypto;
+try {
+    biometriaCrypto = require('../utils/biometriaCrypto');
+} catch (err) {
+    console.error('⚠️ [INSCRIÇÕES] utils/biometriaCrypto não encontrado. Biometria desabilitada:', err.message);
+    biometriaCrypto = null;
+}
 
 const ESCOLARIDADES = Inscricao.ESCOLARIDADES;
 const FAIXAS_RENDA = Inscricao.FAIXAS_RENDA;
@@ -369,7 +382,40 @@ async function gerarProtocoloUnico(anoLetivo) {
     return `${gerarProtocolo(anoLetivo)}${Date.now().toString().slice(-4)}`;
 }
 
-async function criarInscricao({ dados, cfg, origem, req, autor }) {
+// ----------------------------------------------------------------------------
+// Processa o bloco de biometria recebido (sempre pelo servidor).
+// Retorna o subdocumento pronto para salvar, ou lança erro com status.
+// ----------------------------------------------------------------------------
+function processarBiometria(bodyBiometria, cfg, req) {
+    if (!bodyBiometria || !bodyBiometria.aceito) {
+        return { aceito: false };
+    }
+
+    if (!cfg.solicitarBiometria) {
+        const err = new Error('Biometria não habilitada para este processo.');
+        err.status = 400;
+        throw err;
+    }
+
+    if (!biometriaCrypto) {
+        const err = new Error('Módulo de biometria indisponível no servidor.');
+        err.status = 500;
+        throw err;
+    }
+
+    try {
+        return biometriaCrypto.prepararParaSalvar(bodyBiometria, {
+            ip: req.ip || req.connection?.remoteAddress || '',
+            userAgent: req.headers['user-agent'] || ''
+        });
+    } catch (e) {
+        const err = new Error('Falha ao validar biometria: ' + e.message);
+        err.status = 400;
+        throw err;
+    }
+}
+
+async function criarInscricao({ dados, cfg, origem, req, autor, biometria }) {
     const protocolo = await gerarProtocoloUnico(cfg.anoLetivo);
     const dadosCripto = criptografarDocumento(dados);
 
@@ -392,6 +438,7 @@ async function criarInscricao({ dados, cfg, origem, req, autor }) {
             ip: (req && (req.ip || req.connection?.remoteAddress)) || '',
             userAgent: (req && req.headers && req.headers['user-agent']) || ''
         },
+        biometria: biometria || { aceito: false },
         status: 'Pendente',
         historico: [{
             status: 'Pendente',
@@ -404,6 +451,10 @@ async function criarInscricao({ dados, cfg, origem, req, autor }) {
     await doc.save();
     return doc;
 }
+
+// ===========================================================================
+// ROTAS PÚBLICAS
+// ===========================================================================
 
 // ---- GET /publica/config ----
 router.get('/publica/config', async (req, res) => {
@@ -438,7 +489,8 @@ router.get('/publica/config', async (req, res) => {
                 versaoTermo: cfg.versaoTermo,
                 mensagemEncerrado: cfg.mensagemEncerrado,
                 mensagemTopo: cfg.mensagemTopo,
-                permiteConsultaPublica: cfg.permiteConsultaPublica
+                permiteConsultaPublica: cfg.permiteConsultaPublica,
+                solicitarBiometria: !!cfg.solicitarBiometria
             },
             totalInscritos,
             opcoes: {
@@ -492,6 +544,21 @@ router.get('/publica/cep/:cep', async (req, res) => {
     }
 });
 
+// ---- GET /publica/biometria/chave ----
+// No modo simétrico não há chave pública. Retornamos um identificador
+// para o front saber que pode mandar o payload em claro (o servidor cifra).
+router.get('/publica/biometria/chave', (req, res) => {
+    try {
+        if (!biometriaCrypto) {
+            return res.status(503).json({ success: false, error: 'Biometria indisponível no servidor.' });
+        }
+        res.json({ success: true, chavePublica: biometriaCrypto.exportarChavePublicaJWK() });
+    } catch (error) {
+        logger.error('❌ [INSCRIÇÕES] Erro ao obter chave de biometria:', error);
+        res.status(500).json({ success: false, error: 'Falha ao obter configuração de biometria.' });
+    }
+});
+
 // ---- POST /publica ----
 router.post('/publica', limitarTentativas, async (req, res) => {
     try {
@@ -538,9 +605,21 @@ router.post('/publica', limitarTentativas, async (req, res) => {
             }
         }
 
-        const doc = await criarInscricao({ dados, cfg, origem: 'Publico', req });
+        // ------- Biometria (opcional, só se a config permitir) --------------
+        let biometriaFinal = { aceito: false };
+        if (req.body && req.body.biometria) {
+            try {
+                biometriaFinal = processarBiometria(req.body.biometria, cfg, req);
+            } catch (e) {
+                return res.status(e.status || 400).json({ success: false, error: e.message });
+            }
+        }
 
-        logger.info(`✅ [INSCRIÇÕES] Nova inscrição ${doc.protocolo} — ${doc.aluno.nomeCompleto}`);
+        const doc = await criarInscricao({
+            dados, cfg, origem: 'Publico', req, biometria: biometriaFinal
+        });
+
+        logger.info(`✅ [INSCRIÇÕES] Nova inscrição ${doc.protocolo} — ${doc.aluno.nomeCompleto}${biometriaFinal.aceito ? ' [biometria]' : ''}`);
 
         res.status(201).json({
             success: true,
@@ -620,7 +699,7 @@ router.get('/admin/dashboard', authenticateToken, podeConsultar, async (req, res
 
         const [
             total, pendentes, emAnalise, aprovadas, concluidas, canceladas,
-            comCadUnico, comDeficiencia, semDispositivo
+            comCadUnico, comDeficiencia, semDispositivo, comBiometria
         ] = await Promise.all([
             Inscricao.countDocuments(filtroAno),
             Inscricao.countDocuments({ ...filtroAno, status: 'Pendente' }),
@@ -630,7 +709,8 @@ router.get('/admin/dashboard', authenticateToken, podeConsultar, async (req, res
             Inscricao.countDocuments({ ...filtroAno, status: 'Cancelada' }),
             Inscricao.countDocuments({ ...filtroAno, 'aluno.temCadUnico': true }),
             Inscricao.countDocuments({ ...filtroAno, 'informacoesAdicionais.possuiDeficiencia': true }),
-            Inscricao.countDocuments({ ...filtroAno, 'informacoesAdicionais.acessoDispositivos': false })
+            Inscricao.countDocuments({ ...filtroAno, 'informacoesAdicionais.acessoDispositivos': false }),
+            Inscricao.countDocuments({ ...filtroAno, 'biometria.aceito': true })
         ]);
 
         const porFaixaRenda = await Inscricao.aggregate([
@@ -649,14 +729,14 @@ router.get('/admin/dashboard', authenticateToken, podeConsultar, async (req, res
         const ultimas = await Inscricao.find(filtroAno)
             .sort({ createdAt: -1 })
             .limit(6)
-            .select('protocolo aluno.nomeCompleto responsavel.nomeCompleto status createdAt')
+            .select('protocolo aluno.nomeCompleto responsavel.nomeCompleto status createdAt biometria.aceito')
             .lean();
 
         res.json({
             success: true,
             resumo: {
                 total, pendentes, emAnalise, aprovadas, concluidas, canceladas,
-                comCadUnico, comDeficiencia, semDispositivo
+                comCadUnico, comDeficiencia, semDispositivo, comBiometria
             },
             porFaixaRenda: porFaixaRenda.map(f => ({ faixa: f._id || 'Não informado', total: f.total })),
             porBairro: porBairro.map(b => ({ bairro: b._id || 'Não informado', total: b.total })),
@@ -668,7 +748,7 @@ router.get('/admin/dashboard', authenticateToken, podeConsultar, async (req, res
     }
 });
 
-// ---- GET /admin/exportar (CSV otimizado p/ Excel) — admin + gestão ----
+// ---- GET /admin/exportar (CSV) — admin + gestão ----
 router.get('/admin/exportar', authenticateToken, podeEditar, async (req, res) => {
     try {
         const filtro = {};
@@ -681,9 +761,6 @@ router.get('/admin/exportar', authenticateToken, podeEditar, async (req, res) =>
         const dt = (v) => (v ? new Date(v).toLocaleString('pt-BR') : '');
         const d = (v) => (v ? new Date(v).toLocaleDateString('pt-BR') : '');
 
-        // ====================================================================
-        // RESUMO (cabeçalho do arquivo)
-        // ====================================================================
         const total = docs.length;
         const contagem = (fn) => docs.filter(fn).length;
         const pendentes = contagem(i => i.status === 'Pendente');
@@ -693,6 +770,7 @@ router.get('/admin/exportar', authenticateToken, podeEditar, async (req, res) =>
         const canceladas = contagem(i => i.status === 'Cancelada');
         const comCadUnico = contagem(i => i.aluno?.temCadUnico);
         const comDeficiencia = contagem(i => i.informacoesAdicionais?.possuiDeficiencia);
+        const comBiometria = contagem(i => i.biometria?.aceito);
 
         const resumo = [
             ['RELATÓRIO DE INSCRIÇÕES SOCIOECONÔMICAS'],
@@ -709,12 +787,10 @@ router.get('/admin/exportar', authenticateToken, podeEditar, async (req, res) =>
             ['Canceladas', canceladas],
             ['Com CadÚnico', comCadUnico],
             ['Com deficiência', comDeficiencia],
+            ['Com biometria', comBiometria],
             []
         ];
 
-        // ====================================================================
-        // CABEÇALHO DA TABELA
-        // ====================================================================
         const cabecalho = [
             'Protocolo', 'Ano Letivo', 'Série', 'Status', 'Data da Inscrição', 'Origem',
             'Aluno', 'Nascimento Aluno', 'CPF Aluno', 'Sexo', 'RG', 'E-mail Aluno', 'Telefone Aluno',
@@ -728,6 +804,7 @@ router.get('/admin/exportar', authenticateToken, podeEditar, async (req, res) =>
             'Faixa de renda', 'Programas sociais', 'Outro programa',
             'Deficiência', 'Qual deficiência', 'Acesso a dispositivos',
             'LGPD aceito', 'LGPD aceito em', 'Versão do termo',
+            'Biometria', 'Biometria em', 'Biometria ID',
             'Observações administrativas'
         ];
 
@@ -745,6 +822,7 @@ router.get('/admin/exportar', authenticateToken, podeEditar, async (req, res) =>
             const rf = i.rendaFamiliar || {};
             const ia = i.informacoesAdicionais || {};
             const lg = i.lgpd || {};
+            const bio = i.biometria || {};
 
             return [
                 i.protocolo, i.anoLetivo, i.serie, i.status, dt(i.createdAt), i.origem,
@@ -759,16 +837,13 @@ router.get('/admin/exportar', authenticateToken, podeEditar, async (req, res) =>
                 rf.faixaRenda, (rf.programasSociais || []).join(' | '), rf.programaOutro,
                 simNao(ia.possuiDeficiencia), ia.deficienciaQual, simNao(ia.acessoDispositivos),
                 simNao(lg.aceito), dt(lg.aceitoEm), lg.versaoTermo,
+                simNao(bio.aceito), dt(bio.capturadoEm), bio.credentialId || '',
                 i.observacoesAdmin
             ];
         });
 
-        // ====================================================================
-        // MONTAGEM DO CSV (separador ';' — padrão Excel pt-BR)
-        // ====================================================================
         const esc = (v) => {
             const s = String(v == null ? '' : v);
-            // Se contém ; " \n ou começa com =, precisa de aspas
             if (/[;"\r\n]/.test(s) || /^[=+\-@]/.test(s)) {
                 return `"${s.replace(/"/g, '""')}"`;
             }
@@ -777,8 +852,6 @@ router.get('/admin/exportar', authenticateToken, podeEditar, async (req, res) =>
 
         const linhasResumo = resumo.map(l => l.map(esc).join(';'));
         const linhasTabela = [cabecalho, ...linhas].map(l => l.map(esc).join(';'));
-
-        // BOM UTF-8 para o Excel reconhecer acentuação
         const csv = '\uFEFF' + [...linhasResumo, ...linhasTabela].join('\r\n');
 
         const nomeArquivo = `inscricoes-${new Date().toISOString().slice(0, 10)}.csv`;
@@ -792,7 +865,7 @@ router.get('/admin/exportar', authenticateToken, podeEditar, async (req, res) =>
     }
 });
 
-// ---- GET /admin/config — podeConfigurar (admin + gestao) ----
+// ---- GET /admin/config ----
 router.get('/admin/config', authenticateToken, podeConfigurar, async (req, res) => {
     try {
         const cfg = await ConfiguracaoInscricao.obter();
@@ -802,7 +875,7 @@ router.get('/admin/config', authenticateToken, podeConfigurar, async (req, res) 
     }
 });
 
-// ---- PUT /admin/config — podeConfigurar (admin + gestao) ----
+// ---- PUT /admin/config ----
 router.put('/admin/config', authenticateToken, podeConfigurar, async (req, res) => {
     try {
         const cfg = await ConfiguracaoInscricao.obter();
@@ -819,6 +892,7 @@ router.put('/admin/config', authenticateToken, podeConfigurar, async (req, res) 
         if (b.ativo !== undefined) cfg.ativo = booleano(b.ativo, true);
         if (b.bloquearDuplicadas !== undefined) cfg.bloquearDuplicadas = booleano(b.bloquearDuplicadas, true);
         if (b.permiteConsultaPublica !== undefined) cfg.permiteConsultaPublica = booleano(b.permiteConsultaPublica, true);
+        if (b.solicitarBiometria !== undefined) cfg.solicitarBiometria = booleano(b.solicitarBiometria, false);
         if (b.versaoTermo !== undefined) cfg.versaoTermo = texto(b.versaoTermo, 20) || '1.0';
         if (b.mensagemEncerrado !== undefined) cfg.mensagemEncerrado = textoLongo(b.mensagemEncerrado, 400);
         if (b.mensagemTopo !== undefined) cfg.mensagemTopo = textoLongo(b.mensagemTopo, 400);
@@ -837,7 +911,7 @@ router.put('/admin/config', authenticateToken, podeConfigurar, async (req, res) 
     }
 });
 
-// ---- GET /admin/opcoes — podeConsultar ----
+// ---- GET /admin/opcoes ----
 router.get('/admin/opcoes', authenticateToken, podeConsultar, async (req, res) => {
     try {
         const anos = await Inscricao.distinct('anoLetivo');
@@ -859,7 +933,7 @@ router.get('/admin/opcoes', authenticateToken, podeConsultar, async (req, res) =
     }
 });
 
-// ---- GET /admin (lista) — podeConsultar ----
+// ---- GET /admin (lista) ----
 router.get('/admin', authenticateToken, podeConsultar, async (req, res) => {
     try {
         const pagina = Math.max(1, parseInt(req.query.pagina, 10) || 1);
@@ -875,6 +949,9 @@ router.get('/admin', authenticateToken, podeConsultar, async (req, res) => {
 
         if (req.query.deficiencia === 'sim') filtro['informacoesAdicionais.possuiDeficiencia'] = true;
         if (req.query.deficiencia === 'nao') filtro['informacoesAdicionais.possuiDeficiencia'] = false;
+
+        if (req.query.biometria === 'sim') filtro['biometria.aceito'] = true;
+        if (req.query.biometria === 'nao') filtro['biometria.aceito'] = { $ne: true };
 
         if (req.query.programa) filtro['rendaFamiliar.programasSociais'] = req.query.programa;
 
@@ -914,7 +991,8 @@ router.get('/admin', authenticateToken, podeConsultar, async (req, res) => {
                     'aluno.nomeCompleto aluno.cpf aluno.telefone aluno.temCadUnico ' +
                     'responsavel.nomeCompleto responsavel.telefone ' +
                     'endereco.bairro endereco.cidade ' +
-                    'rendaFamiliar.faixaRenda informacoesAdicionais.possuiDeficiencia'
+                    'rendaFamiliar.faixaRenda informacoesAdicionais.possuiDeficiencia ' +
+                    'biometria.aceito'
                 )
                 .lean()
         ]);
@@ -934,6 +1012,7 @@ router.get('/admin', authenticateToken, podeConsultar, async (req, res) => {
             faixaRenda: d.rendaFamiliar?.faixaRenda || '',
             cadUnico: !!d.aluno?.temCadUnico,
             deficiencia: !!d.informacoesAdicionais?.possuiDeficiencia,
+            biometria: !!d.biometria?.aceito,
             status: d.status,
             createdAt: d.createdAt
         }));
@@ -954,7 +1033,7 @@ router.get('/admin', authenticateToken, podeConsultar, async (req, res) => {
     }
 });
 
-// ---- POST /admin (cadastro manual) — podeEditar ----
+// ---- POST /admin (cadastro manual) ----
 router.post('/admin', authenticateToken, podeEditar, async (req, res) => {
     try {
         const cfg = await ConfiguracaoInscricao.obter();
@@ -967,7 +1046,8 @@ router.post('/admin', authenticateToken, podeEditar, async (req, res) => {
             cfg,
             origem: 'Manual',
             req,
-            autor: req.userNome || 'Administrador'
+            autor: req.userNome || 'Administrador',
+            biometria: { aceito: false }
         });
 
         res.status(201).json({ success: true, mensagem: 'Inscrição criada.', inscricao: doc });
@@ -977,7 +1057,7 @@ router.post('/admin', authenticateToken, podeEditar, async (req, res) => {
     }
 });
 
-// ---- GET /admin/:id (detalhe completo) — podeConsultar ----
+// ---- GET /admin/:id (detalhe) ----
 router.get('/admin/:id', authenticateToken, podeConsultar, async (req, res) => {
     try {
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
@@ -1006,7 +1086,7 @@ router.get('/admin/:id', authenticateToken, podeConsultar, async (req, res) => {
     }
 });
 
-// ---- PUT /admin/:id — podeEditar ----
+// ---- PUT /admin/:id ----
 const CAMPOS_PERMITIDOS = {
     aluno: ['nomeCompleto', 'dataNascimento', 'cpf', 'email', 'sexo', 'rg', 'temCadUnico', 'nis', 'telefone'],
     responsavel: ['nomeCompleto', 'dataNascimento', 'cpf', 'email', 'sexo', 'rg', 'grauParentesco', 'temCadUnico', 'nis', 'telefone'],
@@ -1091,7 +1171,7 @@ router.put('/admin/:id', authenticateToken, podeEditar, async (req, res) => {
     }
 });
 
-// ---- DELETE /admin/:id — isAdmin (SÓ admin/super_admin pode excluir) ----
+// ---- DELETE /admin/:id — SÓ admin/super_admin ----
 router.delete('/admin/:id', authenticateToken, isAdmin, async (req, res) => {
     try {
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
