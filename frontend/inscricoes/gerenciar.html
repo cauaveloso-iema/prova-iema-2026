@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestão de Inscrições — EducaPleno</title>
+
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0f766e">
+    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="stylesheet" href="css/inscricoes-admin.css">
+
+    <!-- ⚠️ NÃO carregar login.js aqui — ele redireciona para /login.html -->
+    <script src="/js/dialog-helper.js" defer></script>
+    <script src="/js/core-security.js" defer></script>
+</head>
+<body class="adm-body">
+
+<div id="adm-loader"><div class="spinner"></div><p>Carregando...</p></div>
+
+<!-- ============================= TOPBAR ============================= -->
+<header class="adm-topbar">
+    <div class="adm-brand">
+        <div class="adm-brand-logo"><i class="fas fa-clipboard-user"></i></div>
+        <div class="adm-brand-text">
+            <strong>Gestão de Inscrições</strong>
+            <small>IEMA · Coleta socioeconômica</small>
+        </div>
+    </div>
+
+    <div class="adm-topbar-actions">
+        <a class="adm-btn adm-btn-ghost adm-btn-sm" href="/inscricoes/inscricao-publica.html" target="_blank">
+            <i class="fas fa-external-link-alt"></i> <span>Ver formulário</span>
+        </a>
+        <button class="adm-btn adm-btn-ghost adm-btn-sm" id="btn-voltar" type="button">
+            <i class="fas fa-arrow-left"></i> <span>Voltar</span>
+        </button>
+    </div>
+</header>
+
+<main class="adm-shell">
+
+    <!-- ============================= HERO ============================= -->
+    <section class="adm-hero">
+        <div class="adm-hero-info">
+            <h1><i class="fas fa-clipboard-user"></i> Módulo de Inscrições</h1>
+            <p>Gerencie, consulte e acompanhe as inscrições socioeconômicas dos alunos.</p>
+            <div class="adm-hero-chips">
+                <span class="adm-chip"><i class="fas fa-user-graduate"></i> <span id="hero-ano">—</span></span>
+                <span class="adm-chip"><i class="fas fa-calendar"></i> <span id="hero-periodo">—</span></span>
+                <span class="adm-chip" id="hero-status-chip"><i class="fas fa-circle-notch fa-spin"></i> Verificando...</span>
+            </div>
+        </div>
+        <div class="adm-hero-stats">
+            <div class="adm-hero-stat"><div class="num" id="hero-total">—</div><div class="lbl">Inscrições</div></div>
+            <div class="adm-hero-stat"><div class="num" id="hero-pendentes">—</div><div class="lbl">Pendentes</div></div>
+            <div class="adm-hero-stat"><div class="num" id="hero-aprovadas">—</div><div class="lbl">Aprovadas</div></div>
+        </div>
+    </section>
+
+    <!-- ============================= TABS ============================= -->
+    <nav class="adm-tabs" role="tablist">
+        <button class="adm-tab active" data-tab="dashboard"><i class="fas fa-chart-pie"></i> Dashboard</button>
+        <button class="adm-tab" data-tab="inscricoes"><i class="fas fa-list"></i> Inscrições</button>
+        <button class="adm-tab" data-tab="config"><i class="fas fa-gear"></i> Configurações</button>
+    </nav>
+
+    <!-- ============================= DASHBOARD ============================= -->
+    <section class="adm-panel active" id="panel-dashboard">
+        <div class="adm-stats">
+            <div class="adm-stat"><div class="adm-stat-icon"><i class="fas fa-users"></i></div><h3>Total</h3><div class="adm-stat-value" id="st-total">—</div></div>
+            <div class="adm-stat adm-stat-warning"><div class="adm-stat-icon"><i class="fas fa-clock"></i></div><h3>Pendentes</h3><div class="adm-stat-value" id="st-pendentes">—</div></div>
+            <div class="adm-stat adm-stat-info"><div class="adm-stat-icon"><i class="fas fa-magnifying-glass-chart"></i></div><h3>Em análise</h3><div class="adm-stat-value" id="st-analise">—</div></div>
+            <div class="adm-stat adm-stat-success"><div class="adm-stat-icon"><i class="fas fa-circle-check"></i></div><h3>Aprovadas</h3><div class="adm-stat-value" id="st-aprovadas">—</div></div>
+            <div class="adm-stat"><div class="adm-stat-icon"><i class="fas fa-flag-checkered"></i></div><h3>Concluídas</h3><div class="adm-stat-value" id="st-concluidas">—</div></div>
+            <div class="adm-stat adm-stat-danger"><div class="adm-stat-icon"><i class="fas fa-ban"></i></div><h3>Canceladas</h3><div class="adm-stat-value" id="st-canceladas">—</div></div>
+            <div class="adm-stat adm-stat-info"><div class="adm-stat-icon"><i class="fas fa-hand-holding-dollar"></i></div><h3>Com CadÚnico</h3><div class="adm-stat-value" id="st-cadunico">—</div></div>
+            <div class="adm-stat adm-stat-warning"><div class="adm-stat-icon"><i class="fas fa-universal-access"></i></div><h3>Com deficiência</h3><div class="adm-stat-value" id="st-deficiencia">—</div></div>
+        </div>
+
+        <div class="adm-grid-2">
+            <div class="adm-card">
+                <div class="adm-card-head"><h3><i class="fas fa-chart-simple"></i> Renda familiar</h3></div>
+                <div id="grafico-renda" class="adm-bars"><div class="adm-empty">Carregando...</div></div>
+            </div>
+
+            <div class="adm-card">
+                <div class="adm-card-head"><h3><i class="fas fa-location-dot"></i> Top bairros</h3></div>
+                <div id="grafico-bairros" class="adm-bars"><div class="adm-empty">Carregando...</div></div>
+            </div>
+        </div>
+
+        <div class="adm-card">
+            <div class="adm-card-head">
+                <h3><i class="fas fa-clock-rotate-left"></i> Últimas inscrições</h3>
+                <button class="adm-btn adm-btn-ghost adm-btn-sm" onclick="adm.irParaInscricoes()">
+                    Ver todas <i class="fas fa-arrow-right"></i>
+                </button>
+            </div>
+            <div id="ultimas-inscricoes" class="adm-list"><div class="adm-empty">Carregando...</div></div>
+        </div>
+    </section>
+
+    <!-- ============================= INSCRIÇÕES ============================= -->
+    <section class="adm-panel" id="panel-inscricoes">
+        <div class="adm-card">
+            <div class="adm-card-head">
+                <h3><i class="fas fa-filter"></i> Filtros e consulta</h3>
+                <div class="adm-actions">
+                    <button class="adm-btn adm-btn-ghost adm-btn-sm" id="btn-exportar">
+                        <i class="fas fa-file-csv"></i> Exportar CSV
+                    </button>
+                    <button class="adm-btn adm-btn-ghost adm-btn-sm" id="btn-atualizar">
+                        <i class="fas fa-rotate"></i> Atualizar
+                    </button>
+                </div>
+            </div>
+
+            <div class="adm-filters">
+                <input type="text" id="f-busca" placeholder="🔍 Nome do aluno, responsável, CPF, protocolo ou bairro...">
+
+                <select id="f-status">
+                    <option value="">Todos os status</option>
+                    <option value="Pendente">Pendente</option>
+                    <option value="Em análise">Em análise</option>
+                    <option value="Aprovada">Aprovada</option>
+                    <option value="Concluída">Concluída</option>
+                    <option value="Cancelada">Cancelada</option>
+                </select>
+
+                <select id="f-renda">
+                    <option value="">Todas as faixas de renda</option>
+                    <option value="Até 1 salário mínimo">Até 1 salário mínimo</option>
+                    <option value="De 1 a 2 salários mínimos">De 1 a 2 salários mínimos</option>
+                    <option value="De 2 a 3 salários mínimos">De 2 a 3 salários mínimos</option>
+                    <option value="Acima de 3 salários mínimos">Acima de 3 salários mínimos</option>
+                </select>
+
+                <select id="f-cadunico">
+                    <option value="">CadÚnico: todos</option>
+                    <option value="sim">Somente com CadÚnico</option>
+                    <option value="nao">Somente sem CadÚnico</option>
+                </select>
+
+                <select id="f-deficiencia">
+                    <option value="">Deficiência: todos</option>
+                    <option value="sim">Somente com deficiência</option>
+                    <option value="nao">Somente sem deficiência</option>
+                </select>
+
+                <select id="f-ano">
+                    <option value="">Todos os anos</option>
+                </select>
+
+                <select id="f-ordenar">
+                    <option value="recentes">Mais recentes</option>
+                    <option value="antigas">Mais antigas</option>
+                    <option value="nome">Nome (A-Z)</option>
+                    <option value="status">Status</option>
+                </select>
+
+                <button class="adm-btn adm-btn-ghost adm-btn-sm" id="btn-limpar-filtros">
+                    <i class="fas fa-eraser"></i> Limpar
+                </button>
+            </div>
+
+            <div class="adm-table-wrap">
+                <table class="adm-table" id="tabela-inscricoes">
+                    <thead>
+                        <tr>
+                            <th>Protocolo</th>
+                            <th>Aluno</th>
+                            <th>Responsável</th>
+                            <th>Contato</th>
+                            <th>Bairro</th>
+                            <th>Renda</th>
+                            <th>CadÚnico</th>
+                            <th>Status</th>
+                            <th>Data</th>
+                            <th class="adm-th-acoes">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-inscricoes">
+                        <tr><td colspan="10"><div class="adm-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div></td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="adm-pagination" id="paginacao"></div>
+        </div>
+    </section>
+
+    <!-- ============================= CONFIGURAÇÕES ============================= -->
+    <section class="adm-panel" id="panel-config">
+        <form class="adm-card" id="form-config">
+            <div class="adm-card-head"><h3><i class="fas fa-gear"></i> Configuração do processo</h3></div>
+
+            <div class="adm-grid-3">
+                <div class="adm-field">
+                    <label for="c-ano">Ano letivo</label>
+                    <input type="number" id="c-ano" min="2020" max="2100">
+                </div>
+                <div class="adm-field">
+                    <label for="c-serie">Série</label>
+                    <input type="text" id="c-serie" placeholder="1ª Série do Ensino Médio">
+                </div>
+                <div class="adm-field">
+                    <label for="c-vagas">Vagas (0 = ilimitado)</label>
+                    <input type="number" id="c-vagas" min="0">
+                </div>
+            </div>
+
+            <div class="adm-field">
+                <label for="c-titulo">Título do formulário</label>
+                <input type="text" id="c-titulo">
+            </div>
+
+            <div class="adm-field">
+                <label for="c-subtitulo">Subtítulo</label>
+                <input type="text" id="c-subtitulo">
+            </div>
+
+            <div class="adm-field">
+                <label for="c-objetivo">Objetivo (apresentação)</label>
+                <textarea id="c-objetivo" rows="3"></textarea>
+            </div>
+
+            <div class="adm-grid-2">
+                <div class="adm-field">
+                    <label for="c-inicio">Início das inscrições</label>
+                    <input type="datetime-local" id="c-inicio">
+                </div>
+                <div class="adm-field">
+                    <label for="c-fim">Fim das inscrições</label>
+                    <input type="datetime-local" id="c-fim">
+                </div>
+            </div>
+
+            <div class="adm-field">
+                <label for="c-mensagem">Mensagem quando encerrado</label>
+                <input type="text" id="c-mensagem">
+            </div>
+
+            <div class="adm-field">
+                <label for="c-versao">Versão do termo LGPD</label>
+                <input type="text" id="c-versao" placeholder="1.0">
+            </div>
+
+            <div class="adm-switches">
+                <label class="adm-switch">
+                    <input type="checkbox" id="c-ativo">
+                    <span>Inscrições ativas</span>
+                </label>
+                <label class="adm-switch">
+                    <input type="checkbox" id="c-bloquear">
+                    <span>Bloquear duplicidade por CPF</span>
+                </label>
+                <label class="adm-switch">
+                    <input type="checkbox" id="c-consulta">
+                    <span>Permitir consulta pública</span>
+                </label>
+            </div>
+
+            <div class="adm-actions" style="margin-top:18px">
+                <button type="submit" class="adm-btn adm-btn-primary" id="btn-salvar-config">
+                    <i class="fas fa-save"></i> Salvar configuração
+                </button>
+                <a class="adm-btn adm-btn-ghost" href="/inscricoes/inscricao-publica.html" target="_blank">
+                    <i class="fas fa-external-link-alt"></i> Abrir formulário
+                </a>
+            </div>
+        </form>
+    </section>
+</main>
+
+<!-- ============================= MODAL DETALHE ============================= -->
+<div class="adm-modal" id="modal-detalhe">
+    <div class="adm-modal-box adm-modal-lg">
+        <div class="adm-modal-head">
+            <h3><i class="fas fa-clipboard-list"></i> Detalhes da Inscrição</h3>
+            <button class="adm-modal-close" data-fechar="modal-detalhe">&times;</button>
+        </div>
+        <div class="adm-modal-body" id="detalhe-conteudo"></div>
+        <div class="adm-modal-foot">
+            <button class="adm-btn adm-btn-ghost" data-fechar="modal-detalhe">Fechar</button>
+        </div>
+    </div>
+</div>
+
+<!-- ============================= MODAL EDIÇÃO ============================= -->
+<div class="adm-modal" id="modal-editar">
+    <div class="adm-modal-box adm-modal-lg">
+        <div class="adm-modal-head">
+            <h3><i class="fas fa-pen"></i> Editar Inscrição</h3>
+            <button class="adm-modal-close" data-fechar="modal-editar">&times;</button>
+        </div>
+        <div class="adm-modal-body" id="editar-conteudo"></div>
+        <div class="adm-modal-foot">
+            <button class="adm-btn adm-btn-ghost" data-fechar="modal-editar">Cancelar</button>
+            <button class="adm-btn adm-btn-primary" id="btn-salvar-edicao">
+                <i class="fas fa-save"></i> Salvar alterações
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ============================= MODAL CONFIRMAÇÃO ============================= -->
+<div class="adm-modal" id="modal-confirmar">
+    <div class="adm-modal-box adm-modal-sm">
+        <div class="adm-modal-head adm-modal-head-danger">
+            <h3><i class="fas fa-triangle-exclamation"></i> <span id="confirmar-titulo">Confirmar</span></h3>
+            <button class="adm-modal-close" data-fechar="modal-confirmar">&times;</button>
+        </div>
+        <div class="adm-modal-body">
+            <p id="confirmar-mensagem" class="adm-confirm-text">Tem certeza?</p>
+        </div>
+        <div class="adm-modal-foot">
+            <button class="adm-btn adm-btn-ghost" data-fechar="modal-confirmar">Cancelar</button>
+            <button class="adm-btn adm-btn-danger" id="btn-confirmar-ok">Confirmar</button>
+        </div>
+    </div>
+</div>
+
+<div class="adm-toast-wrap" id="adm-toast-wrap"></div>
+
+<script src="js/inscricoes-admin.js"></script>
+</body>
+</html>

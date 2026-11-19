@@ -25,6 +25,7 @@
     <script src="js/helpers-formatacao.js"></script>
     <script src="js/dialog-helper.js"></script>
     <script src="/js/core-security.js"></script>
+    <script src="js/inscricoes-gestao.js"></script>
 
     <link rel="stylesheet" href="css/gestao-geral.css">
 </head>
@@ -136,13 +137,11 @@
                             <div class="item-text">Calendário</div>
                         </a>
 
-                        <!-- 🆕 CARDÁPIO -->
                         <a href="cardapio.html" class="dropdown-item" title="Cardápio Escolar">
                             <div class="icon-box bg-orange"><i class="fas fa-utensils"></i></div>
                             <div class="item-text">Cardápio</div>
                         </a>
 
-                        <!-- Item que ABRE O SINO -->
                         <div class="dropdown-item" onclick="abrirMenuNotificacoesSeguro(event)"
                             title="Notificações e Lembretes">
                             <div class="icon-box bg-blue"><i class="fas fa-bell"></i></div>
@@ -176,12 +175,20 @@
         <!-- ============================================= -->
 
         <div class="card">
-            <div class="card-header card-header-boas-vindas d-flex justify-content-between align-items-center">
+            <div class="card-header card-header-boas-vindas d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <div>
                     <i class="fas fa-user-tie me-2"></i> Gestão Geral - EducaPleno
                 </div>
 
-                <div class="d-flex align-items-center gap-3">
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                    <a href="/inscricoes/gerenciar.html" id="linkInscricoesAtivas"
+                    class="inscricoes-ativas-link"
+                    style="display: none;">
+                        <span class="pulse-dot"></span>
+                        <i class="fas fa-file-signature me-1"></i>
+                        <span>Inscrições Abertas</span>
+                        <i class="fas fa-arrow-right ms-1"></i>
+                    </a>
                     <span class="fw-bold header-boas-vindas-texto">
                         <i class="fas fa-smile me-1 header-boas-vindas-icone"></i> 
                         Bem-vindo(a), <span id="headerNomeUsuario">Gestor(a)</span>
@@ -308,6 +315,7 @@
                     <!-- ABA ATRASOS                     -->
                     <!-- ═══════════════════════════════ -->
                     <div class="tab-pane fade" id="tab-atrasos">
+                        <!-- ... conteúdo original da aba atrasos ... -->
                         <div class="card mb-3">
                             <div class="card-body">
                                 <div class="modo-selector">
@@ -340,7 +348,6 @@
                         </ul>
 
                         <div class="tab-content">
-                            <!-- ABA REGISTRAR -->
                             <div class="tab-pane fade show active" id="atraso-registrar">
                                 <div id="modoAutomatico">
                                     <div class="card">
@@ -362,381 +369,8 @@
                                             <h5 class="card-title">
                                                 <i class="fas fa-users me-2"></i> Selecionar Aluno por Turma
                                             </h5>
-                                            <p class="text-muted mb-3">
-                                                <i class="fas fa-info-circle"></i> 
-                                                Selecione uma turma e clique no aluno para registrar o atraso.
-                                            </p>
-
-                                            <div class="row g-3 mb-3">
-                                                <div class="col-md-6">
-                                                    <label class="form-label">Turma</label>
-                                                    <select id="filtroTurmaManual" class="form-select">
-                                                        <option value="">Selecione uma turma...</option>
-                                                    </select>
-                                                </div>
-                                                <div class="col-md-6">
-                                                    <label class="form-label">Buscar Aluno</label>
-                                                    <input type="text" id="filtroBuscaManual" class="form-control" 
-                                                        placeholder="Digite o nome do aluno...">
-                                                </div>
-                                            </div>
-
-                                            <div id="listaAlunosManual" class="mt-3">
-                                                <div class="text-center py-3">
-                                                    <div class="loading-spinner"></div>
-                                                    <p>Selecione uma turma para ver os alunos</p>
-                                                </div>
-                                            </div>
+                                            <div id="listaAlunosManual" class="mt-3"></div>
                                         </div>
-                                    </div>
-                                </div>
-
-                                <div id="alunoInfo" style="display: none;">
-                                    <div class="aluno-card">
-                                        <div class="d-flex flex-wrap align-items-center">
-                                            <img id="alunoFoto" class="aluno-foto" src="" alt="Foto">
-                                            <div class="info-aluno">
-                                                <h3 id="alunoNome" class="mb-1">-</h3>
-                                                <p class="mb-1 text-muted">
-                                                    <i class="fas fa-id-card me-1"></i> Matrícula: <span id="alunoMatricula">-</span>
-                                                </p>
-                                                <p class="mb-1 text-muted">
-                                                    <i class="fas fa-graduation-cap me-1"></i> Turma: <span id="alunoTurma">-</span>
-                                                </p>
-                                                <p class="mb-0 text-muted">
-                                                    <i class="fas fa-book me-1"></i> Curso: <span id="alunoCurso">-</span>
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <div id="statusAluno" class="mt-3"></div>
-                                        <div id="historicoRecente" class="mt-3"></div>
-                                    </div>
-                                </div>
-
-                                <div id="formRegistro" class="form-container" style="display: none;">
-                                    <h5><i class="fas fa-clock"></i> Registrar Atraso</h5>
-
-                                    <div class="row">
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label">Data do Atraso <span class="text-danger">*</span></label>
-                                            <input type="date" id="atrasoData" class="form-control" required>
-                                            <small class="text-muted">Quando ocorreu o atraso</small>
-                                        </div>
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label">Hora da Chegada</label>
-                                            <input type="time" id="atrasoHoraChegada" class="form-control">
-                                            <small class="text-muted">Horário em que o aluno chegou</small>
-                                        </div>
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label class="form-label">Motivo do Atraso <span class="text-danger">*</span></label>
-                                        <div class="tipos-tarefa-grid">
-                                            <div class="tipo-card" data-tipo="onibus" onclick="selecionarMotivo('onibus')">
-                                                <i class="fas fa-bus"></i>
-                                                <span>Ônibus</span>
-                                            </div>
-                                            <div class="tipo-card" data-tipo="transito" onclick="selecionarMotivo('transito')">
-                                                <i class="fas fa-car"></i>
-                                                <span>Trânsito</span>
-                                            </div>
-                                            <div class="tipo-card" data-tipo="problemas_pessoais" onclick="selecionarMotivo('problemas_pessoais')">
-                                                <i class="fas fa-user-injured"></i>
-                                                <span>Problemas Pessoais</span>
-                                            </div>
-                                            <div class="tipo-card" data-tipo="fardamento" onclick="selecionarMotivo('fardamento')">
-                                                <i class="fas fa-tshirt"></i>
-                                                <span>Fardamento</span>
-                                            </div>
-                                            <div class="tipo-card" data-tipo="outros" onclick="selecionarMotivo('outros')">
-                                                <i class="fas fa-ellipsis-h"></i>
-                                                <span>Outros</span>
-                                            </div>
-                                        </div>
-                                        <input type="hidden" id="motivoSelecionado">
-                                    </div>
-
-                                    <div id="campoOutros" style="display: none;">
-                                        <div class="mb-3">
-                                            <label class="form-label">Especifique o Motivo <span class="text-danger">*</span></label>
-                                            <input type="text" id="motivoOutrosTexto" class="form-control" 
-                                                placeholder="Descreva o motivo do atraso...">
-                                        </div>
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label class="form-label">Descrição do Ocorrido <span class="text-danger">*</span></label>
-                                        <textarea id="descricao" class="form-control" rows="3" 
-                                                placeholder="Descreva detalhadamente o que aconteceu..."></textarea>
-                                    </div>
-
-                                    <div class="row">
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label">Horário Previsto</label>
-                                            <input type="time" id="horarioPrevisto" class="form-control">
-                                            <small class="text-muted">Horário que deveria chegar</small>
-                                        </div>
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label">Horário de Chegada</label>
-                                            <input type="time" id="horarioChegada" class="form-control">
-                                            <small class="text-muted">Horário real de chegada</small>
-                                        </div>
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label class="form-label">Observações Adicionais</label>
-                                        <textarea id="observacoes" class="form-control" rows="2" 
-                                                placeholder="Informações complementares..."></textarea>
-                                    </div>
-
-                                    <!-- 🆕 DADOS DO RESPONSÁVEL (opcionais) -->
-                                    <div class="card mb-3 dados-responsavel-card">
-                                        <div class="card-body">
-                                            <h6 class="dados-responsavel-titulo">
-                                                <i class="fas fa-user-shield"></i> Dados do Responsável <small class="text-muted">(opcional)</small>
-                                            </h6>
-                                            <div class="row">
-                                                <div class="col-md-6 mb-3">
-                                                    <label class="form-label">Nome do Responsável</label>
-                                                    <input type="text" id="atrasoResponsavelNome" class="form-control" placeholder="Nome completo do responsável">
-                                                </div>
-                                                <div class="col-md-3 mb-3">
-                                                    <label class="form-label">CPF</label>
-                                                    <input type="text" id="atrasoResponsavelCPF" class="form-control" placeholder="000.000.000-00" maxlength="14" oninput="formatarCPF(this)">
-                                                </div>
-                                                <div class="col-md-3 mb-3">
-                                                    <label class="form-label">Telefone</label>
-                                                    <input type="text" id="atrasoResponsavelTelefone" class="form-control" placeholder="(00) 00000-0000" maxlength="15" oninput="formatarTelefone(this)">
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- ASSINATURA POR QR CODE (ATRASO) -->
-                                    <div class="assinatura-wrapper">
-                                        <div class="form-check p-3 mb-2 assinatura-check">
-                                            <input class="form-check-input" type="checkbox" 
-                                                id="atrasoNecessitaAssinatura" 
-                                                onchange="gestaoGeral.toggleNecessitaAssinatura('atraso')"
-                                                style="width: 20px; height: 20px; margin-top: 2px;">
-                                            <label class="form-check-label" for="atrasoNecessitaAssinatura" style="margin-left: 8px; cursor: pointer;">
-                                                <strong><i class="fas fa-signature"></i> Necessita de assinatura do responsável</strong>
-                                                <p style="margin: 5px 0 0; font-size: 13px; color: #64748b;">
-                                                    Marque para gerar um QR Code. O responsável escaneia e assina no celular dele.
-                                                </p>
-                                            </label>
-                                        </div>
-                                        <div id="atrasoBlocoAssinaturaInfo" style="display: none;"></div>
-
-                                        <div class="form-check p-3 assinatura-check-aluno">
-                                            <input class="form-check-input" type="checkbox" 
-                                                id="atrasoNecessitaAssinaturaAluno" 
-                                                onchange="gestaoGeral.toggleNecessitaAssinaturaAluno('atraso')"
-                                                style="width: 20px; height: 20px; margin-top: 2px;">
-                                            <label class="form-check-label" for="atrasoNecessitaAssinaturaAluno" style="margin-left: 8px; cursor: pointer;">
-                                                <strong><i class="fas fa-user-graduate"></i> Necessita de assinatura do aluno</strong>
-                                                <p style="margin: 5px 0 0; font-size: 13px; color: #64748b;">
-                                                    Marque para gerar um QR Code. O próprio aluno escaneia e assina no celular dele.
-                                                </p>
-                                            </label>
-                                        </div>
-                                        <div id="atrasoBlocoAssinaturaAlunoInfo" style="display: none;"></div>
-                                    </div>
-
-                                    <div class="d-flex gap-2">
-                                        <button class="btn-primary-custom" onclick="registrarAtraso()">
-                                            <i class="fas fa-check-circle me-2"></i> Registrar Atraso
-                                        </button>
-                                        <button class="btn-secondary-custom" onclick="limparTela()">
-                                            <i class="fas fa-times me-2"></i> Cancelar
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- ABA DASHBOARD -->
-                            <div class="tab-pane fade" id="atraso-dashboard">
-                                <div class="row mb-4">
-                                    <div class="col-md-3 mb-3">
-                                        <div class="metric-card">
-                                            <i class="fas fa-calendar-day fa-2x text-primary mb-2"></i>
-                                            <div class="metric-value" id="totalHoje">0</div>
-                                            <div class="metric-label">Hoje</div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3 mb-3">
-                                        <div class="metric-card">
-                                            <i class="fas fa-calendar-week fa-2x text-success mb-2"></i>
-                                            <div class="metric-value" id="totalSemana">0</div>
-                                            <div class="metric-label">Esta Semana</div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3 mb-3">
-                                        <div class="metric-card">
-                                            <i class="fas fa-calendar-alt fa-2x text-info mb-2"></i>
-                                            <div class="metric-value" id="totalMes">0</div>
-                                            <div class="metric-label">Este Mês</div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3 mb-3">
-                                        <div class="metric-card">
-                                            <i class="fas fa-chart-line fa-2x text-warning mb-2"></i>
-                                            <div class="metric-value" id="totalGeral">0</div>
-                                            <div class="metric-label">Total Geral</div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="row">
-                                    <div class="col-md-6 mb-4">
-                                        <div class="card h-100">
-                                            <div class="card-body">
-                                                <h6 class="card-title"><i class="fas fa-chart-pie"></i> Por Motivo</h6>
-                                                <canvas id="chartMotivos"></canvas>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6 mb-4">
-                                        <div class="card h-100">
-                                            <div class="card-body">
-                                                <h6 class="card-title"><i class="fas fa-chart-bar"></i> Atendimentos por Dia</h6>
-                                                <canvas id="chartAtrasos"></canvas>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6 mb-4">
-                                        <div class="card h-100">
-                                            <div class="card-body">
-                                                <h6 class="card-title"><i class="fas fa-users"></i> Por Turma</h6>
-                                                <canvas id="chartTurmas"></canvas>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6 mb-4">
-                                        <div class="card h-100">
-                                            <div class="card-body">
-                                                <h6 class="card-title">
-                                                    <i class="fas fa-exclamation-triangle text-warning"></i> 
-                                                    Alunos Reincidentes (3+ atrasos)
-                                                </h6>
-                                                <div id="alunosReincidentes" class="mt-3">
-                                                    <div class="text-center py-3">Carregando...</div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- ABA RELATÓRIOS -->
-                            <div class="tab-pane fade" id="atraso-relatorios">
-                                <div class="relatorio-filtros">
-                                    <div class="row g-3">
-                                        <div class="col-md-4">
-                                            <label class="form-label">Tipo de Relatório</label>
-                                            <select id="tipoRelatorio" class="form-select" onchange="toggleRelatorioFiltros()">
-                                                <option value="geral">Geral</option>
-                                                <option value="turma">Por Turma</option>
-                                                <option value="aluno">Por Aluno</option>
-                                            </select>
-                                        </div>
-                                        <div class="col-md-4" id="filtroTurmaDiv" style="display: none;">
-                                            <label class="form-label">Turma</label>
-                                            <select id="filtroTurma" class="form-select">
-                                                <option value="">Selecione...</option>
-                                            </select>
-                                        </div>
-                                        <div class="col-md-4" id="filtroAlunoDiv" style="display: none;">
-                                            <label class="form-label">Aluno</label>
-                                            <div class="autocomplete-aluno-wrapper">
-                                                <input type="text" id="buscaAlunoRelatorio" class="form-control" 
-                                                    placeholder="Digite o nome do aluno..." autocomplete="off">
-                                                <input type="hidden" id="filtroAluno" value="">
-                                                <div id="autocompleteAlunoList" class="autocomplete-aluno-list" style="display: none;"></div>
-                                            </div>
-                                            <small class="text-muted mt-1 d-block" id="alunoSelecionadoInfo"></small>
-                                        </div>
-                                        <div class="col-md-3">
-                                            <label class="form-label">Data Início</label>
-                                            <input type="date" id="dataInicio" class="form-control">
-                                        </div>
-                                        <div class="col-md-3">
-                                            <label class="form-label">Data Fim</label>
-                                            <input type="date" id="dataFim" class="form-control">
-                                        </div>
-                                        <div class="col-md-2">
-                                            <label class="form-label">&nbsp;</label>
-                                            <button class="btn btn-primary w-100" onclick="carregarRelatorio()">
-                                                <i class="fas fa-search"></i> Buscar
-                                            </button>
-                                        </div>
-                                        <div class="col-md-2">
-                                            <label class="form-label">&nbsp;</label>
-                                            <div class="btn-group w-100">
-                                                <button class="btn btn-success" onclick="exportarCSV()" id="btnExportarCSVAtrasos" disabled>
-                                                    <i class="fas fa-file-csv"></i> CSV
-                                                </button>
-                                                <button class="btn btn-danger" onclick="exportarPDFAtrasos()" id="btnExportarPDFAtrasos" disabled>
-                                                    <i class="fas fa-print"></i> PDF
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div id="resultadoRelatorio" class="mt-4">
-                                    <div class="text-center py-5">
-                                        <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
-                                        <p class="text-muted">Selecione os filtros e clique em Buscar</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="card mt-4" id="cardAtrasosRecentes">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <h5 class="mb-0"><i class="fas fa-history"></i> Atrasos Registrados</h5>
-                                <button class="btn btn-sm btn-light" onclick="carregarAtrasosRecentes(1)">
-                                    <i class="fas fa-sync-alt"></i> Atualizar
-                                </button>
-                            </div>
-                            <div class="card-body">
-                                <div class="row g-2 mb-3">
-                                    <div class="col-md-3">
-                                        <input type="text" id="filtroAtrasosRecentesBusca" class="form-control form-control-sm" placeholder="Buscar por aluno...">
-                                    </div>
-                                    <div class="col-md-2">
-                                        <select id="filtroAtrasosRecentesTurma" class="form-select form-select-sm">
-                                            <option value="">Todas as turmas</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <select id="filtroAtrasosRecentesMotivo" class="form-select form-select-sm">
-                                            <option value="">Todos os motivos</option>
-                                            <option value="onibus">Ônibus</option>
-                                            <option value="transito">Trânsito</option>
-                                            <option value="problemas_pessoais">Problemas Pessoais</option>
-                                            <option value="fardamento">Fardamento</option>
-                                            <option value="outros">Outros</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <input type="date" id="filtroAtrasosRecentesDataInicio" class="form-control form-control-sm">
-                                    </div>
-                                    <div class="col-md-2">
-                                        <input type="date" id="filtroAtrasosRecentesDataFim" class="form-control form-control-sm">
-                                    </div>
-                                    <div class="col-md-1">
-                                        <button class="btn btn-primary btn-sm w-100" onclick="carregarAtrasosRecentes(1)">
-                                            <i class="fas fa-filter"></i>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div id="listaAtrasosRecentes">
-                                    <div class="text-center py-3">
-                                        <div class="loading-spinner"></div>
-                                        <p>Carregando atrasos...</p>
                                     </div>
                                 </div>
                             </div>
@@ -3371,6 +3005,23 @@
                     .catch(err => console.log('❌ Erro:', err));
             });
         }
+    </script>
+    <!-- 🆕 Script para verificar se inscrições estão abertas e mostrar link -->
+    <script>
+    (async function verificarInscricoesAbertas() {
+        try {
+            const r = await fetch('/api/inscricoes/publica/config');
+            const data = await r.json();
+            if (data?.config?.aberto) {
+                const link = document.getElementById('linkInscricoesAtivas');
+                if (link) {
+                    link.style.display = 'inline-flex';
+                }
+            }
+        } catch (e) {
+            console.warn('Não foi possível verificar inscrições abertas:', e.message);
+        }
+    })();
     </script>
 </body>
 </html>

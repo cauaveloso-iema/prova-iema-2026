@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Inscrição Socioeconômica — IEMA | EducaPleno</title>
+
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0f766e">
+    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/inscricoes-publico.css">
+</head>
+<body class="ins-body">
+
+<!-- ============================= TOPBAR ============================= -->
+<header class="ins-topbar">
+    <div class="ins-brand">
+        <div class="ins-brand-logo"><i class="fas fa-graduation-cap"></i></div>
+        <div class="ins-brand-text">
+            <strong>IEMA</strong>
+            <small>Instituto de Educação, Ciência e Tecnologia do Maranhão</small>
+        </div>
+    </div>
+    <a class="ins-topbar-link" href="#consulta">
+        <i class="fas fa-magnifying-glass"></i>
+        <span>Consultar inscrição</span>
+    </a>
+</header>
+
+<main class="ins-shell">
+
+    <!-- ============================= APRESENTAÇÃO ============================= -->
+    <section class="ins-hero">
+        <div class="ins-hero-content">
+            <div class="ins-hero-badge" id="cfg-badge-periodo">
+                <i class="fas fa-circle-notch fa-spin"></i> Carregando período...
+            </div>
+
+            <h1 id="cfg-titulo">
+                Instituto de Educação, Ciência e Tecnologia do Maranhão — IEMA
+            </h1>
+            <p class="ins-hero-serie" id="cfg-serie">1ª Série do Ensino Médio</p>
+
+            <div class="ins-hero-objetivo">
+                <i class="fas fa-bullseye"></i>
+                <p id="cfg-objetivo">
+                    Este formulário tem como objetivo coletar informações socioeconômicas dos alunos e de suas
+                    famílias para subsidiar o planejamento pedagógico e assistencial da instituição.
+                </p>
+            </div>
+
+            <div class="ins-chips">
+                <span class="ins-chip"><i class="fas fa-clock"></i> <span id="cfg-prazo">—</span></span>
+                <span class="ins-chip"><i class="fas fa-user-shield"></i> Dados protegidos (LGPD)</span>
+                <span class="ins-chip"><i class="fas fa-ticket"></i> Protocolo ao final</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Aviso de período encerrado -->
+    <div class="ins-alert ins-alert-warning ins-hidden" id="ins-aviso-fechado">
+        <i class="fas fa-triangle-exclamation"></i>
+        <div>
+            <strong>Inscrições indisponíveis</strong>
+            <p id="ins-aviso-texto">As inscrições estão encerradas no momento.</p>
+        </div>
+    </div>
+
+    <!-- ============================= FORMULÁRIO ============================= -->
+    <form id="form-inscricao" novalidate autocomplete="off">
+
+        <!-- Stepper -->
+        <div class="ins-steps" id="ins-steps">
+            <div class="ins-step ativo" data-passo="1"><span>1</span><small>Aluno</small></div>
+            <div class="ins-step" data-passo="2"><span>2</span><small>Responsável</small></div>
+            <div class="ins-step" data-passo="3"><span>3</span><small>Endereço</small></div>
+            <div class="ins-step" data-passo="4"><span>4</span><small>Família</small></div>
+            <div class="ins-step" data-passo="5"><span>5</span><small>Moradia e renda</small></div>
+            <div class="ins-step" data-passo="6"><span>6</span><small>Finalizar</small></div>
+        </div>
+        <div class="ins-progress"><div id="ins-progress-bar" style="width:16.66%"></div></div>
+
+        <!-- ---------------- PASSO 1 — ALUNO ---------------- -->
+        <section class="ins-card ins-passo ativo" data-passo="1">
+            <div class="ins-section-title">
+                <div class="ins-section-icon"><i class="fas fa-user-graduate"></i></div>
+                <div>
+                    <h2>Dados do Aluno</h2>
+                    <p>Informações de identificação do estudante matriculado.</p>
+                </div>
+            </div>
+
+            <div class="ins-grid-2">
+                <div class="ins-field">
+                    <label for="aluno-nome">Nome completo <span class="ins-req">*</span></label>
+                    <input type="text" id="aluno-nome" name="aluno.nomeCompleto" data-obrigatorio="1"
+                           placeholder="Nome completo do aluno" maxlength="150">
+                    <small class="ins-err"></small>
+                </div>
+
+                <div class="ins-field">
+                    <label for="aluno-nascimento">Data de nascimento <span class="ins-req">*</span></label>
+                    <input type="date" id="aluno-nascimento" name="aluno.dataNascimento" data-obrigatorio="1">
+                    <small class="ins-err"></small>
+                </div>
+
+                <div class="ins-field">
+                    <label for="aluno-cpf">CPF <span class="ins-req">*</span></label>
+                    <input type="text" id="aluno-cpf" name="aluno.cpf" data-obrigatorio="1"
+                           data-mascara="cpf" inputmode="numeric" placeholder="000.000.000-00" maxlength="14">
+                    <small class="ins-err"></small>
+                </div>
+
+                <div class="ins-field">
+                    <label for="aluno-sexo">Sexo <span class="ins-req">*</span></label>
+                    <select id="aluno-sexo" name="aluno.sexo" data-obrigatorio="1">
+                        <option value="">Selecione...</option>
+                        <option value="Masculino">Masculino</option>
+                        <option value="Feminino">Feminino</option>
+                        <option value="Outro">Outro</option>
+                        <option value="Prefiro não informar">Prefiro não informar</option>
+                    </select>
+                    <small class="ins-err"></small>
+                </div>
+
+                <div class="ins-field">
+                    <label for="aluno-email">E-mail <span class="ins-opcional">(opcional)</span></label>
+                    <input type="email" id="aluno-email" name="aluno.email"
+                           placeholder="aluno@email.com" maxlength="150">
+                    <small class="ins-err"></small>
+                </div>
+
+                <div class="ins-field">
+                    <label for="aluno-rg">RG <span class="ins-opcional">(opcional)</span></label>
+                    <input type="text" id="aluno-rg" name="aluno.rg" placeholder="Nº do documento" maxlength="30">
+                    <small class="ins-err"></small>
+                </div>
+
+                <div class="ins-field">
+                    <label for="aluno-cadunico">Possui CadÚnico? <span class="ins-req">*</span></label>
+                    <select id="aluno-cadunico" name="aluno.temCadUnico" data-tipo="bool" data-obrigatorio="1">
+                        <option value="">Selecione...</option>
+                        <option value="false">Não</option>
+                        <option value="true">Sim</option>
+                    </select>
+                    <small class="ins-err"></small>
+                </div>
+
+                <div class="ins-field ins-hidden" id="aluno-nis-field">
+                    <label for="aluno-nis">NIS (CadÚnico) <span class="ins-req">*</span></label>
+                    <input type="text" id="aluno-nis" name="aluno.nis" inputmode="numeric"
+                           placeholder="Número de Identificação Social" maxlength="20">
+                    <small class="ins-hint">Obrigatório quando o aluno possui CadÚnico.</small>
+                    <small class="ins-err"></small>
+                </div>
+
+                <div class="ins-field">
+                    <label for="aluno-telefone">Telefone / WhatsApp <span class="ins-req">*</span></label>
+                    <input type="tel" id="aluno-telefone" name="aluno.telefone" data-obrigatorio="1"
+                           data-mascara="tel" inputmode="numeric" placeholder="(98) 99999-9999" maxlength="15">
+                    <small class="ins-err"></small>
+                </div>
+            </div>
+        </section>
+
+        <!-- ---------------- PASSO 2 — RESPONSÁVEL ---------------- -->
+        <section class="ins-card ins-passo" data-passo="2">
+            <div class="ins-section-title">
+                <div class="ins-section-icon"><i class="fas fa-user-tie"></i></div>
+                <div>
+                    <h2>Dados do Responsável</h2>
+                    <p>Mãe, pai, tutor(a) ou responsável legal pelo aluno.</p>
+                </div>
+            </div>
+
+            <div class="ins-grid-2">
+                <div class="ins-field">
+                    <label for="resp-nome">Nome completo <span class="ins-req">*</span></label>
+                    <input type="text" id="resp-nome" name="responsavel.nomeCompleto" data-obrigatorio="1"
+                           placeholder="Nome completo do responsável" maxlength="150">
+                    <small class="ins-err"></small>
+                </div>
+
+                <div class="ins-field">
+                    <label for="resp-parentesco">Grau de parentesco <span class="ins-req">*</span></label>
+                    <select id="resp-parentesco" name="responsavel.grauParentesco" data-obrigatorio="1">
+                        <option value="">Selecione...</option>
+                        <option value="Mãe">Mãe</option>
+                        <option value="Pai">Pai</option>
+                        <option value="Avó/Avô">Avó / Avô</option>
+                        <option value="Tia/Tio">Tia / Tio</option>
+                        <option value="Irmã/Irmão">Irmã / Irmão</option>
+                        <option value="Tutor(a) legal">Tutor(a) legal</option>
+                        <option value="Outro">Outro</option>
+                    </select>
+                    <small class="ins-err"></small>
+                </div>
+
+                <div class="ins-field">
+                    <label for="resp-nascimento">Data de nascimento <span class="ins-req">*</span></label>
+                    <input type="date" id="resp-nascimento" name="responsavel.dataNascimento" data-obrigatorio="1">
+                    <small class="ins-err"></small>
+                </div>
+
+                <div class="ins-field">
+                    <label for="resp-cpf">CPF <span class="ins-req">*</span></label>
+                    <input type="text" id="resp-cpf" name="responsavel.cpf" data-obrigatorio="1"
+                           data-mascara="cpf" inputmode="numeric" placeholder="000.000.000-00" maxlength="14">
+                    <small class="ins-err"></small>
+                </div>
+
+                <div class="ins-field">
+                    <label for="resp-sexo">Sexo <span class="ins-req">*</span></label>
+                    <select id="resp-sexo" name="responsavel.sexo" data-obrigatorio="1">
+                        <option value="">Selecione...</option>
+                        <option value="Masculino">Masculino</option>
+                        <option value="Feminino">Feminino</option>
+                        <option value="Outro">Outro</option>
+                        <option value="Prefiro não informar">Prefiro não informar</option>
+                    </select>
+                    <small class="ins-err"></small>
+                </div>
+
+                <div class="ins-field">
+                    <label for="resp-email">E-mail <span class="ins-opcional">(opcional)</span></label>
+                    <input type="email" id="resp-email" name="responsavel.email"
+                           placeholder="responsavel@email.com" maxlength="150">
+                    <small class="ins-err"></small>
+                </div>
+
+                <div class="ins-field">
+                    <label for="resp-rg">RG <span class="ins-opcional">(opcional)</span></label>
+                    <input type="text" id="resp-rg" name="responsavel.rg" placeholder="Nº do documento" maxlength="30">
+                    <small class="ins-err"></small>
+                </div>
+
+                <div class="ins-field">
+                    <label for="resp-cadunico">Possui CadÚnico? <span class="ins-req">*</span></label>
+                    <select id="resp-cadunico" name="responsavel.temCadUnico" data-tipo="bool" data-obrigatorio="1">
+                        <option value="">Selecione...</option>
+                        <option value="false">Não</option>
+                        <option value="true">Sim</option>
+                    </select>
+                    <small class="ins-err"></small>
+                </div>
+
+                <div class="ins-field ins-hidden" id="resp-nis-field">
+                    <label for="resp-nis">NIS (CadÚnico) <span class="ins-req">*</span></label>
+                    <input type="text" id="resp-nis" name="responsavel.nis" inputmode="numeric"
+                           placeholder="Número de Identificação Social" maxlength="20">
+                    <small class="ins-hint">Obrigatório quando o responsável possui CadÚnico.</small>
+                    <small class="ins-err"></small>
+                </div>
+
+                <div class="ins-field">
+                    <label for="resp-telefone">Telefone / WhatsApp <span class="ins-req">*</span></label>
+                    <input type="tel" id="resp-telefone" name="responsavel.telefone" data-obrigatorio="1"
+                           data-mascara="tel" inputmode="numeric" placeholder="(98) 99999-9999" maxlength="15">
+                    <small class="ins-err"></small>
+                </div>
+            </div>
+        </section>
+
+        <!-- ---------------- PASSO 3 — ENDEREÇO ---------------- -->
+        <section class="ins-card ins-passo" data-passo="3">
+            <div class="ins-section-title">
+                <div class="ins-section-icon"><i class="fas fa-location-dot"></i></div>
+                <div>
+                    <h2>Endereço Residencial</h2>
+                    <p>Digite o CEP para preencher automaticamente os demais campos.</p>
+                </div>
+            </div>
+
+            <div class="ins-grid-3">
+                <div class="ins-field">
+                    <label for="end-cep">CEP <span class="ins-req">*</span></label>
+                    <div class="ins-cep-wrap">
+                        <input type="text" id="end-cep" name="endereco.cep" data-obrigatorio="1"
+                               data-mascara="cep" inputmode="numeric" placeholder="00000-000" maxlength="9">
+                        <span class="ins-cep-status" id="cep-status"></span>
+                    </div>
+                    <small class="ins-err"></small>
+                </div>
+
+                <div class="ins-field ins-span-2">
+                    <label for="end-logradouro">Logradouro (rua / avenida) <span class="ins-req">*</span></label>
+                    <input type="text" id="end-logradouro" name="endereco.logradouro" data-obrigatorio="1"
+                           placeholder="Ex.: Rua das Flores" maxlength="180">
+                    <small class="ins-err"></small>
+                </div>
+
+                <div class="ins-field">
+                    <label for="end-numero">Número <span class="ins-req">*</span></label>
+                    <input type="text" id="end-numero" name="endereco.numero" data-obrigatorio="1"
+                           placeholder="Ex.: 123" maxlength="20">
+                    <small class="ins-err"></small>
+                </div>
+
+                <div class="ins-field">
+                    <label for="end-complemento">Complemento</label>
+                    <input type="text" id="end-complemento" name="endereco.complemento"
+                           placeholder="Apto, bloco, casa..." maxlength="120">
+                    <small class="ins-err"></small>
+                </div>
+
+                <div class="ins-field">
+                    <label for="end-bairro">Bairro <span class="ins-req">*</span></label>
+                    <input type="text" id="end-bairro" name="endereco.bairro" data-obrigatorio="1"
+                           placeholder="Bairro" maxlength="120">
+                    <small class="ins-err"></small>
+                </div>
+
+                <div class="ins-field ins-span-2">
+                    <label for="end-cidade">Cidade <span class="ins-req">*</span></label>
+                    <input type="text" id="end-cidade" name="endereco.cidade" data-obrigatorio="1"
+                           placeholder="Cidade" maxlength="120">
+                    <small class="ins-err"></small>
+                </div>
+
+                <div class="ins-field">
+                    <label for="end-estado">UF <span class="ins-req">*</span></label>
+                    <select id="end-estado" name="endereco.estado" data-obrigatorio="1">
+                        <option value="">UF</option>
+                    </select>
+                    <small class="ins-err"></small>
+                </div>
+            </div>
+        </section>
+
+        <!-- ---------------- PASSO 4 — COMPOSIÇÃO FAMILIAR ---------------- -->
+        <section class="ins-card ins-passo" data-passo="4">
+            <div class="ins-section-title">
+                <div class="ins-section-icon"><i class="fas fa-people-roof"></i></div>
+                <div>
+                    <h2>Composição Familiar</h2>
+                    <p>Informações sobre quem mora com o aluno e a escolaridade dos responsáveis.</p>
+                </div>
+            </div>
+
+            <div class="ins-grid-2">
+                <div class="ins-field">
+                    <label for="fam-pessoas">Quantas pessoas residem na casa? <span class="ins-req">*</span></label>
+                    <input type="number" id="fam-pessoas" name="composicaoFamiliar.pessoasResidem"
+                           data-tipo="num" data-obrigatorio="1" min="1" max="30" value="1">
+                    <small class="ins-err"></small>
+                </div>
+
+                <div class="ins-field">
+                    <label for="fam-dependentes">Dependentes menores de idade <span class="ins-req">*</span></label>
+                    <input type="number" id="fam-dependentes" name="composicaoFamiliar.dependentesMenores"
+                           data-tipo="num" data-obrigatorio="1" min="0" max="30" value="0">
+                    <small class="ins-err"></small>
+                </div>
+            </div>
+
+            <div class="ins-field" data-grupo="graus" data-obrigatorio="grupo">
+                <label>Grau de parentesco das pessoas que moram juntas <span class="ins-req">*</span></label>
+                <div class="ins-check-group" id="opcoes-graus-parentesco"></div>
+                <small class="ins-hint">Pode marcar mais de uma opção.</small>
+                <small class="ins-err"></small>
+            </div>
+
+            <div class="ins-field" data-grupo="escolaridadePai" data-obrigatorio="grupo">
+                <label>Escolaridade do pai ou responsável <span class="ins-req">*</span></label>
+                <div class="ins-radio-group" id="opcoes-escolaridade-pai"></div>
+                <small class="ins-err"></small>
+            </div>
+
+            <div class="ins-field" data-grupo="escolaridadeMae" data-obrigatorio="grupo">
+                <label>Escolaridade da mãe ou responsável <span class="ins-req">*</span></label>
+                <div class="ins-radio-group" id="opcoes-escolaridade-mae"></div>
+                <small class="ins-err"></small>
+            </div>
+
+            <div class="ins-grid-2">
+                <div class="ins-field">
+                    <label for="fam-ocupacao-pai">Ocupação do pai ou responsável <span class="ins-req">*</span></label>
+                    <input type="text" id="fam-ocupacao-pai" name="composicaoFamiliar.ocupacaoPai"
+                           data-obrigatorio="1" placeholder="Ex.: Autônomo, pedreiro, desempregado..." maxlength="120">
+                    <small class="ins-err"></small>
+                </div>
+
+                <div class="ins-field">
+                    <label for="fam-ocupacao-mae">Ocupação da mãe ou responsável <span class="ins-req">*</span></label>
+                    <input type="text" id="fam-ocupacao-mae" name="composicaoFamiliar.ocupacaoMae"
+                           data-obrigatorio="1" placeholder="Ex.: Diarista, comerciante, do lar..." maxlength="120">
+                    <small class="ins-err"></small>
+                </div>
+            </div>
+        </section>
+
+        <!-- ---------------- PASSO 5 — MORADIA E RENDA ---------------- -->
+        <section class="ins-card ins-passo" data-passo="5">
+            <div class="ins-section-title">
+                <div class="ins-section-icon"><i class="fas fa-house-chimney"></i></div>
+                <div>
+                    <h2>Condição de Moradia e Renda Familiar</h2>
+                    <p>Esses dados são sigilosos e usados apenas para planejamento institucional.</p>
+                </div>
+            </div>
+
+            <div class="ins-field" data-grupo="moradia">
+                <label>O domicílio possui acesso a:</label>
+                <div class="ins-check-group">
+                    <label class="ins-check">
+                        <input type="checkbox" name="condicaoMoradia.aguaEncanada" data-tipo="bool">
+                        <span><i class="fas fa-droplet"></i> Água encanada</span>
+                    </label>
+                    <label class="ins-check">
+                        <input type="checkbox" name="condicaoMoradia.energiaEletrica" data-tipo="bool">
+                        <span><i class="fas fa-bolt"></i> Energia elétrica</span>
+                    </label>
+                    <label class="ins-check">
+                        <input type="checkbox" name="condicaoMoradia.esgotoSanitario" data-tipo="bool">
+                        <span><i class="fas fa-toilet"></i> Esgoto sanitário</span>
+                    </label>
+                    <label class="ins-check">
+                        <input type="checkbox" name="condicaoMoradia.internetBandaLarga" data-tipo="bool">
+                        <span><i class="fas fa-wifi"></i> Internet banda larga</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="ins-field" data-grupo="renda" data-obrigatorio="grupo">
+                <label>Qual é a renda familiar mensal aproximada? <span class="ins-req">*</span></label>
+                <div class="ins-radio-group" id="opcoes-faixa-renda"></div>
+                <small class="ins-err"></small>
+            </div>
+
+            <div class="ins-field" data-grupo="programas" data-obrigatorio="grupo">
+                <label>Há algum programa social do qual a família participe? <span class="ins-req">*</span></label>
+                <div class="ins-radio-group" id="opcoes-programas-sociais"></div>
+                <small class="ins-err"></small>
+            </div>
+
+            <div class="ins-field ins-hidden" id="renda-outro-field">
+                <label for="renda-outro">Qual outro programa social?</label>
+                <input type="text" id="renda-outro" name="rendaFamiliar.programaOutro"
+                       placeholder="Nome do programa" maxlength="120">
+                <small class="ins-err"></small>
+            </div>
+        </section>
+
+        <!-- ---------------- PASSO 6 — INFORMAÇÕES + LGPD ---------------- -->
+        <section class="ins-card ins-passo" data-passo="6">
+            <div class="ins-section-title">
+                <div class="ins-section-icon"><i class="fas fa-clipboard-check"></i></div>
+                <div>
+                    <h2>Informações Adicionais e Consentimento</h2>
+                    <p>Últimos dados antes de enviar a inscrição.</p>
+                </div>
+            </div>
+
+            <div class="ins-field" data-grupo="deficiencia" data-obrigatorio="grupo">
+                <label>O aluno possui alguma deficiência ou necessidade especial? <span class="ins-req">*</span></label>
+                <div class="ins-radio-group ins-radio-inline">
+                    <label class="ins-radio">
+                        <input type="radio" name="informacoesAdicionais.possuiDeficiencia" value="true" data-tipo="bool">
+                        <span>Sim</span>
+                    </label>
+                    <label class="ins-radio">
+                        <input type="radio" name="informacoesAdicionais.possuiDeficiencia" value="false" data-tipo="bool">
+                        <span>Não</span>
+                    </label>
+                </div>
+                <small class="ins-err"></small>
+            </div>
+
+            <div class="ins-field ins-hidden" id="info-deficiencia-field">
+                <label for="info-deficiencia">Se sim, qual? <span class="ins-req">*</span></label>
+                <textarea id="info-deficiencia" name="informacoesAdicionais.deficienciaQual" rows="3"
+                          placeholder="Descreva a deficiência ou necessidade especial, e se há acompanhamento."></textarea>
+                <small class="ins-err"></small>
+            </div>
+
+            <div class="ins-field" data-grupo="dispositivos" data-obrigatorio="grupo">
+                <label>O aluno possui acesso a computador, tablet e/ou smartphone em casa? <span class="ins-req">*</span></label>
+                <div class="ins-radio-group ins-radio-inline">
+                    <label class="ins-radio">
+                        <input type="radio" name="informacoesAdicionais.acessoDispositivos" value="true" data-tipo="bool">
+                        <span>Sim</span>
+                    </label>
+                    <label class="ins-radio">
+                        <input type="radio" name="informacoesAdicionais.acessoDispositivos" value="false" data-tipo="bool">
+                        <span>Não</span>
+                    </label>
+                </div>
+                <small class="ins-err"></small>
+            </div>
+
+            <!-- LGPD -->
+            <div class="ins-lgpd-box">
+                <div class="ins-lgpd-head">
+                    <i class="fas fa-shield-halved"></i>
+                    <div>
+                        <strong>Termo de Consentimento — LGPD</strong>
+                        <p>Leia o termo completo antes de aceitar.</p>
+                    </div>
+                    <button type="button" class="ins-btn ins-btn-ghost ins-btn-sm" id="btn-abrir-lgpd">
+                        <i class="fas fa-book-open"></i> Ler termo
+                    </button>
+                </div>
+
+                <p class="ins-lgpd-resumo">
+                    Autorizo o tratamento dos dados pessoais e socioeconômicos do aluno e de sua família pelo
+                    <strong>IEMA</strong>, exclusivamente para fins de planejamento pedagógico, assistencial e
+                    cumprimento de obrigações legais, nos termos da Lei nº 13.709/2018 (LGPD).
+                </p>
+
+                <div class="ins-field" data-grupo="lgpd" data-obrigatorio="grupo" style="margin-bottom:0">
+                    <label class="ins-check ins-check-lgpd">
+                        <input type="checkbox" id="lgpd-aceite">
+                        <span>Li e aceito o Termo de Consentimento e a Política de Privacidade.</span>
+                    </label>
+                    <small class="ins-err"></small>
+                </div>
+
+                <small class="ins-lgpd-versao" id="lgpd-versao">Versão do termo: 1.0</small>
+            </div>
+        </section>
+
+        <!-- Navegação -->
+        <div class="ins-nav">
+            <button type="button" class="ins-btn ins-btn-ghost" id="btn-voltar">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </button>
+            <button type="button" class="ins-btn ins-btn-primary" id="btn-proximo">
+                Próximo <i class="fas fa-arrow-right"></i>
+            </button>
+            <button type="submit" class="ins-btn ins-btn-success ins-hidden" id="btn-enviar">
+                <i class="fas fa-paper-plane"></i> Enviar inscrição
+            </button>
+        </div>
+    </form>
+
+    <!-- ============================= SUCESSO ============================= -->
+    <section class="ins-card ins-sucesso ins-hidden" id="ins-sucesso">
+        <div class="ins-sucesso-icon"><i class="fas fa-circle-check"></i></div>
+        <h2>Inscrição enviada com sucesso!</h2>
+        <p>Guarde o protocolo abaixo. Ele será necessário para consultar o andamento da inscrição.</p>
+
+        <div class="ins-protocolo" id="ins-protocolo-valor">—</div>
+        <button type="button" class="ins-btn ins-btn-ghost ins-btn-sm" id="btn-copiar-protocolo">
+            <i class="fas fa-copy"></i> Copiar protocolo
+        </button>
+
+        <div class="ins-sucesso-acoes">
+            <a class="ins-btn ins-btn-primary" href="#consulta">
+                <i class="fas fa-magnifying-glass"></i> Consultar inscrição
+            </a>
+            <button type="button" class="ins-btn ins-btn-ghost" id="btn-nova-inscricao">
+                <i class="fas fa-plus"></i> Nova inscrição
+            </button>
+        </div>
+    </section>
+
+    <!-- ============================= CONSULTA ============================= -->
+    <section class="ins-card ins-consulta" id="consulta">
+        <div class="ins-section-title">
+            <div class="ins-section-icon"><i class="fas fa-magnifying-glass"></i></div>
+            <div>
+                <h2>Consultar inscrição</h2>
+                <p>Informe o protocolo recebido e o CPF do aluno.</p>
+            </div>
+        </div>
+
+        <form id="form-consulta" class="ins-consulta-form">
+            <div class="ins-grid-2">
+                <div class="ins-field">
+                    <label for="consulta-protocolo">Protocolo</label>
+                    <input type="text" id="consulta-protocolo" placeholder="INS-2026-XXXXXX" maxlength="40">
+                </div>
+                <div class="ins-field">
+                    <label for="consulta-cpf">CPF do aluno</label>
+                    <input type="text" id="consulta-cpf" data-mascara="cpf" inputmode="numeric"
+                           placeholder="000.000.000-00" maxlength="14">
+                </div>
+            </div>
+            <button type="submit" class="ins-btn ins-btn-primary">
+                <i class="fas fa-magnifying-glass"></i> Consultar
+            </button>
+        </form>
+
+        <div id="consulta-resultado"></div>
+    </section>
+</main>
+
+<footer class="ins-footer">
+    <p>
+        <i class="fas fa-shield-halved"></i>
+        Instituto de Educação, Ciência e Tecnologia do Maranhão — IEMA · Dados tratados conforme a LGPD (Lei nº 13.709/2018)
+    </p>
+    <p class="ins-footer-small">Plataforma EducaPleno</p>
+</footer>
+
+<!-- ============================= MODAL LGPD ============================= -->
+<div class="ins-modal ins-hidden" id="modal-lgpd">
+    <div class="ins-modal-box">
+        <div class="ins-modal-head">
+            <h3><i class="fas fa-shield-halved"></i> Termo de Privacidade e Proteção de Dados</h3>
+            <button type="button" class="ins-modal-close" id="btn-fechar-lgpd">&times;</button>
+        </div>
+        <iframe id="iframe-lgpd" src="lgpd-inscricoes.html" title="Termo de Privacidade (LGPD)"></iframe>
+        <div class="ins-modal-foot">
+            <span class="ins-hint">Role o documento até o final para habilitar o botão "Li e aceito".</span>
+            <button type="button" class="ins-btn ins-btn-ghost" id="btn-fechar-lgpd-2">Fechar</button>
+        </div>
+    </div>
+</div>
+
+<div class="ins-toast-wrap" id="ins-toast-wrap"></div>
+
+<script src="js/inscricoes-publico.js"></script>
+</body>
+</html>

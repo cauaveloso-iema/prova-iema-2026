@@ -1221,6 +1221,11 @@ try {
     logger.error('❌ Erro ao registrar /api/eventos/avaliacoes:', error.message);
 }
 
+// ============================================================================
+// MÓDULO DE INSCRIÇÕES (coleta socioeconômica)
+// ============================================================================
+app.use('/api/inscricoes', require('./inscricoes'));
+
 logger.info('✅ Todos os routers migrados foram registrados');
 
 // ============================================================================

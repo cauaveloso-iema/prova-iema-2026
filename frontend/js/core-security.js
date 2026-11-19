@@ -80,6 +80,62 @@
     }
 
     // ================================================================
+    // TOKEN HELPERS (compatível com inscricoes-gestao.js e demais módulos)
+    // ================================================================
+    const CHAVES_TOKEN = [
+        'auth_token', 'token', 'authToken', 'jwt', 'jwtToken',
+        'accessToken', 'access_token', 'userToken', 'bearerToken'
+    ];
+
+    /**
+     * Busca o token JWT em localStorage e sessionStorage.
+     * Retorna string vazia se não encontrar.
+     */
+    function getToken() {
+        for (const storage of [localStorage, sessionStorage]) {
+            for (const chave of CHAVES_TOKEN) {
+                try {
+                    const v = storage.getItem(chave);
+                    if (v && typeof v === 'string' && v.split('.').length === 3) {
+                        return v;
+                    }
+                } catch (_) { }
+            }
+        }
+        return '';
+    }
+
+    /**
+     * Decodifica o payload do JWT (sem validar assinatura).
+     * Retorna null se não houver token válido.
+     */
+    function getPerfil() {
+        try {
+            const t = getToken();
+            if (!t) return null;
+            const p = JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+            return {
+                id: p.id || p._id,
+                role: p.role || '',
+                nome: p.nome || p.name || ''
+            };
+        } catch (_) {
+            return null;
+        }
+    }
+
+    /**
+     * Limpa o token de todos os storages (usado no logout de memória crítica).
+     */
+    function limparToken() {
+        for (const storage of [localStorage, sessionStorage]) {
+            for (const chave of CHAVES_TOKEN) {
+                try { storage.removeItem(chave); } catch (_) { }
+            }
+        }
+    }
+
+    // ================================================================
     // VERIFICAR SE ESTÁ EM PÁGINA DE LOGIN
     // ================================================================
     function estaNaTelaDeLogin() {
@@ -136,7 +192,8 @@
         log('error', '🚪 Memória crítica persistente — Forçando logout');
 
         try {
-            localStorage.removeItem('auth_token');
+            // Limpa todas as chaves de token (não só auth_token)
+            limparToken();
             localStorage.removeItem('user_data');
             localStorage.removeItem(obterChaveRecarregamento());
         } catch (e) {
@@ -266,6 +323,13 @@
             return;
         }
 
+        // Flag opcional para pular o watchdog em páginas específicas
+        // (ex: gerenciar.html quando o próprio script já gerencia o guarda)
+        if (window.__SKIP_CORE_SECURITY_GUARD__) {
+            log('debug', 'Flag __SKIP_CORE_SECURITY_GUARD__ ativa — Watchdog não será iniciado');
+            return;
+        }
+
         log('info', `🐕 Watchdog de memória iniciado (verificação a cada ${CONFIG.INTERVALO_VERIFICACAO_MS / 1000}s)`);
 
         // Limpa o contador de recarregamentos ao entrar numa página nova
@@ -335,6 +399,7 @@
     function iniciarLimpezaPeriodica() {
         // Não roda na tela de login
         if (estaNaTelaDeLogin()) return;
+        if (window.__SKIP_CORE_SECURITY_GUARD__) return;
 
         setInterval(limparCachesGrandes, CONFIG.INTERVALO_LIMPEZA_MS);
     }
@@ -363,10 +428,10 @@
     }
 
     // ================================================================
-    // API PÚBLICA (APENAS PARA DEBUG)
+    // API PÚBLICA
     // ================================================================
     window.coreSecurity = {
-        // Ver status atual
+        // Status atual do watchdog
         status: function() {
             const memoria = obterUsoMemoria();
             
@@ -409,6 +474,27 @@
         forcarLogout: forcarLogoutPorMemoriaCritica
     };
 
+    // ================================================================
+    // EXPOR API COMPATÍVEL (mesmo padrão que inscricoes-gestao.js espera)
+    // ================================================================
+    window.CoreSecurity = {
+        getToken,
+        getPerfil,
+        limparToken,
+        isAdmin: function () {
+            const p = getPerfil();
+            const role = String(p?.role || '')
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase().trim()
+                .replace(/\s+/g, '_')
+                .replace(/-/g, '_')
+                .replace(/_geral$/i, '')
+                .replace(/^gestao_geral$/i, 'gestao');
+            return role === 'admin' || role === 'super_admin';
+        }
+    };
+
     log('debug', '💡 Use window.coreSecurity.status() para ver a saúde da página');
+    log('debug', '💡 Use window.CoreSecurity.getToken() para obter o JWT');
 
 })();
