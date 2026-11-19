@@ -718,3 +718,64 @@ body.ins-body {
 }
 
 *:focus-visible { outline: 3px solid var(--ins-accent); outline-offset: 2px; }
+
+/* ============================================================
+   CONTROLES DE ACESSIBILIDADE (toggle-buttons.js)
+   ============================================================ */
+/* Container injetado pelo toggle-buttons.js */
+#toggle-buttons,
+.toggle-buttons-container,
+.accessibility-controls,
+#accessibility-controls {
+    position: fixed;
+    top: 80px;
+    right: 16px;
+    z-index: 9997;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Botões individuais */
+#toggle-buttons button,
+.toggle-buttons-container button,
+.accessibility-controls button,
+#accessibility-controls button,
+.toggle-btn,
+.accessibility-toggle {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    border: none;
+    background: #0f766e;
+    color: #fff;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 18px rgba(15, 118, 110, .35);
+    transition: .2s;
+}
+
+#toggle-buttons button:hover,
+.toggle-buttons-container button:hover,
+.accessibility-controls button:hover,
+#accessibility-controls button:hover,
+.toggle-btn:hover,
+.accessibility-toggle:hover {
+    transform: scale(1.08);
+    background: #115e59;
+}
+
+/* Mobile: posiciona acima do botão de ajuda flutuante */
+@media (max-width: 600px) {
+    #toggle-buttons,
+    .toggle-buttons-container,
+    .accessibility-controls,
+    #accessibility-controls {
+        top: auto;
+        bottom: 90px;
+        right: 16px;
+    }
+}
