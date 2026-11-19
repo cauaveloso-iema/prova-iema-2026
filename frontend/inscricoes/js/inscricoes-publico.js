@@ -1,7 +1,7 @@
 /* ============================================================================
    inscricoes-publico.js — Formulário público de inscrição socioeconômica
-   Inclui captura de biometria do responsável (WebAuthn)
-   A criptografia da biometria é feita NO SERVIDOR (ENCRYPTION_KEY do .env).
+   Inclui captura de passkey do responsável (WebAuthn) durante o cadastro.
+   A criptografia da passkey é feita NO SERVIDOR (ENCRYPTION_KEY do .env).
    O navegador apenas envia o payload em JSON normal via HTTPS.
    ============================================================================ */
 'use strict';
@@ -311,7 +311,7 @@ function validarPasso(n) {
         if (state.biometriaHabilitada) {
             const bioAceite = document.getElementById('biometria-aceite');
             if (bioAceite && bioAceite.checked && !state.biometriaCapturada) {
-                toast('Você autorizou a biometria. Toque em "Capturar biometria" antes de enviar.', 'warning');
+                toast('Você autorizou a passkey. Toque em "Capturar biometria" antes de enviar.', 'warning');
                 ok = false;
                 primeiro = primeiro || document.getElementById('btn-capturar-biometria');
             }
@@ -383,88 +383,27 @@ function configurarCEP() {
 }
 
 // ============================================================================
-// BIOMETRIA — WebAuthn (captura no navegador)
+// PASSKEY — registro durante o cadastro
 // A criptografia é feita NO SERVIDOR (ENCRYPTION_KEY do .env).
 // ============================================================================
-function b64encode(buf) {
-    return btoa(String.fromCharCode(...new Uint8Array(buf)));
-}
-
 async function capturarBiometriaWebAuthn() {
-    if (!window.PublicKeyCredential) {
-        throw new Error('Este dispositivo/navegador não suporta biometria WebAuthn.');
-    }
-
-    const disponivel = await PublicKeyCredential
-        .isUserVerifyingPlatformAuthenticatorAvailable()
-        .catch(() => false);
-    if (!disponivel) {
-        throw new Error('Nenhum autenticador biométrico de plataforma disponível neste dispositivo.');
-    }
-
     const respNome = (document.getElementById('resp-nome').value || '').trim();
     const respCpf  = (document.getElementById('resp-cpf').value || '').replace(/\D/g, '');
     if (!respNome || respCpf.length !== 11) {
         throw new Error('Preencha nome e CPF do responsável antes de capturar a biometria.');
     }
 
-    const challenge = crypto.getRandomValues(new Uint8Array(32));
-    const userId    = crypto.getRandomValues(new Uint8Array(16));
+    // Registra passkey (fluxo do passkey-registro.js)
+    const resultado = await registrarPasskey({
+        cpf: respCpf,
+        nome: respNome
+    });
 
-    let cred;
-    try {
-        cred = await navigator.credentials.create({
-            publicKey: {
-                challenge,
-                rp: { name: 'IEMA EducaPleno', id: location.hostname },
-                user: { id: userId, name: respCpf, displayName: respNome },
-                pubKeyCredParams: [
-                    { type: 'public-key', alg: -7 },   // ES256
-                    { type: 'public-key', alg: -257 }  // RS256
-                ],
-                authenticatorSelection: {
-                    authenticatorAttachment: 'platform',
-                    userVerification: 'required',
-                    // 'discouraged' evita acumular credenciais no keychain do
-                    // tablet compartilhado. A credencial continua sendo gerada
-                    // e devolvida ao servidor normalmente — só não fica
-                    // "residente" no dispositivo.
-                    residentKey: 'discouraged'
-                },
-                timeout: 60000,
-                attestation: 'none'
-            }
-        });
-    } catch (err) {
-        // Traduz erros comuns do WebAuthn para mensagens amigáveis
-        const nome = err && err.name ? err.name : '';
-        if (nome === 'NotAllowedError') {
-            throw new Error('Captura cancelada ou tempo esgotado. Toque em "Capturar biometria" e conclua a verificação no dispositivo.');
-        }
-        if (nome === 'InvalidStateError') {
-            throw new Error('Este autenticador já possui uma credencial para este usuário. Use "Refazer biometria" ou outro responsável.');
-        }
-        if (nome === 'ConstraintError') {
-            throw new Error('O autenticador do dispositivo está cheio. Libere espaço ou use outro tablet.');
-        }
-        if (nome === 'NotSupportedError') {
-            throw new Error('Este dispositivo não suporta o tipo de credencial solicitado.');
-        }
-        if (nome === 'SecurityError') {
-            throw new Error('Configuração de segurança inválida (verifique se está em HTTPS e o domínio está correto).');
-        }
-        throw new Error(err && err.message ? err.message : 'Falha na captura biométrica.');
-    }
-
-    if (!cred) throw new Error('Captura cancelada.');
-
+    // Mantém o formato que o resto do código espera
     return {
-        credentialId: cred.id,
-        rawId: b64encode(cred.rawId),
-        clientDataJSON: b64encode(cred.response.clientDataJSON),
-        attestationObject: b64encode(cred.response.attestationObject),
-        tipo: cred.type,
-        transports: (cred.response.getTransports && cred.response.getTransports()) || []
+        credentialId: resultado.credentialId,
+        tipo: 'public-key',
+        transports: []
     };
 }
 
@@ -505,16 +444,16 @@ function configurarBiometria() {
             state.biometriaCapturada = true;
 
             captura.classList.add('sucesso');
-            preview.innerHTML = `<i class="fas fa-check-circle"></i><span>Biometria capturada com sucesso!</span>`;
+            preview.innerHTML = `<i class="fas fa-check-circle"></i><span>Passkey capturada com sucesso!</span>`;
 
             btnRef.classList.remove('ins-hidden');
-            statusEl.textContent = 'Credencial registrada. Ela será protegida pelo servidor antes de ser salva.';
-            toast('Biometria capturada!', 'success');
+            statusEl.textContent = 'Passkey registrada. Ela será protegida pelo servidor antes de ser salva.';
+            toast('Passkey capturada!', 'success');
 
             btnCap.classList.add('ins-hidden');
         } catch (err) {
             statusEl.textContent = '';
-            toast(err.message || 'Falha na captura biométrica.', 'error', 6000);
+            toast(err.message || 'Falha na captura da passkey.', 'error', 6000);
         } finally {
             btnCap.disabled = false;
             btnCap.innerHTML = original;
@@ -694,7 +633,7 @@ function configurarEnvio() {
                 const aceiteBio = !!(document.getElementById('biometria-aceite') || {}).checked;
                 if (aceiteBio) {
                     if (!state.biometriaCapturada || !state.biometriaCredential) {
-                        throw new Error('Autorize a biometria e toque em "Capturar biometria" antes de enviar.');
+                        throw new Error('Autorize a passkey e toque em "Capturar biometria" antes de enviar.');
                     }
 
                     // Modo simétrico: o servidor cifra com a ENCRYPTION_KEY do .env.
@@ -723,7 +662,7 @@ function configurarEnvio() {
         } catch (err) {
             console.error(err);
             toast(err.message, 'error', 7000);
-            if (/CPF|obrigat|inválid|Informe|Selecione|biometria/i.test(err.message)) irParaPasso(1);
+            if (/CPF|obrigat|inválid|Informe|Selecione|passkey|biometria/i.test(err.message)) irParaPasso(1);
         } finally {
             state.enviando = false;
             if (btn) { btn.disabled = false; btn.innerHTML = original; }

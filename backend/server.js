@@ -1225,6 +1225,8 @@ try {
 // MÓDULO DE INSCRIÇÕES (coleta socioeconômica)
 // ============================================================================
 app.use('/api/inscricoes', require('./inscricoes'));
+const passkeysRouter = require('./inscricoes/routes/passkeys');
+app.use('/api/inscricoes/passkeys', passkeysRouter);
 
 logger.info('✅ Todos os routers migrados foram registrados');
 

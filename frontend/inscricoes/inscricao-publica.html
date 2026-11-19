@@ -355,7 +355,7 @@
             </div>
         </section>
 
-        <!-- PASSO 6 — INFORMAÇÕES + LGPD + BIOMETRIA -->
+        <!-- PASSO 6 — INFORMAÇÕES + LGPD + PASSKEY -->
         <section class="ins-card ins-passo" data-passo="6">
             <div class="ins-section-title">
                 <div class="ins-section-icon"><i class="fas fa-clipboard-check"></i></div>
@@ -408,35 +408,36 @@
                 <small class="ins-lgpd-versao" id="lgpd-versao">Versão do termo: 1.0</small>
             </div>
 
-            <!-- BIOMETRIA — exibida somente se o admin habilitar -->
+            <!-- PASSKEY — exibida somente se o admin habilitar -->
             <div class="ins-biometria-box ins-hidden" id="biometria-box">
                 <div class="ins-biometria-head">
                     <i class="fas fa-fingerprint"></i>
                     <div>
-                        <strong>Captura de Biometria do Responsável</strong>
-                        <p>Para processos futuros de identificação. Os dados são criptografados.</p>
+                        <strong>Cadastro de Passkey do Responsável</strong>
+                        <p>Identificação segura para processos futuros do IEMA.</p>
                     </div>
                 </div>
                 <p class="ins-biometria-resumo">
-                    A biometria será utilizada exclusivamente para identificação do responsável em processos
-                    internos do IEMA. Os dados biométricos são criptografados e armazenados com segurança,
-                    conforme a LGPD.
+                    A passkey permite que o responsável se identifique com a digital, rosto ou senha do próprio
+                    dispositivo (celular ou computador) em processos internos do IEMA. A chave privada fica
+                    protegida no gerenciador de senhas do dispositivo (iCloud Keychain ou Google Password Manager),
+                    e o servidor guarda apenas a chave pública, conforme a LGPD.
                 </p>
                 <div class="ins-field" data-grupo="biometria" data-obrigatorio="grupo">
                     <label class="ins-check ins-check-lgpd">
                         <input type="checkbox" id="biometria-aceite">
-                        <span>Autorizo a captura e o armazenamento criptografado da minha biometria.</span>
+                        <span>Autorizo o cadastro da minha passkey para identificação em processos internos do IEMA.</span>
                     </label>
                     <small class="ins-err"></small>
                 </div>
                 <div class="ins-biometria-captura ins-hidden" id="biometria-captura">
                     <div class="ins-biometria-preview" id="biometria-preview">
                         <i class="fas fa-fingerprint"></i>
-                        <span>Biometria não capturada</span>
+                        <span>Passkey não cadastrada</span>
                     </div>
                     <div class="ins-biometria-acoes">
                         <button type="button" class="ins-btn ins-btn-primary" id="btn-capturar-biometria">
-                            <i class="fas fa-fingerprint"></i> Capturar biometria
+                            <i class="fas fa-fingerprint"></i> Cadastrar passkey
                         </button>
                         <button type="button" class="ins-btn ins-btn-ghost ins-hidden" id="btn-refazer-biometria">
                             <i class="fas fa-rotate"></i> Refazer
@@ -509,6 +510,8 @@
 
 <div class="ins-toast-wrap" id="ins-toast-wrap"></div>
 
+<!-- Ordem importa: passkey-registro.js ANTES de inscricoes-publico.js -->
+<script src="js/passkey-registro.js"></script>
 <script src="js/inscricoes-publico.js"></script>
 </body>
 </html>
