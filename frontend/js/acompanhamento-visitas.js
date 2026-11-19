@@ -538,8 +538,20 @@
                 ? new Date(t.dataVisita).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
                 : 'N/A';
 
+            // 🆕 Separa responsáveis por status
+            const responsaveis = t.responsaveis || [];
+            const respAutorizados = responsaveis.filter(r => r.status === 'autorizado');
+            const respRecusados = responsaveis.filter(r => r.status === 'recusado');
+            const respPendentes = responsaveis.filter(r => r.status === 'pendente');
+
             let modalDetalhes = document.getElementById('modalDetalhesVisitaAcompanhamento');
             if (modalDetalhes) modalDetalhes.remove();
+
+            // 🆕 Helper local para formatar data
+            const fmtData = (d) => d ? new Date(d).toLocaleString('pt-BR', {
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            }) : null;
 
             const html = `
                 <div class="modal fade" id="modalDetalhesVisitaAcompanhamento" tabindex="-1">
@@ -555,19 +567,117 @@
                                 
                                 <div style="text-align: center; margin-bottom: 20px;">
                                     <span style="font-size: 14px; padding: 8px 20px; border-radius: 20px; font-weight: 600;
-                                          ${t.status === 'autorizado' ? 'background: #d1fae5; color: #065f46;' : 
+                                        ${t.status === 'autorizado' ? 'background: #d1fae5; color: #065f46;' : 
                                             t.status === 'parcialmente_autorizado' ? 'background: #fed7aa; color: #9a3412;' :
                                             t.status === 'recusado' ? 'background: #fee2e2; color: #991b1b;' : 
                                             'background: #fef3c7; color: #92400e;'}">
                                         ${t.status === 'autorizado' ? '✅ AUTORIZADO' : 
-                                          t.status === 'parcialmente_autorizado' ? '🔶 PARCIAL' :
-                                          t.status === 'recusado' ? '❌ RECUSADO' : '⏳ PENDENTE'}
+                                        t.status === 'parcialmente_autorizado' ? '🔶 PARCIAL' :
+                                        t.status === 'recusado' ? '❌ RECUSADO' : '⏳ PENDENTE'}
                                     </span>
                                 </div>
 
                                 <div style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 15px; border-radius: 12px; margin-bottom: 20px;">
                                     <div style="font-size: 11px; opacity: 0.85;">ATIVIDADE</div>
                                     <div style="font-size: 16px; font-weight: 600;">${escapeHtml(t.atividade)}</div>
+                                </div>
+
+                                <!-- 🆕 RESPONSÁVEIS / AUTORIZAÇÕES -->
+                                <div style="background: #f8fafc; border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 2px solid #e5e7eb;">
+                                    <h6 style="color: #1e293b; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                        <i class="fas fa-users" style="color: #10b981;"></i>
+                                        Autorizações dos Responsáveis
+                                        <span style="margin-left: auto; font-size: 11px; background: #e0e7ff; color: #3730a3; padding: 3px 12px; border-radius: 20px; font-weight: 700;">
+                                            ${respAutorizados.length}/${responsaveis.length} autorizado(s)
+                                        </span>
+                                    </h6>
+
+                                    ${responsaveis.length === 0 ? `
+                                        <div style="text-align: center; padding: 20px; color: #9ca3af; font-size: 13px;">
+                                            <i class="fas fa-inbox" style="font-size: 24px; display: block; margin-bottom: 8px;"></i>
+                                            Nenhum responsável cadastrado ainda
+                                        </div>
+                                    ` : `
+
+                                        ${respAutorizados.length > 0 ? `
+                                            <div style="font-size: 11px; font-weight: 700; color: #10b981; text-transform: uppercase; letter-spacing: 0.5px; margin: 12px 0 8px;">
+                                                ✅ Autorizados (${respAutorizados.length})
+                                            </div>
+                                            ${respAutorizados.map(r => `
+                                                <div style="background: white; padding: 12px; border-radius: 10px; margin-bottom: 8px; border-left: 4px solid #10b981; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap;">
+                                                        <div style="flex: 1; min-width: 180px;">
+                                                            <div style="font-weight: 600; font-size: 14px; color: #111827;">
+                                                                ${escapeHtml(r.nome || 'Responsável')}
+                                                            </div>
+                                                            <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">
+                                                                <i class="fas fa-user-graduate"></i> Aluno: ${escapeHtml(r.alunoNome || 'N/A')}
+                                                            </div>
+                                                            ${r.email ? `<div style="font-size: 11px; color: #9ca3af; margin-top: 2px;"><i class="fas fa-envelope"></i> ${escapeHtml(r.email)}</div>` : ''}
+                                                        </div>
+                                                        <div style="text-align: right; font-size: 11px; color: #10b981; white-space: nowrap;">
+                                                            <div style="font-weight: 700;">
+                                                                <i class="fas fa-check-circle"></i> Autorizou
+                                                            </div>
+                                                            ${r.assinaturaData ? `<div style="color: #6b7280; margin-top: 2px;">${fmtData(r.assinaturaData)}</div>` : ''}
+                                                            ${r.lgpdAceito ? `<div style="color: #0ea5e9; margin-top: 2px;"><i class="fas fa-shield-alt"></i> LGPD aceito</div>` : ''}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            `).join('')}
+                                        ` : ''}
+
+                                        ${respRecusados.length > 0 ? `
+                                            <div style="font-size: 11px; font-weight: 700; color: #ef4444; text-transform: uppercase; letter-spacing: 0.5px; margin: 12px 0 8px;">
+                                                ❌ Recusados (${respRecusados.length})
+                                            </div>
+                                            ${respRecusados.map(r => `
+                                                <div style="background: white; padding: 12px; border-radius: 10px; margin-bottom: 8px; border-left: 4px solid #ef4444; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap;">
+                                                        <div style="flex: 1; min-width: 180px;">
+                                                            <div style="font-weight: 600; font-size: 14px; color: #111827;">
+                                                                ${escapeHtml(r.nome || 'Responsável')}
+                                                            </div>
+                                                            <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">
+                                                                <i class="fas fa-user-graduate"></i> Aluno: ${escapeHtml(r.alunoNome || 'N/A')}
+                                                            </div>
+                                                        </div>
+                                                        <div style="text-align: right; font-size: 11px; color: #ef4444; white-space: nowrap;">
+                                                            <div style="font-weight: 700;">
+                                                                <i class="fas fa-times-circle"></i> Recusou
+                                                            </div>
+                                                            ${r.assinaturaData ? `<div style="color: #6b7280; margin-top: 2px;">${fmtData(r.assinaturaData)}</div>` : ''}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            `).join('')}
+                                        ` : ''}
+
+                                        ${respPendentes.length > 0 ? `
+                                            <div style="font-size: 11px; font-weight: 700; color: #f59e0b; text-transform: uppercase; letter-spacing: 0.5px; margin: 12px 0 8px;">
+                                                ⏳ Aguardando assinatura (${respPendentes.length})
+                                            </div>
+                                            ${respPendentes.map(r => `
+                                                <div style="background: white; padding: 12px; border-radius: 10px; margin-bottom: 8px; border-left: 4px solid #f59e0b; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap;">
+                                                        <div style="flex: 1; min-width: 180px;">
+                                                            <div style="font-weight: 600; font-size: 14px; color: #111827;">
+                                                                ${escapeHtml(r.nome || r.alunoNome || 'Responsável')}
+                                                            </div>
+                                                            <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">
+                                                                <i class="fas fa-user-graduate"></i> Aluno: ${escapeHtml(r.alunoNome || 'N/A')}
+                                                            </div>
+                                                        </div>
+                                                        <div style="text-align: right; font-size: 11px; color: #f59e0b; white-space: nowrap;">
+                                                            <div style="font-weight: 700;">
+                                                                <i class="fas fa-hourglass-half"></i> Pendente
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            `).join('')}
+                                        ` : ''}
+                                    `}
                                 </div>
 
                                 <div style="background: #f8fafc; border-radius: 12px; padding: 15px; margin-bottom: 15px;">

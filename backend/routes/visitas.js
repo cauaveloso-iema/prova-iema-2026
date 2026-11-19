@@ -89,6 +89,17 @@ function extrairTurmasCursos(alunosData) {
 }
 
 // ============================================
+// 🆕 HELPER — ordena alunos alfabeticamente (pt-BR, com acentos)
+//    Garante que o 1º aluno seja sempre o alfabeticamente menor
+// ============================================
+function ordenarAlunosPorNome(alunos) {
+  if (!Array.isArray(alunos)) return [];
+  return [...alunos].sort((a, b) =>
+    (a?.nome || '').localeCompare(b?.nome || '', 'pt-BR', { sensitivity: 'base' })
+  );
+}
+
+// ============================================
 // 🆕 HELPER — normaliza horário recebido do frontend
 //   Aceita: "14:00", "14:00 às 17:00", "14:00 - 17:00", "14:00às17:00"
 //   Retorna SEMPRE "HH:MM às HH:MM" (ou "HH:MM" se só veio um)
@@ -373,7 +384,7 @@ router.get('/health', (req, res) => {
     success: true,
     status: 'online',
     service: 'Autorizacao de Visitas',
-    versao: '3.3-notificacao-geral',
+    versao: '3.4-ordenacao-alfabetica',
     cacheSize: _cache.size,
     _debug: {
       hojeBR: getDataHojeBR(),
@@ -466,6 +477,7 @@ router.get('/cursos', authenticateToken, verificarPermissaoVisitas, async (req, 
 });
 
 // Buscar alunos por turma/curso (aceita múltiplas turmas via vírgula)
+// ✅ CORRIGIDO: já ordena por nome alfabeticamente (pt-BR)
 router.get('/alunos-por-turma', authenticateToken, verificarPermissaoVisitas, async (req, res) => {
   try {
     const { turma, turmas, curso } = req.query;
@@ -499,6 +511,13 @@ router.get('/alunos-por-turma', authenticateToken, verificarPermissaoVisitas, as
       .select('nome matricula turma curso fotoPerfil email')
       .sort({ turma: 1, nome: 1 })
       .lean();
+
+    // 🆕 Garante ordenação alfabética correta em pt-BR (acentos, case)
+    alunos.sort((a, b) => {
+      const t = (a.turma || '').localeCompare(b.turma || '', 'pt-BR', { sensitivity: 'base' });
+      if (t !== 0) return t;
+      return (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' });
+    });
     
     res.json({
       success: true,
@@ -738,9 +757,11 @@ router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, 
     };
     
     const termos = termosRaw.map(t => {
-      const primeiroAluno = t.alunos?.[0];
-      const nomeAluno = t.alunos?.length > 1 
-        ? `${primeiroAluno?.nome || 'Aluno'} + ${t.alunos.length - 1}`
+      // 🆕 Ordena alunos alfabeticamente (pt-BR) — garante o 1º aluno correto
+      const alunosOrdenados = ordenarAlunosPorNome(t.alunos || []);
+      const primeiroAluno = alunosOrdenados[0];
+      const nomeAluno = alunosOrdenados.length > 1 
+        ? `${primeiroAluno?.nome || 'Aluno'} + ${alunosOrdenados.length - 1}`
         : (primeiroAluno?.nome || 'Aluno');
       
       const primeiroProf = t.professores?.[0];
@@ -768,8 +789,8 @@ router.get('/termos', authenticateToken, verificarPermissaoVisitas, async (req, 
         alunoCurso: primeiroAluno?.curso || t.cursoPrincipal || 'N/A',
         alunoMatricula: primeiroAluno?.matricula || '',
         
-        totalAlunos: t.alunos?.length || 1,
-        todosAlunos: t.alunos || [],
+        totalAlunos: alunosOrdenados.length || 1,
+        todosAlunos: alunosOrdenados,
         
         professorNome: nomeProfessor,
         totalProfessores: t.professores?.length || 1,
@@ -832,7 +853,9 @@ router.get('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (r
     
     if (!termo) return res.status(404).json({ success: false, error: 'Termo não encontrado' });
     
-    const primeiroAluno = termo.alunos?.[0];
+    // 🆕 Ordena alunos alfabeticamente (pt-BR) — garante o 1º aluno correto
+    const alunosOrdenados = ordenarAlunosPorNome(termo.alunos || []);
+    const primeiroAluno = alunosOrdenados[0];
     const primeiroProf = termo.professores?.[0];
     
     const turmasDoTermo = (termo.turmas && termo.turmas.length > 0)
@@ -846,8 +869,8 @@ router.get('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (r
       atividade: termo.atividade,
       descricaoAtividade: termo.descricaoAtividade || '',
       
-      alunoNome: termo.alunos?.length > 1 
-        ? `${primeiroAluno?.nome || 'Aluno'} + ${termo.alunos.length - 1}`
+      alunoNome: alunosOrdenados.length > 1 
+        ? `${primeiroAluno?.nome || 'Aluno'} + ${alunosOrdenados.length - 1}`
         : (primeiroAluno?.nome || 'Aluno'),
       alunoTurma: turmasDoTermo.length > 1 
         ? turmasDoTermo.join(', ') 
@@ -857,8 +880,8 @@ router.get('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (r
       alunoCurso: primeiroAluno?.curso || termo.cursoPrincipal || 'N/A',
       alunoMatricula: primeiroAluno?.matricula || '',
       
-      totalAlunos: termo.alunos?.length || 1,
-      alunos: termo.alunos || [],
+      totalAlunos: alunosOrdenados.length || 1,
+      alunos: alunosOrdenados,
       
       professorNome: termo.professores?.length > 1
         ? `${primeiroProf?.nome || 'Professor'} + ${termo.professores.length - 1}`
@@ -911,6 +934,7 @@ router.get('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (r
 });
 
 // Criar novo termo
+// ✅ CORRIGIDO: alunos são ordenados alfabeticamente (pt-BR) antes de salvar
 router.post('/termos', authenticateToken, verificarPermissaoVisitas, async (req, res) => {
   try {
     const {
@@ -950,19 +974,31 @@ router.post('/termos', authenticateToken, verificarPermissaoVisitas, async (req,
     
     console.log(`📝 Criando termo: ${alunos.length} aluno(s), ${professores.length} professor(es) | horário: ${horarioNormalizado}`);
     
+    // ✅ CORRIGIDO: ordena já na busca do Mongo
     const alunosData = await User.find({ 
       _id: { $in: alunos },
       role: 'aluno'
-    }).select('nome matricula turma curso fotoPerfil').lean();
+    })
+      .select('nome matricula turma curso fotoPerfil')
+      .sort({ nome: 1 })
+      .lean();
     
     if (alunosData.length === 0) {
       return res.status(404).json({ success: false, error: 'Nenhum aluno válido encontrado' });
     }
+
+    // ✅ CORRIGIDO: garante ordenação alfabética em pt-BR (acentos, case-insensitive)
+    alunosData.sort((a, b) =>
+      (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' })
+    );
     
     const professoresData = await User.find({
       _id: { $in: professores },
       role: 'professor'
-    }).select('nome matricula eixo').lean();
+    })
+      .select('nome matricula eixo')
+      .sort({ nome: 1 })
+      .lean();
     
     if (professoresData.length === 0) {
       return res.status(404).json({ success: false, error: 'Nenhum professor válido encontrado' });
@@ -1026,7 +1062,7 @@ router.post('/termos', authenticateToken, verificarPermissaoVisitas, async (req,
     // 🔥 Invalida cache de termos (novo termo criado)
     _invalidateTermosCache();
     
-    console.log(`✅ Termo criado: ${codigo} | Turmas: ${turmas.join(', ')} | Horário: ${horarioNormalizado}`);
+    console.log(`✅ Termo criado: ${codigo} | Turmas: ${turmas.join(', ')} | Horário: ${horarioNormalizado} | 1º aluno: ${alunosData[0]?.nome}`);
     
     // ============================================
     // 🔔 NOTIFICAR CRIAÇÃO
@@ -1054,6 +1090,7 @@ router.post('/termos', authenticateToken, verificarPermissaoVisitas, async (req,
 });
 
 // Atualizar termo
+// ✅ CORRIGIDO: alunos são ordenados alfabeticamente (pt-BR) antes de salvar
 router.put('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (req, res) => {
   try {
     const { id } = req.params;
@@ -1069,10 +1106,19 @@ router.put('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (r
     if (!termo) return res.status(404).json({ success: false, error: 'Termo não encontrado' });
     
     if (updates.alunos && Array.isArray(updates.alunos)) {
+      // ✅ CORRIGIDO: ordena já na busca do Mongo
       const alunosData = await User.find({
         _id: { $in: updates.alunos },
         role: 'aluno'
-      }).select('nome matricula turma curso fotoPerfil').lean();
+      })
+        .select('nome matricula turma curso fotoPerfil')
+        .sort({ nome: 1 })
+        .lean();
+
+      // ✅ CORRIGIDO: garante ordenação alfabética em pt-BR (acentos, case-insensitive)
+      alunosData.sort((a, b) =>
+        (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' })
+      );
       
       termo.alunos = alunosData.map(a => ({
         alunoId: a._id,
@@ -1108,7 +1154,10 @@ router.put('/termos/:id', authenticateToken, verificarPermissaoVisitas, async (r
       const professoresData = await User.find({
         _id: { $in: updates.professores },
         role: 'professor'
-      }).select('nome matricula eixo').lean();
+      })
+        .select('nome matricula eixo')
+        .sort({ nome: 1 })
+        .lean();
       
       termo.professores = professoresData.map(p => ({
         professorId: p._id,
