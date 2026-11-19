@@ -779,3 +779,188 @@ body.ins-body {
         right: 16px;
     }
 }
+
+/* =========================================
+   BLOCO DE BIOMETRIA
+   ========================================= */
+.ins-biometria-box {
+    margin-top: 24px;
+    padding: 24px;
+    background: #f8fafc; /* Fundo levemente cinza/azulado */
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.ins-biometria-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.ins-biometria-head i {
+    font-size: 28px;
+    color: #0f766e;
+    background: #ccfbf1;
+    padding: 12px;
+    border-radius: 50%;
+}
+
+.ins-biometria-head strong {
+    display: block;
+    font-size: 16px;
+    color: #1e293b;
+    margin-bottom: 4px;
+}
+
+.ins-biometria-head p {
+    margin: 0;
+    font-size: 13.5px;
+    color: #64748b;
+    line-height: 1.4;
+}
+
+.ins-biometria-resumo {
+    font-size: 13px;
+    color: #475569;
+    background: #fff;
+    padding: 16px;
+    border-radius: 8px;
+    border-left: 4px solid #14b8a6;
+    margin-bottom: 16px;
+}
+
+/* Caixa de autorização */
+.ins-check-lgpd {
+    background: #fff;
+    padding: 12px 16px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    transition: all 0.2s;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.ins-check-lgpd:hover {
+    border-color: #0f766e;
+}
+
+.ins-check-lgpd input:checked + span {
+    font-weight: 600;
+    color: #0f766e;
+}
+
+/* Área de captura */
+.ins-biometria-captura {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 20px;
+    background: #fff;
+    border: 2px dashed #cbd5e1;
+    border-radius: 12px;
+    margin-top: 16px;
+    transition: all 0.3s ease;
+}
+
+.ins-biometria-captura.sucesso {
+    border-color: #10b981;
+    background: #f0fdf4;
+}
+
+/* Ícone de digital com animação */
+.ins-biometria-preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.ins-biometria-preview i {
+    font-size: 64px;
+    color: #94a3b8;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+/* Efeito de pulso na digital */
+.ins-biometria-preview i::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    height: 100%;
+    background: rgba(15, 118, 110, 0.2);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    z-index: -1;
+    animation: pulse-bio 2s infinite;
+}
+
+@keyframes pulse-bio {
+    0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+}
+
+.ins-biometria-preview span {
+    font-size: 14px;
+    color: #64748b;
+    font-weight: 500;
+}
+
+/* Estado de Sucesso */
+.ins-biometria-captura.sucesso .ins-biometria-preview i {
+    color: #10b981;
+}
+.ins-biometria-captura.sucesso .ins-biometria-preview i::after {
+    display: none;
+}
+.ins-biometria-captura.sucesso .ins-biometria-preview span {
+    color: #10b981;
+    font-weight: 600;
+}
+
+/* Botões de Biometria */
+.ins-biometria-acoes {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    width: 100%;
+}
+
+#btn-capturar-biometria {
+    padding: 12px 24px;
+    font-size: 15px;
+    border-radius: 8px;
+    background: #0f766e;
+    color: white;
+    border: none;
+    font-weight: 600;
+    box-shadow: 0 4px 6px rgba(15, 118, 110, 0.2);
+    transition: all 0.2s;
+}
+
+#btn-capturar-biometria:hover {
+    background: #0d9488;
+    transform: translateY(-2px);
+}
+
+#btn-refazer-biometria {
+    padding: 12px 20px;
+    font-size: 14px;
+    border-radius: 8px;
+    background: transparent;
+    color: #64748b;
+    border: 1px solid #cbd5e1;
+}
+
+#btn-refazer-biometria:hover {
+    background: #f1f5f9;
+    color: #1e293b;
+}

@@ -450,7 +450,7 @@ async function capturarBiometriaWebAuthn() {
 
 function configurarBiometria() {
     const aceite   = document.getElementById('biometria-aceite');
-    const captura  = document.getElementById('biometria-captura');
+    const captura  = document.getElementById('biometria-captura'); // Este é o container
     const btnCap   = document.getElementById('btn-capturar-biometria');
     const btnRef   = document.getElementById('btn-refazer-biometria');
     const preview  = document.getElementById('biometria-preview');
@@ -464,6 +464,7 @@ function configurarBiometria() {
         if (!aceite.checked) {
             state.biometriaCapturada = false;
             state.biometriaCredential = null;
+            captura.classList.remove('sucesso'); // Remove o verde
             preview.innerHTML = '<i class="fas fa-fingerprint"></i><span>Biometria não capturada</span>';
             btnRef.classList.add('ins-hidden');
             statusEl.textContent = '';
@@ -476,15 +477,24 @@ function configurarBiometria() {
         statusEl.textContent = 'Solicitando autenticação biométrica...';
         btnCap.disabled = true;
         const original = btnCap.innerHTML;
-        btnCap.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Capturando...';
+        btnCap.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Aguardando dispositivo...';
+        
         try {
             const cred = await capturarBiometriaWebAuthn();
             state.biometriaCredential = cred;
             state.biometriaCapturada = true;
-            preview.innerHTML = `<i class="fas fa-circle-check" style="color:#16a34a"></i><span>Biometria capturada com sucesso</span>`;
+            
+            // Atualiza o visual para sucesso
+            captura.classList.add('sucesso');
+            preview.innerHTML = `<i class="fas fa-check-circle"></i><span>Biometria capturada com sucesso!</span>`;
+            
             btnRef.classList.remove('ins-hidden');
             statusEl.textContent = 'Credencial registrada. Ela será criptografada antes do envio.';
             toast('Biometria capturada!', 'success');
+            
+            // Esconde o botão principal de capturar para não haver duplicidade
+            btnCap.classList.add('ins-hidden'); 
+
         } catch (err) {
             statusEl.textContent = '';
             toast(err.message || 'Falha na captura biométrica.', 'error', 6000);
@@ -497,9 +507,14 @@ function configurarBiometria() {
     btnRef.addEventListener('click', () => {
         state.biometriaCapturada = false;
         state.biometriaCredential = null;
+        
+        // Volta ao estado inicial
+        captura.classList.remove('sucesso');
         preview.innerHTML = '<i class="fas fa-fingerprint"></i><span>Biometria não capturada</span>';
         btnRef.classList.add('ins-hidden');
+        btnCap.classList.remove('ins-hidden'); // Mostra o botão de capturar de novo
         statusEl.textContent = '';
+        
         toast('Captura reiniciada. Toque em "Capturar biometria" novamente.', 'info');
     });
 }
