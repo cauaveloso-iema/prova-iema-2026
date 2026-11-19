@@ -1,6 +1,8 @@
 /* ============================================================================
    inscricoes-publico.js — Formulário público de inscrição socioeconômica
-   Inclui captura de biometria do responsável (WebAuthn) criptografada
+   Inclui captura de biometria do responsável (WebAuthn)
+   A criptografia da biometria é feita NO SERVIDOR (ENCRYPTION_KEY do .env).
+   O navegador apenas envia o payload em JSON normal via HTTPS.
    ============================================================================ */
 'use strict';
 
@@ -381,35 +383,11 @@ function configurarCEP() {
 }
 
 // ============================================================================
-// BIOMETRIA — WebAuthn + criptografia híbrida (RSA-OAEP + AES-GCM)
+// BIOMETRIA — WebAuthn (captura no navegador)
+// A criptografia é feita NO SERVIDOR (ENCRYPTION_KEY do .env).
 // ============================================================================
 function b64encode(buf) {
     return btoa(String.fromCharCode(...new Uint8Array(buf)));
-}
-
-async function obterChavePublicaBiometria() {
-    const resp = await fetch(`${API_BASE}/publica/biometria/chave`);
-    const data = await resp.json();
-    if (!data.success || !data.chavePublica) throw new Error('Chave pública de biometria indisponível.');
-    return data.chavePublica;
-}
-
-async function criptografarBiometria(payloadTexto) {
-    const aesKey = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt']);
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const cipherBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aesKey, new TextEncoder().encode(payloadTexto));
-
-    const rawAes = await crypto.subtle.exportKey('raw', aesKey);
-    const jwk = await obterChavePublicaBiometria();
-    const rsaKey = await crypto.subtle.importKey('jwk', jwk, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['encrypt']);
-    const aesCifrada = await crypto.subtle.encrypt({ name: 'RSA-OAEP' }, rsaKey, rawAes);
-
-    return {
-        alg: 'AES-GCM+RSA-OAEP-256',
-        iv: b64encode(iv),
-        chaveAesCifrada: b64encode(aesCifrada),
-        dadosCifrados: b64encode(cipherBuf)
-    };
 }
 
 async function capturarBiometriaWebAuthn() {
@@ -450,7 +428,7 @@ async function capturarBiometriaWebAuthn() {
 
 function configurarBiometria() {
     const aceite   = document.getElementById('biometria-aceite');
-    const captura  = document.getElementById('biometria-captura'); // Este é o container
+    const captura  = document.getElementById('biometria-captura');
     const btnCap   = document.getElementById('btn-capturar-biometria');
     const btnRef   = document.getElementById('btn-refazer-biometria');
     const preview  = document.getElementById('biometria-preview');
@@ -464,7 +442,7 @@ function configurarBiometria() {
         if (!aceite.checked) {
             state.biometriaCapturada = false;
             state.biometriaCredential = null;
-            captura.classList.remove('sucesso'); // Remove o verde
+            captura.classList.remove('sucesso');
             preview.innerHTML = '<i class="fas fa-fingerprint"></i><span>Biometria não capturada</span>';
             btnRef.classList.add('ins-hidden');
             statusEl.textContent = '';
@@ -478,23 +456,20 @@ function configurarBiometria() {
         btnCap.disabled = true;
         const original = btnCap.innerHTML;
         btnCap.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Aguardando dispositivo...';
-        
+
         try {
             const cred = await capturarBiometriaWebAuthn();
             state.biometriaCredential = cred;
             state.biometriaCapturada = true;
-            
-            // Atualiza o visual para sucesso
+
             captura.classList.add('sucesso');
             preview.innerHTML = `<i class="fas fa-check-circle"></i><span>Biometria capturada com sucesso!</span>`;
-            
-            btnRef.classList.remove('ins-hidden');
-            statusEl.textContent = 'Credencial registrada. Ela será criptografada antes do envio.';
-            toast('Biometria capturada!', 'success');
-            
-            // Esconde o botão principal de capturar para não haver duplicidade
-            btnCap.classList.add('ins-hidden'); 
 
+            btnRef.classList.remove('ins-hidden');
+            statusEl.textContent = 'Credencial registrada. Ela será protegida pelo servidor antes de ser salva.';
+            toast('Biometria capturada!', 'success');
+
+            btnCap.classList.add('ins-hidden');
         } catch (err) {
             statusEl.textContent = '';
             toast(err.message || 'Falha na captura biométrica.', 'error', 6000);
@@ -507,14 +482,13 @@ function configurarBiometria() {
     btnRef.addEventListener('click', () => {
         state.biometriaCapturada = false;
         state.biometriaCredential = null;
-        
-        // Volta ao estado inicial
+
         captura.classList.remove('sucesso');
         preview.innerHTML = '<i class="fas fa-fingerprint"></i><span>Biometria não capturada</span>';
         btnRef.classList.add('ins-hidden');
-        btnCap.classList.remove('ins-hidden'); // Mostra o botão de capturar de novo
+        btnCap.classList.remove('ins-hidden');
         statusEl.textContent = '';
-        
+
         toast('Captura reiniciada. Toque em "Capturar biometria" novamente.', 'info');
     });
 }
@@ -621,7 +595,6 @@ async function carregarConfig() {
         const versao = document.getElementById('lgpd-versao');
         if (versao) versao.textContent = `Versão do termo: ${cfg.versaoTermo || '1.0'}`;
 
-        // Biometria: exibe bloco somente se o admin habilitou
         state.biometriaHabilitada = !!cfg.solicitarBiometria;
         const bioBox = document.getElementById('biometria-box');
         if (bioBox) bioBox.classList.toggle('ins-hidden', !state.biometriaHabilitada);
@@ -681,18 +654,14 @@ function configurarEnvio() {
                     if (!state.biometriaCapturada || !state.biometriaCredential) {
                         throw new Error('Autorize a biometria e toque em "Capturar biometria" antes de enviar.');
                     }
-                    const envelope = await criptografarBiometria(JSON.stringify({
-                        credential: state.biometriaCredential,
-                        responsavelCpf: (document.getElementById('resp-cpf').value || '').replace(/\D/g, ''),
-                        capturadoEm: new Date().toISOString()
-                    }));
+
+                    // Modo simétrico: o servidor cifra com a ENCRYPTION_KEY do .env.
+                    // O navegador só envia o payload em JSON normal (via HTTPS).
                     payload.biometria = {
                         aceito: true,
                         versaoTermo: '1.0',
-                        algoritmo: envelope.alg,
-                        iv: envelope.iv,
-                        chaveAesCifrada: envelope.chaveAesCifrada,
-                        dadosCifrados: envelope.dadosCifrados,
+                        credential: state.biometriaCredential,
+                        responsavelCpf: (document.getElementById('resp-cpf').value || '').replace(/\D/g, ''),
                         capturadoEm: new Date().toISOString()
                     };
                 } else {
