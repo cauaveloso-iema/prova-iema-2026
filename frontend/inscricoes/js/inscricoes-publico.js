@@ -1,7 +1,7 @@
 /* ============================================================================
    inscricoes-publico.js — Formulário público de inscrição socioeconômica
-   Inclui captura de passkey do responsável (WebAuthn) durante o cadastro.
-   A criptografia da passkey é feita NO SERVIDOR (ENCRYPTION_KEY do .env).
+   Inclui captura de passkey do responsável (WebAuthn) durante o cadastro
+   A criptografia da passkey é feita NO SERVIDOR (ENCRYPTION_KEY do .env)
    O navegador apenas envia o payload em JSON normal via HTTPS.
    ============================================================================ */
 'use strict';
