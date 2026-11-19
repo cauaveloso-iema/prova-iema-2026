@@ -1,5 +1,5 @@
 // frontend/js/visitas-publico.js
-// Autorização de Visitas - Página Pública
+// Autorização de Visitas - Página Pública (FLUXO PROGRESSIVO 5 ETAPAS)
 
 class VisitasPublico {
     constructor() {
@@ -9,10 +9,10 @@ class VisitasPublico {
         this.alunos = [];
         this.termos = [];
         this.termosPorCodigo = [];
-        
+
         this.alunoSelecionado = null;
         this.termoAtual = null;
-        
+
         this.responsavel = {
             nome: '',
             rg: '',
@@ -20,10 +20,10 @@ class VisitasPublico {
             telefone: '',
             email: ''
         };
-        
+
         this.lgpdAceito = false;
         this.totpSecret = null;
-        
+
         this.assinatura = {
             canvas: null,
             ctx: null,
@@ -32,13 +32,19 @@ class VisitasPublico {
             lastX: 0,
             lastY: 0
         };
-        
-        this.localizacao = null;
 
+        this.localizacao = null;
         this.whatsappEscola = '5598983086504';
 
         // ============================================
-        // 🔒 LOCKS ANTI-CLIQUE-DUPLO
+        // CONTROLE DO FLUXO PROGRESSIVO
+        // ============================================
+        this.etapaAtual = 0;
+        this.etapaMaxima = 0;
+        this.fluxoIniciado = false;
+
+        // ============================================
+        // LOCKS ANTI-CLIQUE-DUPLO
         // ============================================
         this._locks = {
             selecionarAluno: false,
@@ -52,13 +58,12 @@ class VisitasPublico {
             carregarDadosIniciais: false
         };
 
-        // Cache de termos já carregados (evita refetch)
         this._termoCache = new Map();
         this._dadosIniciaisCarregados = false;
     }
 
     // ============================================
-    // 🔒 HELPERS DE LOCK
+    // HELPERS DE LOCK
     // ============================================
     _adquirirLock(nome) {
         if (this._locks[nome]) {
@@ -82,9 +87,6 @@ class VisitasPublico {
         }
     }
 
-    // ============================================
-    // 🎯 ALUNO-ALVO DO TERMO ATUAL
-    // ============================================
     obterAlunoIdAlvo() {
         return (
             this.termoAtual?.alunoIdFoco ||
@@ -97,17 +99,115 @@ class VisitasPublico {
     }
 
     // ============================================
+    // CONTROLE DE ETAPAS
+    // ============================================
+    _mostrarTela(id) {
+        const telas = ['telaIntroducao', 'etapa1Aluno', 'etapa2Autorizacao', 'etapa3LGPD', 'etapa4TOTP', 'etapa5Dados', 'telaSucesso'];
+        telas.forEach(t => {
+            const el = document.getElementById(t);
+            if (el) el.style.display = 'none';
+        });
+        const alvo = document.getElementById(id);
+        if (alvo) alvo.style.display = 'block';
+    }
+
+    _atualizarStepper(etapa) {
+        const stepper = document.getElementById('stepperGlobal');
+        if (!stepper) return;
+
+        if (etapa >= 1 && etapa <= 5) {
+            stepper.style.display = 'block';
+        } else {
+            stepper.style.display = 'none';
+        }
+
+        const items = stepper.querySelectorAll('.stepper-item');
+        items.forEach((item, idx) => {
+            const stepNum = idx + 1;
+            item.classList.remove('active', 'done');
+            if (stepNum < etapa) {
+                item.classList.add('done');
+                item.querySelector('.stepper-dot').innerHTML = '<i class="fas fa-check"></i>';
+            } else if (stepNum === etapa) {
+                item.classList.add('active');
+                // Restaurar ícone original
+                const icons = ['fa-user-graduate', 'fa-file-alt', 'fa-shield-alt', 'fa-qrcode', 'fa-signature'];
+                item.querySelector('.stepper-dot').innerHTML = `<i class="fas ${icons[idx]}"></i>`;
+            } else {
+                const icons = ['fa-user-graduate', 'fa-file-alt', 'fa-shield-alt', 'fa-qrcode', 'fa-signature'];
+                item.querySelector('.stepper-dot').innerHTML = `<i class="fas ${icons[idx]}"></i>`;
+            }
+        });
+
+        // Barra de progresso
+        const fill = document.getElementById('stepperProgressFill');
+        if (fill) {
+            const percent = Math.max(0, ((etapa - 1) / 4) * 100);
+            fill.style.width = percent + '%';
+        }
+    }
+
+    irParaEtapa(etapa) {
+        this.etapaAtual = etapa;
+        if (etapa > this.etapaMaxima) this.etapaMaxima = etapa;
+
+        this._atualizarStepper(etapa);
+
+        switch (etapa) {
+            case 1:
+                this._mostrarTela('etapa1Aluno');
+                this.renderizarEstadoInicial();
+                break;
+            case 2:
+                this._mostrarTela('etapa2Autorizacao');
+                break;
+            case 3:
+                this._mostrarTela('etapa3LGPD');
+                this.preencherDetalhesTermo('detalhesTermoLgpd');
+                break;
+            case 4:
+                this._mostrarTela('etapa4TOTP');
+                this.gerarQRCodeTOTP();
+                break;
+            case 5:
+                this._mostrarTela('etapa5Dados');
+                this.preencherDetalhesTermo('detalhesTermoDados');
+                setTimeout(() => this.inicializarAssinatura(), 200);
+                break;
+            case 0:
+                this._mostrarTela('telaIntroducao');
+                this._atualizarStepper(0);
+                break;
+        }
+
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    iniciarFluxo() {
+        this.fluxoIniciado = true;
+        this.irParaEtapa(1);
+    }
+
+    voltarParaEtapa(etapa) {
+        this.irParaEtapa(etapa);
+    }
+
+    reiniciarFluxo() {
+        location.reload();
+    }
+
+    // ============================================
     // INICIALIZAÇÃO
     // ============================================
     async init() {
         console.log('🚀 Iniciando página pública de visitas...');
-        
+
         try {
             const statusRes = await fetch(`${this.apiBase}/status`);
             const statusData = await statusRes.json();
-            
+
             const statusPill = document.getElementById('statusPill');
-            
+
             if (!statusData.success || !statusData.status.visitasAbertas) {
                 if (statusPill) {
                     statusPill.className = 'status-pill';
@@ -116,12 +216,12 @@ class VisitasPublico {
                 this.mostrarIndisponivel(statusData.status?.avisoPublico);
                 return;
             }
-            
+
             if (statusPill) {
                 statusPill.className = 'status-pill ativo';
                 statusPill.innerHTML = '<i class="fas fa-circle" style="font-size: 8px;"></i> Autorizações Abertas';
             }
-            
+
             if (statusData.status.avisoPublico) {
                 const avisoContainer = document.getElementById('avisoPublicoContainer');
                 const avisoTexto = document.getElementById('avisoPublicoTexto');
@@ -130,13 +230,13 @@ class VisitasPublico {
                     avisoContainer.style.display = 'block';
                 }
             }
-            
+
             await this.carregarDadosIniciais();
-            
             this.configurarEventos();
             this.capturarLocalizacao();
-            this.renderizarEstadoInicial();
-            
+
+            this._mostrarTela('telaIntroducao');
+
             console.log('✅ Página pública inicializada');
         } catch (error) {
             console.error('❌ Erro:', error);
@@ -144,39 +244,33 @@ class VisitasPublico {
         }
     }
 
-    // ============================================
-    // 🆕 CARREGAMENTO UNIFICADO DE DADOS INICIAIS
-    // ============================================
     async carregarDadosIniciais() {
         if (this._dadosIniciaisCarregados) return;
-        
+
         return this._comLock('carregarDadosIniciais', async () => {
             try {
-                // ✅ Carrega APENAS turmas e cursos (leves, poucos registros)
                 const [turmasRes, cursosRes] = await Promise.all([
                     fetch(`${this.apiBase}/turmas`),
                     fetch(`${this.apiBase}/cursos`)
                 ]);
-                
+
                 const [turmasData, cursosData] = await Promise.all([
                     turmasRes.json(),
                     cursosRes.json()
                 ]);
-                
+
                 if (turmasData.success && turmasData.turmas) {
                     this.turmas = turmasData.turmas;
                     this.preencherSelectTurmas();
                 }
-                
+
                 if (cursosData.success && cursosData.cursos) {
                     this.cursos = cursosData.cursos;
                     this.preencherSelectCursos();
                 }
-                
-                // ❌ NÃO carrega alunos aqui
+
                 this._dadosIniciaisCarregados = true;
                 console.log('✅ Turmas e cursos carregados');
-                
             } catch (error) {
                 console.error('❌ Erro ao carregar dados iniciais:', error);
             }
@@ -186,7 +280,7 @@ class VisitasPublico {
     mostrarIndisponivel(aviso) {
         const container = document.querySelector('.container-public');
         if (!container) return;
-        
+
         container.innerHTML = `
             <div class="hero-section">
                 <div class="hero-icon" style="background: linear-gradient(135deg, #ef4444, #dc2626);">
@@ -204,7 +298,7 @@ class VisitasPublico {
     preencherSelectTurmas() {
         const select = document.getElementById('filtroTurmaPublico');
         if (!select) return;
-        
+
         select.innerHTML = '<option value="">Todas as turmas</option>' +
             this.turmas.map(t => {
                 const nome = t.nome || t;
@@ -215,7 +309,7 @@ class VisitasPublico {
     preencherSelectCursos() {
         const select = document.getElementById('filtroCursoPublico');
         if (!select) return;
-        
+
         select.innerHTML = '<option value="">Todos os cursos</option>' +
             this.cursos.map(c => `<option value="${c}">${c}</option>`).join('');
     }
@@ -229,24 +323,17 @@ class VisitasPublico {
                 timeout = setTimeout(() => this.buscarAlunos(), 400);
             });
         }
-        
-        const buscaCodigoInput = document.getElementById('buscaCodigoPublico');
-        if (buscaCodigoInput) {
-            let timeout;
-            buscaCodigoInput.addEventListener('input', (e) => {
-                clearTimeout(timeout);
-                const valor = e.target.value.trim();
-                if (valor.length < 4) return;
-                timeout = setTimeout(() => this.buscarPorCodigo(), 500);
-            });
-            buscaCodigoInput.addEventListener('keypress', (e) => {
+
+        const buscaCodigoIntro = document.getElementById('buscaCodigoPublicoIntro');
+        if (buscaCodigoIntro) {
+            buscaCodigoIntro.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    this.buscarPorCodigo();
+                    this.buscarPorCodigoIntro();
                 }
             });
         }
-        
+
         const cpfInput = document.getElementById('respCPF');
         if (cpfInput) {
             cpfInput.addEventListener('input', (e) => {
@@ -257,7 +344,7 @@ class VisitasPublico {
                 e.target.value = v;
             });
         }
-        
+
         const telInput = document.getElementById('respTelefone');
         if (telInput) {
             telInput.addEventListener('input', (e) => {
@@ -268,7 +355,7 @@ class VisitasPublico {
                 e.target.value = v;
             });
         }
-        
+
         const totpInput = document.getElementById('totpCodigo');
         if (totpInput) {
             totpInput.addEventListener('keypress', (e) => {
@@ -301,98 +388,43 @@ class VisitasPublico {
     }
 
     // ============================================
-    // PASSO 1: BUSCAR E SELECIONAR ALUNO
+    // CONSULTA RÁPIDA POR CÓDIGO (INTRO)
     // ============================================
-    async buscarAlunos() {
-        const turma = document.getElementById('filtroTurmaPublico')?.value;
-        const curso = document.getElementById('filtroCursoPublico')?.value;
-        const nome = document.getElementById('buscaAlunoPublico')?.value;
-        
-        // ✅ Se não tem filtro, mostra estado inicial (não busca nada)
-        if (!turma && !curso && !nome) {
-            this.renderizarEstadoInicial();
+    async buscarPorCodigoIntro() {
+        const codigo = document.getElementById('buscaCodigoPublicoIntro')?.value?.trim();
+        const resultado = document.getElementById('resultadoConsultaIntro');
+
+        if (!codigo || codigo.length < 4) {
+            this.showToast('Digite pelo menos 4 caracteres do código', 'error');
             return;
         }
-        
+
+        if (resultado) {
+            resultado.innerHTML = '<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-spin" style="font-size:24px;color:#667eea;"></i></div>';
+        }
+
         try {
-            const params = new URLSearchParams();
-            if (turma) params.append('turma', turma);
-            if (curso) params.append('curso', curso);
-            if (nome) params.append('nome', nome);
-            
-            const response = await fetch(`${this.apiBase}/alunos?${params}`);
+            const response = await fetch(`${this.apiBase}/termos-por-codigo/${encodeURIComponent(codigo)}`);
             const data = await response.json();
-            
+
             if (data.success) {
-                this.alunos = data.alunos || [];
-                this.renderizarAlunos();
+                this.termosPorCodigo = data.termos || [];
+                this.renderizarTermosPorCodigo('resultadoConsultaIntro');
+            } else {
+                throw new Error(data.error || 'Erro na busca');
             }
         } catch (error) {
             console.error('❌ Erro:', error);
+            if (resultado) {
+                resultado.innerHTML = `<div style="text-align:center;padding:20px;color:#ef4444;font-size:14px;"><i class="fas fa-exclamation-circle"></i> ${this.escapeHtml(error.message)}</div>`;
+            }
         }
     }
 
-    renderizarEstadoInicial() {
-        const container = document.getElementById('listaAlunosPublico');
+    renderizarTermosPorCodigo(containerId) {
+        const container = document.getElementById(containerId || 'listaTermosCodigoPublico');
         if (!container) return;
-        
-        this.alunos = [];
-        container.innerHTML = `
-            <div style="text-align: center; padding: 40px 20px; color: #9ca3af;">
-                <i class="fas fa-filter" style="font-size: 42px; margin-bottom: 15px; display: block; color: #d1d5db;"></i>
-                <p style="margin: 0 0 8px; font-weight: 600; color: #6b7280;">
-                    Selecione uma turma ou curso
-                </p>
-                <p style="margin: 0; font-size: 13px;">
-                    Use os filtros acima ou busque pelo nome do aluno para encontrar a autorização
-                </p>
-            </div>
-        `;
-    }
 
-    async buscarPorCodigo() {
-        return this._comLock('buscarPorCodigo', async () => {
-            const codigo = document.getElementById('buscaCodigoPublico')?.value?.trim();
-            
-            if (!codigo || codigo.length < 4) {
-                this.showToast('Digite pelo menos 4 caracteres do código', 'error');
-                return;
-            }
-
-            // ✅ Efeito de loading no container
-            const container = document.getElementById('listaTermosCodigoPublico');
-            if (container) {
-                container.style.opacity = '0.5';
-                container.style.pointerEvents = 'none';
-            }
-            
-            try {
-                const response = await fetch(`${this.apiBase}/termos-por-codigo/${encodeURIComponent(codigo)}`);
-                const data = await response.json();
-                
-                if (data.success) {
-                    this.termosPorCodigo = data.termos || [];
-                    this.renderizarTermosPorCodigo();
-                } else {
-                    throw new Error(data.error || 'Erro na busca');
-                }
-            } catch (error) {
-                console.error('❌ Erro:', error);
-                this.showToast('❌ ' + error.message, 'error');
-            } finally {
-                // ✅ Remove o loading
-                if (container) {
-                    container.style.opacity = '1';
-                    container.style.pointerEvents = '';
-                }
-            }
-        });
-    }
-
-    renderizarTermosPorCodigo() {
-        const container = document.getElementById('listaTermosCodigoPublico');
-        if (!container) return;
-        
         if (this.termosPorCodigo.length === 0) {
             container.innerHTML = `
                 <div style="text-align: center; padding: 30px; color: #9ca3af;">
@@ -402,12 +434,12 @@ class VisitasPublico {
             `;
             return;
         }
-        
+
         container.innerHTML = this.termosPorCodigo.map(t => {
-            const dataVisita = new Date(t.dataVisita).toLocaleDateString('pt-BR', { 
-                day: '2-digit', month: 'long', year: 'numeric' 
+            const dataVisita = new Date(t.dataVisita).toLocaleDateString('pt-BR', {
+                day: '2-digit', month: 'long', year: 'numeric'
             });
-            
+
             let badgeStatus = '';
             if (t.status === 'autorizado') {
                 badgeStatus = '<span class="badge-termo autorizado">✓ Totalmente Autorizado</span>';
@@ -418,20 +450,20 @@ class VisitasPublico {
             } else {
                 badgeStatus = '<span class="badge-termo pendente">⏳ Pendente</span>';
             }
-            
+
             const alunosHTML = (t.alunos || []).map(a => {
                 const alunoId = a.alunoId?._id || a.alunoId || a._id || a.id || '';
                 return `
                 <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: #f9fafb; border-radius: 8px; margin-top: 6px; font-size: 12px; gap: 8px; flex-wrap: wrap;">
                     <span style="flex: 1; min-width: 150px;">
-                        <i class="fas fa-user-graduate" style="color: #667eea;"></i> 
+                        <i class="fas fa-user-graduate" style="color: #667eea;"></i>
                         ${this.escapeHtml(a.nome || a.alunoNome || '-')}
                     </span>
                     <div style="display: flex; gap: 6px; align-items: center;">
                         <span style="color: #6b7280; font-size: 11px;">${a.turma || '-'}</span>
                         ${t.responsaveis.autorizados > 0 ? `
-                            <button class="btn-filter btn-imprimir-termo" 
-                                data-termo-id="${t.id}" 
+                            <button class="btn-filter btn-imprimir-termo"
+                                data-termo-id="${t.id}"
                                 data-aluno-id="${alunoId}"
                                 style="padding: 4px 10px; font-size: 11px; background: #3b82f6; border-radius: 20px;"
                                 title="Imprimir termo somente deste aluno">
@@ -441,26 +473,26 @@ class VisitasPublico {
                     </div>
                 </div>
             `}).join('');
-            
+
             return `
                 <div class="termo-publico-card" style="cursor: default;">
                     <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px; gap: 8px; flex-wrap: wrap;">
                         <h4 style="margin: 0;">${this.escapeHtml(t.atividade)}</h4>
                         ${badgeStatus}
                     </div>
-                    
+
                     ${t.descricaoAtividade ? `
                         <div style="background: #f0f9ff; border-left: 3px solid #3b82f6; padding: 8px 12px; margin: 8px 0; border-radius: 6px; font-size: 12px; color: #1e40af;">
                             <i class="fas fa-align-left"></i> ${this.escapeHtml(t.descricaoAtividade)}
                         </div>
                     ` : ''}
-                    
+
                     <div class="info"><i class="fas fa-barcode"></i> <strong>Código:</strong> <code>${t.codigo}</code></div>
                     <div class="info"><i class="fas fa-chalkboard-teacher"></i> ${this.escapeHtml(t.professor)}</div>
                     <div class="info"><i class="fas fa-calendar-alt"></i> ${dataVisita}</div>
                     <div class="info"><i class="fas fa-clock"></i> ${t.horario}</div>
                     <div class="info"><i class="fas fa-map-marker-alt"></i> ${this.escapeHtml(t.local)}</div>
-                    
+
                     <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed #e5e7eb;">
                         <div style="font-size: 11px; color: #6b7280; margin-bottom: 6px;">
                             <strong>Alunos (${t.totalAlunos}):</strong>
@@ -468,7 +500,7 @@ class VisitasPublico {
                         </div>
                         ${alunosHTML}
                     </div>
-                    
+
                     <div style="margin-top: 12px; padding: 10px; background: #f0fdf4; border-radius: 8px; font-size: 12px; display: flex; justify-content: space-around; text-align: center;">
                         <div>
                             <div style="color: #10b981; font-weight: 700; font-size: 16px;">${t.responsaveis.autorizados}</div>
@@ -490,20 +522,64 @@ class VisitasPublico {
         container.querySelectorAll('.btn-imprimir-termo').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const termoId = btn.dataset.termoId;
-                const alunoId = btn.dataset.alunoId;
-                this.imprimirTermoOficial(termoId, alunoId);
+                this.imprimirTermoOficial(btn.dataset.termoId, btn.dataset.alunoId);
             });
         });
+    }
+
+    // ============================================
+    // ETAPA 1: BUSCAR E SELECIONAR ALUNO
+    // ============================================
+    async buscarAlunos() {
+        const turma = document.getElementById('filtroTurmaPublico')?.value;
+        const curso = document.getElementById('filtroCursoPublico')?.value;
+        const nome = document.getElementById('buscaAlunoPublico')?.value;
+
+        if (!turma && !curso && !nome) {
+            this.renderizarEstadoInicial();
+            return;
+        }
+
+        try {
+            const params = new URLSearchParams();
+            if (turma) params.append('turma', turma);
+            if (curso) params.append('curso', curso);
+            if (nome) params.append('nome', nome);
+
+            const response = await fetch(`${this.apiBase}/alunos?${params}`);
+            const data = await response.json();
+
+            if (data.success) {
+                this.alunos = data.alunos || [];
+                this.renderizarAlunos();
+            }
+        } catch (error) {
+            console.error('❌ Erro:', error);
+        }
+    }
+
+    renderizarEstadoInicial() {
+        const container = document.getElementById('listaAlunosPublico');
+        if (!container) return;
+
+        this.alunos = [];
+        container.innerHTML = `
+            <div style="text-align: center; padding: 40px 20px; color: #9ca3af;">
+                <i class="fas fa-filter" style="font-size: 42px; margin-bottom: 15px; display: block; color: #d1d5db;"></i>
+                <p style="margin: 0 0 8px; font-weight: 600; color: #6b7280;">
+                    Selecione uma turma ou curso
+                </p>
+                <p style="margin: 0; font-size: 13px;">
+                    Use os filtros acima ou busque pelo nome do aluno para encontrar a autorização
+                </p>
+            </div>
+        `;
     }
 
     renderizarAlunos() {
         const container = document.getElementById('listaAlunosPublico');
         if (!container) return;
-        
-        // ============================================
-        // ESTADO VAZIO
-        // ============================================
+
         if (this.alunos.length === 0) {
             container.innerHTML = `
                 <div style="text-align: center; padding: 30px; color: #9ca3af;">
@@ -513,21 +589,15 @@ class VisitasPublico {
             `;
             return;
         }
-        
-        // ============================================
-        // ✅ LIMITE DE RENDERIZAÇÃO (evita DOM pesado)
-        // ============================================
+
         const limite = 50;
         const lista = this.alunos.slice(0, limite);
         const temMais = this.alunos.length > limite;
         const totalRestante = this.alunos.length - limite;
-        
-        // ============================================
-        // CARDS DOS ALUNOS
-        // ============================================
+
         const cardsHTML = lista.map(a => `
-            <div class="termo-publico-card aluno-card-public" 
-                data-aluno-id="${a.id}" 
+            <div class="termo-publico-card aluno-card-public"
+                data-aluno-id="${a.id}"
                 style="cursor: pointer;">
                 <h4>${this.escapeHtml(a.nome)}</h4>
                 <div class="info"><i class="fas fa-id-card"></i> ${a.matricula || 'N/A'}</div>
@@ -540,10 +610,7 @@ class VisitasPublico {
                 </div>
             </div>
         `).join('');
-        
-        // ============================================
-        // AVISO DE "TEM MAIS" (se passou do limite)
-        // ============================================
+
         const avisoHTML = temMais ? `
             <div style="text-align: center; padding: 20px 15px; color: #6b7280; font-size: 13px; background: #f9fafb; border-radius: 12px; margin-top: 10px; border: 1px dashed #d1d5db;">
                 <i class="fas fa-info-circle" style="color: #667eea;"></i>
@@ -554,12 +621,9 @@ class VisitasPublico {
                 </span>
             </div>
         ` : '';
-        
+
         container.innerHTML = cardsHTML + avisoHTML;
 
-        // ============================================
-        // EVENT LISTENERS
-        // ============================================
         container.querySelectorAll('.aluno-card-public').forEach(card => {
             card.addEventListener('click', () => {
                 this.selecionarAluno(card.dataset.alunoId);
@@ -568,35 +632,35 @@ class VisitasPublico {
     }
 
     // ============================================
-    // SELECIONAR ALUNO (com lock)
+    // SELECIONAR ALUNO → AVANÇA PARA ETAPA 2
     // ============================================
     async selecionarAluno(alunoId) {
         return this._comLock('selecionarAluno', async () => {
             const aluno = this.alunos.find(a => a.id === alunoId);
             if (!aluno) return;
-            
+
             const container = document.getElementById('listaAlunosPublico');
             if (container) {
                 container.style.opacity = '0.5';
                 container.style.pointerEvents = 'none';
             }
-            
+
             this.alunoSelecionado = aluno;
-            
+
             try {
                 const response = await fetch(`${this.apiBase}/termos/${alunoId}`);
                 const data = await response.json();
-                
-                console.log(`🔍 [FRONTEND] Termos do aluno ${aluno.nome}:`, data);
-                
+
                 if (data.success && data.termos.length > 0) {
                     this.termos = data.termos;
-                    
-                    data.termos.forEach(t => {
-                        console.log(`   → ${t.codigo}: status=${t.statusResponsavel} jaAutorizou=${t.jaAutorizou} jaRecusou=${t.jaRecusou}`);
-                    });
-                    
+
+                    const nomeEl = document.getElementById('nomeAlunoEtapa2');
+                    if (nomeEl) {
+                        nomeEl.textContent = `Termos disponíveis para ${aluno.nome}`;
+                    }
+
                     this.mostrarTermos();
+                    this.irParaEtapa(2);
                 } else {
                     this.showToast('Nenhum termo encontrado para este aluno', 'info');
                 }
@@ -612,28 +676,30 @@ class VisitasPublico {
         });
     }
 
+    // ============================================
+    // ETAPA 2: MOSTRAR TERMOS DISPONÍVEIS
+    // ============================================
     mostrarTermos() {
         const container = document.getElementById('listaTermosPublico');
         if (!container) return;
-        
-        const alunoSelecionadoId = this.alunoSelecionado?.id 
-            || this.alunoSelecionado?._id 
+
+        const alunoSelecionadoId = this.alunoSelecionado?.id
+            || this.alunoSelecionado?._id
             || null;
-        
-        // ✅ Pega apenas o nome do aluno que foi selecionado
+
         const nomeAlunoExibicao = this.alunoSelecionado?.nome || 'Aluno Selecionado';
-        
+
         container.innerHTML = this.termos.map(t => {
             const dataVisita = new Date(t.dataVisita).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
-            
+
             let badgeStatus = '';
             let acoesHTML = '';
-            
+
             if (t.jaAutorizou) {
                 badgeStatus = '<span class="badge-termo autorizado">✓ Você já autorizou</span>';
                 acoesHTML = `
-                    <button class="btn-filter btn-imprimir-termo" 
-                        data-termo-id="${t.id}" 
+                    <button class="btn-filter btn-imprimir-termo"
+                        data-termo-id="${t.id}"
                         data-aluno-id="${alunoSelecionadoId || ''}"
                         style="padding: 8px 16px; font-size: 12px; background: #3b82f6;">
                         <i class="fas fa-print"></i> Imprimir Termo
@@ -650,50 +716,47 @@ class VisitasPublico {
                 badgeStatus = '<span class="badge-termo pendente">⏳ Aguardando sua autorização</span>';
                 acoesHTML = `
                     <span style="color: #667eea; font-weight: 600; font-size: 13px;">
-                        Autorizar <i class="fas fa-arrow-right"></i>
+                        Selecionar <i class="fas fa-arrow-right"></i>
                     </span>
                 `;
             }
-            
+
             const clicavel = t.pendente;
             const cursorStyle = clicavel ? 'cursor: pointer;' : 'cursor: default;';
             const cardClass = clicavel ? 'termo-publico-card termo-card-clicavel' : 'termo-publico-card';
-            
+
             return `
                 <div class="${cardClass}" data-termo-id="${t.id}" data-clicavel="${clicavel}" style="${cursorStyle}">
                     <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px; gap: 8px; flex-wrap: wrap;">
                         <h4 style="margin: 0;">${this.escapeHtml(t.atividade)}</h4>
                         ${badgeStatus}
                     </div>
-                    
+
                     ${t.descricaoAtividade ? `
                         <div style="background: #f0f9ff; border-left: 3px solid #3b82f6; padding: 8px 12px; margin: 8px 0; border-radius: 6px; font-size: 12px; color: #1e40af; line-height: 1.5;">
                             <i class="fas fa-align-left"></i> <strong>Descrição:</strong>
                             <p style="margin: 4px 0 0; text-indent: 0;">${this.escapeHtml(t.descricaoAtividade)}</p>
                         </div>
                     ` : ''}
-                    
-                    <!-- ✅ Nome do aluno selecionado sendo exibido -->
+
                     <div class="info"><i class="fas fa-user-graduate"></i> <strong>Aluno:</strong> ${this.escapeHtml(nomeAlunoExibicao)}</div>
-                    
                     <div class="info"><i class="fas fa-barcode"></i> <code style="font-size: 11px;">${t.codigo}</code></div>
                     <div class="info"><i class="fas fa-chalkboard-teacher"></i> ${this.escapeHtml(t.professor)}</div>
                     <div class="info"><i class="fas fa-calendar-alt"></i> ${dataVisita}</div>
                     <div class="info"><i class="fas fa-clock"></i> ${t.horario}</div>
                     <div class="info"><i class="fas fa-map-marker-alt"></i> ${this.escapeHtml(t.local)}</div>
-                    
+
                     <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed #e5e7eb; text-align: right;">
                         ${acoesHTML}
                     </div>
                 </div>
             `;
         }).join('');
-        
+
         container.querySelectorAll('.termo-card-clicavel').forEach(card => {
             card.addEventListener('click', async (e) => {
                 if (e.target.closest('.btn-imprimir-termo')) return;
-                
-                // ✅ Efeito de loading no card clicado
+
                 const allCards = container.querySelectorAll('.termo-card-clicavel');
                 allCards.forEach(c => {
                     c.style.opacity = '0.5';
@@ -702,7 +765,6 @@ class VisitasPublico {
 
                 await this.abrirTermo(card.dataset.termoId);
 
-                // Restaura (embora a tela mude, é bom garantir)
                 allCards.forEach(c => {
                     c.style.opacity = '1';
                     c.style.pointerEvents = '';
@@ -716,51 +778,23 @@ class VisitasPublico {
                 this.imprimirTermoOficial(btn.dataset.termoId, btn.dataset.alunoId);
             });
         });
-        
-        document.getElementById('passoBusca').style.display = 'none';
-        document.getElementById('secaoTermos').style.display = 'block';
-        document.getElementById('secaoDetalhes').style.display = 'none';
-        
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-
-    voltarBusca() {
-        document.getElementById('passoBusca').style.display = 'block';
-        document.getElementById('secaoTermos').style.display = 'none';
-        document.getElementById('secaoDetalhes').style.display = 'none';
-    }
-
-    voltarTermos() {
-        document.getElementById('passoBusca').style.display = 'none';
-        document.getElementById('secaoTermos').style.display = 'block';
-        document.getElementById('secaoDetalhes').style.display = 'none';
     }
 
     // ============================================
-    // PASSO 2: ABRIR TERMO (com lock + cache)
-    // ============================================
-    // ============================================
-    // ABRIR TERMO (com efeito de loading + Nome corrigido)
+    // ABRIR TERMO → AVANÇA PARA ETAPA 3 (LGPD)
     // ============================================
     async abrirTermo(termoId) {
         return this._comLock('abrirTermo', async () => {
             try {
                 const termoEncontrado = this.termos.find(t => t.id === termoId);
-                
+
                 if (termoEncontrado && (termoEncontrado.jaAutorizou || termoEncontrado.jaRecusou)) {
                     this.showToast('Este termo já foi respondido por você', 'info');
                     return;
                 }
 
-                // ✅ Efeito de loading global na seção de termos
-                const secaoTermos = document.getElementById('secaoTermos');
-                if (secaoTermos) {
-                    secaoTermos.style.opacity = '0.5';
-                    secaoTermos.style.pointerEvents = 'none';
-                }
-
                 let termoData = this._termoCache.get(termoId);
-                
+
                 if (!termoData) {
                     const response = await fetch(`${this.apiBase}/termo/${termoId}`);
                     termoData = await response.json();
@@ -768,129 +802,104 @@ class VisitasPublico {
                         this._termoCache.set(termoId, termoData);
                     }
                 }
-                
+
                 if (!termoData.success) throw new Error('Termo não encontrado');
-                
+
                 this.termoAtual = termoData.termo;
                 this.lgpdAceito = false;
                 this.totpSecret = null;
-                
-                // ✅ CORREÇÃO DEFINITIVA DO NOME DO ALUNO
+
                 let nomeAlunoExibicao = this.termoAtual.alunoNome || 'Aluno';
 
                 if (this.alunoSelecionado) {
-                    // Prioridade 1: O aluno que o usuário clicou na tela anterior
                     nomeAlunoExibicao = this.alunoSelecionado.nome;
                     this.termoAtual.alunoIdFoco = this.alunoSelecionado.id || this.alunoSelecionado._id;
                 } else if (this.termoAtual.alunos?.length > 0) {
-                    // Prioridade 2: Se não tiver selecionado, pega o primeiro do array
                     nomeAlunoExibicao = this.termoAtual.alunos[0].nome || this.termoAtual.alunos[0].alunoNome;
                     this.termoAtual.alunoIdFoco = this.termoAtual.alunos[0].alunoId || this.termoAtual.alunos[0]._id;
                 }
-                
-                const container = document.getElementById('detalhesTermo');
-                if (container) {
-                    container.innerHTML = `
-                        <div style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
-                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
-                                <i class="fas fa-file-alt" style="font-size: 24px;"></i>
-                                <h3 style="margin: 0; font-size: 18px;">${this.escapeHtml(this.termoAtual.atividade)}</h3>
-                            </div>
-                            
-                            ${this.termoAtual.descricaoAtividade ? `
-                                <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 10px; margin-bottom: 12px; font-size: 13px; text-align: left;">
-                                    <strong style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
-                                        <i class="fas fa-align-left"></i> Descrição da Atividade:
-                                    </strong>
-                                    <p style="margin: 0; opacity: 0.95; white-space: pre-wrap; line-height: 1.5;">${this.escapeHtml(this.termoAtual.descricaoAtividade)}</p>
-                                </div>
-                            ` : ''}
-                            
-                            <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 10px; font-size: 13px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                                <!-- ✅ AQUI ESTÁ A CORREÇÃO DO NOME -->
-                                <div><strong>Aluno:</strong> ${this.escapeHtml(nomeAlunoExibicao)}</div>
-                                <div><strong>Turma:</strong> ${this.termoAtual.alunoTurma || 'N/A'}</div>
-                                <div><strong>Curso:</strong> ${this.termoAtual.alunoCurso || 'N/A'}</div>
-                                <div><strong>Professor:</strong> ${this.escapeHtml(this.termoAtual.professorNome)}</div>
-                                <div><strong>Data:</strong> ${new Date(this.termoAtual.dataVisita).toLocaleDateString('pt-BR')}</div>
-                                <div><strong>Horário:</strong> ${this.termoAtual.horario}</div>
-                                <div style="grid-column: span 2;"><strong>Local:</strong> ${this.escapeHtml(this.termoAtual.local)}</div>
-                                ${this.termoAtual.localizacao?.enderecoCompleto ? `
-                                    <div style="grid-column: span 2; font-size: 12px; opacity: 0.9;">
-                                        <i class="fas fa-map-pin"></i> ${this.escapeHtml(this.termoAtual.localizacao.enderecoCompleto)}
-                                    </div>
-                                ` : ''}
-                            </div>
-                        </div>
-                    `;
-                }
-                
-                document.getElementById('etapaLGPD').style.display = 'block';
-                document.getElementById('etapaTOTP').style.display = 'none';
-                document.getElementById('etapaDados').style.display = 'none';
-                document.getElementById('lgpdCheckbox').checked = false;
-                document.getElementById('btnProsseguirLGPD').disabled = true;
-                document.getElementById('totpCodigo').value = '';
-                
-                document.getElementById('passoBusca').style.display = 'none';
-                document.getElementById('secaoTermos').style.display = 'none';
-                document.getElementById('secaoDetalhes').style.display = 'block';
-                
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-                
+
+                this.termoAtual._nomeAlunoExibicao = nomeAlunoExibicao;
+
+                const lgpdCheckbox = document.getElementById('lgpdCheckbox');
+                if (lgpdCheckbox) lgpdCheckbox.checked = false;
+                const btnLGPD = document.getElementById('btnProsseguirLGPD');
+                if (btnLGPD) btnLGPD.disabled = true;
+
+                const totpCodigoEl = document.getElementById('totpCodigo');
+                if (totpCodigoEl) totpCodigoEl.value = '';
+
+                this.irParaEtapa(3);
+
             } catch (error) {
                 console.error('❌ Erro:', error);
                 this.showToast('Erro ao abrir termo', 'error');
-            } finally {
-                // ✅ Remove o loading global
-                const secaoTermos = document.getElementById('secaoTermos');
-                if (secaoTermos) {
-                    secaoTermos.style.opacity = '1';
-                    secaoTermos.style.pointerEvents = '';
-                }
             }
         });
     }
 
+    preencherDetalhesTermo(containerId) {
+        const container = document.getElementById(containerId);
+        if (!container || !this.termoAtual) return;
+
+        const nomeAlunoExibicao = this.termoAtual._nomeAlunoExibicao || this.termoAtual.alunoNome || 'Aluno';
+
+        container.innerHTML = `
+            <div style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                    <i class="fas fa-file-alt" style="font-size: 24px;"></i>
+                    <h3 style="margin: 0; font-size: 18px;">${this.escapeHtml(this.termoAtual.atividade)}</h3>
+                </div>
+
+                ${this.termoAtual.descricaoAtividade ? `
+                    <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 10px; margin-bottom: 12px; font-size: 13px; text-align: left;">
+                        <strong style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                            <i class="fas fa-align-left"></i> Descrição da Atividade:
+                        </strong>
+                        <p style="margin: 0; opacity: 0.95; white-space: pre-wrap; line-height: 1.5;">${this.escapeHtml(this.termoAtual.descricaoAtividade)}</p>
+                    </div>
+                ` : ''}
+
+                <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 10px; font-size: 13px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div><strong>Aluno:</strong> ${this.escapeHtml(nomeAlunoExibicao)}</div>
+                    <div><strong>Turma:</strong> ${this.termoAtual.alunoTurma || 'N/A'}</div>
+                    <div><strong>Curso:</strong> ${this.termoAtual.alunoCurso || 'N/A'}</div>
+                    <div><strong>Professor:</strong> ${this.escapeHtml(this.termoAtual.professorNome)}</div>
+                    <div><strong>Data:</strong> ${new Date(this.termoAtual.dataVisita).toLocaleDateString('pt-BR')}</div>
+                    <div><strong>Horário:</strong> ${this.termoAtual.horario}</div>
+                    <div style="grid-column: span 2;"><strong>Local:</strong> ${this.escapeHtml(this.termoAtual.local)}</div>
+                    ${this.termoAtual.localizacao?.enderecoCompleto ? `
+                        <div style="grid-column: span 2; font-size: 12px; opacity: 0.9;">
+                            <i class="fas fa-map-pin"></i> ${this.escapeHtml(this.termoAtual.localizacao.enderecoCompleto)}
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }
+
     // ============================================
-    // ETAPA 1: LGPD
+    // ETAPA 3: LGPD
     // ============================================
     toggleBotaoLGPD(checked) {
         const btn = document.getElementById('btnProsseguirLGPD');
         if (btn) btn.disabled = !checked;
     }
 
-    prosseguirParaAutenticacao() {
-        const lgpdAceito = document.getElementById('lgpdCheckbox')?.checked;
-        
-        if (!lgpdAceito) {
-            return this.showToast('Você precisa aceitar os termos da LGPD', 'error');
-        }
-        
-        this.lgpdAceito = true;
-        
-        document.getElementById('etapaLGPD').style.display = 'none';
-        document.getElementById('etapaTOTP').style.display = 'block';
-        
-        this.gerarQRCodeTOTP();
-        
-        window.scrollTo({ top: 200, behavior: 'smooth' });
-    }
-
     // ============================================
-    // ETAPA 2: TOTP
+    // ETAPA 4: AUTENTICAÇÃO TOTP
     // ============================================
     async gerarQRCodeTOTP() {
         return this._comLock('gerarQRCode', async () => {
             try {
                 document.getElementById('totpLoading').style.display = 'flex';
                 document.getElementById('totpQRCodeBox').style.display = 'none';
-                
+
                 const secretBox = document.getElementById('totpSecretBox');
                 if (secretBox) secretBox.style.display = 'none';
-                
+
                 const alunoIdTOTP = this.obterAlunoIdAlvo();
-                
+
                 const response = await fetch(`${this.apiBase}/gerar-qrcode-totp`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -899,32 +908,30 @@ class VisitasPublico {
                         alunoId: alunoIdTOTP ? String(alunoIdTOTP) : null
                     })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (!data.success) {
                     throw new Error(data.error || 'Erro ao gerar QR Code');
                 }
-                
+
                 if (data.jaVerificado) {
                     this.showToast('Este aluno já foi autenticado por você', 'info');
-                    this.irParaEtapaDados();
+                    this.irParaEtapa(5);
                     return;
                 }
-                
+
                 document.getElementById('totpLoading').style.display = 'none';
                 document.getElementById('totpQRCodeBox').style.display = 'block';
                 document.getElementById('totpQRCodeImg').src = data.qrCode;
-                
+
                 this.totpSecret = data.secret;
                 this.mostrarSecretTOTP(data.secret);
-                
-                console.log('✅ QR Code TOTP pronto para o aluno', data.alunoId);
-                
+
                 setTimeout(() => {
                     document.getElementById('totpCodigo')?.focus();
                 }, 300);
-                
+
             } catch (error) {
                 console.error('❌ Erro:', error);
                 document.getElementById('totpLoading').innerHTML = `
@@ -943,31 +950,31 @@ class VisitasPublico {
 
     mostrarSecretTOTP(secret) {
         if (!secret) return;
-        
+
         const box = document.getElementById('totpSecretBox');
         const textEl = document.getElementById('totpSecretText');
-        
+
         if (!box || !textEl) return;
-        
+
         const secretFormatado = secret.match(/.{1,4}/g)?.join(' ') || secret;
-        
+
         textEl.textContent = secretFormatado;
         textEl.dataset.secretRaw = secret;
-        
+
         box.style.display = 'block';
     }
 
     async copiarSecretTOTP() {
         const textEl = document.getElementById('totpSecretText');
         const valueEl = document.getElementById('totpSecretValue');
-        
+
         if (!textEl || !this.totpSecret) {
             this.showToast('Nenhuma chave disponível para copiar', 'error');
             return;
         }
-        
+
         const secretRaw = textEl.dataset.secretRaw || this.totpSecret;
-        
+
         try {
             if (navigator.clipboard && window.isSecureContext) {
                 await navigator.clipboard.writeText(secretRaw);
@@ -983,20 +990,20 @@ class VisitasPublico {
                 document.execCommand('copy');
                 document.body.removeChild(textarea);
             }
-            
+
             if (valueEl) {
                 valueEl.classList.add('copiado');
                 const icon = valueEl.querySelector('i.fa-copy');
                 if (icon) icon.className = 'fas fa-check';
-                
+
                 setTimeout(() => {
                     valueEl.classList.remove('copiado');
                     if (icon) icon.className = 'fas fa-copy';
                 }, 2000);
             }
-            
+
             this.showToast('✅ Chave copiada! Cole no Google Authenticator', 'success');
-            
+
         } catch (error) {
             console.error('❌ Erro ao copiar:', error);
             this.showToast('❌ Não foi possível copiar. Selecione manualmente.', 'error');
@@ -1006,23 +1013,23 @@ class VisitasPublico {
     async verificarTOTP(event) {
         return this._comLock('verificarTOTP', async () => {
             const codigo = document.getElementById('totpCodigo')?.value;
-            
+
             if (!codigo || codigo.length !== 6) {
                 this.showToast('Digite o código de 6 dígitos do Google Authenticator', 'error');
                 return;
             }
-            
-            const btn = event?.target?.closest('button') 
-                || document.querySelector('#etapaTOTP .btn-submit');
-            
+
+            const btn = event?.target?.closest('button')
+                || document.querySelector('#etapa4TOTP .btn-continuar-grande');
+
             try {
                 if (btn) {
                     btn.disabled = true;
                     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando...';
                 }
-                
+
                 const alunoIdTOTP = this.obterAlunoIdAlvo();
-                
+
                 const response = await fetch(`${this.apiBase}/verificar-totp`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1032,25 +1039,25 @@ class VisitasPublico {
                         alunoId: alunoIdTOTP ? String(alunoIdTOTP) : null
                     })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     this.showToast('✅ Autenticado com sucesso!', 'success');
-                    this.irParaEtapaDados();
+                    this.irParaEtapa(5);
                 } else {
                     throw new Error(data.error || 'Código inválido');
                 }
-                
+
             } catch (error) {
                 console.error('❌ Erro:', error);
                 this.showToast('❌ ' + error.message, 'error');
-                
+
                 if (btn) {
                     btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-check-circle"></i> Verificar Código';
+                    btn.innerHTML = '<i class="fas fa-check-circle"></i> Verificar Código e Continuar';
                 }
-                
+
                 const input = document.getElementById('totpCodigo');
                 if (input) {
                     input.value = '';
@@ -1061,27 +1068,17 @@ class VisitasPublico {
     }
 
     // ============================================
-    // ETAPA 3: DADOS + ASSINATURA
+    // ETAPA 5: DADOS + ASSINATURA
     // ============================================
-    irParaEtapaDados() {
-        document.getElementById('etapaLGPD').style.display = 'none';
-        document.getElementById('etapaTOTP').style.display = 'none';
-        document.getElementById('etapaDados').style.display = 'block';
-        
-        setTimeout(() => this.inicializarAssinatura(), 200);
-        
-        window.scrollTo({ top: 200, behavior: 'smooth' });
-    }
-
     inicializarAssinatura() {
         const canvas = document.getElementById('assinaturaCanvasPublic');
         if (!canvas) return;
         if (canvas.dataset.init === 'true') return;
         canvas.dataset.init = 'true';
-        
+
         const container = canvas.parentElement;
         const placeholder = document.getElementById('assinaturaPlaceholderPublic');
-        
+
         const ajustarCanvas = () => {
             const rect = canvas.getBoundingClientRect();
             if (rect.width === 0) {
@@ -1101,9 +1098,9 @@ class VisitasPublico {
             this.assinatura.canvas = canvas;
             this.assinatura.ctx = ctx;
         };
-        
+
         ajustarCanvas();
-        
+
         const getPos = (e) => {
             const rect = canvas.getBoundingClientRect();
             let clientX, clientY;
@@ -1116,7 +1113,7 @@ class VisitasPublico {
             }
             return { x: clientX - rect.left, y: clientY - rect.top };
         };
-        
+
         const iniciar = (e) => {
             e.preventDefault();
             this.assinatura.desenhando = true;
@@ -1127,7 +1124,7 @@ class VisitasPublico {
             if (container) container.classList.add('ativa');
             if (placeholder) placeholder.classList.add('escondido');
         };
-        
+
         const desenhar = (e) => {
             if (!this.assinatura.desenhando) return;
             e.preventDefault();
@@ -1139,13 +1136,13 @@ class VisitasPublico {
             this.assinatura.lastX = pos.x;
             this.assinatura.lastY = pos.y;
         };
-        
+
         const parar = (e) => {
             if (e && e.preventDefault) e.preventDefault();
             this.assinatura.desenhando = false;
             if (container) container.classList.remove('ativa');
         };
-        
+
         canvas.addEventListener('mousedown', iniciar);
         canvas.addEventListener('mousemove', desenhar);
         canvas.addEventListener('mouseup', parar);
@@ -1171,27 +1168,27 @@ class VisitasPublico {
             console.warn('⚠️ Geolocalização não suportada');
             return;
         }
-        
+
         navigator.geolocation.getCurrentPosition(
             async (position) => {
                 const { latitude, longitude, accuracy } = position.coords;
-                
+
                 try {
                     const response = await fetch(`${this.apiBase}/geocoding-reverso`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ latitude, longitude })
                     });
-                    
+
                     const data = await response.json();
-                    
+
                     this.localizacao = {
                         latitude,
                         longitude,
                         accuracy,
                         endereco: data.success ? data.endereco : ''
                     };
-                    
+
                     console.log('📍 Localização capturada:', this.localizacao);
                 } catch (e) {
                     this.localizacao = { latitude, longitude, accuracy };
@@ -1204,9 +1201,6 @@ class VisitasPublico {
         );
     }
 
-    // ============================================
-    // AUTORIZAR (com lock)
-    // ============================================
     async autorizar() {
         return this._comLock('autorizar', async () => {
             const nome = document.getElementById('respNome')?.value?.trim();
@@ -1214,35 +1208,35 @@ class VisitasPublico {
             const cpf = document.getElementById('respCPF')?.value?.trim();
             const telefone = document.getElementById('respTelefone')?.value?.trim();
             const email = document.getElementById('respEmail')?.value?.trim();
-            
+
             if (!nome || nome.length < 5) return this.showToast('Informe seu nome completo', 'error');
             if (!rg || rg.length < 5) return this.showToast('Informe o RG', 'error');
             if (!cpf || cpf.replace(/\D/g, '').length !== 11) return this.showToast('CPF inválido', 'error');
             if (!telefone || telefone.replace(/\D/g, '').length < 10) return this.showToast('Telefone inválido', 'error');
-            
+
             if (!this.assinatura.temAssinatura) {
                 return this.showToast('Assine o documento antes de continuar', 'error');
             }
-            
+
             const alunoId = this.obterAlunoIdAlvo();
-            
+
             if (!alunoId) {
                 return this.showToast('Erro: aluno não identificado no termo', 'error');
             }
-            
+
             const assinaturaBase64 = this.assinatura.canvas.toDataURL('image/png');
-            
+
             const btn = document.querySelector('.btn-autorizar-grande');
             const btnOriginalHTML = btn?.innerHTML;
-            
+
             try {
                 if (btn) {
                     btn.disabled = true;
                     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
                 }
-                
+
                 this.showToast('📝 Salvando autorização...', 'info');
-                
+
                 const response = await fetch(`${this.apiBase}/autorizar/${this.termoAtual.id}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1258,9 +1252,9 @@ class VisitasPublico {
                         alunoId: alunoId.toString()
                     })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     this.responsavel = { nome, rg, cpf, telefone, email };
                     this.mostrarSucesso(data.termo);
@@ -1281,14 +1275,14 @@ class VisitasPublico {
     async recusar() {
         return this._comLock('recusar', async () => {
             const motivo = prompt('Por favor, informe o motivo da recusa (opcional):');
-            
+
             if (motivo === null) return;
-            
+
             const confirmar = confirm('Tem certeza que deseja RECUSAR a participação?');
             if (!confirmar) return;
-            
+
             const alunoId = this.obterAlunoIdAlvo();
-            
+
             try {
                 const response = await fetch(`${this.apiBase}/recusar/${this.termoAtual.id}`, {
                     method: 'POST',
@@ -1299,11 +1293,12 @@ class VisitasPublico {
                         alunoId: alunoId ? alunoId.toString() : undefined
                     })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     this.showToast('Recusa registrada. O professor será notificado.', 'info');
+                    this.reiniciarFluxo();
                 } else {
                     throw new Error(data.error);
                 }
@@ -1315,81 +1310,61 @@ class VisitasPublico {
     }
 
     // ============================================
-    // SUCESSO
+    // TELA DE SUCESSO
     // ============================================
     mostrarSucesso(termo) {
-        const container = document.querySelector('.container-public');
-        
-        const alunoId = termo.alunos?.[0]?.alunoId 
-            || termo.alunos?.[0]?._id 
-            || this.alunoSelecionado?.id 
+        this.etapaAtual = 6;
+        this._mostrarTela('telaSucesso');
+        this._atualizarStepper(6);
+
+        const alunoId = termo.alunos?.[0]?.alunoId
+            || termo.alunos?.[0]?._id
+            || this.alunoSelecionado?.id
             || this.alunoSelecionado?._id
             || '';
-        
-        container.innerHTML = `
-            <div class="hero-section">
-                <div class="sucesso-icon">
-                    <i class="fas fa-check"></i>
-                </div>
-                <h1 style="color: #065f46;">Autorização Confirmada!</h1>
-                <p style="color: #6b7280;">
-                    Você autorizou a visita de <strong>${this.escapeHtml(termo.alunoNome)}</strong>.
-                </p>
-                
-                <div style="background: #f0fdf4; border-radius: 16px; padding: 20px; margin: 25px 0; text-align: left; border-left: 4px solid #10b981;">
-                    <h3 style="margin: 0 0 15px; color: #065f46; font-size: 1rem;">
-                        <i class="fas fa-file-alt"></i> Detalhes da Autorização
-                    </h3>
-                    <div style="font-size: 13px; line-height: 1.8;">
-                        <div><strong>Código:</strong> <code style="background: #e5e7eb; padding: 2px 8px; border-radius: 4px;">${termo.codigo}</code></div>
-                        <div><strong>Aluno:</strong> ${this.escapeHtml(termo.alunoNome)}</div>
-                        <div><strong>Atividade:</strong> ${this.escapeHtml(termo.atividade)}</div>
-                        <div><strong>Data:</strong> ${new Date(termo.dataVisita).toLocaleDateString('pt-BR')}</div>
-                        <div><strong>Local:</strong> ${this.escapeHtml(termo.local)}</div>
-                        <div><strong>Responsável:</strong> ${this.escapeHtml(this.responsavel.nome)}</div>
-                    </div>
-                </div>
-                
-                <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 20px;">
-                    <button class="btn-autorizar-grande btn-imprimir-sucesso" 
-                            data-termo-id="${termo.id}" 
-                            data-aluno-id="${alunoId}"
-                            style="max-width: 320px; padding: 15px 30px;">
-                        <i class="fas fa-file-pdf"></i> Imprimir Termo Assinado
-                    </button>
-                    <button class="btn-filter btn-nova-consulta" 
-                            style="padding: 15px 30px;">
-                        <i class="fas fa-home"></i> Nova Consulta
-                    </button>
-                </div>
-                
-                <p style="margin-top: 25px; font-size: 12px; color: #9ca3af;">
-                    <i class="fas fa-shield-alt"></i> 
-                    Documento com assinaturas do responsável e do gestor.
-                </p>
-            </div>
-        `;
 
-        document.querySelector('.btn-imprimir-sucesso')?.addEventListener('click', (e) => {
-            const btn = e.currentTarget;
-            this.imprimirTermoOficial(btn.dataset.termoId, btn.dataset.alunoId);
-        });
-        document.querySelector('.btn-nova-consulta')?.addEventListener('click', () => {
-            location.reload();
-        });
-        
+        const msgEl = document.getElementById('sucessoMensagemAluno');
+        if (msgEl) {
+            msgEl.innerHTML = `Você autorizou a visita de <strong>${this.escapeHtml(termo.alunoNome)}</strong>.`;
+        }
+
+        const detalhesEl = document.getElementById('sucessoDetalhes');
+        if (detalhesEl) {
+            detalhesEl.innerHTML = `
+                <h3 style="margin: 0 0 15px; color: #065f46; font-size: 1rem;">
+                    <i class="fas fa-file-alt"></i> Detalhes da Autorização
+                </h3>
+                <div style="font-size: 13px; line-height: 1.8;">
+                    <div><strong>Código:</strong> <code style="background: #e5e7eb; padding: 2px 8px; border-radius: 4px;">${termo.codigo}</code></div>
+                    <div><strong>Aluno:</strong> ${this.escapeHtml(termo.alunoNome)}</div>
+                    <div><strong>Atividade:</strong> ${this.escapeHtml(termo.atividade)}</div>
+                    <div><strong>Data:</strong> ${new Date(termo.dataVisita).toLocaleDateString('pt-BR')}</div>
+                    <div><strong>Local:</strong> ${this.escapeHtml(termo.local)}</div>
+                    <div><strong>Responsável:</strong> ${this.escapeHtml(this.responsavel.nome)}</div>
+                </div>
+            `;
+        }
+
+        const btnImprimir = document.querySelector('.btn-imprimir-sucesso');
+        if (btnImprimir) {
+            btnImprimir.dataset.termoId = termo.id;
+            btnImprimir.dataset.alunoId = alunoId;
+            btnImprimir.onclick = (e) => {
+                this.imprimirTermoOficial(termo.id, alunoId);
+            };
+        }
+
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     // ============================================
-    // 📄 IMPRIMIR TERMO OFICIAL (com lock)
+    // IMPRIMIR TERMO OFICIAL
     // ============================================
     async imprimirTermoOficial(termoId, alunoId = null) {
         return this._comLock('imprimirTermo', async () => {
-            // ✅ Efeito de loading no botão clicado
             const btn = document.activeElement;
             const originalHTML = btn ? btn.innerHTML : '';
-            
+
             if (btn && (btn.classList.contains('btn-imprimir-termo') || btn.classList.contains('btn-imprimir-sucesso'))) {
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando...';
@@ -1397,50 +1372,47 @@ class VisitasPublico {
 
             try {
                 this.showToast('📄 Gerando termo oficial...', 'info');
-                
+
                 if (!alunoId) {
                     alunoId = this.obterAlunoIdAlvo();
                 }
-                
+
                 if (alunoId && typeof alunoId === 'object') {
                     alunoId = alunoId._id || alunoId.id || alunoId.toString();
                 }
-                
+
                 let url = `${this.apiBase}/termo-oficial/${termoId}`;
                 if (alunoId) {
                     url += `?alunoId=${encodeURIComponent(alunoId)}`;
                 }
-                
-                console.log(`🖨️ [FRONTEND] Imprimindo termo ${termoId} | Aluno: ${alunoId || 'TODOS'}`);
-                
+
                 const response = await fetch(url);
                 const data = await response.json();
-                
+
                 if (!data.success) {
                     throw new Error(data.error || 'Erro ao gerar termo');
                 }
-                
+
                 const win = window.open('', '_blank');
                 win.document.write(data.html);
                 win.document.close();
-                
+
                 win.onload = () => {
                     setTimeout(() => {
                         win.print();
                     }, 800);
                 };
-                
+
                 if (data.modoIndividual) {
                     this.showToast(`📄 Termo de ${data.termo.alunoImpresso} gerado!`, 'success');
                 } else {
                     this.showToast(`📄 ${data.termo.totalPaginas} termo(s) gerado(s)`, 'info');
                 }
-                
+
             } catch (error) {
                 console.error('❌ Erro:', error);
                 this.showToast('❌ ' + error.message, 'error');
             } finally {
-                // ✅ Restaura o botão
                 if (btn && (btn.classList.contains('btn-imprimir-termo') || btn.classList.contains('btn-imprimir-sucesso'))) {
                     btn.disabled = false;
                     btn.innerHTML = originalHTML;
@@ -1450,7 +1422,7 @@ class VisitasPublico {
     }
 
     // ============================================
-    // 🆕 AJUDA VIA WHATSAPP
+    // AJUDA VIA WHATSAPP
     // ============================================
     abrirAjuda() {
         const modal = document.getElementById('modalAjuda');
@@ -1482,21 +1454,11 @@ class VisitasPublico {
         const curso = document.getElementById('ajudaCurso')?.value?.trim();
         const problema = document.getElementById('ajudaProblema')?.value?.trim();
 
-        if (!nome || nome.length < 3) {
-            return this.showToast('Informe seu nome', 'error');
-        }
-        if (!telefone || telefone.replace(/\D/g, '').length < 10) {
-            return this.showToast('Informe um telefone válido', 'error');
-        }
-        if (!turma) {
-            return this.showToast('Informe a turma', 'error');
-        }
-        if (!curso) {
-            return this.showToast('Informe o curso', 'error');
-        }
-        if (!problema || problema.length < 10) {
-            return this.showToast('Descreva o problema (mínimo 10 caracteres)', 'error');
-        }
+        if (!nome || nome.length < 3) return this.showToast('Informe seu nome', 'error');
+        if (!telefone || telefone.replace(/\D/g, '').length < 10) return this.showToast('Informe um telefone válido', 'error');
+        if (!turma) return this.showToast('Informe a turma', 'error');
+        if (!curso) return this.showToast('Informe o curso', 'error');
+        if (!problema || problema.length < 10) return this.showToast('Descreva o problema (mínimo 10 caracteres)', 'error');
 
         const btn = document.getElementById('btnEnviarWhats');
         if (btn) {
@@ -1567,7 +1529,7 @@ class VisitasPublico {
         `;
         toast.textContent = mensagem;
         document.body.appendChild(toast);
-        
+
         setTimeout(() => {
             toast.style.opacity = '0';
             toast.style.transition = 'opacity 0.3s';

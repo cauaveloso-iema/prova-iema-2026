@@ -1379,3 +1379,364 @@ body {
     color: #10b981;
     margin-right: 6px;
 }
+
+/* ============================================================
+   🆕 FLUXO PROGRESSIVO - STEPPER GLOBAL
+   ============================================================ */
+.stepper-global {
+    background: white;
+    border-radius: 20px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    animation: slideDownFade 0.4s ease;
+}
+
+@keyframes slideDownFade {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.stepper-track {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    position: relative;
+    gap: 4px;
+}
+
+.stepper-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    z-index: 2;
+}
+
+.stepper-dot {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: #e5e7eb;
+    color: #9ca3af;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    font-weight: 700;
+    transition: all 0.35s ease;
+    border: 3px solid white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.stepper-item.active .stepper-dot {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    transform: scale(1.12);
+    box-shadow: 0 6px 18px rgba(102,126,234,0.45);
+    animation: pulseDot 1.8s ease-in-out infinite;
+}
+
+@keyframes pulseDot {
+    0%, 100% { box-shadow: 0 6px 18px rgba(102,126,234,0.45); }
+    50% { box-shadow: 0 6px 26px rgba(102,126,234,0.7); }
+}
+
+.stepper-item.done .stepper-dot {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    box-shadow: 0 4px 14px rgba(16,185,129,0.4);
+}
+
+.stepper-label {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #9ca3af;
+    text-align: center;
+    transition: color 0.3s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.stepper-item.active .stepper-label { color: #667eea; font-weight: 700; }
+.stepper-item.done .stepper-label { color: #10b981; }
+
+.stepper-line {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 40px;
+    height: 3px;
+    background: #e5e7eb;
+    margin-top: 22px;
+    border-radius: 3px;
+    align-self: flex-start;
+}
+
+.stepper-progress-bar {
+    margin-top: 16px;
+    height: 6px;
+    background: #e5e7eb;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.stepper-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #667eea, #764ba2, #10b981);
+    border-radius: 10px;
+    transition: width 0.5s ease;
+    width: 0%;
+}
+
+@media (max-width: 600px) {
+    .stepper-global { padding: 16px 12px; }
+    .stepper-dot { width: 36px; height: 36px; font-size: 14px; }
+    .stepper-label { font-size: 9.5px; }
+    .stepper-line { max-width: 18px; margin-top: 18px; }
+}
+
+/* ============================================================
+   🆕 TELA DE INTRODUÇÃO
+   ============================================================ */
+.hero-intro { padding: 40px 30px 30px; }
+
+.hero-subtitle {
+    color: #6b7280;
+    font-size: 1rem;
+    max-width: 520px;
+    margin: 0 auto 22px !important;
+    line-height: 1.6;
+}
+
+.intro-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 14px;
+    margin: 28px 0 22px;
+}
+
+.intro-card {
+    background: #f8fafc;
+    border: 2px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 20px 16px;
+    text-align: center;
+    transition: all 0.3s;
+}
+
+.intro-card:hover {
+    transform: translateY(-4px);
+    border-color: #667eea;
+    box-shadow: 0 10px 24px rgba(102,126,234,0.15);
+}
+
+.intro-card-icon {
+    width: 54px;
+    height: 54px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 12px;
+    font-size: 24px;
+    color: white;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+}
+
+.intro-card h3 {
+    margin: 0 0 6px;
+    font-size: 0.95rem;
+    color: #1f2937;
+}
+
+.intro-card p {
+    margin: 0;
+    font-size: 0.82rem;
+    color: #6b7280;
+    line-height: 1.5;
+}
+
+.intro-aviso {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #eff6ff;
+    border-left: 4px solid #3b82f6;
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin: 0 auto 22px;
+    font-size: 13.5px;
+    color: #1e40af;
+    text-align: left;
+    max-width: 560px;
+}
+
+.intro-aviso i { font-size: 20px; color: #3b82f6; flex-shrink: 0; }
+
+.btn-continuar-grande {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 16px 40px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    border: none;
+    border-radius: 50px;
+    font-size: 1.05rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 10px 26px rgba(102,126,234,0.4);
+    transition: all 0.3s;
+    font-family: inherit;
+}
+
+.btn-continuar-grande:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 14px 34px rgba(102,126,234,0.55);
+}
+
+.btn-continuar-grande:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+    background: #9ca3af;
+}
+
+/* ============================================================
+   🆕 CONSULTA RÁPIDA (INTRO)
+   ============================================================ */
+.consulta-rapida {
+    margin-top: 30px;
+    padding-top: 25px;
+    border-top: 2px dashed #e5e7eb;
+    text-align: left;
+}
+
+.consulta-rapida-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.consulta-rapida-header > i {
+    font-size: 22px;
+    color: #8b5cf6;
+}
+
+.consulta-rapida-header strong {
+    display: block;
+    color: #1f2937;
+    font-size: 0.95rem;
+}
+
+.consulta-rapida-header p {
+    margin: 2px 0 0;
+    font-size: 0.82rem;
+    color: #6b7280;
+}
+
+.consulta-rapida-form {
+    display: flex;
+    gap: 8px;
+}
+
+/* ============================================================
+   🆕 TUTORIAL GIF (CADA ETAPA)
+   ============================================================ */
+.tutorial-box {
+    display: flex;
+    gap: 16px;
+    background: linear-gradient(135deg, #eef2ff, #f0f9ff);
+    border: 2px solid #c7d2fe;
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 20px;
+    align-items: center;
+    animation: slideDownFade 0.4s ease;
+}
+
+.tutorial-media {
+    flex: 0 0 160px;
+    max-width: 160px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: white;
+    box-shadow: 0 6px 18px rgba(102,126,234,0.18);
+}
+
+.tutorial-gif {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 12px;
+}
+
+.tutorial-fallback .tutorial-fallback-content {
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 24px 12px;
+    color: #667eea;
+    font-size: 12px;
+    text-align: center;
+}
+
+.tutorial-fallback-content i { font-size: 30px; }
+
+.tutorial-text { flex: 1; min-width: 0; }
+
+.tutorial-text h4 {
+    margin: 0 0 6px;
+    font-size: 0.95rem;
+    color: #1e40af;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tutorial-text h4 i { color: #f59e0b; }
+
+.tutorial-text p {
+    margin: 0;
+    font-size: 13px;
+    color: #475569;
+    line-height: 1.55;
+}
+
+@media (max-width: 600px) {
+    .tutorial-box { flex-direction: column; align-items: stretch; }
+    .tutorial-media { flex: 0 0 auto; max-width: 100%; }
+}
+
+/* ============================================================
+   🆕 ETAPA BADGE
+   ============================================================ */
+.etapa-fluxo { animation: fadeInEtapa 0.4s ease; }
+
+@keyframes fadeInEtapa {
+    from { opacity: 0; transform: translateY(15px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.etapa-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 6px 14px;
+    border-radius: 20px;
+    margin-bottom: 14px;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 12px rgba(102,126,234,0.3);
+}
