@@ -391,28 +391,70 @@ function b64encode(buf) {
 }
 
 async function capturarBiometriaWebAuthn() {
-    if (!window.PublicKeyCredential) throw new Error('Este dispositivo/navegador não suporta biometria WebAuthn.');
-    const disponivel = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(() => false);
-    if (!disponivel) throw new Error('Nenhum autenticador biométrico de plataforma disponível neste dispositivo.');
+    if (!window.PublicKeyCredential) {
+        throw new Error('Este dispositivo/navegador não suporta biometria WebAuthn.');
+    }
+
+    const disponivel = await PublicKeyCredential
+        .isUserVerifyingPlatformAuthenticatorAvailable()
+        .catch(() => false);
+    if (!disponivel) {
+        throw new Error('Nenhum autenticador biométrico de plataforma disponível neste dispositivo.');
+    }
 
     const respNome = (document.getElementById('resp-nome').value || '').trim();
     const respCpf  = (document.getElementById('resp-cpf').value || '').replace(/\D/g, '');
-    if (!respNome || respCpf.length !== 11) throw new Error('Preencha nome e CPF do responsável antes de capturar a biometria.');
+    if (!respNome || respCpf.length !== 11) {
+        throw new Error('Preencha nome e CPF do responsável antes de capturar a biometria.');
+    }
 
     const challenge = crypto.getRandomValues(new Uint8Array(32));
-    const userId = crypto.getRandomValues(new Uint8Array(16));
+    const userId    = crypto.getRandomValues(new Uint8Array(16));
 
-    const cred = await navigator.credentials.create({
-        publicKey: {
-            challenge,
-            rp: { name: 'IEMA EducaPleno', id: location.hostname },
-            user: { id: userId, name: respCpf, displayName: respNome },
-            pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
-            authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'preferred' },
-            timeout: 60000,
-            attestation: 'none'
+    let cred;
+    try {
+        cred = await navigator.credentials.create({
+            publicKey: {
+                challenge,
+                rp: { name: 'IEMA EducaPleno', id: location.hostname },
+                user: { id: userId, name: respCpf, displayName: respNome },
+                pubKeyCredParams: [
+                    { type: 'public-key', alg: -7 },   // ES256
+                    { type: 'public-key', alg: -257 }  // RS256
+                ],
+                authenticatorSelection: {
+                    authenticatorAttachment: 'platform',
+                    userVerification: 'required',
+                    // 'discouraged' evita acumular credenciais no keychain do
+                    // tablet compartilhado. A credencial continua sendo gerada
+                    // e devolvida ao servidor normalmente — só não fica
+                    // "residente" no dispositivo.
+                    residentKey: 'discouraged'
+                },
+                timeout: 60000,
+                attestation: 'none'
+            }
+        });
+    } catch (err) {
+        // Traduz erros comuns do WebAuthn para mensagens amigáveis
+        const nome = err && err.name ? err.name : '';
+        if (nome === 'NotAllowedError') {
+            throw new Error('Captura cancelada ou tempo esgotado. Toque em "Capturar biometria" e conclua a verificação no dispositivo.');
         }
-    });
+        if (nome === 'InvalidStateError') {
+            throw new Error('Este autenticador já possui uma credencial para este usuário. Use "Refazer biometria" ou outro responsável.');
+        }
+        if (nome === 'ConstraintError') {
+            throw new Error('O autenticador do dispositivo está cheio. Libere espaço ou use outro tablet.');
+        }
+        if (nome === 'NotSupportedError') {
+            throw new Error('Este dispositivo não suporta o tipo de credencial solicitado.');
+        }
+        if (nome === 'SecurityError') {
+            throw new Error('Configuração de segurança inválida (verifique se está em HTTPS e o domínio está correto).');
+        }
+        throw new Error(err && err.message ? err.message : 'Falha na captura biométrica.');
+    }
 
     if (!cred) throw new Error('Captura cancelada.');
 
