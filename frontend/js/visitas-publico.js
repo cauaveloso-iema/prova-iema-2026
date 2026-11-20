@@ -936,13 +936,12 @@ class VisitasPublico {
             this._setBlocoAutenticacao('carregando');
 
             const alunoId = this.obterAlunoIdAlvo();
-            // Pega o nome exato que aparece na tela
             const nomeAluno = this.termoAtual?._nomeAlunoExibicao || this.termoAtual?.alunoNome || this.alunoSelecionado?.nome;
 
             try {
                 const params = new URLSearchParams();
                 if (alunoId) params.append('alunoId', String(alunoId));
-                if (nomeAluno) params.append('nome', String(nomeAluno)); // 🔥 AQUI ENVIA O NOME
+                if (nomeAluno) params.append('nome', String(nomeAluno));
 
                 const r = await fetch(`/api/inscricoes/passkeys/publica/disponivel?${params}`);
                 const data = await r.json();
@@ -969,16 +968,14 @@ class VisitasPublico {
     }
 
     _setBlocoAutenticacao(modo) {
-        // modo: 'carregando' | 'passkey' | 'totp'
-
         const elCarregando = document.getElementById('totpLoading');
         const elQRCode     = document.getElementById('totpQRCodeBox');
         const elPasskey    = document.getElementById('passkeyBox');
         const elSecret     = document.getElementById('totpSecretBox');
         const elVerify     = document.getElementById('totpVerifyBox');
-        const elInfo       = document.getElementById('totpInfoBox');   // 🔥 NOVO
+        const elInfo       = document.getElementById('totpInfoBox');
 
-        // Esconde tudo primeiro
+        // 1. Esconde TUDO
         if (elCarregando) elCarregando.style.display = 'none';
         if (elQRCode)     elQRCode.style.display = 'none';
         if (elPasskey)    elPasskey.style.display = 'none';
@@ -986,26 +983,21 @@ class VisitasPublico {
         if (elVerify)     elVerify.style.display = 'none';
         if (elInfo)       elInfo.style.display = 'none';
 
-        // Mostra só o que interessa
+        // 2. Mostra o modo atual
         if (modo === 'carregando') {
             if (elCarregando) elCarregando.style.display = 'flex';
         } else if (modo === 'passkey') {
             if (elPasskey) elPasskey.style.display = 'block';
-            // QR Code, passo a passo e verificação TOTP ficam ocultos
         } else if (modo === 'totp') {
-            if (elInfo)    elInfo.style.display = 'flex';     // passo a passo
-            if (elQRCode)  elQRCode.style.display = 'block';   // QR Code
-            if (elVerify)  elVerify.style.display = 'block';   // input + botão verificar
+            if (elInfo)    elInfo.style.display = 'flex';
+            if (elQRCode)  elQRCode.style.display = 'block';
+            if (elVerify)  elVerify.style.display = 'block';
         }
     }
 
     _renderizarBotaoBiometria() {
         const box = document.getElementById('passkeyBox');
         if (!box) return;
-
-        const alunoNome = this.termoAtual?._nomeAlunoExibicao
-            || this.termoAtual?.alunoNome
-            || 'o aluno';
 
         box.innerHTML = `
             <div style="text-align:center; padding: 25px 20px;">
@@ -1074,7 +1066,7 @@ class VisitasPublico {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         matriculaId: alunoId ? String(alunoId) : null,
-                        nome: nomeAluno,                    // 🔥 NOVO
+                        nome: nomeAluno,
                         escopo: 'qualquer'
                     })
                 });
@@ -1113,7 +1105,7 @@ class VisitasPublico {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         matriculaId: alunoId ? String(alunoId) : null,
-                        nome: nomeAluno,                    // 🔥 NOVO
+                        nome: nomeAluno,
                         credential: credencialSerializada
                     })
                 });
@@ -1146,13 +1138,11 @@ class VisitasPublico {
 
                 this.showToast(msg, 'error');
 
-                // Restaura botão para o usuário tentar de novo
                 if (btn) {
                     btn.disabled = false;
                     btn.innerHTML = originalHTML || '<i class="fas fa-fingerprint"></i> Autenticar com Biometria';
                 }
 
-                // Se o erro foi de biometria inexistente, oferece fallback
                 if (err.name === 'NotAllowedError' || err.name === 'InvalidStateError') {
                     setTimeout(() => {
                         if (confirm('Deseja usar o QR Code (Google Authenticator) em vez da biometria?')) {
@@ -1170,11 +1160,15 @@ class VisitasPublico {
     async gerarQRCodeTOTP() {
         return this._comLock('gerarQRCode', async () => {
             try {
-                document.getElementById('totpLoading').style.display = 'flex';
-                document.getElementById('totpQRCodeBox').style.display = 'none';
+                const loadingEl = document.getElementById('totpLoading');
+                const qrBoxEl = document.getElementById('totpQRCodeBox');
+                const secretBoxEl = document.getElementById('totpSecretBox');
+                const verifyBoxEl = document.getElementById('totpVerifyBox');
 
-                const secretBox = document.getElementById('totpSecretBox');
-                if (secretBox) secretBox.style.display = 'none';
+                if (loadingEl) loadingEl.style.display = 'flex';
+                if (qrBoxEl) qrBoxEl.style.display = 'none';
+                if (secretBoxEl) secretBoxEl.style.display = 'none';
+                if (verifyBoxEl) verifyBoxEl.style.display = 'none'; // 🔥 Esconde a caixa vazia
 
                 const alunoIdTOTP = this.obterAlunoIdAlvo();
 
@@ -1199,8 +1193,10 @@ class VisitasPublico {
                     return;
                 }
 
-                document.getElementById('totpLoading').style.display = 'none';
-                document.getElementById('totpQRCodeBox').style.display = 'block';
+                if (loadingEl) loadingEl.style.display = 'none';
+                if (qrBoxEl) qrBoxEl.style.display = 'block';
+                if (verifyBoxEl) verifyBoxEl.style.display = 'block'; // 🔥 Mostra só depois de gerar
+                
                 document.getElementById('totpQRCodeImg').src = data.qrCode;
 
                 this.totpSecret = data.secret;
@@ -1212,33 +1208,33 @@ class VisitasPublico {
 
             } catch (error) {
                 console.error('❌ Erro:', error);
-                document.getElementById('totpLoading').innerHTML = `
-                    <i class="fas fa-exclamation-triangle" style="color: #ef4444; font-size: 42px;"></i>
-                    <span style="color: #ef4444;">Erro ao gerar QR Code</span>
-                    <button class="btn-filter btn-tentar-novamente" style="margin-top: 10px;">
-                        <i class="fas fa-sync-alt"></i> Tentar novamente
-                    </button>
-                `;
-                document.querySelector('.btn-tentar-novamente')?.addEventListener('click', () => {
-                    this.gerarQRCodeTOTP();
-                });
+                const loadingEl = document.getElementById('totpLoading');
+                if (loadingEl) {
+                    loadingEl.innerHTML = `
+                        <i class="fas fa-exclamation-triangle" style="color: #ef4444; font-size: 42px;"></i>
+                        <span style="color: #ef4444;">Erro ao gerar QR Code</span>
+                        <button class="btn-filter btn-tentar-novamente" style="margin-top: 10px;">
+                            <i class="fas fa-sync-alt"></i> Tentar novamente
+                        </button>
+                    `;
+                    loadingEl.style.display = 'flex';
+                    document.querySelector('.btn-tentar-novamente')?.addEventListener('click', () => {
+                        this.gerarQRCodeTOTP();
+                    });
+                }
             }
         });
     }
 
     mostrarSecretTOTP(secret) {
         if (!secret) return;
-
         const box = document.getElementById('totpSecretBox');
         const textEl = document.getElementById('totpSecretText');
-
         if (!box || !textEl) return;
 
         const secretFormatado = secret.match(/.{1,4}/g)?.join(' ') || secret;
-
         textEl.textContent = secretFormatado;
         textEl.dataset.secretRaw = secret;
-
         box.style.display = 'block';
     }
 
@@ -1273,13 +1269,11 @@ class VisitasPublico {
                 valueEl.classList.add('copiado');
                 const icon = valueEl.querySelector('i.fa-copy');
                 if (icon) icon.className = 'fas fa-check';
-
                 setTimeout(() => {
                     valueEl.classList.remove('copiado');
                     if (icon) icon.className = 'fas fa-copy';
                 }, 2000);
             }
-
             this.showToast('✅ Chave copiada! Cole no Google Authenticator', 'success');
 
         } catch (error) {

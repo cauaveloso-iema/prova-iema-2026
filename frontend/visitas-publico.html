@@ -338,7 +338,7 @@
         </div>
 
         <!-- ============================================================ -->
-        <!-- ETAPA 4 — AUTENTICAÇÃO TOTP                                  -->
+        <!-- ETAPA 4 — AUTENTICAÇÃO TOTP / PASSKEY                        -->
         <!-- ============================================================ -->
         <div id="etapa4TOTP" class="etapa-fluxo" style="display:none;">
             <div class="etapa-badge">Etapa 4 de 5</div>
@@ -351,12 +351,12 @@
                          onerror="this.parentElement.classList.add('tutorial-fallback'); this.style.display='none';">
                     <div class="tutorial-fallback-content" style="display:none;">
                         <i class="fas fa-qrcode"></i>
-                        <span>Escaneie o QR Code com o Google Authenticator</span>
+                        <span>Use a biometria ou escaneie o QR Code</span>
                     </div>
                 </div>
                 <div class="tutorial-text">
                     <h4><i class="fas fa-lightbulb"></i> Autenticação em 2 etapas</h4>
-                    <p>Escaneie o QR Code com o app <strong>Google Authenticator</strong> (ou digite a chave manualmente) e informe o código de 6 dígitos gerado.</p>
+                    <p>Confirme sua identidade usando a biometria do seu celular ou o app <strong>Google Authenticator</strong>.</p>
                 </div>
             </div>
 
@@ -368,64 +368,9 @@
                     <h2 style="margin: 0;">Autenticação em 2 Etapas</h2>
                 </div>
 
-                <div class="totp-info" id="totpInfoBox">
-                    <i class="fas fa-mobile-alt"></i>
-                    <div>
-                        <strong>Como funciona:</strong>
-                        <ol style="margin: 8px 0 0 20px; padding: 0; font-size: 13px;">
-                            <li>Instale o app <strong>Google Authenticator</strong> (Android/iOS) - é gratuito</li>
-                            <li>Abra o app e toque no ícone <strong>"+"</strong></li>
-                            <li>Escolha <strong>"Escanear QR Code"</strong> e aponte a câmera para o código abaixo</li>
-                            <li><strong>Não consegue escanear?</strong> Escolha <strong>"Inserir chave de configuração"</strong> e digite/cole o código secreto que aparece abaixo do QR Code</li>
-                            <li>Digite o código de 6 dígitos que aparecerá no app</li>
-                        </ol>
-                    </div>
-                </div>
-
-                <!-- Bloco de biometria (aparece quando há passkey ativa) -->
-                <div id="passkeyBox" style="display:none;"></div>
-
-                <!-- QR Code TOTP -->
-                <div class="totp-qrcode-container">
-                    <div id="totpLoading" class="totp-loading">
-                        <i class="fas fa-spinner fa-spin"></i>
-                        <span>Gerando QR Code...</span>
-                    </div>
-                    <div id="totpQRCodeBox" style="display: none;">
-                        <img id="totpQRCodeImg" src="" alt="QR Code TOTP">
-                        <p class="totp-hint">
-                            <i class="fas fa-info-circle"></i>
-                            Escaneie com o Google Authenticator
-                        </p>
-
-                        <div class="totp-secret-box" id="totpSecretBox" style="display: none;">
-                            <p class="totp-secret-label">
-                                <i class="fas fa-keyboard"></i>
-                                Não consegue escanear? Digite este código no app:
-                            </p>
-                            <div class="totp-secret-value" id="totpSecretValue"
-                                 onclick="visitasPublico.copiarSecretTOTP()"
-                                 title="Clique para copiar">
-                                <code id="totpSecretText">--------</code>
-                                <i class="fas fa-copy"></i>
-                            </div>
-                            <p class="totp-secret-help">
-                                No Google Authenticator, toque em <strong>"+"</strong> →
-                                <strong>"Inserir chave de configuração"</strong> e cole o código acima.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Verificação TOTP (único bloco, sem duplicação) -->
-                <div class="totp-verify-box" id="totpVerifyBox">
-                    <label><i class="fas fa-key"></i> Código do Google Authenticator *</label>
-                    <input type="text" id="totpCodigo" class="form-input totp-codigo-input"
-                           placeholder="000000" maxlength="6" autocomplete="off"
-                           oninput="this.value = this.value.replace(/\D/g, '')">
-                    <button class="btn-continuar-grande" onclick="visitasPublico.verificarTOTP(event)">
-                        <i class="fas fa-check-circle"></i> Verificar Código e Continuar
-                    </button>
+                <!-- BLOCO ÚNICO DE CONTEÚDO QUE O JS VAI TROCAR -->
+                <div id="authContainer">
+                    <!-- O JS vai injetar o modo 'carregando', 'passkey' ou 'totp' aqui dentro -->
                 </div>
             </div>
         </div>
