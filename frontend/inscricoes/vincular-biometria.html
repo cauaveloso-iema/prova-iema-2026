@@ -112,14 +112,29 @@
         <div class="tutorial-box">
             <div class="tutorial-text">
                 <h4><i class="fas fa-lightbulb"></i> Como funciona esta etapa</h4>
-                <p>Digite o <strong>nome do aluno</strong> para localizar a inscrição ou matrícula dele. Depois, clique no card do aluno para continuar.</p>
+                <p>Filtre por <strong>turma</strong>, <strong>curso</strong> ou digite o <strong>nome do aluno</strong>. Depois, clique no card do aluno para continuar.</p>
             </div>
         </div>
 
         <div class="form-public">
             <div class="form-header">
                 <h3><i class="fas fa-search"></i> Localizar Aluno</h3>
-                <p>Digite o nome do aluno</p>
+                <p>Informe os dados do aluno para continuar</p>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label><i class="fas fa-school"></i> Turma</label>
+                    <select id="filtroTurma" class="form-input" onchange="vincularBiometria.buscarAlunos()">
+                        <option value="">Todas as turmas</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-book"></i> Curso</label>
+                    <select id="filtroCurso" class="form-input" onchange="vincularBiometria.buscarAlunos()">
+                        <option value="">Todos os cursos</option>
+                    </select>
+                </div>
             </div>
 
             <div class="form-group">
@@ -278,7 +293,7 @@
             <div id="sucessoDetalhes" class="sucesso-detalhes"></div>
 
             <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 20px;">
-                <!-- 🔥 REMOVIDO O BOTÃO DE "IR PARA AUTORIZAÇÃO DE VISITAS" -->
+                <!-- 🔥 BOTÃO "IR PARA AUTORIZAÇÃO DE VISITAS" REMOVIDO -->
                 <button class="btn-filter btn-nova-consulta" style="padding: 15px 30px;"
                         onclick="vincularBiometria.reiniciarFluxo()">
                     <i class="fas fa-home"></i> Nova Consulta
