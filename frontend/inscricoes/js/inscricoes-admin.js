@@ -1,6 +1,7 @@
 /* ============================================================================
    inscricoes-admin.js — Painel de gestão de inscrições
    Carregado por: gerenciar.html
+   Inclui: config, dashboard, inscrições, passkeys (biometrias)
    ============================================================================ */
 'use strict';
 
@@ -161,7 +162,6 @@ const estado = {
     editandoId: null,
     perfil: null,
 
-    // Estado Passkeys
     paginaPasskey: 1,
     limitePasskey: 20,
     totalPaginasPasskey: 1,
@@ -174,12 +174,11 @@ const estado = {
 // ESCONDE CONTROLES DE ADMIN
 // ============================================================================
 function esconderControlesAdmin() {
-    if (isAdmin()) return; 
+    if (isAdmin()) return;
 
     document.querySelectorAll('.adm-tab').forEach(tab => {
         const alvo = (tab.dataset.tab || '').toLowerCase();
         const texto = (tab.textContent || '').toLowerCase();
-        
         if (
             alvo === 'config' || alvo === 'configuracoes' || alvo === 'passkeys' || alvo === 'biometrias' ||
             texto.includes('configura') || texto.includes('biometria')
@@ -191,11 +190,7 @@ function esconderControlesAdmin() {
 
     ['#panel-config', '#panel-configuracoes', '#panel-passkeys', '#panel-biometrias'].forEach(sel => {
         const p = document.querySelector(sel);
-        if (p) { 
-            p.classList.remove('active', 'show'); 
-            p.style.display = 'none'; 
-            p.setAttribute('aria-hidden', 'true'); 
-        }
+        if (p) { p.classList.remove('active', 'show'); p.style.display = 'none'; p.setAttribute('aria-hidden', 'true'); }
     });
 
     const role = normalizarRole(getPerfil()?.role);
@@ -253,7 +248,6 @@ function configurarBotaoVoltar() {
 // ============================================================================
 async function carregarDashboard() {
     const idsNumeros = ['st-total', 'st-pendentes', 'st-analise', 'st-aprovadas', 'st-concluidas', 'st-canceladas', 'st-cadunico', 'st-deficiencia', 'hero-total', 'hero-pendentes', 'hero-aprovadas'];
-    
     idsNumeros.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="font-size:0.8em; opacity:0.5;"></i>';
@@ -261,87 +255,39 @@ async function carregarDashboard() {
 
     const elRenda = document.getElementById('grafico-renda');
     if (elRenda) elRenda.innerHTML = '<div class="adm-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div>';
-    
     const elBairros = document.getElementById('grafico-bairros');
     if (elBairros) elBairros.innerHTML = '<div class="adm-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div>';
-
     const elUltimas = document.getElementById('ultimas-inscricoes');
     if (elUltimas) elUltimas.innerHTML = '<div class="adm-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div>';
 
     try {
         const data = await api(API.dashboard);
         const r = data.resumo || {};
-
         const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v ?? 0; };
-        set('st-total', r.total);
-        set('st-pendentes', r.pendentes);
-        set('st-analise', r.emAnalise);
-        set('st-aprovadas', r.aprovadas);
-        set('st-concluidas', r.concluidas);
-        set('st-canceladas', r.canceladas);
-        set('st-cadunico', r.comCadUnico);
-        set('st-deficiencia', r.comDeficiencia);
-        set('hero-total', r.total);
-        set('hero-pendentes', r.pendentes);
-        set('hero-aprovadas', r.aprovadas);
+        set('st-total', r.total); set('st-pendentes', r.pendentes); set('st-analise', r.emAnalise);
+        set('st-aprovadas', r.aprovadas); set('st-concluidas', r.concluidas); set('st-canceladas', r.canceladas);
+        set('st-cadunico', r.comCadUnico); set('st-deficiencia', r.comDeficiencia);
+        set('hero-total', r.total); set('hero-pendentes', r.pendentes); set('hero-aprovadas', r.aprovadas);
 
         const renda = data.porFaixaRenda || [];
         const maxRenda = Math.max(1, ...renda.map(x => x.total));
         if (elRenda) {
-            elRenda.innerHTML = renda.length === 0
-                ? '<div class="adm-empty"><i class="fas fa-chart-simple"></i> Sem dados ainda.</div>'
-                : renda.map(x => `
-                    <div class="adm-bar-row">
-                        <div class="adm-bar-top"><span>${escapeHtml(x.faixa)}</span><span>${x.total}</span></div>
-                        <div class="adm-bar-track"><div class="adm-bar-fill" style="width:${Math.round((x.total/maxRenda)*100)}%"></div></div>
-                    </div>`).join('');
+            elRenda.innerHTML = renda.length === 0 ? '<div class="adm-empty"><i class="fas fa-chart-simple"></i> Sem dados.</div>' : renda.map(x => `<div class="adm-bar-row"><div class="adm-bar-top"><span>${escapeHtml(x.faixa)}</span><span>${x.total}</span></div><div class="adm-bar-track"><div class="adm-bar-fill" style="width:${Math.round((x.total/maxRenda)*100)}%"></div></div></div>`).join('');
         }
 
         const bairros = data.porBairro || [];
         const maxB = Math.max(1, ...bairros.map(x => x.total));
         if (elBairros) {
-            elBairros.innerHTML = bairros.length === 0
-                ? '<div class="adm-empty"><i class="fas fa-location-dot"></i> Sem dados ainda.</div>'
-                : bairros.map(x => `
-                    <div class="adm-bar-row">
-                        <div class="adm-bar-top"><span>${escapeHtml(x.bairro)}</span><span>${x.total}</span></div>
-                        <div class="adm-bar-track"><div class="adm-bar-fill" style="width:${Math.round((x.total/maxB)*100)}%"></div></div>
-                    </div>`).join('');
+            elBairros.innerHTML = bairros.length === 0 ? '<div class="adm-empty"><i class="fas fa-location-dot"></i> Sem dados.</div>' : bairros.map(x => `<div class="adm-bar-row"><div class="adm-bar-top"><span>${escapeHtml(x.bairro)}</span><span>${x.total}</span></div><div class="adm-bar-track"><div class="adm-bar-fill" style="width:${Math.round((x.total/maxB)*100)}%"></div></div></div>`).join('');
         }
 
         const ultimas = data.ultimas || [];
         if (elUltimas) {
-            elUltimas.innerHTML = ultimas.length === 0
-                ? '<div class="adm-empty"><i class="fas fa-inbox"></i> Nenhuma inscrição ainda.</div>'
-                : ultimas.map(i => `
-                    <div class="adm-list-item">
-                        <div>
-                            <h4>${escapeHtml(i.aluno?.nomeCompleto || '—')}</h4>
-                            <p>
-                                <span class="adm-proto">${escapeHtml(i.protocolo)}</span>
-                                · Resp.: ${escapeHtml(i.responsavel?.nomeCompleto || '—')}
-                                · ${fmtDataHora(i.createdAt)}
-                            </p>
-                        </div>
-                        <div style="display:flex;gap:8px;align-items:center">
-                            ${badgeStatus(i.status)}
-                            <button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon"
-                                    onclick="adm.verDetalhe('${i._id}')" title="Ver detalhes">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                        </div>
-                    </div>`).join('');
+            elUltimas.innerHTML = ultimas.length === 0 ? '<div class="adm-empty"><i class="fas fa-inbox"></i> Nenhuma.</div>' : ultimas.map(i => `<div class="adm-list-item"><div><h4>${escapeHtml(i.aluno?.nomeCompleto || '—')}</h4><p><span class="adm-proto">${escapeHtml(i.protocolo)}</span> · Resp.: ${escapeHtml(i.responsavel?.nomeCompleto || '—')} · ${fmtDataHora(i.createdAt)}</p></div><div style="display:flex;gap:8px;align-items:center">${badgeStatus(i.status)}<button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon" onclick="adm.verDetalhe('${i._id}')"><i class="fas fa-eye"></i></button></div></div>`).join('');
         }
     } catch (err) {
-        console.error('Erro no dashboard:', err);
-        idsNumeros.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.textContent = '0';
-        });
-        if (elRenda) elRenda.innerHTML = '<div class="adm-empty" style="color:#dc2626;"><i class="fas fa-circle-exclamation"></i> Erro</div>';
-        if (elBairros) elBairros.innerHTML = '<div class="adm-empty" style="color:#dc2626;"><i class="fas fa-circle-exclamation"></i> Erro</div>';
-        if (elUltimas) elUltimas.innerHTML = '<div class="adm-empty" style="color:#dc2626;"><i class="fas fa-circle-exclamation"></i> Erro</div>';
-        toast('Erro ao carregar dashboard: ' + err.message, 'error');
+        idsNumeros.forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '0'; });
+        toast('Erro no dashboard.', 'error');
     }
 }
 
@@ -351,79 +297,46 @@ async function carregarDashboard() {
 async function carregarLista(pagina = 1) {
     const tbody = document.getElementById('tbody-inscricoes');
     if (!tbody) return;
-
     estado.pagina = pagina;
     tbody.innerHTML = `<tr><td colspan="11"><div class="adm-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div></td></tr>`;
 
     try {
         const params = new URLSearchParams();
-        params.set('pagina', estado.pagina);
-        params.set('limite', estado.limite);
+        params.set('pagina', estado.pagina); params.set('limite', estado.limite);
         Object.entries(estado.filtros).forEach(([k, v]) => { if (v) params.set(k, v); });
 
         const data = await api(`${API.admin}?${params.toString()}`);
-        const lista = data.inscricoes || [];
-        const pag = data.paginacao || {};
-
-        estado.listaAtual = lista;
-        estado.totalPaginas = pag.totalPaginas || 1;
-        estado.total = pag.total || 0;
+        const lista = data.inscricoes || []; const pag = data.paginacao || {};
+        estado.listaAtual = lista; estado.totalPaginas = pag.totalPaginas || 1; estado.total = pag.total || 0;
 
         if (lista.length === 0) {
             tbody.innerHTML = `<tr><td colspan="11"><div class="adm-empty"><i class="fas fa-user-slash"></i> Nenhuma inscrição encontrada.</div></td></tr>`;
-            renderPaginacao();
-            return;
+            renderPaginacao(); return;
         }
 
         const podeExcluir = isAdmin();
-
         tbody.innerHTML = lista.map(i => `
             <tr>
                 <td><span class="adm-proto">${escapeHtml(i.protocolo)}</span></td>
-                <td>
-                    <span class="adm-cell-strong">${escapeHtml(i.aluno)}</span>
-                    <span class="adm-cell-sub">${escapeHtml(i.cpfMascarado)}</span>
-                </td>
-                <td>
-                    <span class="adm-cell-strong">${escapeHtml(i.responsavel)}</span>
-                    <span class="adm-cell-sub">${escapeHtml(i.responsavelTelefone)}</span>
-                </td>
+                <td><span class="adm-cell-strong">${escapeHtml(i.aluno)}</span><span class="adm-cell-sub">${escapeHtml(i.cpfMascarado)}</span></td>
+                <td><span class="adm-cell-strong">${escapeHtml(i.responsavel)}</span><span class="adm-cell-sub">${escapeHtml(i.responsavelTelefone)}</span></td>
                 <td><span class="adm-cell-strong">${escapeHtml(i.telefoneMascarado)}</span></td>
-                <td>
-                    <span class="adm-cell-strong">${escapeHtml(i.bairro || '—')}</span>
-                    <span class="adm-cell-sub">${escapeHtml(i.cidade || '')}</span>
-                </td>
+                <td><span class="adm-cell-strong">${escapeHtml(i.bairro || '—')}</span><span class="adm-cell-sub">${escapeHtml(i.cidade || '')}</span></td>
                 <td><span class="adm-cell-sub" style="margin:0">${escapeHtml(i.faixaRenda || '—')}</span></td>
-                <td>
-                    <span class="adm-tag ${i.cadUnico ? 'adm-tag-yes' : ''}">${i.cadUnico ? 'Sim' : 'Não'}</span>
-                    ${i.deficiencia ? '<span class="adm-tag adm-tag-yes" title="Possui deficiência"><i class="fas fa-universal-access"></i></span>' : ''}
-                </td>
-                <td>
-                    ${i.biometria
-                        ? `<span class="adm-tag adm-tag-yes" title="Biometria capturada"><i class="fas fa-fingerprint"></i></span>`
-                        : '<span class="adm-cell-sub" style="margin:0">—</span>'}
-                </td>
+                <td><span class="adm-tag ${i.cadUnico ? 'adm-tag-yes' : ''}">${i.cadUnico ? 'Sim' : 'Não'}</span> ${i.deficiencia ? '<span class="adm-tag adm-tag-yes"><i class="fas fa-universal-access"></i></span>' : ''}</td>
+                <td>${i.biometria ? `<span class="adm-tag adm-tag-yes"><i class="fas fa-fingerprint"></i></span>` : '<span class="adm-cell-sub" style="margin:0">—</span>'}</td>
                 <td>${badgeStatus(i.status)}</td>
                 <td><span class="adm-cell-sub" style="margin:0">${fmtData(i.createdAt)}</span></td>
                 <td>
                     <div class="adm-row-actions">
-                        <button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon" onclick="adm.verDetalhe('${i._id}')" title="Ver detalhes">
-                            <i class="fas fa-eye"></i>
-                        </button>
-                        <button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon" onclick="adm.editar('${i._id}')" title="Editar">
-                            <i class="fas fa-pen"></i>
-                        </button>
-                        ${podeExcluir ? `
-                            <button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon" onclick="adm.excluir('${i._id}', '${escapeHtml(i.protocolo)}')" title="Excluir">
-                                <i class="fas fa-trash" style="color:#dc2626"></i>
-                            </button>` : ''}
+                        <button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon" onclick="adm.verDetalhe('${i._id}')" title="Visualizar"><i class="fas fa-eye"></i></button>
+                        <button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon" onclick="adm.editar('${i._id}')" title="Editar"><i class="fas fa-pen"></i></button>
+                        ${podeExcluir ? `<button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon" onclick="adm.excluir('${i._id}', '${escapeHtml(i.protocolo)}')" title="Excluir"><i class="fas fa-trash" style="color:#dc2626"></i></button>` : ''}
                     </div>
                 </td>
             </tr>`).join('');
-
         renderPaginacao();
     } catch (err) {
-        console.error(err);
         tbody.innerHTML = `<tr><td colspan="11"><div class="adm-empty"><i class="fas fa-circle-exclamation"></i> ${escapeHtml(err.message)}</div></td></tr>`;
     }
 }
@@ -433,10 +346,8 @@ function renderPaginacao() {
     if (!el) return;
     const { pagina, totalPaginas, total } = estado;
     if (total === 0) { el.innerHTML = ''; return; }
-
     const inicio = (pagina - 1) * estado.limite + 1;
     const fim = Math.min(pagina * estado.limite, total);
-
     const botoes = [];
     botoes.push(`<button class="adm-page-btn" ${pagina === 1 ? 'disabled' : ''} data-pagina="${pagina-1}"><i class="fas fa-chevron-left"></i></button>`);
     const janela = 2;
@@ -819,27 +730,17 @@ async function carregarConfig() {
         const c = data.config;
 
         const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
-        set('c-ano', c.anoLetivo);
-        set('c-serie', c.serie);
-        set('c-vagas', c.vagas);
-        set('c-titulo', c.titulo);
-        set('c-subtitulo', c.subtitulo);
-        set('c-objetivo', c.objetivo);
-        set('c-inicio', toDatetimeLocal(c.dataInicio));
-        set('c-fim', toDatetimeLocal(c.dataFim));
-        set('c-mensagem', c.mensagemEncerrado);
-        set('c-versao', c.versaoTermo);
+        set('c-ano', c.anoLetivo); set('c-serie', c.serie); set('c-vagas', c.vagas);
+        set('c-titulo', c.titulo); set('c-subtitulo', c.subtitulo); set('c-objetivo', c.objetivo);
+        set('c-inicio', toDatetimeLocal(c.dataInicio)); set('c-fim', toDatetimeLocal(c.dataFim));
+        set('c-mensagem', c.mensagemEncerrado); set('c-versao', c.versaoTermo);
 
         const chk = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
-        chk('c-ativo', c.ativo);
-        chk('c-bloquear', c.bloquearDuplicadas);
-        chk('c-consulta', c.permiteConsultaPublica);
-        chk('c-biometria', c.solicitarBiometria);
+        chk('c-ativo', c.ativo); chk('c-bloquear', c.bloquearDuplicadas);
+        chk('c-consulta', c.permiteConsultaPublica); chk('c-biometria', c.solicitarBiometria);
 
-        const ano = document.getElementById('hero-ano');
-        if (ano) ano.textContent = `Ano letivo ${c.anoLetivo}`;
-        const periodo = document.getElementById('hero-periodo');
-        if (periodo) periodo.textContent = `${fmtData(c.dataInicio)} a ${fmtData(c.dataFim)}`;
+        const ano = document.getElementById('hero-ano'); if (ano) ano.textContent = `Ano letivo ${c.anoLetivo}`;
+        const periodo = document.getElementById('hero-periodo'); if (periodo) periodo.textContent = `${fmtData(c.dataInicio)} a ${fmtData(c.dataFim)}`;
         const chip = document.getElementById('hero-status-chip');
         if (chip) {
             if (data.aberto) { chip.className = 'adm-chip ok'; chip.innerHTML = '<i class="fas fa-circle-check"></i> Inscrições abertas'; }
@@ -941,7 +842,7 @@ async function carregarPasskeys(pagina = 1) {
                 ? '<span class="adm-badge adm-badge-aprovada">Ativa</span>' 
                 : '<span class="adm-badge adm-badge-cancelada">Revogada</span>';
 
-            const alunoVinculado = p.alunoNome 
+            const alunoVinculado = p.alunoNome && p.alunoNome !== 'Não vinculado'
                 ? `<span class="adm-cell-strong">${escapeHtml(p.alunoNome)}</span>` 
                 : '<span class="adm-cell-sub" style="margin:0;font-style:italic;color:#ef4444;">Não vinculado</span>';
 
@@ -963,13 +864,16 @@ async function carregarPasskeys(pagina = 1) {
                             </button>
                             ${p.ativo ? `
                                 <button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon" onclick="adm.revogarPasskey('${p._id}', '${escapeHtml(p.responsavelNome)}')" title="Revogar">
-                                    <i class="fas fa-ban" style="color:#dc2626"></i>
+                                    <i class="fas fa-ban" style="color:#f59e0b"></i>
                                 </button>
                             ` : `
                                 <button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon" onclick="adm.reativarPasskey('${p._id}')" title="Reativar">
                                     <i class="fas fa-rotate-left" style="color:#10b981"></i>
                                 </button>
                             `}
+                            <button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon" onclick="adm.excluirPasskey('${p._id}', '${escapeHtml(p.responsavelNome)}')" title="Excluir Permanentemente">
+                                <i class="fas fa-trash" style="color:#dc2626"></i>
+                            </button>
                         </div>
                     </td>
                 </tr>`;
@@ -1043,7 +947,7 @@ function verDetalhePasskey(id) {
             <h4><i class="fas fa-fingerprint"></i> Credencial WebAuthn</h4>
             <div class="adm-det-grid">
                 <div class="adm-det-item"><span>Responsável</span><strong>${escapeHtml(p.responsavelNome)}</strong></div>
-                <div class="adm-det-item"><span>Aluno Vinculado</span><strong>${p.alunoNome ? escapeHtml(p.alunoNome) : 'Não vinculado'}</strong></div>
+                <div class="adm-det-item"><span>Aluno Vinculado</span><strong>${p.alunoNome && p.alunoNome !== 'Não vinculado' ? escapeHtml(p.alunoNome) : 'Não vinculado'}</strong></div>
                 <div class="adm-det-item"><span>ID da Credencial</span><strong style="word-break:break-all;font-size:12px">${escapeHtml(p.credentialId)}</strong></div>
                 <div class="adm-det-item"><span>Status</span><strong>${p.ativo ? 'Ativa' : 'Revogada'}</strong></div>
                 <div class="adm-det-item"><span>Data do Cadastro</span><strong>${p.createdAt ? fmtDataHora(p.createdAt) : '—'}</strong></div>
@@ -1088,7 +992,7 @@ async function revogarPasskey(id, nome) {
 
     try {
         loader(true, 'Revogando...');
-        await api(`${API.passkeys}/${id}`, { method: 'DELETE' });
+        await api(`${API.passkeys}/${id}/revogar`, { method: 'PUT' });
         toast('Biometria revogada com sucesso.', 'success');
         carregarPasskeys(estado.paginaPasskey);
     } catch (err) {
@@ -1114,6 +1018,27 @@ async function reativarPasskey(id) {
         carregarPasskeys(estado.paginaPasskey);
     } catch (err) {
         toast('Erro ao reativar: ' + err.message, 'error');
+    } finally {
+        loader(false);
+    }
+}
+
+async function excluirPasskey(id, nome) {
+    if (!isAdmin()) { toast('Apenas administradores podem excluir biometrias.', 'warning'); return; }
+    const ok = await confirmar({
+        titulo: 'Excluir Biometria',
+        mensagem: `Tem certeza que deseja EXCLUIR PERMANENTEMENTE a biometria de ${nome}? Esta ação não pode ser desfeita.`,
+        textoOk: 'Excluir permanentemente'
+    });
+    if (!ok) return;
+
+    try {
+        loader(true, 'Excluindo...');
+        await api(`${API.passkeys}/${id}`, { method: 'DELETE' });
+        toast('Biometria excluída com sucesso.', 'success');
+        carregarPasskeys(estado.paginaPasskey);
+    } catch (err) {
+        toast('Erro ao excluir: ' + err.message, 'error');
     } finally {
         loader(false);
     }
@@ -1204,8 +1129,10 @@ window.adm = {
     carregarPasskeys,
     revogarPasskey,
     reativarPasskey,
+    excluirPasskey,
     verDetalhePasskey,
     editarPasskey,
+    atualizarPasskeys: () => carregarPasskeys(estado.paginaPasskey),
     irParaInscricoes: () => {
         const tab = document.querySelector('.adm-tab[data-tab="inscricoes"]');
         if (tab) tab.click();

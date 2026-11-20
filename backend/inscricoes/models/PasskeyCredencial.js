@@ -1,8 +1,5 @@
 // ============================================================================
 // backend/inscricoes/models/PasskeyCredencial.js
-//
-// Armazena as credenciais WebAuthn (passkeys) dos responsáveis.
-// Criadas durante a inscrição. A autenticação virá depois.
 // ============================================================================
 'use strict';
 
@@ -22,7 +19,11 @@ const PasskeyCredencialSchema = new mongoose.Schema({
     attestationType: { type: String, default: 'none' },
     userVerification: { type: String, default: 'required' },
 
+    // 🔥 CAMPOS DE VÍNCULO
     inscricaoId: { type: mongoose.Schema.Types.ObjectId, ref: 'Formulario', default: null },
+    matriculaId: { type: mongoose.Schema.Types.ObjectId, default: null }, // ID do User (aluno antigo)
+    alunoNome: { type: String, default: '' }, // Nome do aluno salvo direto no cadastro
+
     ip: { type: String, default: '' },
     userAgent: { type: String, default: '' },
 
@@ -34,6 +35,7 @@ const PasskeyCredencialSchema = new mongoose.Schema({
 });
 
 PasskeyCredencialSchema.index({ responsavelCpfHash: 1, ativo: 1 });
+PasskeyCredencialSchema.index({ alunoNome: 'text' });
 
 const PasskeyCredencial = mongoose.models.PasskeyCredencial
     || mongoose.model('PasskeyCredencial', PasskeyCredencialSchema);
