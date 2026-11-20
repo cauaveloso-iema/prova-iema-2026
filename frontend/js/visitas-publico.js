@@ -936,32 +936,31 @@ class VisitasPublico {
             this._setBlocoAutenticacao('carregando');
 
             const alunoId = this.obterAlunoIdAlvo();
+            // Pega o nome exato que aparece na tela
+            const nomeAluno = this.termoAtual?._nomeAlunoExibicao || this.termoAtual?.alunoNome || this.alunoSelecionado?.nome;
 
             try {
                 const params = new URLSearchParams();
                 if (alunoId) params.append('alunoId', String(alunoId));
+                if (nomeAluno) params.append('nome', String(nomeAluno)); // 🔥 AQUI ENVIA O NOME
 
                 const r = await fetch(`/api/inscricoes/passkeys/publica/disponivel?${params}`);
                 const data = await r.json();
 
                 this.autenticacaoDisponivel.verificada = true;
                 this.autenticacaoDisponivel.passkeyDisponivel = !!(data.success && data.disponivel);
-                this.autenticacaoDisponivel.credenciais = data.credenciais || [];
-
+                
                 if (this.autenticacaoDisponivel.passkeyDisponivel) {
-                    // 🟢 Biometria como método principal
                     this.autenticacaoDisponivel.metodoEscolhido = 'passkey';
                     this._setBlocoAutenticacao('passkey');
                     this._renderizarBotaoBiometria();
                 } else {
-                    // 🟡 Sem passkey → QR/TOTP
                     this.autenticacaoDisponivel.metodoEscolhido = 'totp';
                     this._setBlocoAutenticacao('totp');
                     await this.gerarQRCodeTOTP();
                 }
             } catch (err) {
                 console.error('❌ Erro ao preparar autenticação:', err);
-                // Em caso de erro, cai no fallback QR (mais seguro)
                 this.autenticacaoDisponivel.metodoEscolhido = 'totp';
                 this._setBlocoAutenticacao('totp');
                 await this.gerarQRCodeTOTP();

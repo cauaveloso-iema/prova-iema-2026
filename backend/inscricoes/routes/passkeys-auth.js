@@ -51,43 +51,49 @@ function consumirChallenge(chave) {
 // ============================================================================
 router.get('/publica/disponivel', async (req, res) => {
     try {
-        const { alunoId, cpf } = req.query;
+        const { alunoId, nome, cpf } = req.query;
 
-        if (!alunoId && !cpf) {
-            return res.status(400).json({
-                success: false,
-                error: 'Informe alunoId ou cpf.'
-            });
+        if (!alunoId && !nome && !cpf) {
+            return res.status(400).json({ success: false, error: 'Informe alunoId, nome ou cpf.' });
+        }
+
+        const condicoes = [];
+
+        // Tenta pelo ID (se estiver correto, acha rápido)
+        if (alunoId) {
+            condicoes.push({ matriculaId: alunoId });
+        }
+
+        // 🔥 PLANO B: Tenta pelo Nome exato (garante que acha o NICHOLAS)
+        if (nome) {
+            const nomeLimpo = nome.trim();
+            condicoes.push({ alunoNome: new RegExp('^' + nomeLimpo + '$', 'i') });
+        }
+
+        // Tenta pelo CPF do responsável
+        if (cpf) {
+            const d = soDigitos(cpf);
+            if (d.length === 11) {
+                condicoes.push({ responsavelCpfHash: hashCPF(d) });
+            }
         }
 
         const filtro = { ativo: true };
-        if (alunoId) filtro.matriculaId = alunoId;
-        if (cpf) {
-            const d = soDigitos(cpf);
-            if (d.length === 11) filtro.responsavelCpfHash = hashCPF(d);
-            else delete filtro.responsavelCpfHash;
-        }
+        if (condicoes.length > 0) filtro.$or = condicoes;
 
-        const credenciais = await PasskeyCredencial.find(filtro)
-            .select('credentialId transports alunoNome inscricaoId matriculaId escopo')
-            .lean();
+        const credenciais = await PasskeyCredencial.find(filtro).lean();
+
+        console.log(`🔍 [PASSKEY] Busca -> ID: ${alunoId} | Nome: ${nome} | Achou: ${credenciais.length}`);
 
         res.json({
             success: true,
             disponivel: credenciais.length > 0,
             total: credenciais.length,
-            credenciais: credenciais.map(c => ({
-                credentialId: c.credentialId,
-                transports: c.transports || [],
-                alunoNome: c.alunoNome || '',
-                temInscricao: !!c.inscricaoId,
-                temMatricula: !!c.matriculaId,
-                escopo: c.escopo || ''
-            }))
+            credenciais
         });
     } catch (err) {
-        console.error('❌ [PASSKEYS-AUTH] disponivel:', err);
-        res.status(500).json({ success: false, error: 'Falha ao verificar passkey.' });
+        console.error('❌ Erro:', err);
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 
@@ -265,6 +271,20 @@ router.post('/autenticar/concluir', async (req, res) => {
     } catch (err) {
         console.error('❌ [PASSKEYS-AUTH] concluir:', err);
         res.status(500).json({ success: false, error: 'Falha ao concluir autenticação.' });
+    }
+});
+
+// ⚠️ APENAS PARA DIAGNÓSTICO - PODE APAGAR DEPOIS
+router.get('/publica/debug', async (req, res) => {
+    try {
+        // Puxa as últimas 20 passkeys para não sobrecarregar
+        const passkeys = await PasskeyCredencial.find({ ativo: true })
+            .sort({ createdAt: -1 })
+            .limit(20)
+            .lean();
+        res.json({ success: true, total: passkeys.length, passkeys });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 

@@ -104,7 +104,6 @@
                         <p>Selecione a autorização que deseja responder.</p>
                     </div>
                     <div class="intro-card">
-                        <!-- CORRIGIDO: Ícone de escudo compatível e cor verde garantida -->
                         <div class="intro-card-icon" style="background: linear-gradient(135deg,#10b981,#059669);">
                             <i class="fas fa-shield-alt"></i>
                         </div>
@@ -383,21 +382,10 @@
                     </div>
                 </div>
 
-                <!-- 🆕 Bloco de biometria (aparece quando há passkey ativa) -->
+                <!-- Bloco de biometria (aparece quando há passkey ativa) -->
                 <div id="passkeyBox" style="display:none;"></div>
 
-                <!-- O bloco TOTP atual continua igual, mas envolva o botão de verificar
-                    em uma div com id="totpVerifyBox" para podermos esconder no modo passkey: -->
-                <div class="totp-verify-box" id="totpVerifyBox">
-                    <label><i class="fas fa-key"></i> Código do Google Authenticator *</label>
-                    <input type="text" id="totpCodigo" class="form-input totp-codigo-input"
-                        placeholder="000000" maxlength="6" autocomplete="off"
-                        oninput="this.value = this.value.replace(/\D/g, '')">
-                    <button class="btn-continuar-grande" onclick="visitasPublico.verificarTOTP(event)">
-                        <i class="fas fa-check-circle"></i> Verificar Código e Continuar
-                    </button>
-                </div>
-
+                <!-- QR Code TOTP -->
                 <div class="totp-qrcode-container">
                     <div id="totpLoading" class="totp-loading">
                         <i class="fas fa-spinner fa-spin"></i>
@@ -429,7 +417,8 @@
                     </div>
                 </div>
 
-                <div class="totp-verify-box">
+                <!-- Verificação TOTP (único bloco, sem duplicação) -->
+                <div class="totp-verify-box" id="totpVerifyBox">
                     <label><i class="fas fa-key"></i> Código do Google Authenticator *</label>
                     <input type="text" id="totpCodigo" class="form-input totp-codigo-input"
                            placeholder="000000" maxlength="6" autocomplete="off"
@@ -582,7 +571,7 @@
         </footer>
     </div>
 
-    <!-- MODAL DE SUCESSO (mantido) -->
+    <!-- MODAL DE SUCESSO -->
     <div class="modal-public" id="modalSucesso">
         <div class="modal-content-public">
             <div class="modal-icon sucesso">
@@ -597,7 +586,7 @@
         </div>
     </div>
 
-    <!-- MODAL DE ERRO (mantido) -->
+    <!-- MODAL DE ERRO -->
     <div class="modal-public" id="modalErro">
         <div class="modal-content-public">
             <div class="modal-icon erro">
