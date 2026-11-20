@@ -521,9 +521,31 @@ function valorParaInput(v, tipo) {
     return v == null ? '' : String(v);
 }
 
+// ============================================================================
+// OPÇÕES (cache)
+// ============================================================================
+async function carregarOpcoes() {
+    if (estado.opcoes) return estado.opcoes;
+    try {
+        const data = await api(API.opcoes);
+        estado.opcoes = data.opcoes || {};
+        return estado.opcoes;
+    } catch (err) {
+        console.warn('Falha ao carregar opções:', err.message);
+        estado.opcoes = {};
+        return estado.opcoes;
+    }
+}
+
+// ============================================================================
+// EDIÇÃO DA INSCRIÇÃO
+// ============================================================================
 async function editar(id) {
     try {
         loader(true, 'Carregando inscrição...');
+        // ⚠️ Garante que as opções (escolaridades, faixasRenda, etc.) estejam carregadas
+        await carregarOpcoes();
+
         const data = await api(`${API.admin}/${id}`);
         const i = data.inscricao;
         estado.editandoId = id;
@@ -536,7 +558,11 @@ async function editar(id) {
                 input = `<select id="${inputId}"><option value="true" ${valor ? 'selected' : ''}>Sim</option><option value="false" ${!valor ? 'selected' : ''}>Não</option></select>`;
             } else if (c.tipo === 'select') {
                 const opcoes = c.opcoes || (estado.opcoes && estado.opcoes[c.opcoesDinamicas]) || [];
-                input = `<select id="${inputId}"><option value="">Selecione...</option>${opcoes.map(o => `<option value="${escapeHtml(o)}" ${valor === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')}</select>`;
+                const valorStr = valor == null ? '' : String(valor);
+                input = `<select id="${inputId}">
+                    <option value="">Selecione...</option>
+                    ${opcoes.map(o => `<option value="${escapeHtml(o)}" ${valorStr === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')}
+                </select>`;
             } else if (c.tipo === 'textarea') {
                 input = `<textarea id="${inputId}" rows="2">${escapeHtml(valor || '')}</textarea>`;
             } else if (c.tipo === 'number') {

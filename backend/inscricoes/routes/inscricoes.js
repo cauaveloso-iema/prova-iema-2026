@@ -31,9 +31,6 @@ try {
 
 if (!Inscricao || !Inscricao.schema || !Inscricao.schema.path('protocolo')) {
     console.error('🚨 [INSCRIÇÕES] Model carregado NÃO é o socioeconômico (sem `protocolo`).');
-    console.error('   Model retornado tem: eventoId =', !!(Inscricao && Inscricao.schema && Inscricao.schema.path('eventoId')));
-    console.error('   Re-registrando como "FormularioSocioeconomico" a partir do schema do arquivo...');
-
     let FormularioDef;
     try {
         const caminho = require.resolve('../models/Formulario');
@@ -46,13 +43,11 @@ if (!Inscricao || !Inscricao.schema || !Inscricao.schema.path('protocolo')) {
             FormularioDef = require(caminho);
         } catch (_) { }
     }
-
     if (FormularioDef && FormularioDef.schema && FormularioDef.schema.path('protocolo')) {
         Inscricao = mongoose.models.FormularioSocioeconomico
             || mongoose.model('FormularioSocioeconomico', FormularioDef.schema);
         console.log('✅ [INSCRIÇÕES] Model re-registrado como FormularioSocioeconomico.');
     } else {
-        console.error('❌ [INSCRIÇÕES] Não foi possível recuperar o schema socioeconômico.');
         throw new Error('Model socioeconômico inválido: não possui campo `protocolo`.');
     }
 }
@@ -68,7 +63,7 @@ const {
     texto, textoLongo, booleano, numero, paraData, escaparRegex
 } = require('../utils/seguranca');
 
-// Biometria (mesma ENCRYPTION_KEY do .env)
+// Biometria
 let biometriaCrypto;
 try {
     biometriaCrypto = require('../utils/biometriaCrypto');
@@ -97,14 +92,9 @@ function limitarTentativas(req, res, next) {
         const ip = req.ip || (req.connection && req.connection.remoteAddress) || 'desconhecido';
         const agora = Date.now();
         const reg = tentativas.get(ip) || { inicio: agora, qtd: 0 };
-
-        if (agora - reg.inicio > JANELA_MS) {
-            reg.inicio = agora;
-            reg.qtd = 0;
-        }
+        if (agora - reg.inicio > JANELA_MS) { reg.inicio = agora; reg.qtd = 0; }
         reg.qtd += 1;
         tentativas.set(ip, reg);
-
         if (reg.qtd > MAX_TENTATIVAS) {
             return res.status(429).json({
                 success: false,
@@ -156,6 +146,11 @@ const CAMPOS_SENSIVEIS = {
     responsavel: ['cpf', 'rg', 'nis', 'email', 'telefone']
 };
 
+/**
+ * ⚠️ CORREÇÃO: criptografa SOMENTE valores que NÃO estão já criptografados
+ * (a própria criptografar() em utils/seguranca já faz essa checagem, mas
+ * garantimos aqui também para nunca duplo-criptografar).
+ */
 function criptografarDocumento(dados) {
     const out = JSON.parse(JSON.stringify(dados));
     for (const grupo of Object.keys(CAMPOS_SENSIVEIS)) {
@@ -170,6 +165,11 @@ function criptografarDocumento(dados) {
     return out;
 }
 
+/**
+ * ⚠️ CORREÇÃO: descriptografa TODOS os campos sensíveis, inclusive quando
+ * o valor está em plaintext (legado). Isso garante que a UI sempre receba
+ * CPF/telefone reais.
+ */
 function descriptografarInscricao(doc) {
     if (!doc) return doc;
     const out = doc.toObject ? doc.toObject() : { ...doc };
@@ -385,19 +385,16 @@ function processarBiometria(bodyBiometria, cfg, req) {
     if (!bodyBiometria || !bodyBiometria.aceito) {
         return { aceito: false };
     }
-
     if (!cfg.solicitarBiometria) {
         const err = new Error('Biometria não habilitada para este processo.');
         err.status = 400;
         throw err;
     }
-
     if (!biometriaCrypto) {
         const err = new Error('Módulo de biometria indisponível no servidor.');
         err.status = 500;
         throw err;
     }
-
     try {
         return biometriaCrypto.prepararParaSalvar(bodyBiometria, {
             ip: req.ip || req.connection?.remoteAddress || '',
@@ -456,7 +453,6 @@ router.get('/publica/config', async (req, res) => {
     try {
         const cfg = await ConfiguracaoInscricao.obter();
         const aberto = cfg.estaAberto();
-
         let totalInscritos = 0;
         try {
             totalInscritos = await Inscricao.countDocuments({
@@ -464,37 +460,24 @@ router.get('/publica/config', async (req, res) => {
                 status: { $ne: 'Cancelada' }
             });
         } catch (_) { }
-
         const vagasRestantes = cfg.vagas > 0 ? Math.max(0, cfg.vagas - totalInscritos) : null;
-
         res.json({
             success: true,
             config: {
-                anoLetivo: cfg.anoLetivo,
-                serie: cfg.serie,
-                titulo: cfg.titulo,
-                subtitulo: cfg.subtitulo,
-                objetivo: cfg.objetivo,
-                dataInicio: cfg.dataInicio,
-                dataFim: cfg.dataFim,
-                vagas: cfg.vagas,
-                ativo: cfg.ativo,
+                anoLetivo: cfg.anoLetivo, serie: cfg.serie, titulo: cfg.titulo, subtitulo: cfg.subtitulo,
+                objetivo: cfg.objetivo, dataInicio: cfg.dataInicio, dataFim: cfg.dataFim,
+                vagas: cfg.vagas, ativo: cfg.ativo,
                 aberto: aberto && (vagasRestantes === null || vagasRestantes > 0),
-                vagasRestantes,
-                versaoTermo: cfg.versaoTermo,
-                mensagemEncerrado: cfg.mensagemEncerrado,
-                mensagemTopo: cfg.mensagemTopo,
+                vagasRestantes, versaoTermo: cfg.versaoTermo,
+                mensagemEncerrado: cfg.mensagemEncerrado, mensagemTopo: cfg.mensagemTopo,
                 permiteConsultaPublica: cfg.permiteConsultaPublica,
                 solicitarBiometria: !!cfg.solicitarBiometria
             },
             totalInscritos,
             opcoes: {
-                escolaridades: ESCOLARIDADES,
-                faixasRenda: FAIXAS_RENDA,
-                programasSociais: PROGRAMAS_SOCIAIS,
-                grausParentesco: GRAUS_PARENTESCO,
-                vinculosResponsavel: VINCULOS_RESPONSAVEL,
-                sexos: SEXOS
+                escolaridades: ESCOLARIDADES, faixasRenda: FAIXAS_RENDA,
+                programasSociais: PROGRAMAS_SOCIAIS, grausParentesco: GRAUS_PARENTESCO,
+                vinculosResponsavel: VINCULOS_RESPONSAVEL, sexos: SEXOS
             }
         });
     } catch (error) {
@@ -507,30 +490,20 @@ router.get('/publica/config', async (req, res) => {
 router.get('/publica/cep/:cep', async (req, res) => {
     try {
         const cep = soDigitos(req.params.cep);
-        if (cep.length !== 8) {
-            return res.status(400).json({ success: false, error: 'CEP inválido.' });
-        }
-
+        if (cep.length !== 8) return res.status(400).json({ success: false, error: 'CEP inválido.' });
         const url = `https://viacep.com.br/ws/${cep}/json/`;
         const data = await (async () => {
             const r = await fetchCompat(url);
             if (!r.ok) throw new Error('Falha ao consultar o CEP.');
             return r.json();
         })();
-
-        if (data.erro) {
-            return res.status(404).json({ success: false, error: 'CEP não encontrado.' });
-        }
-
+        if (data.erro) return res.status(404).json({ success: false, error: 'CEP não encontrado.' });
         res.json({
             success: true,
             endereco: {
-                cep: soDigitos(data.cep || cep),
-                logradouro: data.logradouro || '',
-                complemento: data.complemento || '',
-                bairro: data.bairro || '',
-                cidade: data.localidade || '',
-                estado: (data.uf || '').toUpperCase()
+                cep: soDigitos(data.cep || cep), logradouro: data.logradouro || '',
+                complemento: data.complemento || '', bairro: data.bairro || '',
+                cidade: data.localidade || '', estado: (data.uf || '').toUpperCase()
             }
         });
     } catch (error) {
@@ -542,9 +515,7 @@ router.get('/publica/cep/:cep', async (req, res) => {
 // ---- GET /publica/biometria/chave ----
 router.get('/publica/biometria/chave', (req, res) => {
     try {
-        if (!biometriaCrypto) {
-            return res.status(503).json({ success: false, error: 'Biometria indisponível no servidor.' });
-        }
+        if (!biometriaCrypto) return res.status(503).json({ success: false, error: 'Biometria indisponível no servidor.' });
         res.json({ success: true, chavePublica: biometriaCrypto.exportarChavePublicaJWK() });
     } catch (error) {
         logger.error('❌ [INSCRIÇÕES] Erro ao obter chave de biometria:', error);
@@ -556,29 +527,21 @@ router.get('/publica/biometria/chave', (req, res) => {
 router.post('/publica', limitarTentativas, async (req, res) => {
     try {
         const cfg = await ConfiguracaoInscricao.obter();
-
         if (!cfg.estaAberto()) {
             return res.status(403).json({
                 success: false,
                 error: cfg.mensagemEncerrado || 'As inscrições estão encerradas.'
             });
         }
-
         const { valido, erros, dados } = validarInscricao(req.body || {});
-        if (!valido) {
-            return res.status(400).json({ success: false, error: erros[0], erros });
-        }
+        if (!valido) return res.status(400).json({ success: false, error: erros[0], erros });
 
         if (cfg.vagas > 0) {
             const total = await Inscricao.countDocuments({
-                anoLetivo: cfg.anoLetivo,
-                status: { $ne: 'Cancelada' }
+                anoLetivo: cfg.anoLetivo, status: { $ne: 'Cancelada' }
             });
             if (total >= cfg.vagas) {
-                return res.status(403).json({
-                    success: false,
-                    error: 'As vagas para este processo foram esgotadas.'
-                });
+                return res.status(403).json({ success: false, error: 'As vagas para este processo foram esgotadas.' });
             }
         }
 
@@ -588,7 +551,6 @@ router.post('/publica', limitarTentativas, async (req, res) => {
                 anoLetivo: cfg.anoLetivo,
                 status: { $ne: 'Cancelada' }
             }).select('protocolo').lean();
-
             if (existente) {
                 return res.status(409).json({
                     success: false,
@@ -600,36 +562,22 @@ router.post('/publica', limitarTentativas, async (req, res) => {
 
         let biometriaFinal = { aceito: false };
         if (req.body && req.body.biometria) {
-            try {
-                biometriaFinal = processarBiometria(req.body.biometria, cfg, req);
-            } catch (e) {
-                return res.status(e.status || 400).json({ success: false, error: e.message });
-            }
+            try { biometriaFinal = processarBiometria(req.body.biometria, cfg, req); }
+            catch (e) { return res.status(e.status || 400).json({ success: false, error: e.message }); }
         }
 
-        const doc = await criarInscricao({
-            dados, cfg, origem: 'Publico', req, biometria: biometriaFinal
-        });
-
+        const doc = await criarInscricao({ dados, cfg, origem: 'Publico', req, biometria: biometriaFinal });
         logger.info(`✅ [INSCRIÇÕES] Nova inscrição ${doc.protocolo} — ${doc.aluno.nomeCompleto}${biometriaFinal.aceito ? ' [biometria]' : ''}`);
 
         res.status(201).json({
             success: true,
             mensagem: 'Inscrição registrada com sucesso!',
             protocolo: doc.protocolo,
-            inscricao: {
-                _id: doc._id,
-                protocolo: doc.protocolo,
-                status: doc.status,
-                createdAt: doc.createdAt
-            }
+            inscricao: { _id: doc._id, protocolo: doc.protocolo, status: doc.status, createdAt: doc.createdAt }
         });
     } catch (error) {
         logger.error('❌ [INSCRIÇÕES] Erro ao criar inscrição pública:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Não foi possível registrar a inscrição. Tente novamente em instantes.'
-        });
+        res.status(500).json({ success: false, error: 'Não foi possível registrar a inscrição. Tente novamente em instantes.' });
     }
 });
 
@@ -640,38 +588,23 @@ router.get('/publica/consulta/:protocolo', async (req, res) => {
         if (!cfg.permiteConsultaPublica) {
             return res.status(403).json({ success: false, error: 'A consulta pública está desativada.' });
         }
-
         const protocolo = texto(req.params.protocolo, 40).toUpperCase();
         const cpf = soDigitos(req.query.cpf || '');
-
         if (!protocolo) return res.status(400).json({ success: false, error: 'Informe o protocolo.' });
         if (cpf.length !== 11) return res.status(400).json({ success: false, error: 'Informe o CPF do aluno para consultar.' });
 
         const doc = await Inscricao.findOne({ protocolo }).lean();
-        if (!doc) {
-            return res.status(404).json({ success: false, error: 'Protocolo não encontrado.' });
-        }
-
+        if (!doc) return res.status(404).json({ success: false, error: 'Protocolo não encontrado.' });
         if (doc.aluno?.cpfHash !== hashCPF(cpf)) {
             return res.status(403).json({ success: false, error: 'CPF não confere com o protocolo informado.' });
         }
-
         res.json({
             success: true,
             inscricao: {
-                protocolo: doc.protocolo,
-                anoLetivo: doc.anoLetivo,
-                serie: doc.serie,
-                aluno: doc.aluno?.nomeCompleto,
-                responsavel: doc.responsavel?.nomeCompleto,
-                status: doc.status,
-                createdAt: doc.createdAt,
-                atualizadoEm: doc.updatedAt,
-                historico: (doc.historico || []).map(h => ({
-                    status: h.status,
-                    em: h.em,
-                    observacao: h.observacao
-                }))
+                protocolo: doc.protocolo, anoLetivo: doc.anoLetivo, serie: doc.serie,
+                aluno: doc.aluno?.nomeCompleto, responsavel: doc.responsavel?.nomeCompleto,
+                status: doc.status, createdAt: doc.createdAt, atualizadoEm: doc.updatedAt,
+                historico: (doc.historico || []).map(h => ({ status: h.status, em: h.em, observacao: h.observacao }))
             }
         });
     } catch (error) {
@@ -688,7 +621,6 @@ router.get('/publica/consulta/:protocolo', async (req, res) => {
 router.get('/admin/dashboard', authenticateToken, podeConsultar, async (req, res) => {
     try {
         const filtroAno = req.query.anoLetivo ? { anoLetivo: Number(req.query.anoLetivo) } : {};
-
         const [
             total, pendentes, emAnalise, aprovadas, concluidas, canceladas,
             comCadUnico, comDeficiencia, semDispositivo, comBiometria
@@ -710,17 +642,14 @@ router.get('/admin/dashboard', authenticateToken, podeConsultar, async (req, res
             { $group: { _id: '$rendaFamiliar.faixaRenda', total: { $sum: 1 } } },
             { $sort: { total: -1 } }
         ]);
-
         const porBairro = await Inscricao.aggregate([
             { $match: filtroAno },
             { $group: { _id: '$endereco.bairro', total: { $sum: 1 } } },
             { $sort: { total: -1 } },
             { $limit: 6 }
         ]);
-
         const ultimas = await Inscricao.find(filtroAno)
-            .sort({ createdAt: -1 })
-            .limit(6)
+            .sort({ createdAt: -1 }).limit(6)
             .select('protocolo aluno.nomeCompleto responsavel.nomeCompleto status createdAt biometria.aceito')
             .lean();
 
@@ -836,16 +765,13 @@ router.get('/admin/exportar', authenticateToken, podeEditar, async (req, res) =>
 
         const esc = (v) => {
             const s = String(v == null ? '' : v);
-            if (/[;"\r\n]/.test(s) || /^[=+\-@]/.test(s)) {
-                return `"${s.replace(/"/g, '""')}"`;
-            }
+            if (/[;"\r\n]/.test(s) || /^[=+\-@]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
             return s;
         };
 
         const linhasResumo = resumo.map(l => l.map(esc).join(';'));
         const linhasTabela = [cabecalho, ...linhas].map(l => l.map(esc).join(';'));
         const csv = '\uFEFF' + [...linhasResumo, ...linhasTabela].join('\r\n');
-
         const nomeArquivo = `inscricoes-${new Date().toISOString().slice(0, 10)}.csv`;
 
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -872,7 +798,6 @@ router.put('/admin/config', authenticateToken, podeConfigurar, async (req, res) 
     try {
         const cfg = await ConfiguracaoInscricao.obter();
         const b = req.body || {};
-
         if (b.anoLetivo !== undefined) cfg.anoLetivo = numero(b.anoLetivo, cfg.anoLetivo);
         if (b.serie !== undefined) cfg.serie = texto(b.serie, 80);
         if (b.titulo !== undefined) cfg.titulo = texto(b.titulo, 200);
@@ -895,7 +820,6 @@ router.put('/admin/config', authenticateToken, podeConfigurar, async (req, res) 
 
         await cfg.save();
         logger.info(`⚙️ [INSCRIÇÕES] Configuração atualizada por ${req.userNome || req.userId}`);
-
         res.json({ success: true, mensagem: 'Configuração salva.', config: cfg, aberto: cfg.estaAberto() });
     } catch (error) {
         logger.error('❌ [INSCRIÇÕES] Erro ao salvar config:', error);
@@ -910,13 +834,9 @@ router.get('/admin/opcoes', authenticateToken, podeConsultar, async (req, res) =
         res.json({
             success: true,
             opcoes: {
-                status: STATUS,
-                escolaridades: ESCOLARIDADES,
-                faixasRenda: FAIXAS_RENDA,
-                programasSociais: PROGRAMAS_SOCIAIS,
-                grausParentesco: GRAUS_PARENTESCO,
-                vinculosResponsavel: VINCULOS_RESPONSAVEL,
-                sexos: SEXOS,
+                status: STATUS, escolaridades: ESCOLARIDADES, faixasRenda: FAIXAS_RENDA,
+                programasSociais: PROGRAMAS_SOCIAIS, grausParentesco: GRAUS_PARENTESCO,
+                vinculosResponsavel: VINCULOS_RESPONSAVEL, sexos: SEXOS,
                 anosLetivos: anos.sort((a, b) => b - a)
             }
         });
@@ -935,23 +855,18 @@ router.get('/admin', authenticateToken, podeConsultar, async (req, res) => {
         if (req.query.status && STATUS.includes(req.query.status)) filtro.status = req.query.status;
         if (req.query.anoLetivo) filtro.anoLetivo = Number(req.query.anoLetivo);
         if (req.query.faixaRenda) filtro['rendaFamiliar.faixaRenda'] = req.query.faixaRenda;
-
         if (req.query.cadUnico === 'sim') filtro['aluno.temCadUnico'] = true;
         if (req.query.cadUnico === 'nao') filtro['aluno.temCadUnico'] = false;
-
         if (req.query.deficiencia === 'sim') filtro['informacoesAdicionais.possuiDeficiencia'] = true;
         if (req.query.deficiencia === 'nao') filtro['informacoesAdicionais.possuiDeficiencia'] = false;
-
         if (req.query.biometria === 'sim') filtro['biometria.aceito'] = true;
         if (req.query.biometria === 'nao') filtro['biometria.aceito'] = { $ne: true };
-
         if (req.query.programa) filtro['rendaFamiliar.programasSociais'] = req.query.programa;
 
         if (req.query.busca && String(req.query.busca).trim()) {
             const termo = String(req.query.busca).trim();
             const rx = new RegExp(escaparRegex(termo), 'i');
             const digitos = soDigitos(termo);
-
             const or = [
                 { protocolo: rx },
                 { 'aluno.nomeCompleto': rx },
@@ -959,11 +874,7 @@ router.get('/admin', authenticateToken, podeConsultar, async (req, res) => {
                 { 'endereco.bairro': rx },
                 { 'endereco.cidade': rx }
             ];
-
-            if (digitos.length === 11) {
-                or.push({ cpfHash: hashCPF(digitos) });
-            }
-
+            if (digitos.length === 11) or.push({ cpfHash: hashCPF(digitos) });
             filtro.$or = or;
         }
 
@@ -974,10 +885,8 @@ router.get('/admin', authenticateToken, podeConsultar, async (req, res) => {
 
         const [total, docs] = await Promise.all([
             Inscricao.countDocuments(filtro),
-            Inscricao.find(filtro)
-                .sort(ordenacao)
-                .skip((pagina - 1) * limite)
-                .limit(limite)
+            Inscricao.find(filtro).sort(ordenacao)
+                .skip((pagina - 1) * limite).limit(limite)
                 .select(
                     'protocolo anoLetivo serie status createdAt ' +
                     'aluno.nomeCompleto aluno.cpf aluno.telefone aluno.temCadUnico ' +
@@ -989,6 +898,7 @@ router.get('/admin', authenticateToken, podeConsultar, async (req, res) => {
                 .lean()
         ]);
 
+        // ⚠️ CORREÇÃO: descriptografar CPF/telefone ANTES de mascarar
         const lista = docs.map(d => ({
             _id: d._id,
             protocolo: d.protocolo,
@@ -1013,9 +923,7 @@ router.get('/admin', authenticateToken, podeConsultar, async (req, res) => {
             success: true,
             inscricoes: lista,
             paginacao: {
-                pagina,
-                limite,
-                total,
+                pagina, limite, total,
                 totalPaginas: Math.max(1, Math.ceil(total / limite))
             }
         });
@@ -1030,18 +938,13 @@ router.post('/admin', authenticateToken, podeEditar, async (req, res) => {
     try {
         const cfg = await ConfiguracaoInscricao.obter();
         const { valido, erros, dados } = validarInscricao(req.body || {});
-
         if (!valido) return res.status(400).json({ success: false, error: erros[0], erros });
 
         const doc = await criarInscricao({
-            dados,
-            cfg,
-            origem: 'Manual',
-            req,
+            dados, cfg, origem: 'Manual', req,
             autor: req.userNome || 'Administrador',
             biometria: { aceito: false }
         });
-
         res.status(201).json({ success: true, mensagem: 'Inscrição criada.', inscricao: doc });
     } catch (error) {
         logger.error('❌ [INSCRIÇÕES] Erro ao criar manualmente:', error);
@@ -1055,10 +958,10 @@ router.get('/admin/:id', authenticateToken, podeConsultar, async (req, res) => {
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
             return res.status(400).json({ success: false, error: 'ID inválido.' });
         }
-
         const doc = await Inscricao.findById(req.params.id).lean();
         if (!doc) return res.status(404).json({ success: false, error: 'Inscrição não encontrada.' });
 
+        // ⚠️ CORREÇÃO: descriptografar antes de retornar; formatar sobre o já dec
         const docDec = descriptografarInscricao(doc);
 
         res.json({
@@ -1099,7 +1002,6 @@ router.put('/admin/:id', authenticateToken, podeEditar, async (req, res) => {
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
             return res.status(400).json({ success: false, error: 'ID inválido.' });
         }
-
         const doc = await Inscricao.findById(req.params.id);
         if (!doc) return res.status(404).json({ success: false, error: 'Inscrição não encontrada.' });
 
@@ -1107,9 +1009,7 @@ router.put('/admin/:id', authenticateToken, podeEditar, async (req, res) => {
         const autor = req.userNome || 'Administrador';
 
         if (status !== undefined) {
-            if (!STATUS.includes(status)) {
-                return res.status(400).json({ success: false, error: 'Status inválido.' });
-            }
+            if (!STATUS.includes(status)) return res.status(400).json({ success: false, error: 'Status inválido.' });
             if (status !== doc.status) {
                 doc.registrarStatus(status, autor, `Status alterado de "${doc.status}" para "${status}"`);
             }
@@ -1129,6 +1029,7 @@ router.put('/admin/:id', authenticateToken, podeEditar, async (req, res) => {
                     if (!(campo in origem)) return;
                     let valor = origem[campo];
 
+                    // Normalizações
                     if (campo === 'dataNascimento') valor = paraData(valor);
                     else if (['pessoasResidem', 'dependentesMenores'].includes(campo)) valor = numero(valor, 0);
                     else if (['temCadUnico', 'aguaEncanada', 'energiaEletrica', 'esgotoSanitario', 'internetBandaLarga', 'possuiDeficiencia', 'acessoDispositivos'].includes(campo)) valor = booleano(valor);
@@ -1136,8 +1037,13 @@ router.put('/admin/:id', authenticateToken, podeEditar, async (req, res) => {
                         valor = Array.isArray(valor) ? valor.map(v => texto(v, 60)).filter(Boolean) : [];
                     } else valor = textoLongo(valor, 500);
 
+                    // ⚠️ CORREÇÃO: só criptografa se vier em plaintext.
+                    // Se o front mandar vazio (ex.: campo limpo pelo usuário),
+                    // gravamos string vazia — não o ciphertext de vazio.
                     if (CAMPOS_SENSIVEIS_GRUPO[grupo]?.includes(campo)) {
-                        if (!String(valor).startsWith('enc:v1:')) {
+                        if (valor == null || String(valor).trim() === '') {
+                            valor = '';
+                        } else if (!String(valor).startsWith('enc:v1:')) {
                             valor = criptografar(valor);
                         }
                         if (campo === 'cpf' && grupo === 'aluno') {
@@ -1152,7 +1058,6 @@ router.put('/admin/:id', authenticateToken, podeEditar, async (req, res) => {
         }
 
         await doc.save();
-
         logger.info(`✏️ [INSCRIÇÕES] Inscrição ${doc.protocolo} atualizada por ${autor}`);
 
         const docDec = descriptografarInscricao(doc);
@@ -1169,12 +1074,9 @@ router.delete('/admin/:id', authenticateToken, isAdmin, async (req, res) => {
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
             return res.status(400).json({ success: false, error: 'ID inválido.' });
         }
-
         const doc = await Inscricao.findByIdAndDelete(req.params.id);
         if (!doc) return res.status(404).json({ success: false, error: 'Inscrição não encontrada.' });
-
         logger.warn(`🗑️ [INSCRIÇÕES] Inscrição ${doc.protocolo} EXCLUÍDA por ${req.userNome || req.userId}`);
-
         res.json({ success: true, mensagem: `Inscrição ${doc.protocolo} removida.` });
     } catch (error) {
         logger.error('❌ [INSCRIÇÕES] Erro ao excluir:', error);
@@ -1189,21 +1091,16 @@ router.get('/publica/alunos-todos', async (req, res) => {
         const turmaFiltro = String(req.query.turma || '').trim();
         const cursoFiltro = String(req.query.curso || '').trim();
         const rx = termo ? new RegExp(escaparRegex(termo), 'i') : null;
-        
         const resultados = [];
 
-        // 1. Busca nas Inscrições
         try {
             const filtroInscricao = { status: { $ne: 'Cancelada' } };
             if (rx) filtroInscricao['aluno.nomeCompleto'] = rx;
             if (turmaFiltro) filtroInscricao.serie = new RegExp(escaparRegex(turmaFiltro), 'i');
-
             const inscricoes = await Inscricao.find(filtroInscricao)
-                .sort({ 'aluno.nomeCompleto': 1 })
-                .limit(50)
+                .sort({ 'aluno.nomeCompleto': 1 }).limit(50)
                 .select('protocolo aluno.nomeCompleto serie responsavel.nomeCompleto')
                 .lean();
-
             inscricoes.forEach(d => {
                 resultados.push({
                     id: d._id.toString(),
@@ -1219,24 +1116,18 @@ router.get('/publica/alunos-todos', async (req, res) => {
             logger.warn('⚠️ [INSCRIÇÕES] Erro ao buscar inscrições:', e.message);
         }
 
-        // 2. Busca nos Usuários (Alunos antigos)
         try {
             let User;
             try { User = require('../../models/User'); } catch (_) {}
             if (!User) { try { User = require('../../../models/User'); } catch (_) {} }
-
             if (User) {
                 const filtroAluno = { role: 'aluno', ativo: true };
                 if (rx) filtroAluno.nome = rx;
                 if (turmaFiltro) filtroAluno.turma = new RegExp(escaparRegex(turmaFiltro), 'i');
                 if (cursoFiltro) filtroAluno.curso = new RegExp(escaparRegex(cursoFiltro), 'i');
-
                 const alunosMatriculados = await User.find(filtroAluno)
-                    .sort({ nome: 1 })
-                    .limit(50)
-                    .select('nome matricula turma curso')
-                    .lean();
-
+                    .sort({ nome: 1 }).limit(50)
+                    .select('nome matricula turma curso').lean();
                 alunosMatriculados.forEach(a => {
                     resultados.push({
                         id: a._id.toString(),
@@ -1253,47 +1144,33 @@ router.get('/publica/alunos-todos', async (req, res) => {
             logger.warn('⚠️ [INSCRIÇÕES] Erro ao buscar usuários:', e.message);
         }
 
-        // 3. Busca as opções de Turmas e Cursos
         let turmas = [];
         let cursos = [];
         try {
             let User;
             try { User = require('../../models/User'); } catch (_) {}
             if (!User) { try { User = require('../../../models/User'); } catch (_) {} }
-
             if (User) {
                 const turmasDB = await User.distinct('turma', { role: 'aluno', ativo: true, turma: { $ne: null } });
                 turmas = [...new Set(turmasDB)].filter(Boolean).sort();
-
                 const cursosDB = await User.distinct('curso', { role: 'aluno', ativo: true, curso: { $ne: null } });
                 cursos = [...new Set(cursosDB)].filter(Boolean).sort();
             }
-            
             const seriesDB = await Inscricao.distinct('serie', { status: { $ne: 'Cancelada' } });
-            seriesDB.forEach(s => {
-                if (s && !turmas.includes(s)) turmas.push(s);
-            });
+            seriesDB.forEach(s => { if (s && !turmas.includes(s)) turmas.push(s); });
             turmas.sort();
-
         } catch (e) {
             logger.warn('⚠️ [INSCRIÇÕES] Erro ao buscar opções de turmas/cursos:', e.message);
         }
 
-        // Remove duplicatas
         const unicos = [];
         const vistos = new Set();
         resultados.forEach(r => {
             const chave = r.nome.toLowerCase() + '|' + r.matricula;
-            if (!vistos.has(chave)) {
-                vistos.add(chave);
-                unicos.push(r);
-            }
+            if (!vistos.has(chave)) { vistos.add(chave); unicos.push(r); }
         });
-
         unicos.sort((a, b) => a.nome.localeCompare(b.nome));
-
         res.json({ success: true, alunos: unicos, turmas, cursos });
-
     } catch (error) {
         logger.error('❌ [INSCRIÇÕES] Erro na busca unificada:', error);
         res.status(500).json({ success: false, error: 'Não foi possível buscar os alunos.' });

@@ -27,11 +27,12 @@ try {
             const d = String(cpf == null ? '' : cpf).replace(/\D+/g, '');
             if (d.length !== 11) return null;
             return crypto.createHmac('sha256', PEPPER).update(d).digest('hex');
-        }
+        },
+        descriptografar: (v) => v
     };
 }
 
-const { hashCPF, soDigitos } = seguranca;
+const { hashCPF, soDigitos, descriptografar } = seguranca;
 
 const ESCOLARIDADES = [
     'Ensino Fundamental Incompleto',
@@ -107,6 +108,7 @@ const EnderecoSchema = new mongoose.Schema({
 }, { _id: false });
 
 // ---------------------------------------------------------------- Composição familiar
+// ⚠️ Removido `''` dos enums de campos obrigatórios para forçar valor válido
 const ComposicaoFamiliarSchema = new mongoose.Schema({
     pessoasResidem: { type: Number, default: 1, min: 0 },
     grausParentesco: { type: [String], default: [] },
@@ -149,17 +151,15 @@ const LgpdSchema = new mongoose.Schema({
 }, { _id: false });
 
 // ---------------------------------------------------------------- Biometria
-// O envelope cifrado é armazenado como recebido do navegador.
-// O payload em claro (credencial WebAuthn) NÃO é persistido.
 const BiometriaSchema = new mongoose.Schema({
     aceito: { type: Boolean, default: false },
     versaoTermo: { type: String, default: '1.0' },
-    algoritmo: { type: String, default: '' },          // ex.: AES-GCM+RSA-OAEP-256
-    iv: { type: String, default: '' },                  // base64
-    chaveAesCifrada: { type: String, default: '' },     // base64 (RSA-OAEP)
-    dadosCifrados: { type: String, default: '' },       // base64 (payload cifrado)
+    algoritmo: { type: String, default: '' },
+    iv: { type: String, default: '' },
+    chaveAesCifrada: { type: String, default: '' },
+    dadosCifrados: { type: String, default: '' },
     capturadoEm: { type: Date, default: null },
-    credentialId: { type: String, default: '' },        // ID WebAuthn (auditoria)
+    credentialId: { type: String, default: '' },
     ip: { type: String, default: '' },
     userAgent: { type: String, default: '' }
 }, { _id: false });
@@ -175,10 +175,8 @@ const HistoricoSchema = new mongoose.Schema({
 // ================================================================ SCHEMA
 const FormularioSchema = new mongoose.Schema({
     protocolo: { type: String, required: true, unique: true, index: true },
-
     anoLetivo: { type: Number, required: true, index: true },
     serie: { type: String, default: '1ª Série do Ensino Médio' },
-
     origem: { type: String, enum: ['Publico', 'Manual', 'Importacao'], default: 'Publico' },
 
     aluno: { type: AlunoSchema, required: true },
@@ -200,8 +198,6 @@ const FormularioSchema = new mongoose.Schema({
     timestamps: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
-    // ⚠️ IMPORTANTE: mantém a coleção original "inscricaos" para preservar
-    // dados já gravados antes da renomeação do model.
     collection: 'inscricaos'
 });
 
@@ -213,20 +209,43 @@ FormularioSchema.index({ 'biometria.aceito': 1 });
 FormularioSchema.index({ 'aluno.nomeCompleto': 'text', 'responsavel.nomeCompleto': 'text' });
 
 // ---------------------------------------------------------------- Hooks
+/**
+ * ⚠️ CORREÇÃO CRÍTICA:
+ * Este hook só normaliza CPF/telefone/NIS SE o valor NÃO estiver criptografado.
+ * Antes, `soDigitos()` destruía o ciphertext (enc:v1:...) e o hash do CPF era
+ * calculado sobre o ciphertext. Agora:
+ *   1) Se o valor é plaintext → normaliza com soDigitos
+ *   2) Se já é ciphertext (enc:v1:...) → NÃO mexe
+ *   3) O cpfHash é calculado descriptografando primeiro
+ */
 FormularioSchema.pre('save', function (next) {
     try {
         if (this.aluno) {
-            if (this.aluno.cpf) this.aluno.cpf = soDigitos(this.aluno.cpf);
-            if (this.aluno.telefone) this.aluno.telefone = soDigitos(this.aluno.telefone);
-            if (this.aluno.nis) this.aluno.nis = soDigitos(this.aluno.nis);
-            this.aluno.cpfHash = hashCPF(this.aluno.cpf);
+            if (this.aluno.cpf && !String(this.aluno.cpf).startsWith('enc:v1:')) {
+                this.aluno.cpf = soDigitos(this.aluno.cpf);
+            }
+            if (this.aluno.telefone && !String(this.aluno.telefone).startsWith('enc:v1:')) {
+                this.aluno.telefone = soDigitos(this.aluno.telefone);
+            }
+            if (this.aluno.nis && !String(this.aluno.nis).startsWith('enc:v1:')) {
+                this.aluno.nis = soDigitos(this.aluno.nis);
+            }
+            // Calcula hash sobre o CPF em claro (descriptografa se necessário)
+            const cpfClaro = descriptografar(this.aluno.cpf);
+            this.aluno.cpfHash = hashCPF(cpfClaro);
         }
         if (this.responsavel) {
-            if (this.responsavel.cpf) this.responsavel.cpf = soDigitos(this.responsavel.cpf);
-            if (this.responsavel.telefone) this.responsavel.telefone = soDigitos(this.responsavel.telefone);
-            if (this.responsavel.nis) this.responsavel.nis = soDigitos(this.responsavel.nis);
+            if (this.responsavel.cpf && !String(this.responsavel.cpf).startsWith('enc:v1:')) {
+                this.responsavel.cpf = soDigitos(this.responsavel.cpf);
+            }
+            if (this.responsavel.telefone && !String(this.responsavel.telefone).startsWith('enc:v1:')) {
+                this.responsavel.telefone = soDigitos(this.responsavel.telefone);
+            }
+            if (this.responsavel.nis && !String(this.responsavel.nis).startsWith('enc:v1:')) {
+                this.responsavel.nis = soDigitos(this.responsavel.nis);
+            }
         }
-        if (this.endereco && this.endereco.cep) {
+        if (this.endereco && this.endereco.cep && !String(this.endereco.cep).startsWith('enc:v1:')) {
             this.endereco.cep = soDigitos(this.endereco.cep);
         }
     } catch (_) { /* nunca bloqueia o save por causa do hash */ }
@@ -243,7 +262,6 @@ FormularioSchema.methods.registrarStatus = function (novoStatus, por, observacao
     });
 };
 
-// ⚠️ Nome do model: 'Formulario' (único, sem colisão com 'Inscricao' de eventos)
 const Formulario = mongoose.models.Formulario
     || mongoose.model('Formulario', FormularioSchema);
 

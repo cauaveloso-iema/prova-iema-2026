@@ -1,48 +1,30 @@
-// ============================================================================
-// backend/inscricoes/utils/seguranca.js
-// Helpers de segurança / normalização / LGPD
-// Criptografia AES-256-GCM para campos sensíveis (CPF, RG, NIS, email, tel)
-// ============================================================================
 'use strict';
 
 const crypto = require('crypto');
 
-// Pepper para hash determinístico de CPF (busca e deduplicação sem guardar CPF em claro no índice)
 const PEPPER = process.env.INSCRICOES_HASH_PEPPER
     || process.env.JWT_SECRET
     || 'educapleno::inscricoes::pepper';
 
-// Chave de criptografia simétrica — reutiliza ENCRYPTION_KEY do .env
-// Formato esperado: hex de 64 caracteres (32 bytes) ou string; derivamos com scrypt para garantir 32 bytes
 const RAW_ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || process.env.AUTH_ENCRYPTION_KEY || PEPPER;
 const ENC_KEY = crypto.scryptSync(String(RAW_ENCRYPTION_KEY), 'educapleno::inscricoes::salt', 32);
 const ENC_ALGO = 'aes-256-gcm';
-const ENC_IV_LEN = 12;   // GCM recomendado
+const ENC_IV_LEN = 12;
 const ENC_TAG_LEN = 16;
 
 const soDigitos = (v) => String(v == null ? '' : v).replace(/\D+/g, '');
 
-/**
- * Hash determinístico do CPF (HMAC-SHA256).
- * Permite buscar/deduplicar sem expor o CPF em texto puro em índices/logs.
- */
 function hashCPF(cpf) {
     const d = soDigitos(cpf);
     if (d.length !== 11) return null;
     return crypto.createHmac('sha256', PEPPER).update(d).digest('hex');
 }
 
-// ----------------------------------------------------------------------------
-// CRIPTOGRAFIA DE CAMPOS SENSÍVEIS (AES-256-GCM)
-// Formato armazenado: "enc:v1:<base64(iv|tag|ciphertext)>"
-// ----------------------------------------------------------------------------
 function criptografar(valor) {
     if (valor == null) return valor;
     const texto = String(valor);
     if (texto === '') return texto;
-    // Se já está criptografado, não criptografa de novo
     if (texto.startsWith('enc:v1:')) return texto;
-
     const iv = crypto.randomBytes(ENC_IV_LEN);
     const cipher = crypto.createCipheriv(ENC_ALGO, ENC_KEY, iv);
     const enc = Buffer.concat([cipher.update(texto, 'utf8'), cipher.final()]);
@@ -51,11 +33,15 @@ function criptografar(valor) {
     return `enc:v1:${payload}`;
 }
 
+/**
+ * ⚠️ Se falhar (chave errada), loga e retorna ''.
+ * O chamador (rotas) já usa o resultado em mascarar/formatar,
+ * então '' produz '***' ou string vazia — nunca o ciphertext cru.
+ */
 function descriptografar(valor) {
     if (valor == null) return valor;
     const texto = String(valor);
-    if (!texto.startsWith('enc:v1:')) return texto; // legado em claro
-
+    if (!texto.startsWith('enc:v1:')) return texto;
     try {
         const payload = Buffer.from(texto.slice('enc:v1:'.length), 'base64');
         const iv = payload.subarray(0, ENC_IV_LEN);
@@ -66,7 +52,7 @@ function descriptografar(valor) {
         const dec = Buffer.concat([decipher.update(enc), decipher.final()]);
         return dec.toString('utf8');
     } catch (err) {
-        // Falha de autenticação — retorna placeholder para não quebrar a UI
+        console.error('❌ [SEGURANCA] Falha ao descriptografar (verifique ENCRYPTION_KEY):', err.message);
         return '';
     }
 }
@@ -103,17 +89,14 @@ function formatarCEP(cep) {
     return `${d.slice(0, 5)}-${d.slice(5)}`;
 }
 
-/** Validação completa de CPF (dígitos verificadores) */
 function validarCPF(cpf) {
     const d = soDigitos(cpf);
     if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
-
     let soma = 0;
     for (let i = 0; i < 9; i++) soma += Number(d[i]) * (10 - i);
     let dv1 = (soma * 10) % 11;
     if (dv1 === 10) dv1 = 0;
     if (dv1 !== Number(d[9])) return false;
-
     soma = 0;
     for (let i = 0; i < 10; i++) soma += Number(d[i]) * (11 - i);
     let dv2 = (soma * 10) % 11;
@@ -121,7 +104,6 @@ function validarCPF(cpf) {
     return dv2 === Number(d[10]);
 }
 
-/** Protocolo legível: INS-2026-A1B2C3 */
 function gerarProtocolo(anoLetivo) {
     const ano = Number(anoLetivo) || new Date().getFullYear();
     const rand = crypto.randomBytes(3).toString('hex').toUpperCase();
@@ -168,21 +150,7 @@ function escaparRegex(s) {
 }
 
 module.exports = {
-    soDigitos,
-    hashCPF,
-    criptografar,
-    descriptografar,
-    mascararCPF,
-    formatarCPF,
-    mascararTelefone,
-    formatarTelefone,
-    formatarCEP,
-    validarCPF,
-    gerarProtocolo,
-    texto,
-    textoLongo,
-    booleano,
-    numero,
-    paraData,
-    escaparRegex
+    soDigitos, hashCPF, criptografar, descriptografar,
+    mascararCPF, formatarCPF, mascararTelefone, formatarTelefone, formatarCEP,
+    validarCPF, gerarProtocolo, texto, textoLongo, booleano, numero, paraData, escaparRegex
 };
