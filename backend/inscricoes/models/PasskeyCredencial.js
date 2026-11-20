@@ -34,6 +34,10 @@ const PasskeyCredencialSchema = new mongoose.Schema({
         default: ''
     },
 
+    // 🔥 NOVOS CAMPOS PARA O CHALLENGE (Persistência no Banco)
+    challengeAtual: { type: String, default: null },
+    challengeExpiraEm: { type: Date, default: null },
+
     ip: { type: String, default: '' },
     userAgent: { type: String, default: '' },
 

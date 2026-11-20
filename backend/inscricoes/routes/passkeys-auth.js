@@ -12,18 +12,11 @@ const Formulario = require('../models/Formulario');
 const passkeyCrypto = require('../utils/passkeyCrypto');
 const { soDigitos, hashCPF } = require('../utils/seguranca');
 
-// Cache em memória dos challenges de autenticação (TTL 5 min)
-const challenges = new Map();
-const CHALLENGE_TTL_MS = 5 * 60 * 1000;
-
-const _timer = setInterval(() => {
-    const agora = Date.now();
-    for (const [k, v] of challenges.entries()) {
-        if (agora - v.criadoEm > CHALLENGE_TTL_MS) challenges.delete(k);
-    }
-}, 60 * 1000);
-if (_timer.unref) _timer.unref();
-
+// Função helper para normalizar Base64URL (ignora +, /, =)
+function normalizarB64Url(str) {
+    if (!str) return '';
+    return String(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
 
 function obterRpId(req) {
     return process.env.WEBAUTHN_RP_ID || req.headers.host?.split(':')[0] || 'localhost';
@@ -31,26 +24,6 @@ function obterRpId(req) {
 
 function obterOrigin(req) {
     return process.env.WEBAUTHN_ORIGIN || `${req.protocol}://${req.headers.host}`;
-}
-
-function criarChallenge(chave) {
-    const challenge = passkeyCrypto.gerarChallenge();
-    challenges.set(chave, { challenge, criadoEm: Date.now() });
-    return challenge;
-}
-
-// Adicione no topo, perto de criarChallenge e consumirChallenge
-function normalizarB64Url(str) {
-    if (!str) return '';
-    return String(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function consumirChallenge(chave) {
-    const reg = challenges.get(chave);
-    if (!reg) return null;
-    challenges.delete(chave);
-    if (Date.now() - reg.criadoEm > CHALLENGE_TTL_MS) return null;
-    return reg.challenge;
 }
 
 // ============================================================================
@@ -167,8 +140,16 @@ router.post('/autenticar/iniciar', async (req, res) => {
             });
         }
 
-        const chave = `auth:${chaveBusca}`;
-        const challenge = criarChallenge(chave);
+        // 🔥 GERA O CHALLENGE E SALVA NO BANCO DE DADOS
+        const challenge = passkeyCrypto.gerarChallenge();
+        const expiraEm = new Date(Date.now() + 5 * 60 * 1000); // 5 minutos
+
+        // Atualiza todas as credenciais encontradas com o novo challenge
+        const idsCredenciais = credenciais.map(c => c._id);
+        await PasskeyCredencial.updateMany(
+            { _id: { $in: idsCredenciais } },
+            { $set: { challengeAtual: challenge, challengeExpiraEm: expiraEm } }
+        );
 
         res.json({
             success: true,
@@ -201,6 +182,7 @@ router.post('/autenticar/concluir', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Credencial ausente.' });
         }
 
+        // Busca a passkey e o challenge salvo nela
         const doc = await PasskeyCredencial.findOne({
             credentialId: credential.id,
             ativo: true
@@ -209,33 +191,15 @@ router.post('/autenticar/concluir', async (req, res) => {
             return res.status(404).json({ success: false, error: 'Biometria não encontrada ou revogada.' });
         }
 
-        // 🔥 Tenta consumir o challenge por TODAS as chaves possíveis (evita erro de cache)
-        const chavesParaTentar = [];
-        if (cpf) {
-            const d = soDigitos(cpf);
-            if (d.length === 11) chavesParaTentar.push(`auth:cpf:${hashCPF(d)}`);
-        }
-        if (matriculaId) chavesParaTentar.push(`auth:matricula:${matriculaId}`);
-        if (inscricaoId) chavesParaTentar.push(`auth:inscricao:${inscricaoId}`);
-        if (nome) chavesParaTentar.push(`auth:nome:${nome.trim().toLowerCase()}`);
-        
-        if (doc.matriculaId) chavesParaTentar.push(`auth:matricula:${doc.matriculaId}`);
-        if (doc.inscricaoId) chavesParaTentar.push(`auth:inscricao:${doc.inscricaoId}`);
-        if (doc.responsavelCpfHash) chavesParaTentar.push(`auth:cpf:${doc.responsavelCpfHash}`);
-        if (doc.alunoNome) chavesParaTentar.push(`auth:nome:${doc.alunoNome.trim().toLowerCase()}`);
-
-        let esperado = null;
-        for (const chave of chavesParaTentar) {
-            const tentativa = consumirChallenge(chave);
-            if (tentativa) {
-                esperado = tentativa;
-                console.log(`✅ Challenge recuperado usando a chave: ${chave}`);
-                break;
-            }
-        }
+        const esperado = doc.challengeAtual;
+        const expiraEm = doc.challengeExpiraEm;
 
         if (!esperado) {
-            return res.status(400).json({ success: false, error: 'Challenge expirado ou inválido.' });
+            return res.status(400).json({ success: false, error: 'Nenhum challenge pendente. Inicie a autenticação novamente.' });
+        }
+
+        if (expiraEm && new Date() > expiraEm) {
+            return res.status(400).json({ success: false, error: 'Challenge expirado. Tente novamente.' });
         }
 
         const resp = credential.response;
@@ -246,23 +210,21 @@ router.post('/autenticar/concluir', async (req, res) => {
             return res.status(400).json({ success: false, error: 'clientDataJSON inválido.' });
         }
 
-        if (clientData.type !== 'webauthn.get') {
-            return res.status(400).json({ success: false, error: 'Tipo de cerimônia inválido.' });
+        // Comparação normalizada (ignora + e -)
+        if (normalizarB64Url(clientData.challenge) !== normalizarB64Url(esperado)) {
+            console.warn(`❌ Challenge não confere. Recebido: ${clientData.challenge} | Esperado: ${esperado}`);
+            return res.status(400).json({ success: false, error: 'Challenge não confere.' });
         }
 
-        // 🔥 CORREÇÃO CRÍTICA: Compara o challenge normalizado (ignora se é + ou -)
-        const challengeRecebidoNorm = normalizarB64Url(clientData.challenge);
-        const challengeEsperadoNorm = normalizarB64Url(esperado);
-        
-        if (challengeRecebidoNorm !== challengeEsperadoNorm) {
-            console.warn(`❌ Challenge não confere. Recebido: ${challengeRecebidoNorm} | Esperado: ${challengeEsperadoNorm}`);
-            return res.status(400).json({ success: false, error: 'Challenge não confere.' });
+        if (clientData.type !== 'webauthn.get') {
+            return res.status(400).json({ success: false, error: 'Tipo de cerimônia inválido.' });
         }
 
         if (clientData.origin !== obterOrigin(req)) {
             return res.status(400).json({ success: false, error: 'Origin não confere.' });
         }
 
+        // Valida a assinatura criptográfica
         const ok = passkeyCrypto.verificarAssertion({
             publicKeyJwk: doc.publicKeyJwk,
             clientDataJSON: resp.clientDataJSON,
@@ -274,10 +236,14 @@ router.post('/autenticar/concluir', async (req, res) => {
             return res.status(401).json({ success: false, error: 'Assinatura inválida.' });
         }
 
+        // 🔥 LIMPA O CHALLENGE DO BANCO (segurança)
         doc.counter = (doc.counter || 0) + 1;
         doc.ultimoUsoEm = new Date();
+        doc.challengeAtual = null;
+        doc.challengeExpiraEm = null;
         await doc.save();
 
+        // Contexto para o frontend
         const contexto = { tipo: null, inscricao: null, matricula: null };
 
         if (doc.inscricaoId) {
