@@ -1,7 +1,6 @@
 /* ============================================================================
    inscricoes-admin.js — Painel de gestão de inscrições
    Carregado por: gerenciar.html
-   Inclui: config de biometria, filtro e coluna de biometria, gestão de passkeys
    ============================================================================ */
 'use strict';
 
@@ -167,35 +166,29 @@ const estado = {
     limitePasskey: 20,
     totalPaginasPasskey: 1,
     totalPasskey: 0,
-    filtrosPasskey: { busca: '', ativo: '' }
+    filtrosPasskey: { busca: '', ativo: '' },
+    listaPasskeys: []
 };
 
 // ============================================================================
 // ESCONDE CONTROLES DE ADMIN
 // ============================================================================
 function esconderControlesAdmin() {
-    if (isAdmin()) return; // Se for admin, não esconde nada
+    if (isAdmin()) return; 
 
-    // 1. Esconder Abas não permitidas (Configurações e Biometrias)
     document.querySelectorAll('.adm-tab').forEach(tab => {
         const alvo = (tab.dataset.tab || '').toLowerCase();
         const texto = (tab.textContent || '').toLowerCase();
         
-        // Esconde se for config ou passkeys
         if (
-            alvo === 'config' || 
-            alvo === 'configuracoes' || 
-            alvo === 'passkeys' || 
-            alvo === 'biometrias' ||
-            texto.includes('configura') ||
-            texto.includes('biometria')
+            alvo === 'config' || alvo === 'configuracoes' || alvo === 'passkeys' || alvo === 'biometrias' ||
+            texto.includes('configura') || texto.includes('biometria')
         ) {
             tab.style.display = 'none';
             tab.setAttribute('aria-hidden', 'true');
         }
     });
 
-    // 2. Esconder os painéis correspondentes
     ['#panel-config', '#panel-configuracoes', '#panel-passkeys', '#panel-biometrias'].forEach(sel => {
         const p = document.querySelector(sel);
         if (p) { 
@@ -205,15 +198,12 @@ function esconderControlesAdmin() {
         }
     });
 
-    // 3. Esconder botão de exportar (se não for admin/gestao)
     const role = normalizarRole(getPerfil()?.role);
     const podeExportar = ['admin','super_admin','gestao'].includes(role);
     if (!podeExportar) {
         const btnExportar = document.getElementById('btn-exportar');
         if (btnExportar) { btnExportar.style.display = 'none'; btnExportar.setAttribute('aria-hidden', 'true'); }
     }
-    
-    console.log('🛡️ [inscricoes-admin] Controles de admin ocultados para perfil:', getPerfil()?.role);
 }
 
 // ============================================================================
@@ -262,7 +252,6 @@ function configurarBotaoVoltar() {
 // DASHBOARD
 // ============================================================================
 async function carregarDashboard() {
-    // 1. Feedback visual imediato
     const idsNumeros = ['st-total', 'st-pendentes', 'st-analise', 'st-aprovadas', 'st-concluidas', 'st-canceladas', 'st-cadunico', 'st-deficiencia', 'hero-total', 'hero-pendentes', 'hero-aprovadas'];
     
     idsNumeros.forEach(id => {
@@ -279,12 +268,10 @@ async function carregarDashboard() {
     const elUltimas = document.getElementById('ultimas-inscricoes');
     if (elUltimas) elUltimas.innerHTML = '<div class="adm-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div>';
 
-    // 2. Busca os dados
     try {
         const data = await api(API.dashboard);
         const r = data.resumo || {};
 
-        // 3. Preenche os números
         const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v ?? 0; };
         set('st-total', r.total);
         set('st-pendentes', r.pendentes);
@@ -298,7 +285,6 @@ async function carregarDashboard() {
         set('hero-pendentes', r.pendentes);
         set('hero-aprovadas', r.aprovadas);
 
-        // 4. Gráfico de Renda
         const renda = data.porFaixaRenda || [];
         const maxRenda = Math.max(1, ...renda.map(x => x.total));
         if (elRenda) {
@@ -311,7 +297,6 @@ async function carregarDashboard() {
                     </div>`).join('');
         }
 
-        // 5. Gráfico de Bairros
         const bairros = data.porBairro || [];
         const maxB = Math.max(1, ...bairros.map(x => x.total));
         if (elBairros) {
@@ -324,7 +309,6 @@ async function carregarDashboard() {
                     </div>`).join('');
         }
 
-        // 6. Últimas Inscrições
         const ultimas = data.ultimas || [];
         if (elUltimas) {
             elUltimas.innerHTML = ultimas.length === 0
@@ -348,20 +332,15 @@ async function carregarDashboard() {
                         </div>
                     </div>`).join('');
         }
-
     } catch (err) {
         console.error('Erro no dashboard:', err);
-        
-        // Fallback caso dê erro
         idsNumeros.forEach(id => {
             const el = document.getElementById(id);
             if (el) el.textContent = '0';
         });
-        
-        if (elRenda) elRenda.innerHTML = '<div class="adm-empty" style="color:#dc2626;"><i class="fas fa-circle-exclamation"></i> Erro ao carregar dados.</div>';
-        if (elBairros) elBairros.innerHTML = '<div class="adm-empty" style="color:#dc2626;"><i class="fas fa-circle-exclamation"></i> Erro ao carregar dados.</div>';
-        if (elUltimas) elUltimas.innerHTML = '<div class="adm-empty" style="color:#dc2626;"><i class="fas fa-circle-exclamation"></i> Erro ao carregar dados.</div>';
-
+        if (elRenda) elRenda.innerHTML = '<div class="adm-empty" style="color:#dc2626;"><i class="fas fa-circle-exclamation"></i> Erro</div>';
+        if (elBairros) elBairros.innerHTML = '<div class="adm-empty" style="color:#dc2626;"><i class="fas fa-circle-exclamation"></i> Erro</div>';
+        if (elUltimas) elUltimas.innerHTML = '<div class="adm-empty" style="color:#dc2626;"><i class="fas fa-circle-exclamation"></i> Erro</div>';
         toast('Erro ao carregar dashboard: ' + err.message, 'error');
     }
 }
@@ -391,7 +370,7 @@ async function carregarLista(pagina = 1) {
         estado.total = pag.total || 0;
 
         if (lista.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="11"><div class="adm-empty"><i class="fas fa-user-slash"></i> Nenhuma inscrição encontrada com os filtros atuais.</div></td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="11"><div class="adm-empty"><i class="fas fa-user-slash"></i> Nenhuma inscrição encontrada.</div></td></tr>`;
             renderPaginacao();
             return;
         }
@@ -428,17 +407,14 @@ async function carregarLista(pagina = 1) {
                 <td><span class="adm-cell-sub" style="margin:0">${fmtData(i.createdAt)}</span></td>
                 <td>
                     <div class="adm-row-actions">
-                        <button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon"
-                                onclick="adm.verDetalhe('${i._id}')" title="Ver detalhes">
+                        <button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon" onclick="adm.verDetalhe('${i._id}')" title="Ver detalhes">
                             <i class="fas fa-eye"></i>
                         </button>
-                        <button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon"
-                                onclick="adm.editar('${i._id}')" title="Editar">
+                        <button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon" onclick="adm.editar('${i._id}')" title="Editar">
                             <i class="fas fa-pen"></i>
                         </button>
                         ${podeExcluir ? `
-                            <button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon"
-                                    onclick="adm.excluir('${i._id}', '${escapeHtml(i.protocolo)}')" title="Excluir">
+                            <button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon" onclick="adm.excluir('${i._id}', '${escapeHtml(i.protocolo)}')" title="Excluir">
                                 <i class="fas fa-trash" style="color:#dc2626"></i>
                             </button>` : ''}
                     </div>
@@ -542,28 +518,16 @@ async function verDetalhe(id) {
             </div>
 
             ${blocoDetalhe('Aluno', 'fa-user-graduate', [
-                ['Nome completo', a.nomeCompleto],
-                ['Data de nascimento', fmtData(a.dataNascimento)],
-                ['CPF', f.cpfAluno || a.cpf],
-                ['Sexo', a.sexo],
-                ['RG', a.rg],
-                ['E-mail', a.email],
-                ['Telefone', f.telefoneAluno || a.telefone],
-                ['Possui CadÚnico', fmtBool(a.temCadUnico)],
-                ['NIS', a.nis]
+                ['Nome completo', a.nomeCompleto], ['Data de nascimento', fmtData(a.dataNascimento)],
+                ['CPF', f.cpfAluno || a.cpf], ['Sexo', a.sexo], ['RG', a.rg], ['E-mail', a.email],
+                ['Telefone', f.telefoneAluno || a.telefone], ['Possui CadÚnico', fmtBool(a.temCadUnico)], ['NIS', a.nis]
             ])}
 
             ${blocoDetalhe('Responsável', 'fa-user-tie', [
-                ['Nome completo', r.nomeCompleto],
-                ['Grau de parentesco', r.grauParentesco],
-                ['Data de nascimento', fmtData(r.dataNascimento)],
-                ['CPF', f.cpfResponsavel || r.cpf],
-                ['Sexo', r.sexo],
-                ['RG', r.rg],
-                ['E-mail', r.email],
-                ['Telefone', f.telefoneResponsavel || r.telefone],
-                ['Possui CadÚnico', fmtBool(r.temCadUnico)],
-                ['NIS', r.nis]
+                ['Nome completo', r.nomeCompleto], ['Grau de parentesco', r.grauParentesco],
+                ['Data de nascimento', fmtData(r.dataNascimento)], ['CPF', f.cpfResponsavel || r.cpf],
+                ['Sexo', r.sexo], ['RG', r.rg], ['E-mail', r.email],
+                ['Telefone', f.telefoneResponsavel || r.telefone], ['Possui CadÚnico', fmtBool(r.temCadUnico)], ['NIS', r.nis]
             ])}
 
             ${blocoDetalhe('Endereço', 'fa-location-dot', [
@@ -572,32 +536,22 @@ async function verDetalhe(id) {
             ])}
 
             ${blocoDetalhe('Composição familiar', 'fa-people-roof', [
-                ['Pessoas na residência', c.pessoasResidem],
-                ['Graus de parentesco', (c.grausParentesco || []).join(', ')],
-                ['Dependentes menores', c.dependentesMenores],
-                ['Escolaridade do pai', c.escolaridadePai],
-                ['Escolaridade da mãe', c.escolaridadeMae],
-                ['Ocupação do pai', c.ocupacaoPai],
-                ['Ocupação da mãe', c.ocupacaoMae]
+                ['Pessoas na residência', c.pessoasResidem], ['Graus de parentesco', (c.grausParentesco || []).join(', ')],
+                ['Dependentes menores', c.dependentesMenores], ['Escolaridade do pai', c.escolaridadePai],
+                ['Escolaridade da mãe', c.escolaridadeMae], ['Ocupação do pai', c.ocupacaoPai], ['Ocupação da mãe', c.ocupacaoMae]
             ])}
 
             ${blocoDetalhe('Condição de moradia', 'fa-house-chimney', [
-                ['Água encanada', fmtBool(cm.aguaEncanada)],
-                ['Energia elétrica', fmtBool(cm.energiaEletrica)],
-                ['Esgoto sanitário', fmtBool(cm.esgotoSanitario)],
-                ['Internet banda larga', fmtBool(cm.internetBandaLarga)]
+                ['Água encanada', fmtBool(cm.aguaEncanada)], ['Energia elétrica', fmtBool(cm.energiaEletrica)],
+                ['Esgoto sanitário', fmtBool(cm.esgotoSanitario)], ['Internet banda larga', fmtBool(cm.internetBandaLarga)]
             ])}
 
             ${blocoDetalhe('Renda familiar', 'fa-coins', [
-                ['Faixa de renda', rf.faixaRenda],
-                ['Programas sociais', (rf.programasSociais || []).join(', ')],
-                ['Outro programa', rf.programaOutro]
+                ['Faixa de renda', rf.faixaRenda], ['Programas sociais', (rf.programasSociais || []).join(', ')], ['Outro programa', rf.programaOutro]
             ])}
 
             ${blocoDetalhe('Informações adicionais', 'fa-circle-info', [
-                ['Possui deficiência', fmtBool(ia.possuiDeficiencia)],
-                ['Qual deficiência', ia.deficienciaQual],
-                ['Acesso a dispositivos', fmtBool(ia.acessoDispositivos)]
+                ['Possui deficiência', fmtBool(ia.possuiDeficiencia)], ['Qual deficiência', ia.deficienciaQual], ['Acesso a dispositivos', fmtBool(ia.acessoDispositivos)]
             ])}
 
             ${bio && bio.aceito ? `
@@ -613,13 +567,9 @@ async function verDetalhe(id) {
                 </div>` : ''}
 
             ${blocoDetalhe('LGPD e auditoria', 'fa-shield-halved', [
-                ['Consentimento aceito', fmtBool(lg.aceito)],
-                ['Aceito em', fmtDataHora(lg.aceitoEm)],
-                ['Versão do termo', lg.versaoTermo],
-                ['IP de origem', lg.ip],
-                ['Origem do cadastro', i.origem],
-                ['Criado em', fmtDataHora(i.createdAt)],
-                ['Atualizado em', fmtDataHora(i.updatedAt)]
+                ['Consentimento aceito', fmtBool(lg.aceito)], ['Aceito em', fmtDataHora(lg.aceitoEm)],
+                ['Versão do termo', lg.versaoTermo], ['IP de origem', lg.ip], ['Origem do cadastro', i.origem],
+                ['Criado em', fmtDataHora(i.createdAt)], ['Atualizado em', fmtDataHora(i.updatedAt)]
             ])}
 
             ${i.observacoesAdmin ? `
@@ -807,7 +757,7 @@ async function excluir(id, protocolo) {
     if (!isAdmin()) { toast('Apenas administradores podem excluir inscrições.', 'warning'); return; }
     const ok = await confirmar({
         titulo: 'Excluir inscrição',
-        mensagem: `Deseja realmente excluir a inscrição ${protocolo}? Esta ação é irreversível e remove todos os dados coletados.`,
+        mensagem: `Deseja realmente excluir a inscrição ${protocolo}? Esta ação é irreversível.`,
         textoOk: 'Excluir permanentemente'
     });
     if (!ok) return;
@@ -901,7 +851,6 @@ async function carregarConfig() {
             const periodo = document.getElementById('hero-periodo'); if (periodo) periodo.textContent = '19/11/2026 a 19/01/2027';
             const chip = document.getElementById('hero-status-chip');
             if (chip) { chip.className = 'adm-chip ok'; chip.innerHTML = '<i class="fas fa-circle-check"></i> Inscrições abertas'; }
-            console.log('ℹ️ [inscricoes-admin] Config não acessível para gestão — usando fallback fixo no hero.');
             return;
         }
         toast('Erro ao carregar configuração: ' + err.message, 'error');
@@ -955,7 +904,7 @@ async function salvarConfig(e) {
 // GESTÃO DE PASSKEYS / BIOMETRIAS
 // ============================================================================
 async function carregarPasskeys(pagina = 1) {
-    if (!isAdmin()) return; // Trava de segurança extra
+    if (!isAdmin()) return; 
 
     const tbody = document.getElementById('tbody-passkeys');
     if (!tbody) return;
@@ -976,14 +925,13 @@ async function carregarPasskeys(pagina = 1) {
 
         estado.totalPaginasPasskey = pag.totalPaginas || 1;
         estado.totalPasskey = pag.total || 0;
+        estado.listaPasskeys = lista; 
 
         if (lista.length === 0) {
             tbody.innerHTML = `<tr><td colspan="7"><div class="adm-empty"><i class="fas fa-fingerprint"></i> Nenhuma biometria encontrada com os filtros atuais.</div></td></tr>`;
             renderPaginacaoPasskeys();
             return;
         }
-
-        const podeEditar = isAdmin() || normalizarRole(getPerfil()?.role) === 'gestao';
 
         tbody.innerHTML = lista.map(p => {
             const dtCadastro = p.createdAt ? new Date(p.createdAt).toLocaleDateString('pt-BR') : '—';
@@ -995,7 +943,7 @@ async function carregarPasskeys(pagina = 1) {
 
             const alunoVinculado = p.alunoNome 
                 ? `<span class="adm-cell-strong">${escapeHtml(p.alunoNome)}</span>` 
-                : '<span class="adm-cell-sub" style="margin:0;font-style:italic;">Não vinculado</span>';
+                : '<span class="adm-cell-sub" style="margin:0;font-style:italic;color:#ef4444;">Não vinculado</span>';
 
             return `
                 <tr style="${!p.ativo ? 'opacity:0.6;' : ''}">
@@ -1007,12 +955,18 @@ async function carregarPasskeys(pagina = 1) {
                     <td><span class="adm-cell-sub" style="margin:0">${dtUso}</span></td>
                     <td>
                         <div class="adm-row-actions">
+                            <button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon" onclick="adm.verDetalhePasskey('${p._id}')" title="Visualizar">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon" onclick="adm.editarPasskey('${p._id}')" title="Editar Nome">
+                                <i class="fas fa-pen"></i>
+                            </button>
                             ${p.ativo ? `
-                                <button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon" onclick="adm.revogarPasskey('${p._id}', '${escapeHtml(p.responsavelNome)}')" title="Revogar Biometria">
+                                <button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon" onclick="adm.revogarPasskey('${p._id}', '${escapeHtml(p.responsavelNome)}')" title="Revogar">
                                     <i class="fas fa-ban" style="color:#dc2626"></i>
                                 </button>
                             ` : `
-                                <button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon" onclick="adm.reativarPasskey('${p._id}')" title="Reativar Biometria">
+                                <button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon" onclick="adm.reativarPasskey('${p._id}')" title="Reativar">
                                     <i class="fas fa-rotate-left" style="color:#10b981"></i>
                                 </button>
                             `}
@@ -1075,6 +1029,52 @@ function configurarFiltrosPasskeys() {
 
     const status = document.getElementById('f-status-passkey');
     if (status) status.addEventListener('change', recarregar);
+}
+
+function verDetalhePasskey(id) {
+    const p = estado.listaPasskeys.find(x => x._id === id);
+    if (!p) return;
+
+    const modal = document.getElementById('modal-passkey');
+    const conteudo = document.getElementById('passkey-conteudo');
+    
+    conteudo.innerHTML = `
+        <div class="adm-det-bloco">
+            <h4><i class="fas fa-fingerprint"></i> Credencial WebAuthn</h4>
+            <div class="adm-det-grid">
+                <div class="adm-det-item"><span>Responsável</span><strong>${escapeHtml(p.responsavelNome)}</strong></div>
+                <div class="adm-det-item"><span>Aluno Vinculado</span><strong>${p.alunoNome ? escapeHtml(p.alunoNome) : 'Não vinculado'}</strong></div>
+                <div class="adm-det-item"><span>ID da Credencial</span><strong style="word-break:break-all;font-size:12px">${escapeHtml(p.credentialId)}</strong></div>
+                <div class="adm-det-item"><span>Status</span><strong>${p.ativo ? 'Ativa' : 'Revogada'}</strong></div>
+                <div class="adm-det-item"><span>Data do Cadastro</span><strong>${p.createdAt ? fmtDataHora(p.createdAt) : '—'}</strong></div>
+                <div class="adm-det-item"><span>Último Uso</span><strong>${p.ultimoUsoEm ? fmtDataHora(p.ultimoUsoEm) : 'Nunca usado'}</strong></div>
+                <div class="adm-det-item"><span>Transportes</span><strong>${(p.transports || []).join(', ') || 'Não informado'}</strong></div>
+            </div>
+        </div>
+    `;
+    abrirModal('modal-passkey');
+}
+
+async function editarPasskey(id) {
+    const p = estado.listaPasskeys.find(x => x._id === id);
+    if (!p) return;
+
+    const novoNome = prompt("Digite o novo nome do responsável:", p.responsavelNome);
+    if (novoNome === null || novoNome.trim() === '' || novoNome === p.responsavelNome) return;
+
+    try {
+        loader(true, 'Salvando...');
+        await api(`${API.passkeys}/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ responsavelNome: novoNome.trim() })
+        });
+        toast('Nome do responsável atualizado!', 'success');
+        carregarPasskeys(estado.paginaPasskey);
+    } catch (err) {
+        toast('Erro ao editar: ' + err.message, 'error');
+    } finally {
+        loader(false);
+    }
 }
 
 async function revogarPasskey(id, nome) {
@@ -1189,16 +1189,13 @@ document.addEventListener('DOMContentLoaded', () => {
     configurarBotaoVoltar();
     configurarModais();
     configurarFiltros();
-    configurarFiltrosPasskeys(); // Inicializa filtros da aba de biometria
+    configurarFiltrosPasskeys();
 
-    const form = document.getElementById('config-form'); // fallback caso o ID mude
+    const form = document.getElementById('config-form'); 
     const formConfig = document.getElementById('form-config') || form;
     if (formConfig) formConfig.addEventListener('submit', salvarConfig);
 
-    // ⚠️ CORREÇÃO: Carrega o Hero (ano, período, status) logo ao abrir a página
     carregarConfig(); 
-
-    // Carrega o dashboard
     carregarDashboard();
 });
 
@@ -1207,6 +1204,8 @@ window.adm = {
     carregarPasskeys,
     revogarPasskey,
     reativarPasskey,
+    verDetalhePasskey,
+    editarPasskey,
     irParaInscricoes: () => {
         const tab = document.querySelector('.adm-tab[data-tab="inscricoes"]');
         if (tab) tab.click();

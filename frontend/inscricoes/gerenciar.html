@@ -20,7 +20,6 @@
 
 <div id="adm-loader"><div class="spinner"></div><p>Carregando...</p></div>
 
-<!-- ============================= TOPBAR ============================= -->
 <header class="adm-topbar">
     <div class="adm-brand">
         <div class="adm-brand-logo"><i class="fas fa-clipboard-user"></i></div>
@@ -42,7 +41,6 @@
 
 <main class="adm-shell">
 
-    <!-- ============================= HERO ============================= -->
     <section class="adm-hero">
         <div class="adm-hero-info">
             <h1><i class="fas fa-clipboard-user"></i> Módulo de Inscrições</h1>
@@ -60,15 +58,13 @@
         </div>
     </section>
 
-    <!-- ============================= TABS ============================= -->
     <nav class="adm-tabs" role="tablist">
         <button class="adm-tab active" data-tab="dashboard"><i class="fas fa-chart-pie"></i> Dashboard</button>
         <button class="adm-tab" data-tab="inscricoes"><i class="fas fa-list"></i> Inscrições</button>
-        <button class="adm-tab" data-tab="passkeys"><i class="fas fa-fingerprint"></i> Biometrias (Passkeys)</button>
+        <button class="adm-tab" data-tab="passkeys"><i class="fas fa-fingerprint"></i> Biometrias</button>
         <button class="adm-tab" data-tab="config"><i class="fas fa-gear"></i> Configurações</button>
     </nav>
 
-    <!-- ============================= DASHBOARD ============================= -->
     <section class="adm-panel active" id="panel-dashboard">
         <div class="adm-stats">
             <div class="adm-stat"><div class="adm-stat-icon"><i class="fas fa-users"></i></div><h3>Total</h3><div class="adm-stat-value" id="st-total">—</div></div>
@@ -104,7 +100,6 @@
         </div>
     </section>
 
-    <!-- ============================= INSCRIÇÕES ============================= -->
     <section class="adm-panel" id="panel-inscricoes">
         <div class="adm-card">
             <div class="adm-card-head">
@@ -200,7 +195,6 @@
         </div>
     </section>
 
-    <!-- ============================= PASSKEYS / BIOMETRIAS ============================= -->
     <section class="adm-panel" id="panel-passkeys">
         <div class="adm-card">
             <div class="adm-card-head">
@@ -250,7 +244,6 @@
         </div>
     </section>
 
-    <!-- ============================= CONFIGURAÇÕES ============================= -->
     <section class="adm-panel" id="panel-config">
         <form class="adm-card" id="form-config">
             <div class="adm-card-head"><h3><i class="fas fa-gear"></i> Configuração do processo</h3></div>
@@ -336,7 +329,6 @@
         </form>
     </section>
 
-    <!-- ============================= QR CODES DE ACESSO RÁPIDO ============================= -->
     <section class="adm-card" style="margin-top:24px">
         <div class="adm-card-head">
             <h3><i class="fas fa-qrcode"></i> QR Codes de Acesso Rápido</h3>
@@ -346,7 +338,6 @@
         </div>
 
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:16px; padding:8px 0;">
-            <!-- QR 1 — Inscrição -->
             <div style="text-align:center; padding:20px 16px; background:#f9fafb; border-radius:14px; border:1.5px solid #e5e7eb;">
                 <div id="qrcode-inscricao" style="display:inline-block; padding:12px; background:white; border-radius:10px; margin-bottom:12px;"></div>
                 <h4 style="font-size:14px; color:#1f2937; margin:0 0 4px;">
@@ -358,7 +349,6 @@
                 </a>
             </div>
 
-            <!-- QR 2 — Vincular Biometria -->
             <div style="text-align:center; padding:20px 16px; background:#f9fafb; border-radius:14px; border:1.5px solid #e5e7eb;">
                 <div id="qrcode-biometria" style="display:inline-block; padding:12px; background:white; border-radius:10px; margin-bottom:12px;"></div>
                 <h4 style="font-size:14px; color:#1f2937; margin:0 0 4px;">
@@ -370,7 +360,6 @@
                 </a>
             </div>
 
-            <!-- QR 3 — Consulta de Inscrição -->
             <div style="text-align:center; padding:20px 16px; background:#f9fafb; border-radius:14px; border:1.5px solid #e5e7eb;">
                 <div id="qrcode-consulta" style="display:inline-block; padding:12px; background:white; border-radius:10px; margin-bottom:12px;"></div>
                 <h4 style="font-size:14px; color:#1f2937; margin:0 0 4px;">
@@ -382,17 +371,10 @@
                 </a>
             </div>
         </div>
-
-        <div style="margin-top:16px; padding:14px 18px; background:#eff6ff; border-radius:10px; border-left:4px solid #3b82f6; font-size:13px; line-height:1.6; color:#1e40af;">
-            <i class="fas fa-info-circle" style="margin-right:6px;"></i>
-            <strong>Dica:</strong> use o botão <em>Imprimir esta página</em> do navegador (Ctrl+P) para gerar um cartaz com os QR Codes.
-            Os links são gerados automaticamente com base no domínio atual (<span id="qr-origin">—</span>).
-        </div>
     </section>
 
 </main>
 
-<!-- ============================= MODAL DETALHE (Inscrição) ============================= -->
 <div class="adm-modal" id="modal-detalhe">
     <div class="adm-modal-box adm-modal-lg">
         <div class="adm-modal-head">
@@ -406,7 +388,6 @@
     </div>
 </div>
 
-<!-- ============================= MODAL EDIÇÃO ============================= -->
 <div class="adm-modal" id="modal-editar">
     <div class="adm-modal-box adm-modal-lg">
         <div class="adm-modal-head">
@@ -423,7 +404,7 @@
     </div>
 </div>
 
-<!-- ============================= MODAL DETALHE (Passkey) ============================= -->
+<!-- MODAL DE DETALHE DA PASSKEY (Adicionado) -->
 <div class="adm-modal" id="modal-passkey">
     <div class="adm-modal-box adm-modal-md">
         <div class="adm-modal-head">
@@ -437,7 +418,6 @@
     </div>
 </div>
 
-<!-- ============================= MODAL CONFIRMAÇÃO ============================= -->
 <div class="adm-modal" id="modal-confirmar">
     <div class="adm-modal-box adm-modal-sm">
         <div class="adm-modal-head adm-modal-head-danger">
@@ -458,7 +438,6 @@
 
 <script src="js/inscricoes-admin.js"></script>
 
-<!-- ============================= QR CODE GENERATOR ============================= -->
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
 (function () {

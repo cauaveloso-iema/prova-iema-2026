@@ -1,11 +1,6 @@
 // ============================================================================
 // backend/inscricoes/routes/passkeys.js
 // Base: /api/inscricoes/passkeys
-//
-//   POST /registrar/iniciar    → gera challenge para cadastro de passkey
-//   POST /registrar/concluir   → valida e salva a passkey
-//   GET  /listar/:cpfHash      → lista passkeys de um responsável (admin)
-//   DELETE /:credentialId      → revoga passkey (admin)
 // ============================================================================
 'use strict';
 
@@ -15,6 +10,8 @@ const router = express.Router();
 const PasskeyCredencial = require('../models/PasskeyCredencial');
 const passkeyCrypto = require('../utils/passkeyCrypto');
 const { soDigitos, hashCPF, texto } = require('../utils/seguranca');
+const { authenticateToken, podeConsultar, podeEditar } = require('../middlewares/auth-inscricoes');
+const Formulario = require('../models/Formulario');
 
 // Cache em memória dos challenges (TTL 5 min)
 const challenges = new Map();
@@ -28,14 +25,11 @@ setInterval(() => {
 }, 60 * 1000).unref();
 
 function obterRpId(req) {
-    return process.env.WEBAUTHN_RP_ID
-        || req.headers.host?.split(':')[0]
-        || 'localhost';
+    return process.env.WEBAUTHN_RP_ID || req.headers.host?.split(':')[0] || 'localhost';
 }
 
 function obterOrigin(req) {
-    return process.env.WEBAUTHN_ORIGIN
-        || `${req.protocol}://${req.headers.host}`;
+    return process.env.WEBAUTHN_ORIGIN || `${req.protocol}://${req.headers.host}`;
 }
 
 function criarChallenge(chave) {
@@ -72,8 +66,6 @@ router.post('/registrar/iniciar', (req, res) => {
 
         const rpId = obterRpId(req);
         const rpName = process.env.WEBAUTHN_RP_NAME || 'IEMA EducaPleno';
-
-        // userId estável (cpfHash) — permite agrupar passkeys do mesmo responsável
         const userId = Buffer.from(cpfHash, 'hex');
 
         res.json({
@@ -91,8 +83,6 @@ router.post('/registrar/iniciar', (req, res) => {
                     { type: 'public-key', alg: -257 }
                 ],
                 authenticatorSelection: {
-                    // ⚠️ NÃO forçar 'platform' → permite passkey sincronizada
-                    // (iCloud Keychain / Google Password Manager)
                     userVerification: 'required',
                     residentKey: 'required',
                     requireResidentKey: true
@@ -113,30 +103,20 @@ router.post('/registrar/concluir', async (req, res) => {
         const { cpf, nome, credential, inscricaoId } = req.body || {};
         const cpfDigitos = soDigitos(cpf);
 
-        if (cpfDigitos.length !== 11) {
-            return res.status(400).json({ success: false, error: 'CPF inválido.' });
-        }
-        if (!credential || !credential.response) {
-            return res.status(400).json({ success: false, error: 'Credencial ausente.' });
-        }
+        if (cpfDigitos.length !== 11) return res.status(400).json({ success: false, error: 'CPF inválido.' });
+        if (!credential || !credential.response) return res.status(400).json({ success: false, error: 'Credencial ausente.' });
 
         const cpfHash = hashCPF(cpfDigitos);
         const challengeEsperado = consumirChallenge(`reg:${cpfHash}`);
-        if (!challengeEsperado) {
-            return res.status(400).json({ success: false, error: 'Challenge expirado ou inválido. Refaça o cadastro.' });
-        }
+        if (!challengeEsperado) return res.status(400).json({ success: false, error: 'Challenge expirado ou inválido. Refaça o cadastro.' });
 
-        // Extrai a chave pública do attestationObject
         let extraido;
         try {
-            extraido = passkeyCrypto.extrairChavePublicaDaAttestation(
-                credential.response.attestationObject
-            );
+            extraido = passkeyCrypto.extrairChavePublicaDaAttestation(credential.response.attestationObject);
         } catch (e) {
             return res.status(400).json({ success: false, error: 'Attestation inválida: ' + e.message });
         }
 
-        // Verifica o clientDataJSON
         let clientData;
         try {
             const buf = passkeyCrypto.b64urlDecode(credential.response.clientDataJSON);
@@ -145,21 +125,12 @@ router.post('/registrar/concluir', async (req, res) => {
             return res.status(400).json({ success: false, error: 'clientDataJSON inválido.' });
         }
 
-        if (clientData.type !== 'webauthn.create') {
-            return res.status(400).json({ success: false, error: 'Tipo de cerimônia inválido.' });
-        }
-        if (clientData.challenge !== challengeEsperado) {
-            return res.status(400).json({ success: false, error: 'Challenge não confere.' });
-        }
-        if (clientData.origin !== obterOrigin(req)) {
-            return res.status(400).json({ success: false, error: 'Origin não confere.' });
-        }
+        if (clientData.type !== 'webauthn.create') return res.status(400).json({ success: false, error: 'Tipo de cerimônia inválido.' });
+        if (clientData.challenge !== challengeEsperado) return res.status(400).json({ success: false, error: 'Challenge não confere.' });
+        if (clientData.origin !== obterOrigin(req)) return res.status(400).json({ success: false, error: 'Origin não confere.' });
 
-        // Verifica duplicata
         const existente = await PasskeyCredencial.findOne({ credentialId: extraido.credentialId }).lean();
-        if (existente) {
-            return res.status(409).json({ success: false, error: 'Esta passkey já está registrada.' });
-        }
+        if (existente) return res.status(409).json({ success: false, error: 'Esta passkey já está registrada.' });
 
         const doc = new PasskeyCredencial({
             responsavelCpfHash: cpfHash,
@@ -205,25 +176,9 @@ router.get('/listar/:cpfHash', async (req, res) => {
     }
 });
 
-router.delete('/:credentialId', async (req, res) => {
-    try {
-        const doc = await PasskeyCredencial.findOneAndUpdate(
-            { credentialId: req.params.credentialId },
-            { ativo: false },
-            { new: true }
-        );
-        if (!doc) return res.status(404).json({ success: false, error: 'Passkey não encontrada.' });
-        res.json({ success: true, mensagem: 'Passkey revogada.' });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
-
 // ============================================================================
 // ADMIN — GESTÃO DE PASSKEYS
 // ============================================================================
-const { authenticateToken, podeConsultar, podeEditar } = require('../middlewares/auth-inscricoes');
-const Formulario = require('../models/Formulario'); // Para cruzar dados do aluno
 
 // ---- GET /passkeys/admin (Listar todas) ----
 router.get('/admin', authenticateToken, podeConsultar, async (req, res) => {
@@ -239,7 +194,6 @@ router.get('/admin', authenticateToken, podeConsultar, async (req, res) => {
                 { responsavelNome: rx },
                 { credentialId: rx }
             ];
-            // Se o termo for um CPF válido, tenta buscar pelo hash
             const cpfDigitos = soDigitos(termo);
             if (cpfDigitos.length === 11) {
                 filtro.$or.push({ responsavelCpfHash: hashCPF(cpfDigitos) });
@@ -255,28 +209,37 @@ router.get('/admin', authenticateToken, podeConsultar, async (req, res) => {
                 .sort({ createdAt: -1 })
                 .skip((pagina - 1) * limite)
                 .limit(limite)
-                .select('-publicKeyJwk') // Não envia a chave pública para o front
+                .select('-publicKeyJwk')
                 .lean()
         ]);
 
-        // Cruza com as inscrições para pegar o nome do aluno (se houver inscricaoId)
-        const inscricoesIds = docs.filter(d => d.inscricaoId).map(d => d.inscricaoId);
-        const inscricoes = await Formulario.find({ _id: { $in: inscricoesIds } })
-            .select('_id aluno.nomeCompleto')
-            .lean();
-        
-        const mapaInscricoes = {};
-        inscricoes.forEach(i => { mapaInscricoes[i._id.toString()] = i.aluno?.nomeCompleto || 'Aluno não encontrado'; });
+        // 🔥 CORREÇÃO: Buscar o nome do aluno pelo inscricaoId OU pelo CPF do responsável
+        const lista = await Promise.all(docs.map(async (d) => {
+            let alunoNome = null;
+            
+            if (d.inscricaoId) {
+                const insc = await Formulario.findById(d.inscricaoId).select('aluno.nomeCompleto').lean();
+                if (insc && insc.aluno) alunoNome = insc.aluno.nomeCompleto;
+            }
+            
+            if (!alunoNome && d.responsavelCpfHash) {
+                const insc = await Formulario.findOne({ cpfHash: d.responsavelCpfHash })
+                    .sort({ createdAt: -1 })
+                    .select('aluno.nomeCompleto')
+                    .lean();
+                if (insc && insc.aluno) alunoNome = insc.aluno.nomeCompleto;
+            }
 
-        const lista = docs.map(d => ({
-            _id: d._id,
-            responsavelNome: d.responsavelNome,
-            credentialId: d.credentialId,
-            transports: d.transports,
-            ativo: d.ativo,
-            createdAt: d.createdAt,
-            ultimoUsoEm: d.ultimoUsoEm,
-            alunoNome: d.inscricaoId ? mapaInscricoes[d.inscricaoId.toString()] : null
+            return {
+                _id: d._id,
+                responsavelNome: d.responsavelNome,
+                credentialId: d.credentialId,
+                transports: d.transports,
+                ativo: d.ativo,
+                createdAt: d.createdAt,
+                ultimoUsoEm: d.ultimoUsoEm,
+                alunoNome: alunoNome || null
+            };
         }));
 
         res.json({
@@ -295,7 +258,30 @@ router.get('/admin', authenticateToken, podeConsultar, async (req, res) => {
     }
 });
 
-// ---- DELETE /passkeys/admin/:id (Revogar/Excluir) ----
+// ---- PUT /passkeys/admin/:id (Editar Nome) ----
+router.put('/admin/:id', authenticateToken, podeEditar, async (req, res) => {
+    try {
+        const { responsavelNome } = req.body;
+        if (!responsavelNome) {
+            return res.status(400).json({ success: false, error: 'Nome do responsável é obrigatório.' });
+        }
+
+        const doc = await PasskeyCredencial.findByIdAndUpdate(
+            req.params.id,
+            { responsavelNome: texto(responsavelNome, 150) },
+            { new: true }
+        );
+        
+        if (!doc) return res.status(404).json({ success: false, error: 'Passkey não encontrada.' });
+
+        res.json({ success: true, mensagem: 'Passkey atualizada com sucesso.', passkey: doc });
+    } catch (error) {
+        console.error('❌ [PASSKEYS] Erro ao editar:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ---- DELETE /passkeys/admin/:id (Revogar) ----
 router.delete('/admin/:id', authenticateToken, podeEditar, async (req, res) => {
     try {
         const doc = await PasskeyCredencial.findByIdAndUpdate(
@@ -313,7 +299,7 @@ router.delete('/admin/:id', authenticateToken, podeEditar, async (req, res) => {
     }
 });
 
-// ---- PUT /passkeys/admin/:id (Reativar - opcional) ----
+// ---- PUT /passkeys/admin/:id/reativar ----
 router.put('/admin/:id/reativar', authenticateToken, podeEditar, async (req, res) => {
     try {
         const doc = await PasskeyCredencial.findByIdAndUpdate(
