@@ -812,12 +812,12 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
       assinaturaBase64,
       localizacao,
       alunoId,
-      metodoAutenticacao,     // 🆕 'passkey' | 'totp' (ou omitido = totp)
-      passkeyCredentialId     // 🆕 obrigatório quando metodoAutenticacao === 'passkey'
+      metodoAutenticacao,     // 'passkey' | 'totp' (ou omitido = totp)
+      passkeyCredentialId
     } = req.body;
 
     // ──────────────────────────────────────────────
-    // Validações básicas (mantidas)
+    // Validações básicas
     // ──────────────────────────────────────────────
     if (!nome || !rg || !cpf || !telefone) {
       return res.status(400).json({ success: false, error: 'Nome, RG, CPF e telefone são obrigatórios' });
@@ -841,6 +841,31 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
     }
 
     const responsavelAlvo = termo.responsaveis[respIndex];
+
+    // ──────────────────────────────────────────────
+    // Identifica o aluno para salvar (antes da auth, para usar na validação)
+    // ──────────────────────────────────────────────
+    let alunoIdParaSalvar = paraObjectId(normalizarId(alunoId));
+    if (!alunoIdParaSalvar) alunoIdParaSalvar = paraObjectId(responsavelAlvo.alunoId);
+    if (!alunoIdParaSalvar) {
+      const alunoCorrespondente = termo.alunos?.[respIndex] || termo.alunos?.[0];
+      alunoIdParaSalvar = paraObjectId(alunoCorrespondente?.alunoId || alunoCorrespondente?._id);
+    }
+    if (!alunoIdParaSalvar && termo.alunos?.[0]) {
+      alunoIdParaSalvar = paraObjectId(termo.alunos[0].alunoId || termo.alunos[0]._id);
+    }
+    if (!alunoIdParaSalvar) {
+      return res.status(500).json({
+        success: false,
+        error: 'Não foi possível identificar o aluno no termo'
+      });
+    }
+
+    const alunoCorrespondente = termo.alunos?.find(a =>
+      normalizarId(a.alunoId) === alunoIdParaSalvar.toString()
+    ) || termo.alunos?.[respIndex] || termo.alunos?.[0];
+
+    const alunoNomeParaSalvar = alunoCorrespondente?.nome || responsavelAlvo.alunoNome || '';
 
     // ──────────────────────────────────────────────
     // 🔐 Autenticação — passkey OU totp
@@ -870,7 +895,7 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
         });
       }
 
-      // Confere que a passkey pertence ao aluno (matrícula) OU ao CPF do responsável
+      // Confere vínculo: matrícula, CPF OU nome do aluno
       const cpfLimpoAuth = (cpf || '').replace(/\D/g, '');
       const cpfHashAuth = cpfLimpoAuth.length === 11 ? hash(cpfLimpoAuth) : null;
 
@@ -878,7 +903,12 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
       const pertenceAoAluno = alunoIdNorm && String(passkeyDoc.matriculaId) === alunoIdNorm;
       const pertenceAoResponsavel = cpfHashAuth && passkeyDoc.responsavelCpfHash === cpfHashAuth;
 
-      if (!pertenceAoAluno && !pertenceAoResponsavel) {
+      // 🔥 NOVO: validação por nome do aluno
+      const nomeAlunoNorm = (alunoNomeParaSalvar || '').trim().toLowerCase();
+      const nomePasskeyNorm = (passkeyDoc.alunoNome || '').trim().toLowerCase();
+      const pertencePorNome = nomeAlunoNorm && nomePasskeyNorm && nomeAlunoNorm === nomePasskeyNorm;
+
+      if (!pertenceAoAluno && !pertenceAoResponsavel && !pertencePorNome) {
         return res.status(403).json({
           success: false,
           error: 'Esta biometria não pertence a este aluno/responsável.'
@@ -888,7 +918,7 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
       autenticacaoMetodoFinal = 'passkey';
 
     } else if (metodoAutenticacao === 'totp' || !metodoAutenticacao) {
-      // --- Caminho TOTP (fallback legado) ---
+      // --- Caminho TOTP ---
       if (!responsavelAlvo.totpVerified) {
         return res.status(400).json({
           success: false,
@@ -905,7 +935,7 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
     }
 
     // ──────────────────────────────────────────────
-    // 🔁 Validação de status (mantida)
+    // 🔁 Validação de status
     // ──────────────────────────────────────────────
     if (responsavelAlvo.status === 'autorizado') {
       return res.status(400).json({ success: false, error: 'Este aluno já foi autorizado por você' });
@@ -918,37 +948,6 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
     if (cpfLimpo.length !== 11) {
       return res.status(400).json({ success: false, error: 'CPF inválido' });
     }
-
-    // ──────────────────────────────────────────────
-    // 👤 Identifica o aluno para salvar (mantido)
-    // ──────────────────────────────────────────────
-    let alunoIdParaSalvar = paraObjectId(normalizarId(alunoId));
-
-    if (!alunoIdParaSalvar) {
-      alunoIdParaSalvar = paraObjectId(responsavelAlvo.alunoId);
-    }
-
-    if (!alunoIdParaSalvar) {
-      const alunoCorrespondente = termo.alunos?.[respIndex] || termo.alunos?.[0];
-      alunoIdParaSalvar = paraObjectId(alunoCorrespondente?.alunoId || alunoCorrespondente?._id);
-    }
-
-    if (!alunoIdParaSalvar && termo.alunos?.[0]) {
-      alunoIdParaSalvar = paraObjectId(termo.alunos[0].alunoId || termo.alunos[0]._id);
-    }
-
-    if (!alunoIdParaSalvar) {
-      return res.status(500).json({
-        success: false,
-        error: 'Não foi possível identificar o aluno no termo'
-      });
-    }
-
-    const alunoCorrespondente = termo.alunos?.find(a =>
-      normalizarId(a.alunoId) === alunoIdParaSalvar.toString()
-    ) || termo.alunos?.[respIndex] || termo.alunos?.[0];
-
-    const alunoNomeParaSalvar = alunoCorrespondente?.nome || responsavelAlvo.alunoNome || '';
 
     // ──────────────────────────────────────────────
     // 💾 Salva autorização
@@ -969,9 +968,8 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
 
       autenticado: true,
       autenticacaoData: new Date(),
-      autenticacaoMetodo: autenticacaoMetodoFinal,   // 🆕 'passkey' | 'totp'
+      autenticacaoMetodo: autenticacaoMetodoFinal,
 
-      // 🆕 Auditoria da biometria
       passkeyCredentialId: passkeyDoc?.credentialId || null,
       passkeyAutenticadoEm: passkeyDoc ? new Date() : null,
 
@@ -1000,7 +998,7 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
     await termo.save();
 
     // ──────────────────────────────────────────────
-    // 🔔 Notifica quando 100% autorizado (mantido)
+    // 🔔 Notifica quando 100% autorizado
     // ──────────────────────────────────────────────
     if (termo.status === 'autorizado') {
       notificarTermoCompleto(termo).catch(err =>

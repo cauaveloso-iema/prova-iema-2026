@@ -969,17 +969,34 @@ class VisitasPublico {
     }
 
     _setBlocoAutenticacao(modo) {
-        const elCarregando = document.getElementById('totpLoading');
-        const elQRCode = document.getElementById('totpQRCodeBox');
-        const elPasskey = document.getElementById('passkeyBox');
-        const elSecret = document.getElementById('totpSecretBox');
-        const elVerify = document.getElementById('totpVerifyBox');
+        // modo: 'carregando' | 'passkey' | 'totp'
 
-        if (elCarregando) elCarregando.style.display = modo === 'carregando' ? 'flex' : 'none';
-        if (elQRCode) elQRCode.style.display = modo === 'totp' ? 'block' : 'none';
-        if (elPasskey) elPasskey.style.display = modo === 'passkey' ? 'block' : 'none';
-        if (elSecret) elSecret.style.display = 'none';
-        if (elVerify) elVerify.style.display = modo === 'totp' ? 'block' : 'none';
+        const elCarregando = document.getElementById('totpLoading');
+        const elQRCode     = document.getElementById('totpQRCodeBox');
+        const elPasskey    = document.getElementById('passkeyBox');
+        const elSecret     = document.getElementById('totpSecretBox');
+        const elVerify     = document.getElementById('totpVerifyBox');
+        const elInfo       = document.getElementById('totpInfoBox');   // 🔥 NOVO
+
+        // Esconde tudo primeiro
+        if (elCarregando) elCarregando.style.display = 'none';
+        if (elQRCode)     elQRCode.style.display = 'none';
+        if (elPasskey)    elPasskey.style.display = 'none';
+        if (elSecret)     elSecret.style.display = 'none';
+        if (elVerify)     elVerify.style.display = 'none';
+        if (elInfo)       elInfo.style.display = 'none';
+
+        // Mostra só o que interessa
+        if (modo === 'carregando') {
+            if (elCarregando) elCarregando.style.display = 'flex';
+        } else if (modo === 'passkey') {
+            if (elPasskey) elPasskey.style.display = 'block';
+            // QR Code, passo a passo e verificação TOTP ficam ocultos
+        } else if (modo === 'totp') {
+            if (elInfo)    elInfo.style.display = 'flex';     // passo a passo
+            if (elQRCode)  elQRCode.style.display = 'block';   // QR Code
+            if (elVerify)  elVerify.style.display = 'block';   // input + botão verificar
+        }
     }
 
     _renderizarBotaoBiometria() {
@@ -1046,6 +1063,10 @@ class VisitasPublico {
                 }
 
                 const alunoId = this.obterAlunoIdAlvo();
+                const nomeAluno = this.termoAtual?._nomeAlunoExibicao
+                            || this.termoAtual?.alunoNome
+                            || this.alunoSelecionado?.nome
+                            || null;
 
                 // 1) INICIAR
                 const rIniciar = await fetch('/api/inscricoes/passkeys/autenticar/iniciar', {
@@ -1053,6 +1074,7 @@ class VisitasPublico {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         matriculaId: alunoId ? String(alunoId) : null,
+                        nome: nomeAluno,                    // 🔥 NOVO
                         escopo: 'qualquer'
                     })
                 });
@@ -1063,56 +1085,80 @@ class VisitasPublico {
                 const opcoes = dIniciar.opcoes;
                 opcoes.challenge = this._b64urlParaBuffer(opcoes.challenge);
                 opcoes.allowCredentials = (opcoes.allowCredentials || []).map(c => ({
-                    ...c, id: this._b64urlParaBuffer(c.id)
+                    ...c,
+                    id: this._b64urlParaBuffer(c.id)
                 }));
 
-                const assertion = await navigator.credentials.get({ publicKey: opcoes });
-                if (!assertion) throw Object.assign(new Error('Autenticação cancelada'), { name: 'NotAllowedError' });
+                const credencial = await navigator.credentials.get({ publicKey: opcoes });
+                if (!credencial) throw new Error('Autenticação cancelada');
 
-                // 3) CONCLUIR
+                // 3) SERIALIZA
+                const credencialSerializada = {
+                    id: credencial.id,
+                    rawId: this._bufferParaB64url(credencial.rawId),
+                    type: credencial.type,
+                    response: {
+                        clientDataJSON: this._bufferParaB64url(credencial.response.clientDataJSON),
+                        authenticatorData: this._bufferParaB64url(credencial.response.authenticatorData),
+                        signature: this._bufferParaB64url(credencial.response.signature),
+                        userHandle: credencial.response.userHandle
+                            ? this._bufferParaB64url(credencial.response.userHandle)
+                            : null
+                    }
+                };
+
+                // 4) CONCLUIR
                 const rConcluir = await fetch('/api/inscricoes/passkeys/autenticar/concluir', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         matriculaId: alunoId ? String(alunoId) : null,
-                        credential: {
-                            id: assertion.id,
-                            response: {
-                                clientDataJSON: this._bufferParaB64url(assertion.response.clientDataJSON),
-                                authenticatorData: this._bufferParaB64url(assertion.response.authenticatorData),
-                                signature: this._bufferParaB64url(assertion.response.signature),
-                                userHandle: assertion.response.userHandle
-                                    ? this._bufferParaB64url(assertion.response.userHandle)
-                                    : null
-                            }
-                        }
+                        nome: nomeAluno,                    // 🔥 NOVO
+                        credential: credencialSerializada
                     })
                 });
                 const dConcluir = await rConcluir.json();
-                if (!dConcluir.success) throw new Error(dConcluir.error || 'Assinatura inválida');
+                if (!dConcluir.success) throw new Error(dConcluir.error || 'Falha ao validar biometria');
 
-                // ✅ Guarda credencial para o /autorizar
+                // 5) SUCESSO → marca método e avança
+                this.autenticacaoDisponivel.metodoEscolhido = 'passkey';
                 this.autenticacaoDisponivel.passkeyCredentialId = dConcluir.credentialId;
-                this.totpSecret = null;
 
-                this.showToast('✅ Biometria verificada!', 'success');
+                this.showToast('Biometria validada com sucesso!', 'success');
                 this.irParaEtapa(5);
 
             } catch (err) {
-                console.error('❌ Erro na biometria:', err);
+                console.error('❌ Erro passkey:', err);
 
-                if (err.name === 'NotAllowedError' || /cancel/i.test(err.message || '')) {
-                    this.showToast('Biometria cancelada. Tente novamente ou use QR Code.', 'info');
-                } else if (err.name === 'SecurityError' || err.name === 'NotSupportedError' || /WebAuthn/i.test(err.message || '')) {
-                    this.showToast('Dispositivo sem suporte a biometria. Usando QR Code.', 'info');
-                    await this.usarFallbackTOTP();
-                } else {
-                    this.showToast('❌ ' + err.message, 'error');
+                let msg = 'Não foi possível validar a biometria.';
+
+                if (err.name === 'NotAllowedError') {
+                    msg = 'Biometria cancelada ou não reconhecida. Tente novamente.';
+                } else if (err.name === 'NotSupportedError') {
+                    msg = 'Seu dispositivo não suporta biometria. Use o QR Code.';
+                } else if (err.name === 'SecurityError') {
+                    msg = 'Erro de segurança. Verifique se está em HTTPS.';
+                } else if (err.name === 'InvalidStateError') {
+                    msg = 'Nenhuma biometria cadastrada neste dispositivo. Use o QR Code.';
+                } else if (err.message) {
+                    msg = err.message;
                 }
 
+                this.showToast(msg, 'error');
+
+                // Restaura botão para o usuário tentar de novo
                 if (btn) {
                     btn.disabled = false;
-                    btn.innerHTML = originalHTML;
+                    btn.innerHTML = originalHTML || '<i class="fas fa-fingerprint"></i> Autenticar com Biometria';
+                }
+
+                // Se o erro foi de biometria inexistente, oferece fallback
+                if (err.name === 'NotAllowedError' || err.name === 'InvalidStateError') {
+                    setTimeout(() => {
+                        if (confirm('Deseja usar o QR Code (Google Authenticator) em vez da biometria?')) {
+                            this.usarFallbackTOTP();
+                        }
+                    }, 300);
                 }
             }
         });

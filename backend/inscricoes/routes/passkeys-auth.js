@@ -102,29 +102,52 @@ router.get('/publica/disponivel', async (req, res) => {
 // ============================================================================
 router.post('/autenticar/iniciar', async (req, res) => {
     try {
-        const { cpf, matriculaId, inscricaoId, escopo } = req.body || {};
+        const { cpf, matriculaId, inscricaoId, escopo, nome } = req.body || {};
 
-        const filtro = { ativo: true };
+        let filtro = { ativo: true };
+        let chaveBusca = null;
 
         if (cpf) {
             const d = soDigitos(cpf);
             if (d.length !== 11) return res.status(400).json({ success: false, error: 'CPF inválido.' });
             filtro.responsavelCpfHash = hashCPF(d);
+            chaveBusca = filtro.responsavelCpfHash;
         } else if (matriculaId) {
             filtro.matriculaId = matriculaId;
+            chaveBusca = matriculaId;
         } else if (inscricaoId) {
             filtro.inscricaoId = inscricaoId;
+            chaveBusca = inscricaoId;
+        } else if (nome) {
+            // 🔥 Fallback por nome (mesma lógica do /publica/disponivel)
+            filtro.alunoNome = new RegExp('^' + nome.trim() + '$', 'i');
+            chaveBusca = 'nome:' + nome.trim();
         } else {
-            return res.status(400).json({ success: false, error: 'Informe CPF, matriculaId ou inscricaoId.' });
+            return res.status(400).json({
+                success: false,
+                error: 'Informe CPF, matriculaId, inscricaoId ou nome.'
+            });
         }
 
-        // Escopo opcional — o processo pode exigir um vínculo específico
+        // Escopo opcional
         if (escopo === 'matricula') filtro.matriculaId = { $ne: null };
         else if (escopo === 'inscricao') filtro.inscricaoId = { $ne: null };
 
-        const credenciais = await PasskeyCredencial.find(filtro)
+        let credenciais = await PasskeyCredencial.find(filtro)
             .select('credentialId transports')
             .lean();
+
+        // 🔥 PLANO B: se buscou por matriculaId e não achou, tenta por nome
+        if (!credenciais.length && matriculaId && nome) {
+            const filtroNome = {
+                ativo: true,
+                alunoNome: new RegExp('^' + nome.trim() + '$', 'i')
+            };
+            credenciais = await PasskeyCredencial.find(filtroNome)
+                .select('credentialId transports')
+                .lean();
+            if (credenciais.length) chaveBusca = 'nome:' + nome.trim();
+        }
 
         if (!credenciais.length) {
             return res.status(404).json({
@@ -137,7 +160,7 @@ router.post('/autenticar/iniciar', async (req, res) => {
             });
         }
 
-        const chave = `auth:${filtro.responsavelCpfHash || matriculaId || inscricaoId}`;
+        const chave = `auth:${chaveBusca}`;
         const challenge = criarChallenge(chave);
 
         res.json({
@@ -165,7 +188,7 @@ router.post('/autenticar/iniciar', async (req, res) => {
 // ============================================================================
 router.post('/autenticar/concluir', async (req, res) => {
     try {
-        const { cpf, matriculaId, inscricaoId, credential } = req.body || {};
+        const { cpf, matriculaId, inscricaoId, nome, credential } = req.body || {};
 
         if (!credential || !credential.id || !credential.response) {
             return res.status(400).json({ success: false, error: 'Credencial ausente.' });
@@ -179,21 +202,43 @@ router.post('/autenticar/concluir', async (req, res) => {
             return res.status(404).json({ success: false, error: 'Biometria não encontrada ou revogada.' });
         }
 
-        // Confere vínculo informado (defesa contra credentialId de outro usuário)
-        if (matriculaId && String(doc.matriculaId) !== String(matriculaId)) {
-            return res.status(403).json({ success: false, error: 'Credencial não pertence a esta matrícula.' });
+        // 🔥 Confere vínculo informado (defesa contra credentialId de outro usuário)
+        let vinculoOk = false;
+
+        if (matriculaId && String(doc.matriculaId) === String(matriculaId)) {
+            vinculoOk = true;
         }
-        if (inscricaoId && String(doc.inscricaoId) !== String(inscricaoId)) {
-            return res.status(403).json({ success: false, error: 'Credencial não pertence a esta inscrição.' });
+        if (inscricaoId && String(doc.inscricaoId) === String(inscricaoId)) {
+            vinculoOk = true;
         }
         if (cpf) {
             const d = soDigitos(cpf);
-            if (doc.responsavelCpfHash !== hashCPF(d)) {
-                return res.status(403).json({ success: false, error: 'Credencial não pertence a este CPF.' });
-            }
+            if (doc.responsavelCpfHash === hashCPF(d)) vinculoOk = true;
+        }
+        // 🔥 NOVO: validação por nome
+        if (nome && doc.alunoNome) {
+            const nomeDoc = doc.alunoNome.trim().toLowerCase();
+            const nomeEnviado = nome.trim().toLowerCase();
+            if (nomeDoc === nomeEnviado) vinculoOk = true;
         }
 
-        const chave = `auth:${doc.responsavelCpfHash || matriculaId || inscricaoId}`;
+        // Se informou ALGUM vínculo e nenhum bateu, rejeita
+        const informouVinculo = !!(matriculaId || inscricaoId || cpf || nome);
+        if (informouVinculo && !vinculoOk) {
+            return res.status(403).json({
+                success: false,
+                error: 'Credencial não pertence a este aluno/responsável.'
+            });
+        }
+
+        // 🔥 Chave do challenge precisa ser a mesma usada no /iniciar
+        let chave = null;
+        if (doc.responsavelCpfHash) chave = `auth:${doc.responsavelCpfHash}`;
+        else if (doc.matriculaId) chave = `auth:${doc.matriculaId}`;
+        else if (doc.inscricaoId) chave = `auth:${doc.inscricaoId}`;
+        else if (doc.alunoNome) chave = `auth:nome:${doc.alunoNome.trim()}`;
+        else chave = `auth:${matriculaId || inscricaoId}`;
+
         const esperado = consumirChallenge(chave);
         if (!esperado) {
             return res.status(400).json({ success: false, error: 'Challenge expirado ou inválido.' });
