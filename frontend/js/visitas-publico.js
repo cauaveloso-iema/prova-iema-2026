@@ -933,7 +933,7 @@ class VisitasPublico {
     // ============================================
     async prepararAutenticacao() {
         return this._comLock('prepararAutenticacao', async () => {
-            this._setBlocoAutenticacao('carregando');
+            this._renderizarAutenticacao('carregando');
 
             const alunoId = this.obterAlunoIdAlvo();
             const nomeAluno = this.termoAtual?._nomeAlunoExibicao || this.termoAtual?.alunoNome || this.alunoSelecionado?.nome;
@@ -951,88 +951,117 @@ class VisitasPublico {
                 
                 if (this.autenticacaoDisponivel.passkeyDisponivel) {
                     this.autenticacaoDisponivel.metodoEscolhido = 'passkey';
-                    this._setBlocoAutenticacao('passkey');
-                    this._renderizarBotaoBiometria();
+                    this._renderizarAutenticacao('passkey');
                 } else {
                     this.autenticacaoDisponivel.metodoEscolhido = 'totp';
-                    this._setBlocoAutenticacao('totp');
+                    this._renderizarAutenticacao('totp');
                     await this.gerarQRCodeTOTP();
                 }
             } catch (err) {
                 console.error('❌ Erro ao preparar autenticação:', err);
                 this.autenticacaoDisponivel.metodoEscolhido = 'totp';
-                this._setBlocoAutenticacao('totp');
+                this._renderizarAutenticacao('totp');
                 await this.gerarQRCodeTOTP();
             }
         });
     }
 
-    _setBlocoAutenticacao(modo) {
-        const elCarregando = document.getElementById('totpLoading');
-        const elQRCode     = document.getElementById('totpQRCodeBox');
-        const elPasskey    = document.getElementById('passkeyBox');
-        const elSecret     = document.getElementById('totpSecretBox');
-        const elVerify     = document.getElementById('totpVerifyBox');
-        const elInfo       = document.getElementById('totpInfoBox');
-
-        // 1. Esconde TUDO
-        if (elCarregando) elCarregando.style.display = 'none';
-        if (elQRCode)     elQRCode.style.display = 'none';
-        if (elPasskey)    elPasskey.style.display = 'none';
-        if (elSecret)     elSecret.style.display = 'none';
-        if (elVerify)     elVerify.style.display = 'none';
-        if (elInfo)       elInfo.style.display = 'none';
-
-        // 2. Mostra o modo atual
-        if (modo === 'carregando') {
-            if (elCarregando) elCarregando.style.display = 'flex';
-        } else if (modo === 'passkey') {
-            if (elPasskey) elPasskey.style.display = 'block';
-        } else if (modo === 'totp') {
-            if (elInfo)    elInfo.style.display = 'flex';
-            if (elQRCode)  elQRCode.style.display = 'block';
-            if (elVerify)  elVerify.style.display = 'block';
+    // 🔥 NOVA FUNÇÃO QUE SUBSTITUI O _setBlocoAutenticacao
+    _renderizarAutenticacao(modo) {
+        const box = document.getElementById('authContainer');
+        if (!box) {
+            console.error('❌ Erro crítico: #authContainer não encontrado no HTML.');
+            return;
         }
-    }
 
-    _renderizarBotaoBiometria() {
-        const box = document.getElementById('passkeyBox');
-        if (!box) return;
-
-        box.innerHTML = `
-            <div style="text-align:center; padding: 25px 20px;">
-                <div style="width:90px; height:90px; margin:0 auto 18px;
-                            background: linear-gradient(135deg,#10b981,#059669);
-                            border-radius:50%; display:flex; align-items:center;
-                            justify-content:center; color:white; font-size:42px;
-                            box-shadow: 0 8px 24px rgba(16,185,129,0.35);">
-                    <i class="fas fa-fingerprint"></i>
+        if (modo === 'carregando') {
+            box.innerHTML = `
+                <div style="text-align:center; padding:40px 20px; color:#6b7280;">
+                    <i class="fas fa-spinner fa-spin" style="font-size:32px; color:#667eea; margin-bottom:15px;"></i>
+                    <p>Verificando métodos de segurança...</p>
                 </div>
-                <h3 style="margin:0 0 8px; font-size:1.15rem; color:#065f46;">
-                    Use sua biometria
-                </h3>
-                <p style="margin:0 0 20px; font-size:13px; color:#6b7280; line-height:1.6;">
-                    Confirme sua identidade com a digital, rosto ou senha
-                    do seu celular. É mais rápido e seguro.
-                </p>
-                <button class="btn-continuar-grande" id="btnUsarBiometria"
-                        onclick="visitasPublico.autenticarComPasskey()">
-                    <i class="fas fa-fingerprint"></i> Autenticar com Biometria
-                </button>
-                <button class="btn-filter" style="margin-top:14px; background:transparent;
-                        border:1.5px solid #d1d5db; color:#6b7280; padding:10px 20px;
-                        border-radius:24px; font-size:13px; cursor:pointer;"
-                        onclick="visitasPublico.usarFallbackTOTP()">
-                    <i class="fas fa-qrcode"></i> Usar QR Code em vez disso
-                </button>
-            </div>
-        `;
+            `;
+            return;
+        }
+
+        if (modo === 'passkey') {
+            box.innerHTML = `
+                <div style="text-align:center; padding: 25px 20px;">
+                    <div style="width:90px; height:90px; margin:0 auto 18px;
+                                background: linear-gradient(135deg,#10b981,#059669);
+                                border-radius:50%; display:flex; align-items:center;
+                                justify-content:center; color:white; font-size:42px;
+                                box-shadow: 0 8px 24px rgba(16,185,129,0.35);">
+                        <i class="fas fa-fingerprint"></i>
+                    </div>
+                    <h3 style="margin:0 0 8px; font-size:1.15rem; color:#065f46;">
+                        Use sua biometria
+                    </h3>
+                    <p style="margin:0 0 20px; font-size:13px; color:#6b7280; line-height:1.6;">
+                        Confirme sua identidade com a digital, rosto ou senha
+                        do seu celular. É mais rápido e seguro.
+                    </p>
+                    <button class="btn-continuar-grande" id="btnUsarBiometria"
+                            onclick="visitasPublico.autenticarComPasskey()">
+                        <i class="fas fa-fingerprint"></i> Autenticar com Biometria
+                    </button>
+                    <button class="btn-filter" style="margin-top:14px; background:transparent;
+                            border:1.5px solid #d1d5db; color:#6b7280; padding:10px 20px;
+                            border-radius:24px; font-size:13px; cursor:pointer;"
+                            onclick="visitasPublico.usarFallbackTOTP()">
+                        <i class="fas fa-qrcode"></i> Usar QR Code em vez disso
+                    </button>
+                </div>
+            `;
+            return;
+        }
+
+        if (modo === 'totp') {
+            box.innerHTML = `
+                <div class="totp-info" id="totpInfoBox" style="margin-bottom: 20px;">
+                    <i class="fas fa-mobile-alt"></i>
+                    <div>
+                        <strong>Como funciona:</strong>
+                        <ol style="margin: 8px 0 0 20px; padding: 0; font-size: 13px;">
+                            <li>Instale o app <strong>Google Authenticator</strong> - é gratuito</li>
+                            <li>Toque em <strong>"+"</strong> e escolha <strong>"Escanear QR Code"</strong></li>
+                            <li>Digite o código de 6 dígitos que aparecerá no app</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <div class="totp-qrcode-container" id="totpQRCodeBox" style="display: none;">
+                    <div id="totpLoading" class="totp-loading" style="display: flex;">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <span>Gerando QR Code...</span>
+                    </div>
+                    <div id="totpQRCodeContainer" style="display: none;">
+                        <img id="totpQRCodeImg" src="" alt="QR Code TOTP" style="max-width:200px; margin:0 auto; display:block;">
+                        <div class="totp-secret-box" id="totpSecretBox" style="display: none; margin-top:15px;">
+                            <p class="totp-secret-label"><i class="fas fa-keyboard"></i> Não consegue escanear? Digite este código no app:</p>
+                            <div class="totp-secret-value" onclick="visitasPublico.copiarSecretTOTP()" title="Clique para copiar">
+                                <code id="totpSecretText">--------</code> <i class="fas fa-copy"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="totp-verify-box" id="totpVerifyBox" style="display: none; margin-top: 20px;">
+                    <label><i class="fas fa-key"></i> Código de 6 dígitos *</label>
+                    <input type="text" id="totpCodigo" class="form-input totp-codigo-input" placeholder="000000" maxlength="6" autocomplete="off" oninput="this.value = this.value.replace(/\\D/g, '')">
+                    <button class="btn-continuar-grande" id="btnVerificarTOTP" onclick="visitasPublico.verificarTOTP(event)">
+                        <i class="fas fa-check-circle"></i> Verificar Código e Continuar
+                    </button>
+                </div>
+            `;
+            return;
+        }
     }
 
     async usarFallbackTOTP() {
         this.autenticacaoDisponivel.metodoEscolhido = 'totp';
         this.autenticacaoDisponivel.passkeyCredentialId = null;
-        this._setBlocoAutenticacao('totp');
+        this._renderizarAutenticacao('totp');
         await this.gerarQRCodeTOTP();
     }
 
@@ -1162,13 +1191,15 @@ class VisitasPublico {
             try {
                 const loadingEl = document.getElementById('totpLoading');
                 const qrBoxEl = document.getElementById('totpQRCodeBox');
+                const qrContainer = document.getElementById('totpQRCodeContainer');
                 const secretBoxEl = document.getElementById('totpSecretBox');
                 const verifyBoxEl = document.getElementById('totpVerifyBox');
 
                 if (loadingEl) loadingEl.style.display = 'flex';
-                if (qrBoxEl) qrBoxEl.style.display = 'none';
+                if (qrBoxEl) qrBoxEl.style.display = 'block';
+                if (qrContainer) qrContainer.style.display = 'none';
                 if (secretBoxEl) secretBoxEl.style.display = 'none';
-                if (verifyBoxEl) verifyBoxEl.style.display = 'none'; // 🔥 Esconde a caixa vazia
+                if (verifyBoxEl) verifyBoxEl.style.display = 'none';
 
                 const alunoIdTOTP = this.obterAlunoIdAlvo();
 
@@ -1183,9 +1214,7 @@ class VisitasPublico {
 
                 const data = await response.json();
 
-                if (!data.success) {
-                    throw new Error(data.error || 'Erro ao gerar QR Code');
-                }
+                if (!data.success) throw new Error(data.error || 'Erro ao gerar QR Code');
 
                 if (data.jaVerificado) {
                     this.showToast('Este aluno já foi autenticado por você', 'info');
@@ -1194,7 +1223,7 @@ class VisitasPublico {
                 }
 
                 if (loadingEl) loadingEl.style.display = 'none';
-                if (qrBoxEl) qrBoxEl.style.display = 'block';
+                if (qrContainer) qrContainer.style.display = 'block';
                 if (verifyBoxEl) verifyBoxEl.style.display = 'block'; // 🔥 Mostra só depois de gerar
                 
                 document.getElementById('totpQRCodeImg').src = data.qrCode;
