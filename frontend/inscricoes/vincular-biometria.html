@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Vincular Biometria — EducaPleno</title>
+
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0f766e">
+    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <script src="/js/vlibras-oficial.js"></script>
+    <script src="/js/acessibilidade.js"></script>
+    <script src="/js/toggle-buttons.js"></script>
+    <script src="/js/draggable.js"></script>
+    <script src="/js/dialog-helper.js"></script>
+
+    <link rel="stylesheet" href="css/vincular-biometria.css">
+</head>
+<body>
+
+<div class="animated-bg">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+</div>
+
+<div class="container-public">
+
+    <!-- ============================================================ -->
+    <!-- STEPPER GLOBAL                                               -->
+    <!-- ============================================================ -->
+    <div class="stepper-global" id="stepperGlobal" style="display:none;">
+        <div class="stepper-track">
+            <div class="stepper-item" data-step="1">
+                <div class="stepper-dot"><i class="fas fa-user-graduate"></i></div>
+                <span class="stepper-label">Aluno</span>
+            </div>
+            <div class="stepper-line"></div>
+            <div class="stepper-item" data-step="2">
+                <div class="stepper-dot"><i class="fas fa-id-card"></i></div>
+                <span class="stepper-label">Responsável</span>
+            </div>
+            <div class="stepper-line"></div>
+            <div class="stepper-item" data-step="3">
+                <div class="stepper-dot"><i class="fas fa-fingerprint"></i></div>
+                <span class="stepper-label">Biometria</span>
+            </div>
+        </div>
+        <div class="stepper-progress-bar"><div class="stepper-progress-fill" id="stepperProgressFill"></div></div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- ETAPA 0 — INTRODUÇÃO                                         -->
+    <!-- ============================================================ -->
+    <div id="telaIntroducao" class="tela-ativa">
+        <div class="hero-section hero-intro">
+            <div class="hero-icon">
+                <i class="fas fa-fingerprint"></i>
+            </div>
+            <h1>Vincular Biometria</h1>
+            <p class="hero-subtitle">
+                Cadastre sua passkey para autorizar visitas e outros processos do IEMA
+                usando a digital, rosto ou senha do seu celular.
+            </p>
+
+            <div class="intro-cards">
+                <div class="intro-card">
+                    <div class="intro-card-icon" style="background: linear-gradient(135deg,#667eea,#764ba2);">
+                        <i class="fas fa-search"></i>
+                    </div>
+                    <h3>1. Encontre o aluno</h3>
+                    <p>Busque pelo nome ou turma do seu filho(a).</p>
+                </div>
+                <div class="intro-card">
+                    <div class="intro-card-icon" style="background: linear-gradient(135deg,#3b82f6,#2563eb);">
+                        <i class="fas fa-id-card"></i>
+                    </div>
+                    <h3>2. Confirme seus dados</h3>
+                    <p>Informe o CPF que você usou na inscrição.</p>
+                </div>
+                <div class="intro-card">
+                    <div class="intro-card-icon" style="background: linear-gradient(135deg,#10b981,#059669);">
+                        <i class="fas fa-fingerprint"></i>
+                    </div>
+                    <h3>3. Cadastre a passkey</h3>
+                    <p>Use a biometria do seu celular. Sem instalar aplicativo.</p>
+                </div>
+            </div>
+
+            <div class="intro-aviso">
+                <i class="fas fa-info-circle"></i>
+                <span>O processo leva cerca de <strong>2 minutos</strong>. Você só precisa fazer isso uma vez.</span>
+            </div>
+
+            <button class="btn-continuar-grande" onclick="vincularBiometria.iniciarFluxo()">
+                <i class="fas fa-play-circle"></i> Começar Agora
+            </button>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- ETAPA 1 — SELECIONAR ALUNO                                   -->
+    <!-- ============================================================ -->
+    <div id="etapa1Aluno" class="etapa-fluxo" style="display:none;">
+        <div class="etapa-badge">Etapa 1 de 3</div>
+
+        <div class="tutorial-box">
+            <div class="tutorial-text">
+                <h4><i class="fas fa-lightbulb"></i> Como funciona esta etapa</h4>
+                <p>Filtre por <strong>turma</strong>, <strong>curso</strong> ou digite o <strong>nome do aluno</strong>. Depois, clique no card do aluno para continuar.</p>
+            </div>
+        </div>
+
+        <div class="form-public">
+            <div class="form-header">
+                <h3><i class="fas fa-search"></i> Localizar Aluno</h3>
+                <p>Informe os dados do aluno para continuar</p>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label><i class="fas fa-school"></i> Turma</label>
+                    <select id="filtroTurma" class="form-input" onchange="vincularBiometria.buscarAlunos()">
+                        <option value="">Todas as turmas</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-book"></i> Curso</label>
+                    <select id="filtroCurso" class="form-input" onchange="vincularBiometria.buscarAlunos()">
+                        <option value="">Todos os cursos</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label><i class="fas fa-user-graduate"></i> Nome do Aluno</label>
+                <input type="text" id="buscaAluno" class="form-input"
+                       placeholder="Digite o nome do aluno..." autocomplete="off">
+            </div>
+
+            <div id="listaAlunos" class="termos-disponiveis-grid"></div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- ETAPA 2 — DADOS DO RESPONSÁVEL                               -->
+    <!-- ============================================================ -->
+    <div id="etapa2Responsavel" class="etapa-fluxo" style="display:none;">
+        <div class="etapa-badge">Etapa 2 de 3</div>
+
+        <div class="form-public">
+            <div class="section-header" style="margin-bottom: 20px;">
+                <button class="btn-voltar" onclick="vincularBiometria.voltarParaEtapa(1)">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <div>
+                    <h3 style="margin: 0; font-size: 1.2rem;">
+                        <i class="fas fa-id-card"></i> Dados do Responsável
+                    </h3>
+                    <p style="margin: 3px 0 0; font-size: 0.85rem; color: #6b7280;" id="nomeAlunoEtapa2">
+                        Confirme seus dados
+                    </p>
+                </div>
+            </div>
+
+            <div class="aluno-selecionado-card" id="alunoSelecionadoCard"></div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label><i class="fas fa-user"></i> Nome Completo *</label>
+                    <input type="text" id="respNome" class="form-input"
+                           placeholder="Seu nome completo" maxlength="150">
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-id-card"></i> CPF *</label>
+                    <input type="text" id="respCPF" class="form-input"
+                           placeholder="000.000.000-00" maxlength="14" inputmode="numeric">
+                    <small style="display:block; margin-top:6px; color:#6b7280; font-size:12px;">
+                        Use o mesmo CPF da inscrição do aluno.
+                    </small>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label><i class="fas fa-phone"></i> Telefone *</label>
+                    <input type="tel" id="respTelefone" class="form-input"
+                           placeholder="(00) 00000-0000" maxlength="15" inputmode="numeric">
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-envelope"></i> E-mail (opcional)</label>
+                    <input type="email" id="respEmail" class="form-input"
+                           placeholder="seuemail@exemplo.com" maxlength="150">
+                </div>
+            </div>
+
+            <div class="lgpd-box" style="margin-top: 20px;">
+                <h4><i class="fas fa-shield-halved"></i> Consentimento LGPD</h4>
+                <p>
+                    Autorizo o cadastro da minha passkey para identificação em processos internos do IEMA.
+                    A chave privada fica protegida no gerenciador de senhas do meu dispositivo
+                    (iCloud Keychain ou Google Password Manager), e o servidor guarda apenas a chave pública,
+                    conforme a Lei nº 13.709/2018 (LGPD).
+                </p>
+                <label class="lgpd-checkbox">
+                    <input type="checkbox" id="lgpdCheckbox" onchange="vincularBiometria.toggleBotaoLGPD(this.checked)">
+                    <label for="lgpdCheckbox">
+                        <strong>Estou ciente e concordo</strong> com os termos acima.
+                    </label>
+                </label>
+            </div>
+
+            <button class="btn-continuar-grande" id="btnProsseguirDados"
+                    onclick="vincularBiometria.irParaEtapa(3)" disabled>
+                <i class="fas fa-arrow-right"></i> Continuar para Biometria
+            </button>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- ETAPA 3 — CAPTURA DA PASSKEY                                 -->
+    <!-- ============================================================ -->
+    <div id="etapa3Biometria" class="etapa-fluxo" style="display:none;">
+        <div class="etapa-badge">Etapa 3 de 3</div>
+
+        <div class="tutorial-box">
+            <div class="tutorial-text">
+                <h4><i class="fas fa-lightbulb"></i> Cadastro da Passkey</h4>
+                <p>Você vai usar a <strong>digital, rosto ou senha do seu dispositivo</strong>. Não precisa instalar aplicativo.</p>
+            </div>
+        </div>
+
+        <div class="form-public">
+            <div class="section-header" style="margin-bottom: 20px;">
+                <button class="btn-voltar" onclick="vincularBiometria.voltarParaEtapa(2)">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2 style="margin: 0;">Cadastrar Passkey</h2>
+            </div>
+
+            <div class="biometria-preview-box" id="biometriaPreviewBox">
+                <div class="biometria-preview-icon" id="biometriaPreviewIcon">
+                    <i class="fas fa-fingerprint"></i>
+                </div>
+                <div class="biometria-preview-text">
+                    <strong id="biometriaPreviewTitulo">Passkey não cadastrada</strong>
+                    <p id="biometriaPreviewTexto">Toque no botão abaixo para iniciar o cadastro.</p>
+                </div>
+            </div>
+
+            <div class="biometria-status" id="biometriaStatus" style="display:none;">
+                <i class="fas fa-circle-notch fa-spin"></i>
+                <span id="biometriaStatusTexto">Processando...</span>
+            </div>
+
+            <button class="btn-continuar-grande" id="btnCadastrarPasskey"
+                    onclick="vincularBiometria.cadastrarPasskey()">
+                <i class="fas fa-fingerprint"></i> Cadastrar Passkey
+            </button>
+
+            <div class="biometria-info-box">
+                <i class="fas fa-info-circle"></i>
+                <div>
+                    <strong>O que é uma passkey?</strong>
+                    <p>
+                        É uma credencial segura que fica salva no gerenciador de senhas do seu celular
+                        (iCloud Keychain ou Google Password Manager). Você confirma com a digital,
+                        rosto ou senha do dispositivo — sem digitar códigos.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TELA DE SUCESSO                                              -->
+    <!-- ============================================================ -->
+    <div id="telaSucesso" class="etapa-fluxo" style="display:none;">
+        <div class="hero-section">
+            <div class="sucesso-icon">
+                <i class="fas fa-check"></i>
+            </div>
+            <h1 style="color: #065f46;">Passkey Cadastrada!</h1>
+            <p style="color: #6b7280;" id="sucessoMensagem">
+                Agora você pode autorizar visitas usando a biometria do seu celular.
+            </p>
+
+            <div id="sucessoDetalhes" class="sucesso-detalhes"></div>
+
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 20px;">
+                <a class="btn-autorizar-grande" href="/inscricoes/inscricao-publica.html"
+                   style="max-width: 320px; padding: 15px 30px; text-decoration: none; text-align: center;">
+                    <i class="fas fa-file-signature"></i> Ir para Autorização de Visitas
+                </a>
+                <button class="btn-filter btn-nova-consulta" style="padding: 15px 30px;"
+                        onclick="vincularBiometria.reiniciarFluxo()">
+                    <i class="fas fa-home"></i> Nova Consulta
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer style="text-align: center; padding: 30px 0; color: white; margin-top: 30px;">
+        <p style="margin: 0;"><i class="fas fa-fingerprint"></i> Vínculo de Biometria • 2026</p>
+        <p style="margin: 5px 0 0; font-size: 12px;"><i class="fas fa-graduation-cap"></i> EducaPleno</p>
+        <p style="margin: 10px 0 0; font-size: 12px;">
+            <a href="/politica-privacidade.html" target="_blank" rel="noopener"
+               style="color: rgba(255,255,255,0.85); text-decoration: underline;">
+                Política de Privacidade
+            </a>
+        </p>
+    </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/vincular-biometria.js"></script>
+</body>
+</html>

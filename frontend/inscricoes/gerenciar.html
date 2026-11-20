@@ -285,6 +285,75 @@
             </div>
         </form>
     </section>
+
+    <!-- ============================= QR CODES DE ACESSO RÁPIDO ============================= -->
+    <section class="adm-card" style="margin-top:24px">
+        <div class="adm-card-head">
+            <h3><i class="fas fa-qrcode"></i> QR Codes de Acesso Rápido</h3>
+            <p style="margin:4px 0 0; font-size:13px; color:#6b7280;">
+                Imprima e fixe na secretaria/portaria. Os responsáveis escaneiam com a câmera do celular.
+            </p>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:16px; padding:8px 0;">
+
+            <!-- QR 1 — Inscrição -->
+            <div style="text-align:center; padding:20px 16px; background:#f9fafb; border-radius:14px; border:1.5px solid #e5e7eb;">
+                <div id="qrcode-inscricao" style="display:inline-block; padding:12px; background:white; border-radius:10px; margin-bottom:12px;"></div>
+                <h4 style="font-size:14px; color:#1f2937; margin:0 0 4px;">
+                    <i class="fas fa-file-signature" style="color:#0f766e;"></i>
+                    Formulário de Inscrição
+                </h4>
+                <p style="font-size:12px; color:#6b7280; margin:0 0 8px;">
+                    Para novos alunos
+                </p>
+                <a id="link-inscricao" href="/inscricoes/inscricao-publica.html" target="_blank"
+                   style="font-size:11px; color:#0f766e; text-decoration:underline; word-break:break-all;">
+                    /inscricoes/inscricao-publica.html
+                </a>
+            </div>
+
+            <!-- QR 2 — Vincular Biometria -->
+            <div style="text-align:center; padding:20px 16px; background:#f9fafb; border-radius:14px; border:1.5px solid #e5e7eb;">
+                <div id="qrcode-biometria" style="display:inline-block; padding:12px; background:white; border-radius:10px; margin-bottom:12px;"></div>
+                <h4 style="font-size:14px; color:#1f2937; margin:0 0 4px;">
+                    <i class="fas fa-fingerprint" style="color:#0f766e;"></i>
+                    Vincular Biometria
+                </h4>
+                <p style="font-size:12px; color:#6b7280; margin:0 0 8px;">
+                    Para quem já fez a inscrição
+                </p>
+                <a id="link-biometria" href="/inscricoes/vincular-biometria.html" target="_blank"
+                   style="font-size:11px; color:#0f766e; text-decoration:underline; word-break:break-all;">
+                    /inscricoes/vincular-biometria.html
+                </a>
+            </div>
+
+            <!-- QR 3 — Consulta de Inscrição -->
+            <div style="text-align:center; padding:20px 16px; background:#f9fafb; border-radius:14px; border:1.5px solid #e5e7eb;">
+                <div id="qrcode-consulta" style="display:inline-block; padding:12px; background:white; border-radius:10px; margin-bottom:12px;"></div>
+                <h4 style="font-size:14px; color:#1f2937; margin:0 0 4px;">
+                    <i class="fas fa-magnifying-glass" style="color:#0f766e;"></i>
+                    Consultar Inscrição
+                </h4>
+                <p style="font-size:12px; color:#6b7280; margin:0 0 8px;">
+                    Acompanhar status
+                </p>
+                <a id="link-consulta" href="/inscricoes/inscricao-publica.html#consulta" target="_blank"
+                   style="font-size:11px; color:#0f766e; text-decoration:underline; word-break:break-all;">
+                    /inscricoes/inscricao-publica.html#consulta
+                </a>
+            </div>
+
+        </div>
+
+        <div style="margin-top:16px; padding:14px 18px; background:#eff6ff; border-radius:10px; border-left:4px solid #3b82f6; font-size:13px; line-height:1.6; color:#1e40af;">
+            <i class="fas fa-info-circle" style="margin-right:6px;"></i>
+            <strong>Dica:</strong> use o botão <em>Imprimir esta página</em> do navegador (Ctrl+P) para gerar um cartaz com os QR Codes.
+            Os links são gerados automaticamente com base no domínio atual (<span id="qr-origin">—</span>).
+        </div>
+    </section>
+
 </main>
 
 <!-- ============================= MODAL DETALHE ============================= -->
@@ -338,5 +407,57 @@
 <div class="adm-toast-wrap" id="adm-toast-wrap"></div>
 
 <script src="js/inscricoes-admin.js"></script>
+
+<!-- ============================= QR CODE GENERATOR ============================= -->
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script>
+(function () {
+    'use strict';
+
+    function gerarQRCode(elId, url, cor) {
+        const el = document.getElementById(elId);
+        if (!el || typeof QRCode === 'undefined') return;
+
+        // Limpa conteúdo anterior (caso o script rode mais de uma vez)
+        el.innerHTML = '';
+
+        new QRCode(el, {
+            text: url,
+            width: 160,
+            height: 160,
+            colorDark: cor || '#0f766e',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.H
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const origin = window.location.origin;
+
+        const urlInscricao = origin + '/inscricoes/inscricao-publica.html';
+        const urlBiometria = origin + '/inscricoes/vincular-biometria.html';
+        const urlConsulta = origin + '/inscricoes/inscricao-publica.html#consulta';
+
+        // Mostra o domínio usado
+        const originEl = document.getElementById('qr-origin');
+        if (originEl) originEl.textContent = origin;
+
+        // Atualiza os links visíveis para refletir o domínio real
+        const linkIns = document.getElementById('link-inscricao');
+        if (linkIns) { linkIns.href = urlInscricao; linkIns.textContent = urlInscricao.replace(origin, ''); }
+
+        const linkBio = document.getElementById('link-biometria');
+        if (linkBio) { linkBio.href = urlBiometria; linkBio.textContent = urlBiometria.replace(origin, ''); }
+
+        const linkCon = document.getElementById('link-consulta');
+        if (linkCon) { linkCon.href = urlConsulta; linkCon.textContent = urlConsulta.replace(origin, ''); }
+
+        // Gera os QR Codes
+        gerarQRCode('qrcode-inscricao', urlInscricao, '#0f766e');
+        gerarQRCode('qrcode-biometria', urlBiometria, '#0f766e');
+        gerarQRCode('qrcode-consulta', urlConsulta, '#0f766e');
+    });
+})();
+</script>
 </body>
 </html>
