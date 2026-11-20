@@ -1,6 +1,13 @@
 // ============================================================================
 // backend/inscricoes/routes/passkeys.js
 // Base: /api/inscricoes/passkeys
+//
+// 🔥 REGRAS DE UNICIDADE NO VÍNCULO DE BIOMETRIA:
+//   1) credentialId é único global (mesma credencial não pode ser registrada 2x)
+//   2) inscricaoId, se informado, PRECISA existir e NÃO pode ter outra passkey ativa
+//   3) matriculaId, se informado, NÃO pode ter outra passkey ativa
+//   4) Fallback: se inscricaoId não veio, descobre pelo alunoNome ativo
+//      (garante a trava mesmo que o frontend não envie o ID)
 // ============================================================================
 'use strict';
 
@@ -44,6 +51,11 @@ function consumirChallenge(chave) {
     challenges.delete(chave);
     if (Date.now() - reg.criadoEm > CHALLENGE_TTL_MS) return null;
     return reg.challenge;
+}
+
+// 🔥 Helper: valida formato de ObjectId
+function isObjectIdValido(id) {
+    return id && /^[a-f0-9]{24}$/i.test(String(id));
 }
 
 // ============================================================================
@@ -134,15 +146,115 @@ router.post('/registrar/concluir', async (req, res) => {
         if (clientData.challenge !== challengeEsperado) return res.status(400).json({ success: false, error: 'Challenge não confere.' });
         if (clientData.origin !== obterOrigin(req)) return res.status(400).json({ success: false, error: 'Origin não confere.' });
 
-        const existente = await PasskeyCredencial.findOne({ credentialId: extraido.credentialId }).lean();
-        if (existente) return res.status(409).json({ success: false, error: 'Esta passkey já está registrada.' });
+        // --------------------------------------------------------------------
+        // 🔥 UNICIDADE #1 — credentialId não pode existir em outra passkey
+        // --------------------------------------------------------------------
+        const existenteCred = await PasskeyCredencial.findOne({ credentialId: extraido.credentialId }).lean();
+        if (existenteCred) {
+            return res.status(409).json({ success: false, error: 'Esta passkey já está registrada.' });
+        }
 
-        // 🔥 Valida/normaliza campos de vínculo
-        const inscricaoIdValido = inscricaoId && /^[a-f0-9]{24}$/i.test(String(inscricaoId))
-            ? inscricaoId : null;
-        const matriculaIdValido = matriculaId && /^[a-f0-9]{24}$/i.test(String(matriculaId))
-            ? matriculaId : null;
+        // --------------------------------------------------------------------
+        // 🔥 Normaliza ids de vínculo (formato ObjectId)
+        // --------------------------------------------------------------------
+        const inscricaoIdValido = isObjectIdValido(inscricaoId) ? String(inscricaoId) : null;
+        if (inscricaoId && !inscricaoIdValido) {
+            return res.status(400).json({ success: false, error: 'ID de inscrição inválido.' });
+        }
 
+        const matriculaIdValido = isObjectIdValido(matriculaId) ? String(matriculaId) : null;
+        if (matriculaId && !matriculaIdValido) {
+            return res.status(400).json({ success: false, error: 'ID de matrícula inválido.' });
+        }
+
+        // --------------------------------------------------------------------
+        // 🔥 UNICIDADE #2 — inscricaoId, se informado, precisa existir e não
+        // pode já ter passkey ativa.
+        // --------------------------------------------------------------------
+        if (inscricaoIdValido) {
+            const inscricaoExiste = await Formulario.findById(inscricaoIdValido)
+                .select('_id protocolo status')
+                .lean();
+
+            if (!inscricaoExiste) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'Inscrição não encontrada para vincular a biometria.'
+                });
+            }
+            if (inscricaoExiste.status === 'Cancelada') {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Não é possível vincular biometria a uma inscrição cancelada.'
+                });
+            }
+
+            const passkeyDaInscricao = await PasskeyCredencial.findOne({
+                inscricaoId: inscricaoIdValido,
+                ativo: true
+            }).select('_id responsavelNome').lean();
+
+            if (passkeyDaInscricao) {
+                return res.status(409).json({
+                    success: false,
+                    error: `Esta inscrição já possui biometria ativa vinculada (responsável: ${passkeyDaInscricao.responsavelNome || '—'}). Revogue antes de cadastrar outra.`
+                });
+            }
+        }
+
+        // --------------------------------------------------------------------
+        // 🔥 UNICIDADE #3 — matriculaId, se informado, não pode ter passkey ativa.
+        // --------------------------------------------------------------------
+        if (matriculaIdValido) {
+            const passkeyDaMatricula = await PasskeyCredencial.findOne({
+                matriculaId: matriculaIdValido,
+                ativo: true
+            }).select('_id responsavelNome').lean();
+
+            if (passkeyDaMatricula) {
+                return res.status(409).json({
+                    success: false,
+                    error: `Esta matrícula já possui biometria ativa vinculada (responsável: ${passkeyDaMatricula.responsavelNome || '—'}). Revogue antes de cadastrar outra.`
+                });
+            }
+        }
+
+        // --------------------------------------------------------------------
+        // 🔥 UNICIDADE #4 — Fallback: se o frontend não mandou inscricaoId,
+        // descobre a inscrição ativa do aluno pelo alunoNome e trava mesmo assim.
+        // Isso garante o cenário "pai vinculou o Cauã, mãe tenta vincular o Cauã".
+        // --------------------------------------------------------------------
+        const alunoNomeNormalizado = texto(alunoNome, 150);
+        let inscricaoIdFinal = inscricaoIdValido;
+
+        if (!inscricaoIdFinal && alunoNomeNormalizado) {
+            // Busca a inscrição ativa mais recente do aluno (não cancelada)
+            const inscricaoDoAluno = await Formulario.findOne({
+                'aluno.nomeCompleto': new RegExp('^' + alunoNomeNormalizado.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i'),
+                status: { $ne: 'Cancelada' }
+            }).sort({ createdAt: -1 }).select('_id protocolo').lean();
+
+            if (inscricaoDoAluno) {
+                inscricaoIdFinal = String(inscricaoDoAluno._id);
+
+                // Verifica se essa inscrição descoberta já tem passkey ativa
+                const passkeyDesc = await PasskeyCredencial.findOne({
+                    inscricaoId: inscricaoIdFinal,
+                    ativo: true
+                }).select('_id responsavelNome').lean();
+
+                if (passkeyDesc) {
+                    return res.status(409).json({
+                        success: false,
+                        error: `Este aluno já possui biometria ativa vinculada (responsável: ${passkeyDesc.responsavelNome || '—'}). Revogue antes de cadastrar outra.`
+                    });
+                }
+            }
+        }
+
+        // --------------------------------------------------------------------
+        // Persiste
+        // --------------------------------------------------------------------
         const doc = new PasskeyCredencial({
             responsavelCpfHash: cpfHash,
             responsavelNome: texto(nome, 150) || '',
@@ -154,9 +266,9 @@ router.post('/registrar/concluir', async (req, res) => {
             aaguid: extraido.aaguid || '',
             attestationType: 'none',
             userVerification: 'required',
-            inscricaoId: inscricaoIdValido,
+            inscricaoId: inscricaoIdFinal,
             matriculaId: matriculaIdValido,
-            alunoNome: texto(alunoNome, 150) || '',
+            alunoNome: alunoNomeNormalizado,
             alunoTurma: texto(alunoTurma, 120) || '',
             alunoCurso: texto(alunoCurso, 120) || '',
             alunoOrigem: texto(alunoOrigem, 40) || '',
@@ -172,6 +284,13 @@ router.post('/registrar/concluir', async (req, res) => {
             credentialId: doc.credentialId
         });
     } catch (err) {
+        // 🔥 Tradução de E11000 (se algum dia adicionar índice único parcial)
+        if (err && (err.code === 11000 || /duplicate key/i.test(err.message || ''))) {
+            return res.status(409).json({
+                success: false,
+                error: 'Esta credencial já está vinculada a outra inscrição/aluno.'
+            });
+        }
         console.error('❌ [PASSKEYS] Erro em registrar/concluir:', err);
         res.status(500).json({ success: false, error: 'Falha ao concluir cadastro de passkey.' });
     }
@@ -220,11 +339,9 @@ router.get('/admin', authenticateToken, podeConsultar, async (req, res) => {
         if (req.query.ativo === 'sim') filtro.ativo = true;
         if (req.query.ativo === 'nao') filtro.ativo = false;
 
-        // 🔥 NOVO: filtro por turma
         if (req.query.turma) {
             filtro.alunoTurma = new RegExp(String(req.query.turma).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
         }
-        // 🔥 NOVO: filtro por curso
         if (req.query.curso) {
             filtro.alunoCurso = new RegExp(String(req.query.curso).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
         }
@@ -239,7 +356,6 @@ router.get('/admin', authenticateToken, podeConsultar, async (req, res) => {
                 .lean()
         ]);
 
-        // 🔥 NOVO: lista de turmas disponíveis para o select do frontend
         const turmas = await PasskeyCredencial.distinct('alunoTurma', { alunoTurma: { $ne: '' } });
         const cursos = await PasskeyCredencial.distinct('alunoCurso', { alunoCurso: { $ne: '' } });
 
@@ -319,12 +435,30 @@ router.put('/admin/:id/revogar', authenticateToken, podeEditar, async (req, res)
 // ---- PUT /passkeys/admin/:id/reativar ----
 router.put('/admin/:id/reativar', authenticateToken, podeEditar, async (req, res) => {
     try {
+        // 🔥 Ao reativar, garante que a inscrição/aluno não tenha outra ativa
+        const alvo = await PasskeyCredencial.findById(req.params.id).lean();
+        if (!alvo) return res.status(404).json({ success: false, error: 'Passkey não encontrada.' });
+
+        if (alvo.inscricaoId) {
+            const conflito = await PasskeyCredencial.findOne({
+                _id: { $ne: alvo._id },
+                inscricaoId: alvo.inscricaoId,
+                ativo: true
+            }).select('_id responsavelNome').lean();
+
+            if (conflito) {
+                return res.status(409).json({
+                    success: false,
+                    error: `Não é possível reativar: a inscrição já tem outra biometria ativa (responsável: ${conflito.responsavelNome || '—'}).`
+                });
+            }
+        }
+
         const doc = await PasskeyCredencial.findByIdAndUpdate(
             req.params.id,
             { ativo: true },
             { new: true }
         );
-        if (!doc) return res.status(404).json({ success: false, error: 'Passkey não encontrada.' });
         res.json({ success: true, mensagem: 'Passkey reativada com sucesso.' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
