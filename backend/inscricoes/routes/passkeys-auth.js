@@ -285,18 +285,4 @@ router.post('/autenticar/concluir', async (req, res) => {
     }
 });
 
-// ⚠️ APENAS PARA DIAGNÓSTICO - PODE APAGAR DEPOIS
-router.get('/publica/debug', async (req, res) => {
-    try {
-        // Puxa as últimas 20 passkeys para não sobrecarregar
-        const passkeys = await PasskeyCredencial.find({ ativo: true })
-            .sort({ createdAt: -1 })
-            .limit(20)
-            .lean();
-        res.json({ success: true, total: passkeys.length, passkeys });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
-
 module.exports = router;

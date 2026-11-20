@@ -7,7 +7,7 @@
 //   2) inscricaoId, se informado, PRECISA existir e NÃO pode ter outra passkey ativa
 //   3) matriculaId, se informado, NÃO pode ter outra passkey ativa
 //   4) Fallback: se inscricaoId não veio, descobre pelo alunoNome ativo
-//      (garante a trava mesmo que o frontend não envie o ID)
+//   5) UNICIDADE POR NOME: impede dois responsáveis vincularem biometria pro mesmo aluno
 // ============================================================================
 'use strict';
 
@@ -219,14 +219,13 @@ router.post('/registrar/concluir', async (req, res) => {
             }
         }
 
-        // --------------------------------------------------------------------
-        // 🔥 UNICIDADE #4 — Fallback: se o frontend não mandou inscricaoId,
-        // descobre a inscrição ativa do aluno pelo alunoNome e trava mesmo assim.
-        // Isso garante o cenário "pai vinculou o Cauã, mãe tenta vincular o Cauã".
-        // --------------------------------------------------------------------
         const alunoNomeNormalizado = texto(alunoNome, 150);
         let inscricaoIdFinal = inscricaoIdValido;
 
+        // --------------------------------------------------------------------
+        // 🔥 UNICIDADE #4 — Fallback: se o frontend não mandou inscricaoId,
+        // descobre a inscrição ativa do aluno pelo alunoNome e trava mesmo assim.
+        // --------------------------------------------------------------------
         if (!inscricaoIdFinal && alunoNomeNormalizado) {
             // Busca a inscrição ativa mais recente do aluno (não cancelada)
             const inscricaoDoAluno = await Formulario.findOne({
@@ -249,6 +248,34 @@ router.post('/registrar/concluir', async (req, res) => {
                         error: `Este aluno já possui biometria ativa vinculada (responsável: ${passkeyDesc.responsavelNome || '—'}). Revogue antes de cadastrar outra.`
                     });
                 }
+            }
+        }
+
+        // --------------------------------------------------------------------
+        // 🔥 UNICIDADE #5 — TRAVA POR NOME DO ALUNO (evita duplicidade sem ID)
+        // Se o aluno já tiver uma passkey ativa (mesmo que a inscrição/matrícula
+        // não tenha sido passada), bloqueia o cadastro da nova.
+        // --------------------------------------------------------------------
+        if (alunoNomeNormalizado) {
+            const filtroNome = {
+                alunoNome: new RegExp('^' + alunoNomeNormalizado.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i'),
+                ativo: true
+            };
+
+            // Se tiver matrícula, restringe a busca a ela para não bloquear homônimos
+            if (matriculaIdValido) {
+                filtroNome.matriculaId = matriculaIdValido;
+            }
+
+            const passkeyExistenteNome = await PasskeyCredencial.findOne(filtroNome)
+                .select('_id responsavelNome')
+                .lean();
+
+            if (passkeyExistenteNome) {
+                return res.status(409).json({
+                    success: false,
+                    error: `Este aluno já possui biometria ativa cadastrada por ${passkeyExistenteNome.responsavelNome || 'outro responsável'}. Por segurança, não é possível cadastrar outra.`
+                });
             }
         }
 
