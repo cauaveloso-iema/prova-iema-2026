@@ -3,10 +3,6 @@
 // Base: /api/inscricoes
 //   Público : /publica/*
 //   Admin   : /admin/*
-//
-// Biometria: usa a MESMA ENCRYPTION_KEY do .env (criptografia simétrica
-// feita no servidor). O navegador envia o payload em JSON normal; o
-// servidor cifra e grava no Mongo no formato enc:v1:...
 // ============================================================================
 'use strict';
 
@@ -384,7 +380,6 @@ async function gerarProtocoloUnico(anoLetivo) {
 
 // ----------------------------------------------------------------------------
 // Processa o bloco de biometria recebido (sempre pelo servidor).
-// Retorna o subdocumento pronto para salvar, ou lança erro com status.
 // ----------------------------------------------------------------------------
 function processarBiometria(bodyBiometria, cfg, req) {
     if (!bodyBiometria || !bodyBiometria.aceito) {
@@ -545,8 +540,6 @@ router.get('/publica/cep/:cep', async (req, res) => {
 });
 
 // ---- GET /publica/biometria/chave ----
-// No modo simétrico não há chave pública. Retornamos um identificador
-// para o front saber que pode mandar o payload em claro (o servidor cifra).
 router.get('/publica/biometria/chave', (req, res) => {
     try {
         if (!biometriaCrypto) {
@@ -605,7 +598,6 @@ router.post('/publica', limitarTentativas, async (req, res) => {
             }
         }
 
-        // ------- Biometria (opcional, só se a config permitir) --------------
         let biometriaFinal = { aceito: false };
         if (req.body && req.body.biometria) {
             try {
@@ -1191,18 +1183,20 @@ router.delete('/admin/:id', authenticateToken, isAdmin, async (req, res) => {
 });
 
 // ---- GET /publica/alunos-todos ----
-// Busca alunos tanto na tabela de Inscrições (novos) quanto na de Usuários (antigos, role 'aluno')
 router.get('/publica/alunos-todos', async (req, res) => {
     try {
         const termo = String(req.query.nome || '').trim();
+        const turmaFiltro = String(req.query.turma || '').trim();
+        const cursoFiltro = String(req.query.curso || '').trim();
         const rx = termo ? new RegExp(escaparRegex(termo), 'i') : null;
         
         const resultados = [];
 
-        // 1. Busca nas Inscrições Socioeconômicas (Novos Alunos)
+        // 1. Busca nas Inscrições
         try {
             const filtroInscricao = { status: { $ne: 'Cancelada' } };
             if (rx) filtroInscricao['aluno.nomeCompleto'] = rx;
+            if (turmaFiltro) filtroInscricao.serie = new RegExp(escaparRegex(turmaFiltro), 'i');
 
             const inscricoes = await Inscricao.find(filtroInscricao)
                 .sort({ 'aluno.nomeCompleto': 1 })
@@ -1222,12 +1216,11 @@ router.get('/publica/alunos-todos', async (req, res) => {
                 });
             });
         } catch (e) {
-            logger.warn('⚠️ [INSCRIÇÕES] Erro ao buscar na tabela de inscrições:', e.message);
+            logger.warn('⚠️ [INSCRIÇÕES] Erro ao buscar inscrições:', e.message);
         }
 
-        // 2. Busca na Base de Usuários (Alunos Antigos - Role 'aluno')
+        // 2. Busca nos Usuários (Alunos antigos)
         try {
-            // Importa o model User dinamicamente
             let User;
             try { User = require('../../models/User'); } catch (_) {}
             if (!User) { try { User = require('../../../models/User'); } catch (_) {} }
@@ -1235,6 +1228,8 @@ router.get('/publica/alunos-todos', async (req, res) => {
             if (User) {
                 const filtroAluno = { role: 'aluno', ativo: true };
                 if (rx) filtroAluno.nome = rx;
+                if (turmaFiltro) filtroAluno.turma = new RegExp(escaparRegex(turmaFiltro), 'i');
+                if (cursoFiltro) filtroAluno.curso = new RegExp(escaparRegex(cursoFiltro), 'i');
 
                 const alunosMatriculados = await User.find(filtroAluno)
                     .sort({ nome: 1 })
@@ -1250,17 +1245,41 @@ router.get('/publica/alunos-todos', async (req, res) => {
                         turma: a.turma || '—',
                         curso: a.curso || '—',
                         origem: 'Matrícula',
-                        responsavel: '—' // O User não tem o nome do responsável direto
+                        responsavel: '—'
                     });
                 });
-            } else {
-                logger.warn('⚠️ [INSCRIÇÕES] Model User não encontrado para busca de alunos antigos.');
             }
         } catch (e) {
-            logger.warn('⚠️ [INSCRIÇÕES] Erro ao buscar alunos antigos (User):', e.message);
+            logger.warn('⚠️ [INSCRIÇÕES] Erro ao buscar usuários:', e.message);
         }
 
-        // Remove duplicatas (caso o mesmo aluno esteja em ambos)
+        // 3. Busca as opções de Turmas e Cursos
+        let turmas = [];
+        let cursos = [];
+        try {
+            let User;
+            try { User = require('../../models/User'); } catch (_) {}
+            if (!User) { try { User = require('../../../models/User'); } catch (_) {} }
+
+            if (User) {
+                const turmasDB = await User.distinct('turma', { role: 'aluno', ativo: true, turma: { $ne: null } });
+                turmas = [...new Set(turmasDB)].filter(Boolean).sort();
+
+                const cursosDB = await User.distinct('curso', { role: 'aluno', ativo: true, curso: { $ne: null } });
+                cursos = [...new Set(cursosDB)].filter(Boolean).sort();
+            }
+            
+            const seriesDB = await Inscricao.distinct('serie', { status: { $ne: 'Cancelada' } });
+            seriesDB.forEach(s => {
+                if (s && !turmas.includes(s)) turmas.push(s);
+            });
+            turmas.sort();
+
+        } catch (e) {
+            logger.warn('⚠️ [INSCRIÇÕES] Erro ao buscar opções de turmas/cursos:', e.message);
+        }
+
+        // Remove duplicatas
         const unicos = [];
         const vistos = new Set();
         resultados.forEach(r => {
@@ -1271,13 +1290,12 @@ router.get('/publica/alunos-todos', async (req, res) => {
             }
         });
 
-        // Ordena por nome
         unicos.sort((a, b) => a.nome.localeCompare(b.nome));
 
-        res.json({ success: true, alunos: unicos });
+        res.json({ success: true, alunos: unicos, turmas, cursos });
 
     } catch (error) {
-        logger.error('❌ [INSCRIÇÕES] Erro na busca unificada de alunos:', error);
+        logger.error('❌ [INSCRIÇÕES] Erro na busca unificada:', error);
         res.status(500).json({ success: false, error: 'Não foi possível buscar os alunos.' });
     }
 });

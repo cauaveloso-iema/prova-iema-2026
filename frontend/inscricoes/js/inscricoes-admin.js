@@ -1,7 +1,5 @@
 /* ============================================================================
    inscricoes-admin.js — Painel de gestão de inscrições
-   Carregado por: gerenciar.html
-   Inclui: config, dashboard, inscrições, passkeys (biometrias)
    ============================================================================ */
 'use strict';
 
@@ -22,10 +20,7 @@ const $ = (s) => document.querySelector(s);
 const $$ = (s) => Array.from(document.querySelectorAll(s));
 
 function getToken() {
-    return localStorage.getItem('auth_token')
-        || sessionStorage.getItem('auth_token')
-        || localStorage.getItem('token')
-        || sessionStorage.getItem('token');
+    return localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token') || localStorage.getItem('token') || sessionStorage.getItem('token');
 }
 
 function getPerfil() {
@@ -76,7 +71,7 @@ async function api(url, options = {}) {
     }
     if (resp.status === 403) {
         const data = await resp.clone().json().catch(() => ({}));
-        const err = new Error(data.error || 'Seu perfil não tem permissão para executar esta ação.');
+        const err = new Error(data.error || 'Seu perfil não tem permissão.');
         err.status = 403; err.debug = data.debug || null;
         throw err;
     }
@@ -152,22 +147,11 @@ function confirmar({ titulo = 'Confirmar', mensagem = 'Tem certeza?', textoOk = 
 // ESTADO
 // ============================================================================
 const estado = {
-    pagina: 1,
-    limite: 20,
-    totalPaginas: 1,
-    total: 0,
+    pagina: 1, limite: 20, totalPaginas: 1, total: 0,
     filtros: { busca:'', status:'', faixaRenda:'', cadUnico:'', deficiencia:'', biometria:'', anoLetivo:'', ordenar:'recentes' },
-    opcoes: null,
-    listaAtual: [],
-    editandoId: null,
-    perfil: null,
-
-    paginaPasskey: 1,
-    limitePasskey: 20,
-    totalPaginasPasskey: 1,
-    totalPasskey: 0,
-    filtrosPasskey: { busca: '', ativo: '' },
-    listaPasskeys: []
+    opcoes: null, listaAtual: [], editandoId: null, perfil: null,
+    paginaPasskey: 1, limitePasskey: 20, totalPaginasPasskey: 1, totalPasskey: 0,
+    filtrosPasskey: { busca: '', ativo: '' }, listaPasskeys: []
 };
 
 // ============================================================================
@@ -179,10 +163,7 @@ function esconderControlesAdmin() {
     document.querySelectorAll('.adm-tab').forEach(tab => {
         const alvo = (tab.dataset.tab || '').toLowerCase();
         const texto = (tab.textContent || '').toLowerCase();
-        if (
-            alvo === 'config' || alvo === 'configuracoes' || alvo === 'passkeys' || alvo === 'biometrias' ||
-            texto.includes('configura') || texto.includes('biometria')
-        ) {
+        if (alvo === 'config' || alvo === 'configuracoes' || alvo === 'passkeys' || alvo === 'biometrias' || texto.includes('configura') || texto.includes('biometria')) {
             tab.style.display = 'none';
             tab.setAttribute('aria-hidden', 'true');
         }
@@ -194,8 +175,7 @@ function esconderControlesAdmin() {
     });
 
     const role = normalizarRole(getPerfil()?.role);
-    const podeExportar = ['admin','super_admin','gestao'].includes(role);
-    if (!podeExportar) {
+    if (!['admin','super_admin','gestao'].includes(role)) {
         const btnExportar = document.getElementById('btn-exportar');
         if (btnExportar) { btnExportar.style.display = 'none'; btnExportar.setAttribute('aria-hidden', 'true'); }
     }
@@ -216,14 +196,8 @@ function configurarAbas() {
 
             if (alvo === 'dashboard') carregarDashboard();
             if (alvo === 'inscricoes') carregarLista(1);
-            if (alvo === 'passkeys') {
-                if (!isAdmin()) { toast('Apenas administradores podem gerenciar biometrias.', 'warning'); return; }
-                carregarPasskeys(1);
-            }
-            if (alvo === 'config') {
-                if (!isAdmin()) { toast('Apenas administradores podem acessar as configurações.', 'warning'); return; }
-                carregarConfig();
-            }
+            if (alvo === 'passkeys') { if (!isAdmin()) { toast('Acesso negado.', 'warning'); return; } carregarPasskeys(1); }
+            if (alvo === 'config') { if (!isAdmin()) { toast('Acesso negado.', 'warning'); return; } carregarConfig(); }
         });
     });
 }
@@ -248,17 +222,10 @@ function configurarBotaoVoltar() {
 // ============================================================================
 async function carregarDashboard() {
     const idsNumeros = ['st-total', 'st-pendentes', 'st-analise', 'st-aprovadas', 'st-concluidas', 'st-canceladas', 'st-cadunico', 'st-deficiencia', 'hero-total', 'hero-pendentes', 'hero-aprovadas'];
-    idsNumeros.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="font-size:0.8em; opacity:0.5;"></i>';
-    });
-
-    const elRenda = document.getElementById('grafico-renda');
-    if (elRenda) elRenda.innerHTML = '<div class="adm-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div>';
-    const elBairros = document.getElementById('grafico-bairros');
-    if (elBairros) elBairros.innerHTML = '<div class="adm-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div>';
-    const elUltimas = document.getElementById('ultimas-inscricoes');
-    if (elUltimas) elUltimas.innerHTML = '<div class="adm-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div>';
+    idsNumeros.forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="font-size:0.8em; opacity:0.5;"></i>'; });
+    const elRenda = document.getElementById('grafico-renda'); if (elRenda) elRenda.innerHTML = '<div class="adm-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div>';
+    const elBairros = document.getElementById('grafico-bairros'); if (elBairros) elBairros.innerHTML = '<div class="adm-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div>';
+    const elUltimas = document.getElementById('ultimas-inscricoes'); if (elUltimas) elUltimas.innerHTML = '<div class="adm-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div>';
 
     try {
         const data = await api(API.dashboard);
@@ -269,22 +236,14 @@ async function carregarDashboard() {
         set('st-cadunico', r.comCadUnico); set('st-deficiencia', r.comDeficiencia);
         set('hero-total', r.total); set('hero-pendentes', r.pendentes); set('hero-aprovadas', r.aprovadas);
 
-        const renda = data.porFaixaRenda || [];
-        const maxRenda = Math.max(1, ...renda.map(x => x.total));
-        if (elRenda) {
-            elRenda.innerHTML = renda.length === 0 ? '<div class="adm-empty"><i class="fas fa-chart-simple"></i> Sem dados.</div>' : renda.map(x => `<div class="adm-bar-row"><div class="adm-bar-top"><span>${escapeHtml(x.faixa)}</span><span>${x.total}</span></div><div class="adm-bar-track"><div class="adm-bar-fill" style="width:${Math.round((x.total/maxRenda)*100)}%"></div></div></div>`).join('');
-        }
+        const renda = data.porFaixaRenda || []; const maxRenda = Math.max(1, ...renda.map(x => x.total));
+        if (elRenda) elRenda.innerHTML = renda.length === 0 ? '<div class="adm-empty"><i class="fas fa-chart-simple"></i> Sem dados.</div>' : renda.map(x => `<div class="adm-bar-row"><div class="adm-bar-top"><span>${escapeHtml(x.faixa)}</span><span>${x.total}</span></div><div class="adm-bar-track"><div class="adm-bar-fill" style="width:${Math.round((x.total/maxRenda)*100)}%"></div></div></div>`).join('');
 
-        const bairros = data.porBairro || [];
-        const maxB = Math.max(1, ...bairros.map(x => x.total));
-        if (elBairros) {
-            elBairros.innerHTML = bairros.length === 0 ? '<div class="adm-empty"><i class="fas fa-location-dot"></i> Sem dados.</div>' : bairros.map(x => `<div class="adm-bar-row"><div class="adm-bar-top"><span>${escapeHtml(x.bairro)}</span><span>${x.total}</span></div><div class="adm-bar-track"><div class="adm-bar-fill" style="width:${Math.round((x.total/maxB)*100)}%"></div></div></div>`).join('');
-        }
+        const bairros = data.porBairro || []; const maxB = Math.max(1, ...bairros.map(x => x.total));
+        if (elBairros) elBairros.innerHTML = bairros.length === 0 ? '<div class="adm-empty"><i class="fas fa-location-dot"></i> Sem dados.</div>' : bairros.map(x => `<div class="adm-bar-row"><div class="adm-bar-top"><span>${escapeHtml(x.bairro)}</span><span>${x.total}</span></div><div class="adm-bar-track"><div class="adm-bar-fill" style="width:${Math.round((x.total/maxB)*100)}%"></div></div></div>`).join('');
 
         const ultimas = data.ultimas || [];
-        if (elUltimas) {
-            elUltimas.innerHTML = ultimas.length === 0 ? '<div class="adm-empty"><i class="fas fa-inbox"></i> Nenhuma.</div>' : ultimas.map(i => `<div class="adm-list-item"><div><h4>${escapeHtml(i.aluno?.nomeCompleto || '—')}</h4><p><span class="adm-proto">${escapeHtml(i.protocolo)}</span> · Resp.: ${escapeHtml(i.responsavel?.nomeCompleto || '—')} · ${fmtDataHora(i.createdAt)}</p></div><div style="display:flex;gap:8px;align-items:center">${badgeStatus(i.status)}<button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon" onclick="adm.verDetalhe('${i._id}')"><i class="fas fa-eye"></i></button></div></div>`).join('');
-        }
+        if (elUltimas) elUltimas.innerHTML = ultimas.length === 0 ? '<div class="adm-empty"><i class="fas fa-inbox"></i> Nenhuma.</div>' : ultimas.map(i => `<div class="adm-list-item"><div><h4>${escapeHtml(i.aluno?.nomeCompleto || '—')}</h4><p><span class="adm-proto">${escapeHtml(i.protocolo)}</span> · Resp.: ${escapeHtml(i.responsavel?.nomeCompleto || '—')} · ${fmtDataHora(i.createdAt)}</p></div><div style="display:flex;gap:8px;align-items:center">${badgeStatus(i.status)}<button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon" onclick="adm.verDetalhe('${i._id}')"><i class="fas fa-eye"></i></button></div></div>`).join('');
     } catch (err) {
         idsNumeros.forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '0'; });
         toast('Erro no dashboard.', 'error');
@@ -350,11 +309,10 @@ function renderPaginacao() {
     const fim = Math.min(pagina * estado.limite, total);
     const botoes = [];
     botoes.push(`<button class="adm-page-btn" ${pagina === 1 ? 'disabled' : ''} data-pagina="${pagina-1}"><i class="fas fa-chevron-left"></i></button>`);
-    const janela = 2;
     for (let p = 1; p <= totalPaginas; p++) {
-        if (p === 1 || p === totalPaginas || (p >= pagina - janela && p <= pagina + janela)) {
+        if (p === 1 || p === totalPaginas || (p >= pagina - 2 && p <= pagina + 2)) {
             botoes.push(`<button class="adm-page-btn ${p === pagina ? 'ativo' : ''}" data-pagina="${p}">${p}</button>`);
-        } else if (p === pagina - janela - 1 || p === pagina + janela + 1) {
+        } else if (p === pagina - 3 || p === pagina + 3) {
             botoes.push('<span style="align-self:center;color:#94a3b8">…</span>');
         }
     }
@@ -1034,10 +992,9 @@ async function excluirPasskey(id, nome) {
 
     try {
         loader(true, 'Excluindo...');
-        // 🔥 Aqui está o DELETE para a rota correta
         await api(`${API.passkeys}/${id}`, { method: 'DELETE' });
         toast('Biometria excluída com sucesso.', 'success');
-        carregarPasskeys(estado.paginaPasskey); // Recarrega a lista
+        carregarPasskeys(estado.paginaPasskey);
     } catch (err) {
         toast('Erro ao excluir: ' + err.message, 'error');
     } finally {

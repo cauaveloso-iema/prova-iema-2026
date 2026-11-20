@@ -100,7 +100,7 @@ router.post('/registrar/iniciar', (req, res) => {
 // ---- POST /passkeys/registrar/concluir ----
 router.post('/registrar/concluir', async (req, res) => {
     try {
-        const { cpf, nome, credential, inscricaoId } = req.body || {};
+        const { cpf, nome, credential, inscricaoId, matriculaId, alunoNome } = req.body || {};
         const cpfDigitos = soDigitos(cpf);
 
         if (cpfDigitos.length !== 11) return res.status(400).json({ success: false, error: 'CPF inválido.' });
@@ -144,6 +144,8 @@ router.post('/registrar/concluir', async (req, res) => {
             attestationType: 'none',
             userVerification: 'required',
             inscricaoId: inscricaoId || null,
+            matriculaId: matriculaId || null,
+            alunoNome: alunoNome || '', // 🔥 SALVA O NOME DIRETO AQUI
             ip: req.ip || '',
             userAgent: req.headers['user-agent'] || ''
         });
@@ -192,6 +194,7 @@ router.get('/admin', authenticateToken, podeConsultar, async (req, res) => {
             const rx = new RegExp(termo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
             filtro.$or = [
                 { responsavelNome: rx },
+                { alunoNome: rx },
                 { credentialId: rx }
             ];
             const cpfDigitos = soDigitos(termo);
@@ -213,24 +216,9 @@ router.get('/admin', authenticateToken, podeConsultar, async (req, res) => {
                 .lean()
         ]);
 
-        // 🔥 CORREÇÃO: Buscar o nome do aluno pelo inscricaoId OU pelo CPF do responsável
-        const lista = await Promise.all(docs.map(async (d) => {
-            let alunoNome = null;
-            
-            if (d.inscricaoId) {
-                const insc = await Formulario.findById(d.inscricaoId).select('aluno.nomeCompleto').lean();
-                if (insc && insc.aluno) alunoNome = insc.aluno.nomeCompleto;
-            }
-            
-            if (!alunoNome && d.responsavelCpfHash) {
-                const insc = await Formulario.findOne({ cpfHash: d.responsavelCpfHash })
-                    .sort({ createdAt: -1 })
-                    .select('aluno.nomeCompleto')
-                    .lean();
-                if (insc && insc.aluno) alunoNome = insc.aluno.nomeCompleto;
-            }
-
-            return {
+        res.json({
+            success: true,
+            passkeys: docs.map(d => ({
                 _id: d._id,
                 responsavelNome: d.responsavelNome,
                 credentialId: d.credentialId,
@@ -238,13 +226,10 @@ router.get('/admin', authenticateToken, podeConsultar, async (req, res) => {
                 ativo: d.ativo,
                 createdAt: d.createdAt,
                 ultimoUsoEm: d.ultimoUsoEm,
-                alunoNome: alunoNome || null
-            };
-        }));
-
-        res.json({
-            success: true,
-            passkeys: lista,
+                alunoNome: d.alunoNome || 'Não vinculado', // 🔥 Retorna o nome salvo
+                inscricaoId: d.inscricaoId,
+                matriculaId: d.matriculaId
+            })),
             paginacao: {
                 pagina,
                 limite,
@@ -281,13 +266,18 @@ router.put('/admin/:id', authenticateToken, podeEditar, async (req, res) => {
     }
 });
 
-// ---- DELETE /admin/:id (Excluir Permanentemente) ----
-router.delete('/admin/:id', authenticateToken, podeEditar, async (req, res) => {
+// ---- PUT /passkeys/admin/:id/revogar ----
+router.put('/admin/:id/revogar', authenticateToken, podeEditar, async (req, res) => {
     try {
-        const doc = await PasskeyCredencial.findByIdAndDelete(req.params.id); // 🔥 Exclui de verdade
+        const doc = await PasskeyCredencial.findByIdAndUpdate(
+            req.params.id,
+            { ativo: false },
+            { new: true }
+        );
         if (!doc) return res.status(404).json({ success: false, error: 'Passkey não encontrada.' });
-        res.json({ success: true, mensagem: 'Biometria excluída permanentemente.' });
+        res.json({ success: true, mensagem: 'Passkey revogada com sucesso.' });
     } catch (error) {
+        console.error('❌ [PASSKEYS] Erro ao revogar:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -303,6 +293,18 @@ router.put('/admin/:id/reativar', authenticateToken, podeEditar, async (req, res
         if (!doc) return res.status(404).json({ success: false, error: 'Passkey não encontrada.' });
         res.json({ success: true, mensagem: 'Passkey reativada com sucesso.' });
     } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ---- DELETE /passkeys/admin/:id (Excluir Permanentemente) ----
+router.delete('/admin/:id', authenticateToken, podeEditar, async (req, res) => {
+    try {
+        const doc = await PasskeyCredencial.findByIdAndDelete(req.params.id);
+        if (!doc) return res.status(404).json({ success: false, error: 'Passkey não encontrada.' });
+        res.json({ success: true, mensagem: 'Biometria excluída permanentemente.' });
+    } catch (error) {
+        console.error('❌ [PASSKEYS] Erro ao excluir:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
