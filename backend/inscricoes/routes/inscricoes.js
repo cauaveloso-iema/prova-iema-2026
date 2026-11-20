@@ -1190,4 +1190,96 @@ router.delete('/admin/:id', authenticateToken, isAdmin, async (req, res) => {
     }
 });
 
+// ---- GET /publica/alunos-todos ----
+// Busca alunos tanto na tabela de Inscrições (novos) quanto na de Usuários (antigos, role 'aluno')
+router.get('/publica/alunos-todos', async (req, res) => {
+    try {
+        const termo = String(req.query.nome || '').trim();
+        const rx = termo ? new RegExp(escaparRegex(termo), 'i') : null;
+        
+        const resultados = [];
+
+        // 1. Busca nas Inscrições Socioeconômicas (Novos Alunos)
+        try {
+            const filtroInscricao = { status: { $ne: 'Cancelada' } };
+            if (rx) filtroInscricao['aluno.nomeCompleto'] = rx;
+
+            const inscricoes = await Inscricao.find(filtroInscricao)
+                .sort({ 'aluno.nomeCompleto': 1 })
+                .limit(50)
+                .select('protocolo aluno.nomeCompleto serie responsavel.nomeCompleto')
+                .lean();
+
+            inscricoes.forEach(d => {
+                resultados.push({
+                    id: d._id.toString(),
+                    nome: d.aluno?.nomeCompleto || 'Aluno sem nome',
+                    matricula: d.protocolo,
+                    turma: d.serie || '—',
+                    curso: 'Inscrição',
+                    origem: 'Inscrição',
+                    responsavel: d.responsavel?.nomeCompleto || '—'
+                });
+            });
+        } catch (e) {
+            logger.warn('⚠️ [INSCRIÇÕES] Erro ao buscar na tabela de inscrições:', e.message);
+        }
+
+        // 2. Busca na Base de Usuários (Alunos Antigos - Role 'aluno')
+        try {
+            // Importa o model User dinamicamente
+            let User;
+            try { User = require('../../models/User'); } catch (_) {}
+            if (!User) { try { User = require('../../../models/User'); } catch (_) {} }
+
+            if (User) {
+                const filtroAluno = { role: 'aluno', ativo: true };
+                if (rx) filtroAluno.nome = rx;
+
+                const alunosMatriculados = await User.find(filtroAluno)
+                    .sort({ nome: 1 })
+                    .limit(50)
+                    .select('nome matricula turma curso')
+                    .lean();
+
+                alunosMatriculados.forEach(a => {
+                    resultados.push({
+                        id: a._id.toString(),
+                        nome: a.nome || 'Aluno sem nome',
+                        matricula: a.matricula || '—',
+                        turma: a.turma || '—',
+                        curso: a.curso || '—',
+                        origem: 'Matrícula',
+                        responsavel: '—' // O User não tem o nome do responsável direto
+                    });
+                });
+            } else {
+                logger.warn('⚠️ [INSCRIÇÕES] Model User não encontrado para busca de alunos antigos.');
+            }
+        } catch (e) {
+            logger.warn('⚠️ [INSCRIÇÕES] Erro ao buscar alunos antigos (User):', e.message);
+        }
+
+        // Remove duplicatas (caso o mesmo aluno esteja em ambos)
+        const unicos = [];
+        const vistos = new Set();
+        resultados.forEach(r => {
+            const chave = r.nome.toLowerCase() + '|' + r.matricula;
+            if (!vistos.has(chave)) {
+                vistos.add(chave);
+                unicos.push(r);
+            }
+        });
+
+        // Ordena por nome
+        unicos.sort((a, b) => a.nome.localeCompare(b.nome));
+
+        res.json({ success: true, alunos: unicos });
+
+    } catch (error) {
+        logger.error('❌ [INSCRIÇÕES] Erro na busca unificada de alunos:', error);
+        res.status(500).json({ success: false, error: 'Não foi possível buscar os alunos.' });
+    }
+});
+
 module.exports = router;
