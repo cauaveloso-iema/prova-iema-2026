@@ -281,20 +281,13 @@ router.put('/admin/:id', authenticateToken, podeEditar, async (req, res) => {
     }
 });
 
-// ---- DELETE /passkeys/admin/:id (Revogar) ----
+// ---- DELETE /admin/:id (Excluir Permanentemente) ----
 router.delete('/admin/:id', authenticateToken, podeEditar, async (req, res) => {
     try {
-        const doc = await PasskeyCredencial.findByIdAndUpdate(
-            req.params.id,
-            { ativo: false },
-            { new: true }
-        );
+        const doc = await PasskeyCredencial.findByIdAndDelete(req.params.id); // 🔥 Exclui de verdade
         if (!doc) return res.status(404).json({ success: false, error: 'Passkey não encontrada.' });
-
-        console.log(`🗑️ [PASSKEYS] Passkey de ${doc.responsavelNome} revogada por ${req.userNome || req.userId}`);
-        res.json({ success: true, mensagem: 'Passkey revogada com sucesso.' });
+        res.json({ success: true, mensagem: 'Biometria excluída permanentemente.' });
     } catch (error) {
-        console.error('❌ [PASSKEYS] Erro ao revogar:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });

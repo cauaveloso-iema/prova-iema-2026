@@ -1034,9 +1034,10 @@ async function excluirPasskey(id, nome) {
 
     try {
         loader(true, 'Excluindo...');
+        // 🔥 Aqui está o DELETE para a rota correta
         await api(`${API.passkeys}/${id}`, { method: 'DELETE' });
         toast('Biometria excluída com sucesso.', 'success');
-        carregarPasskeys(estado.paginaPasskey);
+        carregarPasskeys(estado.paginaPasskey); // Recarrega a lista
     } catch (err) {
         toast('Erro ao excluir: ' + err.message, 'error');
     } finally {
