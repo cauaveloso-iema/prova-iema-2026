@@ -1,7 +1,7 @@
 /* ============================================================================
    inscricoes-admin.js — Painel de gestão de inscrições
    Carregado por: gerenciar.html
-   Inclui: config de biometria, filtro e coluna de biometria
+   Inclui: config de biometria, filtro e coluna de biometria, gestão de passkeys
    ============================================================================ */
 'use strict';
 
@@ -11,7 +11,8 @@ const API = {
     dashboard: '/api/inscricoes/admin/dashboard',
     config: '/api/inscricoes/admin/config',
     exportar: '/api/inscricoes/admin/exportar',
-    opcoes: '/api/inscricoes/admin/opcoes'
+    opcoes: '/api/inscricoes/admin/opcoes',
+    passkeys: '/api/inscricoes/passkeys/admin'
 };
 
 // ============================================================================
@@ -159,35 +160,59 @@ const estado = {
     opcoes: null,
     listaAtual: [],
     editandoId: null,
-    perfil: null
+    perfil: null,
+
+    // Estado Passkeys
+    paginaPasskey: 1,
+    limitePasskey: 20,
+    totalPaginasPasskey: 1,
+    totalPasskey: 0,
+    filtrosPasskey: { busca: '', ativo: '' }
 };
 
 // ============================================================================
 // ESCONDE CONTROLES DE ADMIN
 // ============================================================================
 function esconderControlesAdmin() {
-    if (isAdmin()) return;
+    if (isAdmin()) return; // Se for admin, não esconde nada
 
+    // 1. Esconder Abas não permitidas (Configurações e Biometrias)
     document.querySelectorAll('.adm-tab').forEach(tab => {
         const alvo = (tab.dataset.tab || '').toLowerCase();
         const texto = (tab.textContent || '').toLowerCase();
-        if (alvo === 'config' || alvo === 'configuracoes' || texto.includes('configura')) {
+        
+        // Esconde se for config ou passkeys
+        if (
+            alvo === 'config' || 
+            alvo === 'configuracoes' || 
+            alvo === 'passkeys' || 
+            alvo === 'biometrias' ||
+            texto.includes('configura') ||
+            texto.includes('biometria')
+        ) {
             tab.style.display = 'none';
             tab.setAttribute('aria-hidden', 'true');
         }
     });
 
-    ['#panel-config', '#panel-configuracoes', '#tab-config', '#tab-configuracoes'].forEach(sel => {
+    // 2. Esconder os painéis correspondentes
+    ['#panel-config', '#panel-configuracoes', '#panel-passkeys', '#panel-biometrias'].forEach(sel => {
         const p = document.querySelector(sel);
-        if (p) { p.classList.remove('active', 'show'); p.style.display = 'none'; p.setAttribute('aria-hidden', 'true'); }
+        if (p) { 
+            p.classList.remove('active', 'show'); 
+            p.style.display = 'none'; 
+            p.setAttribute('aria-hidden', 'true'); 
+        }
     });
 
+    // 3. Esconder botão de exportar (se não for admin/gestao)
     const role = normalizarRole(getPerfil()?.role);
     const podeExportar = ['admin','super_admin','gestao'].includes(role);
     if (!podeExportar) {
         const btnExportar = document.getElementById('btn-exportar');
         if (btnExportar) { btnExportar.style.display = 'none'; btnExportar.setAttribute('aria-hidden', 'true'); }
     }
+    
     console.log('🛡️ [inscricoes-admin] Controles de admin ocultados para perfil:', getPerfil()?.role);
 }
 
@@ -206,6 +231,10 @@ function configurarAbas() {
 
             if (alvo === 'dashboard') carregarDashboard();
             if (alvo === 'inscricoes') carregarLista(1);
+            if (alvo === 'passkeys') {
+                if (!isAdmin()) { toast('Apenas administradores podem gerenciar biometrias.', 'warning'); return; }
+                carregarPasskeys(1);
+            }
             if (alvo === 'config') {
                 if (!isAdmin()) { toast('Apenas administradores podem acessar as configurações.', 'warning'); return; }
                 carregarConfig();
@@ -233,10 +262,29 @@ function configurarBotaoVoltar() {
 // DASHBOARD
 // ============================================================================
 async function carregarDashboard() {
+    // 1. Feedback visual imediato
+    const idsNumeros = ['st-total', 'st-pendentes', 'st-analise', 'st-aprovadas', 'st-concluidas', 'st-canceladas', 'st-cadunico', 'st-deficiencia', 'hero-total', 'hero-pendentes', 'hero-aprovadas'];
+    
+    idsNumeros.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="font-size:0.8em; opacity:0.5;"></i>';
+    });
+
+    const elRenda = document.getElementById('grafico-renda');
+    if (elRenda) elRenda.innerHTML = '<div class="adm-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div>';
+    
+    const elBairros = document.getElementById('grafico-bairros');
+    if (elBairros) elBairros.innerHTML = '<div class="adm-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div>';
+
+    const elUltimas = document.getElementById('ultimas-inscricoes');
+    if (elUltimas) elUltimas.innerHTML = '<div class="adm-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div>';
+
+    // 2. Busca os dados
     try {
         const data = await api(API.dashboard);
         const r = data.resumo || {};
 
+        // 3. Preenche os números
         const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v ?? 0; };
         set('st-total', r.total);
         set('st-pendentes', r.pendentes);
@@ -250,9 +298,9 @@ async function carregarDashboard() {
         set('hero-pendentes', r.pendentes);
         set('hero-aprovadas', r.aprovadas);
 
+        // 4. Gráfico de Renda
         const renda = data.porFaixaRenda || [];
         const maxRenda = Math.max(1, ...renda.map(x => x.total));
-        const elRenda = document.getElementById('grafico-renda');
         if (elRenda) {
             elRenda.innerHTML = renda.length === 0
                 ? '<div class="adm-empty"><i class="fas fa-chart-simple"></i> Sem dados ainda.</div>'
@@ -263,9 +311,9 @@ async function carregarDashboard() {
                     </div>`).join('');
         }
 
+        // 5. Gráfico de Bairros
         const bairros = data.porBairro || [];
         const maxB = Math.max(1, ...bairros.map(x => x.total));
-        const elBairros = document.getElementById('grafico-bairros');
         if (elBairros) {
             elBairros.innerHTML = bairros.length === 0
                 ? '<div class="adm-empty"><i class="fas fa-location-dot"></i> Sem dados ainda.</div>'
@@ -276,8 +324,8 @@ async function carregarDashboard() {
                     </div>`).join('');
         }
 
+        // 6. Últimas Inscrições
         const ultimas = data.ultimas || [];
-        const elUltimas = document.getElementById('ultimas-inscricoes');
         if (elUltimas) {
             elUltimas.innerHTML = ultimas.length === 0
                 ? '<div class="adm-empty"><i class="fas fa-inbox"></i> Nenhuma inscrição ainda.</div>'
@@ -300,14 +348,26 @@ async function carregarDashboard() {
                         </div>
                     </div>`).join('');
         }
+
     } catch (err) {
-        console.error(err);
+        console.error('Erro no dashboard:', err);
+        
+        // Fallback caso dê erro
+        idsNumeros.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = '0';
+        });
+        
+        if (elRenda) elRenda.innerHTML = '<div class="adm-empty" style="color:#dc2626;"><i class="fas fa-circle-exclamation"></i> Erro ao carregar dados.</div>';
+        if (elBairros) elBairros.innerHTML = '<div class="adm-empty" style="color:#dc2626;"><i class="fas fa-circle-exclamation"></i> Erro ao carregar dados.</div>';
+        if (elUltimas) elUltimas.innerHTML = '<div class="adm-empty" style="color:#dc2626;"><i class="fas fa-circle-exclamation"></i> Erro ao carregar dados.</div>';
+
         toast('Erro ao carregar dashboard: ' + err.message, 'error');
     }
 }
 
 // ============================================================================
-// LISTA
+// LISTA DE INSCRIÇÕES
 // ============================================================================
 async function carregarLista(pagina = 1) {
     const tbody = document.getElementById('tbody-inscricoes');
@@ -428,7 +488,7 @@ function renderPaginacao() {
 }
 
 // ============================================================================
-// DETALHE (com bloco de biometria)
+// DETALHE DA INSCRIÇÃO
 // ============================================================================
 function blocoDetalhe(titulo, icone, itens) {
     const validos = itens.filter(([,v]) => v !== '' && v !== null && v !== undefined && v !== '—');
@@ -592,7 +652,7 @@ async function verDetalhe(id) {
 }
 
 // ============================================================================
-// EDIÇÃO
+// EDIÇÃO DA INSCRIÇÃO
 // ============================================================================
 const CAMPOS_EDICAO = [
     { grupo:'aluno', campo:'nomeCompleto', label:'Nome do aluno', tipo:'text' },
@@ -741,7 +801,7 @@ async function salvarEdicao() {
 }
 
 // ============================================================================
-// EXCLUIR
+// EXCLUIR INSCRIÇÃO
 // ============================================================================
 async function excluir(id, protocolo) {
     if (!isAdmin()) { toast('Apenas administradores podem excluir inscrições.', 'warning'); return; }
@@ -801,7 +861,7 @@ async function exportarCSV() {
 }
 
 // ============================================================================
-// CONFIGURAÇÃO — inclui o switch de biometria (c-biometria)
+// CONFIGURAÇÃO
 // ============================================================================
 async function carregarConfig() {
     try {
@@ -892,6 +952,174 @@ async function salvarConfig(e) {
 }
 
 // ============================================================================
+// GESTÃO DE PASSKEYS / BIOMETRIAS
+// ============================================================================
+async function carregarPasskeys(pagina = 1) {
+    if (!isAdmin()) return; // Trava de segurança extra
+
+    const tbody = document.getElementById('tbody-passkeys');
+    if (!tbody) return;
+
+    estado.paginaPasskey = pagina;
+    tbody.innerHTML = `<tr><td colspan="7"><div class="adm-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div></td></tr>`;
+
+    try {
+        const params = new URLSearchParams();
+        params.set('pagina', estado.paginaPasskey);
+        params.set('limite', estado.limitePasskey);
+        if (estado.filtrosPasskey.busca) params.set('busca', estado.filtrosPasskey.busca);
+        if (estado.filtrosPasskey.ativo) params.set('ativo', estado.filtrosPasskey.ativo);
+
+        const data = await api(`${API.passkeys}?${params.toString()}`);
+        const lista = data.passkeys || [];
+        const pag = data.paginacao || {};
+
+        estado.totalPaginasPasskey = pag.totalPaginas || 1;
+        estado.totalPasskey = pag.total || 0;
+
+        if (lista.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7"><div class="adm-empty"><i class="fas fa-fingerprint"></i> Nenhuma biometria encontrada com os filtros atuais.</div></td></tr>`;
+            renderPaginacaoPasskeys();
+            return;
+        }
+
+        const podeEditar = isAdmin() || normalizarRole(getPerfil()?.role) === 'gestao';
+
+        tbody.innerHTML = lista.map(p => {
+            const dtCadastro = p.createdAt ? new Date(p.createdAt).toLocaleDateString('pt-BR') : '—';
+            const dtUso = p.ultimoUsoEm ? new Date(p.ultimoUsoEm).toLocaleString('pt-BR') : 'Nunca';
+            
+            const badgeStatus = p.ativo 
+                ? '<span class="adm-badge adm-badge-aprovada">Ativa</span>' 
+                : '<span class="adm-badge adm-badge-cancelada">Revogada</span>';
+
+            const alunoVinculado = p.alunoNome 
+                ? `<span class="adm-cell-strong">${escapeHtml(p.alunoNome)}</span>` 
+                : '<span class="adm-cell-sub" style="margin:0;font-style:italic;">Não vinculado</span>';
+
+            return `
+                <tr style="${!p.ativo ? 'opacity:0.6;' : ''}">
+                    <td><span class="adm-cell-strong">${escapeHtml(p.responsavelNome)}</span></td>
+                    <td>${alunoVinculado}</td>
+                    <td><code style="font-size:11px; background:#f3f4f6; padding:2px 6px; border-radius:4px;" title="${escapeHtml(p.credentialId)}">${escapeHtml(p.credentialId.substring(0, 15))}...</code></td>
+                    <td>${badgeStatus}</td>
+                    <td><span class="adm-cell-sub" style="margin:0">${dtCadastro}</span></td>
+                    <td><span class="adm-cell-sub" style="margin:0">${dtUso}</span></td>
+                    <td>
+                        <div class="adm-row-actions">
+                            ${p.ativo ? `
+                                <button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon" onclick="adm.revogarPasskey('${p._id}', '${escapeHtml(p.responsavelNome)}')" title="Revogar Biometria">
+                                    <i class="fas fa-ban" style="color:#dc2626"></i>
+                                </button>
+                            ` : `
+                                <button class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon" onclick="adm.reativarPasskey('${p._id}')" title="Reativar Biometria">
+                                    <i class="fas fa-rotate-left" style="color:#10b981"></i>
+                                </button>
+                            `}
+                        </div>
+                    </td>
+                </tr>`;
+        }).join('');
+
+        renderPaginacaoPasskeys();
+    } catch (err) {
+        console.error(err);
+        tbody.innerHTML = `<tr><td colspan="7"><div class="adm-empty"><i class="fas fa-circle-exclamation"></i> ${escapeHtml(err.message)}</div></td></tr>`;
+    }
+}
+
+function renderPaginacaoPasskeys() {
+    const el = document.getElementById('paginacao-passkeys');
+    if (!el) return;
+    const { paginaPasskey, totalPaginasPasskey, totalPasskey } = estado;
+    if (totalPasskey === 0) { el.innerHTML = ''; return; }
+
+    const inicio = (paginaPasskey - 1) * estado.limitePasskey + 1;
+    const fim = Math.min(paginaPasskey * estado.limitePasskey, totalPasskey);
+
+    const botoes = [];
+    botoes.push(`<button class="adm-page-btn" ${paginaPasskey === 1 ? 'disabled' : ''} data-pagina="${paginaPasskey-1}"><i class="fas fa-chevron-left"></i></button>`);
+    const janela = 2;
+    for (let p = 1; p <= totalPaginasPasskey; p++) {
+        if (p === 1 || p === totalPaginasPasskey || (p >= paginaPasskey - janela && p <= paginaPasskey + janela)) {
+            botoes.push(`<button class="adm-page-btn ${p === paginaPasskey ? 'ativo' : ''}" data-pagina="${p}">${p}</button>`);
+        } else if (p === paginaPasskey - janela - 1 || p === paginaPasskey + janela + 1) {
+            botoes.push('<span style="align-self:center;color:#94a3b8">…</span>');
+        }
+    }
+    botoes.push(`<button class="adm-page-btn" ${paginaPasskey === totalPaginasPasskey ? 'disabled' : ''} data-pagina="${paginaPasskey+1}"><i class="fas fa-chevron-right"></i></button>`);
+
+    el.innerHTML = `
+        <div class="adm-pagination-info">Exibindo <strong>${inicio}–${fim}</strong> de <strong>${totalPasskey}</strong> biometria(s)</div>
+        <div class="adm-pagination-btns">${botoes.join('')}</div>`;
+
+    el.querySelectorAll('[data-pagina]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const p = Number(btn.dataset.pagina);
+            if (p < 1 || p > totalPaginasPasskey || p === paginaPasskey) return;
+            carregarPasskeys(p);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+    });
+}
+
+function configurarFiltrosPasskeys() {
+    const recarregar = debounce(() => {
+        estado.filtrosPasskey.busca = (document.getElementById('f-busca-passkey')?.value || '').trim();
+        estado.filtrosPasskey.ativo = document.getElementById('f-status-passkey')?.value || '';
+        carregarPasskeys(1);
+    }, 400);
+
+    const busca = document.getElementById('f-busca-passkey');
+    if (busca) busca.addEventListener('input', recarregar);
+
+    const status = document.getElementById('f-status-passkey');
+    if (status) status.addEventListener('change', recarregar);
+}
+
+async function revogarPasskey(id, nome) {
+    if (!isAdmin()) { toast('Apenas administradores podem revogar biometrias.', 'warning'); return; }
+    const ok = await confirmar({
+        titulo: 'Revogar Biometria',
+        mensagem: `Tem certeza que deseja revogar a biometria de ${nome}? O responsável não poderá mais autenticar usando esta passkey.`,
+        textoOk: 'Revogar'
+    });
+    if (!ok) return;
+
+    try {
+        loader(true, 'Revogando...');
+        await api(`${API.passkeys}/${id}`, { method: 'DELETE' });
+        toast('Biometria revogada com sucesso.', 'success');
+        carregarPasskeys(estado.paginaPasskey);
+    } catch (err) {
+        toast('Erro ao revogar: ' + err.message, 'error');
+    } finally {
+        loader(false);
+    }
+}
+
+async function reativarPasskey(id) {
+    if (!isAdmin()) { toast('Apenas administradores podem reativar biometrias.', 'warning'); return; }
+    const ok = await confirmar({
+        titulo: 'Reativar Biometria',
+        mensagem: 'Deseja reativar esta biometria? O responsável voltará a poder autenticar.',
+        textoOk: 'Reativar'
+    });
+    if (!ok) return;
+
+    try {
+        loader(true, 'Reativando...');
+        await api(`${API.passkeys}/${id}/reativar`, { method: 'PUT' });
+        toast('Biometria reativada com sucesso.', 'success');
+        carregarPasskeys(estado.paginaPasskey);
+    } catch (err) {
+        toast('Erro ao reativar: ' + err.message, 'error');
+    } finally {
+        loader(false);
+    }
+}
+
+// ============================================================================
 // MODAIS
 // ============================================================================
 function abrirModal(id) {
@@ -911,7 +1139,7 @@ function configurarModais() {
 }
 
 // ============================================================================
-// FILTROS
+// FILTROS (INSCRIÇÕES)
 // ============================================================================
 function lerFiltros() {
     estado.filtros = {
@@ -961,15 +1189,24 @@ document.addEventListener('DOMContentLoaded', () => {
     configurarBotaoVoltar();
     configurarModais();
     configurarFiltros();
+    configurarFiltrosPasskeys(); // Inicializa filtros da aba de biometria
 
-    const form = document.getElementById('form-config');
-    if (form) form.addEventListener('submit', salvarConfig);
+    const form = document.getElementById('config-form'); // fallback caso o ID mude
+    const formConfig = document.getElementById('form-config') || form;
+    if (formConfig) formConfig.addEventListener('submit', salvarConfig);
 
+    // ⚠️ CORREÇÃO: Carrega o Hero (ano, período, status) logo ao abrir a página
+    carregarConfig(); 
+
+    // Carrega o dashboard
     carregarDashboard();
 });
 
 window.adm = {
     verDetalhe, editar, excluir,
+    carregarPasskeys,
+    revogarPasskey,
+    reativarPasskey,
     irParaInscricoes: () => {
         const tab = document.querySelector('.adm-tab[data-tab="inscricoes"]');
         if (tab) tab.click();

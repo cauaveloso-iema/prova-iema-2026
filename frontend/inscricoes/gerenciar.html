@@ -13,7 +13,6 @@
     <link rel="stylesheet" href="/css/styles.css">
     <link rel="stylesheet" href="css/inscricoes-admin.css">
 
-    <!-- ⚠️ NÃO carregar login.js aqui — ele redireciona para /login.html -->
     <script src="/js/dialog-helper.js" defer></script>
     <script src="/js/core-security.js" defer></script>
 </head>
@@ -65,6 +64,7 @@
     <nav class="adm-tabs" role="tablist">
         <button class="adm-tab active" data-tab="dashboard"><i class="fas fa-chart-pie"></i> Dashboard</button>
         <button class="adm-tab" data-tab="inscricoes"><i class="fas fa-list"></i> Inscrições</button>
+        <button class="adm-tab" data-tab="passkeys"><i class="fas fa-fingerprint"></i> Biometrias (Passkeys)</button>
         <button class="adm-tab" data-tab="config"><i class="fas fa-gear"></i> Configurações</button>
     </nav>
 
@@ -200,6 +200,56 @@
         </div>
     </section>
 
+    <!-- ============================= PASSKEYS / BIOMETRIAS ============================= -->
+    <section class="adm-panel" id="panel-passkeys">
+        <div class="adm-card">
+            <div class="adm-card-head">
+                <h3><i class="fas fa-fingerprint"></i> Gestão de Biometrias</h3>
+                <div class="adm-actions">
+                    <button class="adm-btn adm-btn-ghost adm-btn-sm" onclick="adm.atualizarPasskeys()">
+                        <i class="fas fa-rotate"></i> Atualizar
+                    </button>
+                </div>
+            </div>
+
+            <div class="adm-filters">
+                <input type="text" id="f-busca-passkey" placeholder="🔍 Nome do responsável, CPF ou ID da credencial...">
+                <select id="f-status-passkey">
+                    <option value="">Todas as biometrias</option>
+                    <option value="sim">Ativas</option>
+                    <option value="nao">Revogadas</option>
+                </select>
+                <button class="adm-btn adm-btn-ghost adm-btn-sm" onclick="adm.buscarPasskeys()">
+                    <i class="fas fa-search"></i> Filtrar
+                </button>
+                <button class="adm-btn adm-btn-ghost adm-btn-sm" id="btn-limpar-filtros-passkey" onclick="adm.limparFiltrosPasskeys()">
+                    <i class="fas fa-eraser"></i> Limpar
+                </button>
+            </div>
+
+            <div class="adm-table-wrap">
+                <table class="adm-table" id="tabela-passkeys">
+                    <thead>
+                        <tr>
+                            <th>Responsável</th>
+                            <th>Aluno Vinculado</th>
+                            <th>ID da Credencial</th>
+                            <th>Status</th>
+                            <th>Data do Cadastro</th>
+                            <th>Último Uso</th>
+                            <th class="adm-th-acoes">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-passkeys">
+                        <tr><td colspan="7"><div class="adm-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div></td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="adm-pagination" id="paginacao-passkeys"></div>
+        </div>
+    </section>
+
     <!-- ============================= CONFIGURAÇÕES ============================= -->
     <section class="adm-panel" id="panel-config">
         <form class="adm-card" id="form-config">
@@ -296,19 +346,14 @@
         </div>
 
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:16px; padding:8px 0;">
-
             <!-- QR 1 — Inscrição -->
             <div style="text-align:center; padding:20px 16px; background:#f9fafb; border-radius:14px; border:1.5px solid #e5e7eb;">
                 <div id="qrcode-inscricao" style="display:inline-block; padding:12px; background:white; border-radius:10px; margin-bottom:12px;"></div>
                 <h4 style="font-size:14px; color:#1f2937; margin:0 0 4px;">
-                    <i class="fas fa-file-signature" style="color:#0f766e;"></i>
-                    Formulário de Inscrição
+                    <i class="fas fa-file-signature" style="color:#0f766e;"></i> Formulário de Inscrição
                 </h4>
-                <p style="font-size:12px; color:#6b7280; margin:0 0 8px;">
-                    Para novos alunos
-                </p>
-                <a id="link-inscricao" href="/inscricoes/inscricao-publica.html" target="_blank"
-                   style="font-size:11px; color:#0f766e; text-decoration:underline; word-break:break-all;">
+                <p style="font-size:12px; color:#6b7280; margin:0 0 8px;">Para novos alunos</p>
+                <a id="link-inscricao" href="/inscricoes/inscricao-publica.html" target="_blank" style="font-size:11px; color:#0f766e; text-decoration:underline; word-break:break-all;">
                     /inscricoes/inscricao-publica.html
                 </a>
             </div>
@@ -317,14 +362,10 @@
             <div style="text-align:center; padding:20px 16px; background:#f9fafb; border-radius:14px; border:1.5px solid #e5e7eb;">
                 <div id="qrcode-biometria" style="display:inline-block; padding:12px; background:white; border-radius:10px; margin-bottom:12px;"></div>
                 <h4 style="font-size:14px; color:#1f2937; margin:0 0 4px;">
-                    <i class="fas fa-fingerprint" style="color:#0f766e;"></i>
-                    Vincular Biometria
+                    <i class="fas fa-fingerprint" style="color:#0f766e;"></i> Vincular Biometria
                 </h4>
-                <p style="font-size:12px; color:#6b7280; margin:0 0 8px;">
-                    Para quem já fez a inscrição
-                </p>
-                <a id="link-biometria" href="/inscricoes/vincular-biometria.html" target="_blank"
-                   style="font-size:11px; color:#0f766e; text-decoration:underline; word-break:break-all;">
+                <p style="font-size:12px; color:#6b7280; margin:0 0 8px;">Para quem já fez a inscrição</p>
+                <a id="link-biometria" href="/inscricoes/vincular-biometria.html" target="_blank" style="font-size:11px; color:#0f766e; text-decoration:underline; word-break:break-all;">
                     /inscricoes/vincular-biometria.html
                 </a>
             </div>
@@ -333,18 +374,13 @@
             <div style="text-align:center; padding:20px 16px; background:#f9fafb; border-radius:14px; border:1.5px solid #e5e7eb;">
                 <div id="qrcode-consulta" style="display:inline-block; padding:12px; background:white; border-radius:10px; margin-bottom:12px;"></div>
                 <h4 style="font-size:14px; color:#1f2937; margin:0 0 4px;">
-                    <i class="fas fa-magnifying-glass" style="color:#0f766e;"></i>
-                    Consultar Inscrição
+                    <i class="fas fa-magnifying-glass" style="color:#0f766e;"></i> Consultar Inscrição
                 </h4>
-                <p style="font-size:12px; color:#6b7280; margin:0 0 8px;">
-                    Acompanhar status
-                </p>
-                <a id="link-consulta" href="/inscricoes/inscricao-publica.html#consulta" target="_blank"
-                   style="font-size:11px; color:#0f766e; text-decoration:underline; word-break:break-all;">
+                <p style="font-size:12px; color:#6b7280; margin:0 0 8px;">Acompanhar status</p>
+                <a id="link-consulta" href="/inscricoes/inscricao-publica.html#consulta" target="_blank" style="font-size:11px; color:#0f766e; text-decoration:underline; word-break:break-all;">
                     /inscricoes/inscricao-publica.html#consulta
                 </a>
             </div>
-
         </div>
 
         <div style="margin-top:16px; padding:14px 18px; background:#eff6ff; border-radius:10px; border-left:4px solid #3b82f6; font-size:13px; line-height:1.6; color:#1e40af;">
@@ -356,7 +392,7 @@
 
 </main>
 
-<!-- ============================= MODAL DETALHE ============================= -->
+<!-- ============================= MODAL DETALHE (Inscrição) ============================= -->
 <div class="adm-modal" id="modal-detalhe">
     <div class="adm-modal-box adm-modal-lg">
         <div class="adm-modal-head">
@@ -383,6 +419,20 @@
             <button class="adm-btn adm-btn-primary" id="btn-salvar-edicao">
                 <i class="fas fa-save"></i> Salvar alterações
             </button>
+        </div>
+    </div>
+</div>
+
+<!-- ============================= MODAL DETALHE (Passkey) ============================= -->
+<div class="adm-modal" id="modal-passkey">
+    <div class="adm-modal-box adm-modal-md">
+        <div class="adm-modal-head">
+            <h3><i class="fas fa-fingerprint"></i> Detalhes da Biometria</h3>
+            <button class="adm-modal-close" data-fechar="modal-passkey">&times;</button>
+        </div>
+        <div class="adm-modal-body" id="passkey-conteudo"></div>
+        <div class="adm-modal-foot">
+            <button class="adm-btn adm-btn-ghost" data-fechar="modal-passkey">Fechar</button>
         </div>
     </div>
 </div>
@@ -417,10 +467,7 @@
     function gerarQRCode(elId, url, cor) {
         const el = document.getElementById(elId);
         if (!el || typeof QRCode === 'undefined') return;
-
-        // Limpa conteúdo anterior (caso o script rode mais de uma vez)
         el.innerHTML = '';
-
         new QRCode(el, {
             text: url,
             width: 160,
@@ -433,26 +480,20 @@
 
     document.addEventListener('DOMContentLoaded', function () {
         const origin = window.location.origin;
-
         const urlInscricao = origin + '/inscricoes/inscricao-publica.html';
         const urlBiometria = origin + '/inscricoes/vincular-biometria.html';
         const urlConsulta = origin + '/inscricoes/inscricao-publica.html#consulta';
 
-        // Mostra o domínio usado
         const originEl = document.getElementById('qr-origin');
         if (originEl) originEl.textContent = origin;
 
-        // Atualiza os links visíveis para refletir o domínio real
         const linkIns = document.getElementById('link-inscricao');
         if (linkIns) { linkIns.href = urlInscricao; linkIns.textContent = urlInscricao.replace(origin, ''); }
-
         const linkBio = document.getElementById('link-biometria');
         if (linkBio) { linkBio.href = urlBiometria; linkBio.textContent = urlBiometria.replace(origin, ''); }
-
         const linkCon = document.getElementById('link-consulta');
         if (linkCon) { linkCon.href = urlConsulta; linkCon.textContent = urlConsulta.replace(origin, ''); }
 
-        // Gera os QR Codes
         gerarQRCode('qrcode-inscricao', urlInscricao, '#0f766e');
         gerarQRCode('qrcode-biometria', urlBiometria, '#0f766e');
         gerarQRCode('qrcode-consulta', urlConsulta, '#0f766e');
