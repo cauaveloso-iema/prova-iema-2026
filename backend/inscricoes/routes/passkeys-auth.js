@@ -24,6 +24,7 @@ const _timer = setInterval(() => {
 }, 60 * 1000);
 if (_timer.unref) _timer.unref();
 
+
 function obterRpId(req) {
     return process.env.WEBAUTHN_RP_ID || req.headers.host?.split(':')[0] || 'localhost';
 }
@@ -36,6 +37,12 @@ function criarChallenge(chave) {
     const challenge = passkeyCrypto.gerarChallenge();
     challenges.set(chave, { challenge, criadoEm: Date.now() });
     return challenge;
+}
+
+// Adicione no topo, perto de criarChallenge e consumirChallenge
+function normalizarB64Url(str) {
+    if (!str) return '';
+    return String(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 function consumirChallenge(chave) {
@@ -202,44 +209,31 @@ router.post('/autenticar/concluir', async (req, res) => {
             return res.status(404).json({ success: false, error: 'Biometria não encontrada ou revogada.' });
         }
 
-        // 🔥 Confere vínculo informado (defesa contra credentialId de outro usuário)
-        let vinculoOk = false;
-
-        if (matriculaId && String(doc.matriculaId) === String(matriculaId)) {
-            vinculoOk = true;
-        }
-        if (inscricaoId && String(doc.inscricaoId) === String(inscricaoId)) {
-            vinculoOk = true;
-        }
+        // 🔥 Tenta consumir o challenge por TODAS as chaves possíveis (evita erro de cache)
+        const chavesParaTentar = [];
         if (cpf) {
             const d = soDigitos(cpf);
-            if (doc.responsavelCpfHash === hashCPF(d)) vinculoOk = true;
+            if (d.length === 11) chavesParaTentar.push(`auth:cpf:${hashCPF(d)}`);
         }
-        // 🔥 NOVO: validação por nome
-        if (nome && doc.alunoNome) {
-            const nomeDoc = doc.alunoNome.trim().toLowerCase();
-            const nomeEnviado = nome.trim().toLowerCase();
-            if (nomeDoc === nomeEnviado) vinculoOk = true;
+        if (matriculaId) chavesParaTentar.push(`auth:matricula:${matriculaId}`);
+        if (inscricaoId) chavesParaTentar.push(`auth:inscricao:${inscricaoId}`);
+        if (nome) chavesParaTentar.push(`auth:nome:${nome.trim().toLowerCase()}`);
+        
+        if (doc.matriculaId) chavesParaTentar.push(`auth:matricula:${doc.matriculaId}`);
+        if (doc.inscricaoId) chavesParaTentar.push(`auth:inscricao:${doc.inscricaoId}`);
+        if (doc.responsavelCpfHash) chavesParaTentar.push(`auth:cpf:${doc.responsavelCpfHash}`);
+        if (doc.alunoNome) chavesParaTentar.push(`auth:nome:${doc.alunoNome.trim().toLowerCase()}`);
+
+        let esperado = null;
+        for (const chave of chavesParaTentar) {
+            const tentativa = consumirChallenge(chave);
+            if (tentativa) {
+                esperado = tentativa;
+                console.log(`✅ Challenge recuperado usando a chave: ${chave}`);
+                break;
+            }
         }
 
-        // Se informou ALGUM vínculo e nenhum bateu, rejeita
-        const informouVinculo = !!(matriculaId || inscricaoId || cpf || nome);
-        if (informouVinculo && !vinculoOk) {
-            return res.status(403).json({
-                success: false,
-                error: 'Credencial não pertence a este aluno/responsável.'
-            });
-        }
-
-        // 🔥 Chave do challenge precisa ser a mesma usada no /iniciar
-        let chave = null;
-        if (doc.responsavelCpfHash) chave = `auth:${doc.responsavelCpfHash}`;
-        else if (doc.matriculaId) chave = `auth:${doc.matriculaId}`;
-        else if (doc.inscricaoId) chave = `auth:${doc.inscricaoId}`;
-        else if (doc.alunoNome) chave = `auth:nome:${doc.alunoNome.trim()}`;
-        else chave = `auth:${matriculaId || inscricaoId}`;
-
-        const esperado = consumirChallenge(chave);
         if (!esperado) {
             return res.status(400).json({ success: false, error: 'Challenge expirado ou inválido.' });
         }
@@ -255,9 +249,16 @@ router.post('/autenticar/concluir', async (req, res) => {
         if (clientData.type !== 'webauthn.get') {
             return res.status(400).json({ success: false, error: 'Tipo de cerimônia inválido.' });
         }
-        if (clientData.challenge !== esperado) {
+
+        // 🔥 CORREÇÃO CRÍTICA: Compara o challenge normalizado (ignora se é + ou -)
+        const challengeRecebidoNorm = normalizarB64Url(clientData.challenge);
+        const challengeEsperadoNorm = normalizarB64Url(esperado);
+        
+        if (challengeRecebidoNorm !== challengeEsperadoNorm) {
+            console.warn(`❌ Challenge não confere. Recebido: ${challengeRecebidoNorm} | Esperado: ${challengeEsperadoNorm}`);
             return res.status(400).json({ success: false, error: 'Challenge não confere.' });
         }
+
         if (clientData.origin !== obterOrigin(req)) {
             return res.status(400).json({ success: false, error: 'Origin não confere.' });
         }
@@ -277,7 +278,6 @@ router.post('/autenticar/concluir', async (req, res) => {
         doc.ultimoUsoEm = new Date();
         await doc.save();
 
-        // Contexto retornado para o processo que chamou
         const contexto = { tipo: null, inscricao: null, matricula: null };
 
         if (doc.inscricaoId) {
