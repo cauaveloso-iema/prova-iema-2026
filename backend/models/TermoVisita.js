@@ -9,7 +9,7 @@ const TermoVisitaSchema = new mongoose.Schema({
     required: true,
     index: true
   },
-  
+
   // ============ ALUNOS ============
   alunos: [{
     alunoId: {
@@ -23,9 +23,9 @@ const TermoVisitaSchema = new mongoose.Schema({
     curso: String,
     fotoPerfil: String
   }],
-  
+
   totalAlunos: { type: Number, default: 1 },
-  
+
   // 🆕 MÚLTIPLAS TURMAS
   turmaPrincipal: String,
   turmas: {
@@ -33,24 +33,24 @@ const TermoVisitaSchema = new mongoose.Schema({
     default: [],
     index: true
   },
-  
+
   cursoPrincipal: String,
   cursos: {
     type: [String],
     default: []
   },
-  
+
   // ============ ATIVIDADE ============
   atividade: {
     type: String,
     required: true
   },
-  
+
   descricaoAtividade: {
     type: String,
     default: ''
   },
-  
+
   // ============ PROFESSORES ============
   professores: [{
     professorId: {
@@ -62,11 +62,11 @@ const TermoVisitaSchema = new mongoose.Schema({
     matricula: String,
     eixo: String
   }],
-  
+
   // ============ PERÍODO E HORÁRIO ============
   periodo: { type: String, required: true },
   horario: { type: String, required: true },
-  
+
   // ============ LOCAL ============
   local: { type: String, required: true },
   localizacao: {
@@ -77,24 +77,24 @@ const TermoVisitaSchema = new mongoose.Schema({
     cidade: String,
     estado: String
   },
-  
+
   // ============ DATA ============
   dataVisita: { type: Date, required: true },
   cidade: { type: String, default: 'São Luís' },
-  
+
   // ============ TOTP (legado — mantido para retrocompatibilidade) ============
   // ⚠️ NÃO USE MAIS. O TOTP agora é POR RESPONSÁVEL (dentro de responsaveis[]).
   totpSecret: { type: String, default: null },
   totpVerified: { type: Boolean, default: false },
   totpVerifiedAt: { type: Date, default: null },
   totpCreatedAt: { type: Date, default: null },
-  
+
   // ============ SMS (futuro) ============
   smsCode: { type: String, default: null },
   smsCodeExpiresAt: { type: Date, default: null },
   smsVerified: { type: Boolean, default: false },
   smsVerifiedAt: { type: Date, default: null },
-  
+
   // ============ RESPONSÁVEIS ============
   responsaveis: [{
     alunoId: {
@@ -102,48 +102,54 @@ const TermoVisitaSchema = new mongoose.Schema({
       ref: 'User'
     },
     alunoNome: String,
-    
+
     nome: String,
-    
+
     // 🔐 Já chegam criptografados
     rg: String,
     cpf: String,
     telefone: String,
     email: String,
-    
+
     cpfHash: { type: String, index: true },
-    
+
     // ============================================
-    // 🔐 TOTP — AGORA POR RESPONSÁVEL
+    // 🔐 TOTP — POR RESPONSÁVEL (fallback)
     // ============================================
     totpSecret: { type: String, default: null },
     totpVerified: { type: Boolean, default: false },
     totpVerifiedAt: { type: Date, default: null },
     totpCreatedAt: { type: Date, default: null },
-    
+
+    // ============================================
+    // 🔐 PASSKEY / BIOMETRIA (método principal)
+    // ============================================
+    passkeyCredentialId: { type: String, default: null },
+    passkeyAutenticadoEm: { type: Date, default: null },
+
     autenticado: { type: Boolean, default: false },
     autenticacaoData: Date,
     autenticacaoMetodo: {
       type: String,
-      enum: ['sms', 'totp', 'ambos', null],
+      enum: ['sms', 'totp', 'passkey', 'passkey+totp', 'ambos', null],
       default: null
     },
-    
+
     codigoTemp: String,
     codigoExpira: Date,
     autenticacaoSMS: { type: Boolean, default: false },
     autenticacaoSMSData: Date,
-    
+
     assinaturaBase64: String,
     assinaturaData: Date,
-    
+
     // LGPD
     lgpdAceito: { type: Boolean, default: false },
     lgpdAceitoData: Date,
     lgpdVersao: { type: String, default: '1.0' },
     lgpdIp: String,
     lgpdUserAgent: String,
-    
+
     localizacaoAssinatura: {
       latitude: Number,
       longitude: Number,
@@ -153,7 +159,7 @@ const TermoVisitaSchema = new mongoose.Schema({
       accuracy: Number,
       timestamp: Date
     },
-    
+
     status: {
       type: String,
       enum: ['pendente', 'autorizado', 'recusado'],
@@ -162,7 +168,7 @@ const TermoVisitaSchema = new mongoose.Schema({
     recusaData: Date,
     motivoRecusa: String
   }],
-  
+
   // ============ STATUS GERAL ============
   status: {
     type: String,
@@ -171,7 +177,7 @@ const TermoVisitaSchema = new mongoose.Schema({
     index: true
   },
   statusData: Date,
-  
+
   // ============ ASSINATURA DO GESTOR ============
   assinaturaGestor: {
     base64: String,
@@ -179,15 +185,15 @@ const TermoVisitaSchema = new mongoose.Schema({
     cargo: String,
     data: Date
   },
-  
+
   // ============ CONTROLE ============
   criadoPor: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   },
-  
+
   ativo: { type: Boolean, default: true },
-  
+
   // ============ RETENÇÃO LGPD ============
   expiraEm: {
     type: Date,
@@ -199,10 +205,10 @@ const TermoVisitaSchema = new mongoose.Schema({
     },
     index: true
   },
-  
+
   anonimizado: { type: Boolean, default: false, index: true },
   anonimizadoEm: Date
-  
+
 }, { timestamps: true });
 
 // ============================================
@@ -217,16 +223,15 @@ TermoVisitaSchema.index({ turmas: 1 });
 TermoVisitaSchema.index({ ativo: 1, dataVisita: 1 });
 
 // ============================================
-// 🚀 ÍNDICES COMPOSTOS OTIMIZADOS (listagem/paginação/filtros)
-// Adicionados para performance do módulo Visitas
+// 🚀 ÍNDICES COMPOSTOS OTIMIZADOS
 // ============================================
-TermoVisitaSchema.index({ ativo: 1, createdAt: -1 });              // listagem padrão (query + sort)
-TermoVisitaSchema.index({ ativo: 1, status: 1, createdAt: -1 });    // filtro por status + sort
-TermoVisitaSchema.index({ ativo: 1, turmaPrincipal: 1 });           // filtro por turma principal
-TermoVisitaSchema.index({ ativo: 1, turmas: 1 });                   // filtro por turma (array)
-TermoVisitaSchema.index({ 'alunos.nome': 1 });                      // busca por nome do aluno
-TermoVisitaSchema.index({ 'professores.nome': 1 });                 // busca por nome do professor
-TermoVisitaSchema.index({ atividade: 1 });                          // busca por atividade
+TermoVisitaSchema.index({ ativo: 1, createdAt: -1 });
+TermoVisitaSchema.index({ ativo: 1, status: 1, createdAt: -1 });
+TermoVisitaSchema.index({ ativo: 1, turmaPrincipal: 1 });
+TermoVisitaSchema.index({ ativo: 1, turmas: 1 });
+TermoVisitaSchema.index({ 'alunos.nome': 1 });
+TermoVisitaSchema.index({ 'professores.nome': 1 });
+TermoVisitaSchema.index({ atividade: 1 });
 
 // ============================================
 // MÉTODOS ESTÁTICOS
@@ -234,17 +239,17 @@ TermoVisitaSchema.index({ atividade: 1 });                          // busca por
 TermoVisitaSchema.statics.gerarCodigo = async function() {
   const ano = new Date().getFullYear();
   let tentativas = 0;
-  
+
   while (tentativas < 10) {
     const random = Math.floor(1000 + Math.random() * 9000);
     const codigo = `VIS-${ano}-${random}`;
-    
+
     const existe = await this.findOne({ codigo });
     if (!existe) return codigo;
-    
+
     tentativas++;
   }
-  
+
   return `VIS-${ano}-${Date.now()}`;
 };
 
@@ -257,11 +262,11 @@ TermoVisitaSchema.methods.atualizarStatusGeral = function() {
     this.statusData = new Date();
     return;
   }
-  
+
   const autorizados = this.responsaveis.filter(r => r.status === 'autorizado').length;
   const recusados = this.responsaveis.filter(r => r.status === 'recusado').length;
   const total = this.responsaveis.length;
-  
+
   if (autorizados === total) {
     this.status = 'autorizado';
   } else if (autorizados + recusados === total) {
@@ -273,14 +278,14 @@ TermoVisitaSchema.methods.atualizarStatusGeral = function() {
   } else {
     this.status = 'pendente';
   }
-  
+
   this.statusData = new Date();
 };
 
 TermoVisitaSchema.methods.recalcularTurmasCursos = function() {
   const turmas = [...new Set((this.alunos || []).map(a => a.turma).filter(Boolean))];
   const cursos = [...new Set((this.alunos || []).map(a => a.curso).filter(Boolean))];
-  
+
   this.turmas = turmas;
   this.cursos = cursos;
   this.turmaPrincipal = turmas[0] || '';
@@ -301,12 +306,14 @@ TermoVisitaSchema.methods.anonimizar = function() {
     r.lgpdUserAgent = null;
     r.totpSecret = null;
     r.totpVerified = false;
+    r.passkeyCredentialId = null;
+    r.passkeyAutenticadoEm = null;
   });
-  
+
   this.assinaturaGestor = null;
   this.anonimizado = true;
   this.anonimizadoEm = new Date();
-  
+
   return this;
 };
 

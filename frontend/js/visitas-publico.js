@@ -44,6 +44,17 @@ class VisitasPublico {
         this.fluxoIniciado = false;
 
         // ============================================
+        // 🆕 AUTENTICAÇÃO: biometria (principal) ou QR/TOTP (fallback)
+        // ============================================
+        this.autenticacaoDisponivel = {
+            verificada: false,
+            passkeyDisponivel: false,
+            credenciais: [],
+            metodoEscolhido: null,       // 'passkey' | 'totp'
+            passkeyCredentialId: null
+        };
+
+        // ============================================
         // LOCKS ANTI-CLIQUE-DUPLO
         // ============================================
         this._locks = {
@@ -51,6 +62,8 @@ class VisitasPublico {
             abrirTermo: false,
             buscarPorCodigo: false,
             verificarTOTP: false,
+            prepararAutenticacao: false,
+            autenticarPasskey: false,
             autorizar: false,
             recusar: false,
             imprimirTermo: false,
@@ -99,6 +112,26 @@ class VisitasPublico {
     }
 
     // ============================================
+    // HELPERS base64url (WebAuthn)
+    // ============================================
+    _b64urlParaBuffer(s) {
+        if (!s) return new ArrayBuffer(0);
+        const pad = s.length % 4 === 0 ? '' : '='.repeat(4 - (s.length % 4));
+        const b64 = (s + pad).replace(/-/g, '+').replace(/_/g, '/');
+        const bin = atob(b64);
+        const arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        return arr.buffer;
+    }
+
+    _bufferParaB64url(buf) {
+        const bytes = new Uint8Array(buf);
+        let bin = '';
+        for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+        return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    // ============================================
     // CONTROLE DE ETAPAS
     // ============================================
     _mostrarTela(id) {
@@ -130,7 +163,6 @@ class VisitasPublico {
                 item.querySelector('.stepper-dot').innerHTML = '<i class="fas fa-check"></i>';
             } else if (stepNum === etapa) {
                 item.classList.add('active');
-                // Restaurar ícone original
                 const icons = ['fa-user-graduate', 'fa-file-alt', 'fa-shield-alt', 'fa-qrcode', 'fa-signature'];
                 item.querySelector('.stepper-dot').innerHTML = `<i class="fas ${icons[idx]}"></i>`;
             } else {
@@ -139,7 +171,6 @@ class VisitasPublico {
             }
         });
 
-        // Barra de progresso
         const fill = document.getElementById('stepperProgressFill');
         if (fill) {
             const percent = Math.max(0, ((etapa - 1) / 4) * 100);
@@ -167,7 +198,8 @@ class VisitasPublico {
                 break;
             case 4:
                 this._mostrarTela('etapa4TOTP');
-                this.gerarQRCodeTOTP();
+                // 🆕 Agora decide entre biometria (principal) e QR (fallback)
+                this.prepararAutenticacao();
                 break;
             case 5:
                 this._mostrarTela('etapa5Dados');
@@ -189,6 +221,16 @@ class VisitasPublico {
     }
 
     voltarParaEtapa(etapa) {
+        // 🆕 Se voltou para a etapa 4, reseta o estado de autenticação
+        if (etapa === 4) {
+            this.autenticacaoDisponivel = {
+                verificada: false,
+                passkeyDisponivel: false,
+                credenciais: [],
+                metodoEscolhido: null,
+                passkeyCredentialId: null
+            };
+        }
         this.irParaEtapa(etapa);
     }
 
@@ -887,7 +929,198 @@ class VisitasPublico {
     }
 
     // ============================================
-    // ETAPA 4: AUTENTICAÇÃO TOTP
+    // 🆕 ETAPA 4: PREPARAR AUTENTICAÇÃO (biometria → fallback QR)
+    // ============================================
+    async prepararAutenticacao() {
+        return this._comLock('prepararAutenticacao', async () => {
+            this._setBlocoAutenticacao('carregando');
+
+            const alunoId = this.obterAlunoIdAlvo();
+
+            try {
+                const params = new URLSearchParams();
+                if (alunoId) params.append('alunoId', String(alunoId));
+
+                const r = await fetch(`/api/inscricoes/passkeys/publica/disponivel?${params}`);
+                const data = await r.json();
+
+                this.autenticacaoDisponivel.verificada = true;
+                this.autenticacaoDisponivel.passkeyDisponivel = !!(data.success && data.disponivel);
+                this.autenticacaoDisponivel.credenciais = data.credenciais || [];
+
+                if (this.autenticacaoDisponivel.passkeyDisponivel) {
+                    // 🟢 Biometria como método principal
+                    this.autenticacaoDisponivel.metodoEscolhido = 'passkey';
+                    this._setBlocoAutenticacao('passkey');
+                    this._renderizarBotaoBiometria();
+                } else {
+                    // 🟡 Sem passkey → QR/TOTP
+                    this.autenticacaoDisponivel.metodoEscolhido = 'totp';
+                    this._setBlocoAutenticacao('totp');
+                    await this.gerarQRCodeTOTP();
+                }
+            } catch (err) {
+                console.error('❌ Erro ao preparar autenticação:', err);
+                // Em caso de erro, cai no fallback QR (mais seguro)
+                this.autenticacaoDisponivel.metodoEscolhido = 'totp';
+                this._setBlocoAutenticacao('totp');
+                await this.gerarQRCodeTOTP();
+            }
+        });
+    }
+
+    _setBlocoAutenticacao(modo) {
+        const elCarregando = document.getElementById('totpLoading');
+        const elQRCode = document.getElementById('totpQRCodeBox');
+        const elPasskey = document.getElementById('passkeyBox');
+        const elSecret = document.getElementById('totpSecretBox');
+        const elVerify = document.getElementById('totpVerifyBox');
+
+        if (elCarregando) elCarregando.style.display = modo === 'carregando' ? 'flex' : 'none';
+        if (elQRCode) elQRCode.style.display = modo === 'totp' ? 'block' : 'none';
+        if (elPasskey) elPasskey.style.display = modo === 'passkey' ? 'block' : 'none';
+        if (elSecret) elSecret.style.display = 'none';
+        if (elVerify) elVerify.style.display = modo === 'totp' ? 'block' : 'none';
+    }
+
+    _renderizarBotaoBiometria() {
+        const box = document.getElementById('passkeyBox');
+        if (!box) return;
+
+        const alunoNome = this.termoAtual?._nomeAlunoExibicao
+            || this.termoAtual?.alunoNome
+            || 'o aluno';
+
+        box.innerHTML = `
+            <div style="text-align:center; padding: 25px 20px;">
+                <div style="width:90px; height:90px; margin:0 auto 18px;
+                            background: linear-gradient(135deg,#10b981,#059669);
+                            border-radius:50%; display:flex; align-items:center;
+                            justify-content:center; color:white; font-size:42px;
+                            box-shadow: 0 8px 24px rgba(16,185,129,0.35);">
+                    <i class="fas fa-fingerprint"></i>
+                </div>
+                <h3 style="margin:0 0 8px; font-size:1.15rem; color:#065f46;">
+                    Use sua biometria
+                </h3>
+                <p style="margin:0 0 20px; font-size:13px; color:#6b7280; line-height:1.6;">
+                    Confirme sua identidade com a digital, rosto ou senha
+                    do seu celular. É mais rápido e seguro.
+                </p>
+                <button class="btn-continuar-grande" id="btnUsarBiometria"
+                        onclick="visitasPublico.autenticarComPasskey()">
+                    <i class="fas fa-fingerprint"></i> Autenticar com Biometria
+                </button>
+                <button class="btn-filter" style="margin-top:14px; background:transparent;
+                        border:1.5px solid #d1d5db; color:#6b7280; padding:10px 20px;
+                        border-radius:24px; font-size:13px; cursor:pointer;"
+                        onclick="visitasPublico.usarFallbackTOTP()">
+                    <i class="fas fa-qrcode"></i> Usar QR Code em vez disso
+                </button>
+            </div>
+        `;
+    }
+
+    async usarFallbackTOTP() {
+        this.autenticacaoDisponivel.metodoEscolhido = 'totp';
+        this.autenticacaoDisponivel.passkeyCredentialId = null;
+        this._setBlocoAutenticacao('totp');
+        await this.gerarQRCodeTOTP();
+    }
+
+    // ============================================
+    // 🆕 AUTENTICAR COM PASSKEY
+    // ============================================
+    async autenticarComPasskey() {
+        return this._comLock('autenticarPasskey', async () => {
+            const btn = document.getElementById('btnUsarBiometria');
+            const originalHTML = btn?.innerHTML;
+
+            try {
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Solicitando biometria...';
+                }
+
+                if (!window.PublicKeyCredential) {
+                    throw Object.assign(new Error('Dispositivo sem suporte a WebAuthn'), { name: 'NotSupportedError' });
+                }
+
+                const alunoId = this.obterAlunoIdAlvo();
+
+                // 1) INICIAR
+                const rIniciar = await fetch('/api/inscricoes/passkeys/autenticar/iniciar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        matriculaId: alunoId ? String(alunoId) : null,
+                        escopo: 'qualquer'
+                    })
+                });
+                const dIniciar = await rIniciar.json();
+                if (!dIniciar.success) throw new Error(dIniciar.error || 'Falha ao iniciar biometria');
+
+                // 2) NAVEGADOR
+                const opcoes = dIniciar.opcoes;
+                opcoes.challenge = this._b64urlParaBuffer(opcoes.challenge);
+                opcoes.allowCredentials = (opcoes.allowCredentials || []).map(c => ({
+                    ...c, id: this._b64urlParaBuffer(c.id)
+                }));
+
+                const assertion = await navigator.credentials.get({ publicKey: opcoes });
+                if (!assertion) throw Object.assign(new Error('Autenticação cancelada'), { name: 'NotAllowedError' });
+
+                // 3) CONCLUIR
+                const rConcluir = await fetch('/api/inscricoes/passkeys/autenticar/concluir', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        matriculaId: alunoId ? String(alunoId) : null,
+                        credential: {
+                            id: assertion.id,
+                            response: {
+                                clientDataJSON: this._bufferParaB64url(assertion.response.clientDataJSON),
+                                authenticatorData: this._bufferParaB64url(assertion.response.authenticatorData),
+                                signature: this._bufferParaB64url(assertion.response.signature),
+                                userHandle: assertion.response.userHandle
+                                    ? this._bufferParaB64url(assertion.response.userHandle)
+                                    : null
+                            }
+                        }
+                    })
+                });
+                const dConcluir = await rConcluir.json();
+                if (!dConcluir.success) throw new Error(dConcluir.error || 'Assinatura inválida');
+
+                // ✅ Guarda credencial para o /autorizar
+                this.autenticacaoDisponivel.passkeyCredentialId = dConcluir.credentialId;
+                this.totpSecret = null;
+
+                this.showToast('✅ Biometria verificada!', 'success');
+                this.irParaEtapa(5);
+
+            } catch (err) {
+                console.error('❌ Erro na biometria:', err);
+
+                if (err.name === 'NotAllowedError' || /cancel/i.test(err.message || '')) {
+                    this.showToast('Biometria cancelada. Tente novamente ou use QR Code.', 'info');
+                } else if (err.name === 'SecurityError' || err.name === 'NotSupportedError' || /WebAuthn/i.test(err.message || '')) {
+                    this.showToast('Dispositivo sem suporte a biometria. Usando QR Code.', 'info');
+                    await this.usarFallbackTOTP();
+                } else {
+                    this.showToast('❌ ' + err.message, 'error');
+                }
+
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHTML;
+                }
+            }
+        });
+    }
+
+    // ============================================
+    // ETAPA 4 (FALLBACK): AUTENTICAÇÃO TOTP
     // ============================================
     async gerarQRCodeTOTP() {
         return this._comLock('gerarQRCode', async () => {
@@ -1043,6 +1276,8 @@ class VisitasPublico {
                 const data = await response.json();
 
                 if (data.success) {
+                    this.autenticacaoDisponivel.metodoEscolhido = 'totp';
+                    this.autenticacaoDisponivel.passkeyCredentialId = null;
                     this.showToast('✅ Autenticado com sucesso!', 'success');
                     this.irParaEtapa(5);
                 } else {
@@ -1224,6 +1459,15 @@ class VisitasPublico {
                 return this.showToast('Erro: aluno não identificado no termo', 'error');
             }
 
+            // 🆕 Exige que um método de autenticação tenha sido concluído
+            if (!this.autenticacaoDisponivel.metodoEscolhido) {
+                return this.showToast('Conclua a autenticação antes de continuar', 'error');
+            }
+            if (this.autenticacaoDisponivel.metodoEscolhido === 'passkey'
+                && !this.autenticacaoDisponivel.passkeyCredentialId) {
+                return this.showToast('Biometria não confirmada. Refaça a autenticação.', 'error');
+            }
+
             const assinaturaBase64 = this.assinatura.canvas.toDataURL('image/png');
 
             const btn = document.querySelector('.btn-autorizar-grande');
@@ -1249,7 +1493,11 @@ class VisitasPublico {
                         lgpdAceito: true,
                         assinaturaBase64,
                         localizacao: this.localizacao,
-                        alunoId: alunoId.toString()
+                        alunoId: alunoId.toString(),
+
+                        // 🆕 método de autenticação + credencial (se passkey)
+                        metodoAutenticacao: this.autenticacaoDisponivel.metodoEscolhido,
+                        passkeyCredentialId: this.autenticacaoDisponivel.passkeyCredentialId
                     })
                 });
 
@@ -1341,6 +1589,7 @@ class VisitasPublico {
                     <div><strong>Data:</strong> ${new Date(termo.dataVisita).toLocaleDateString('pt-BR')}</div>
                     <div><strong>Local:</strong> ${this.escapeHtml(termo.local)}</div>
                     <div><strong>Responsável:</strong> ${this.escapeHtml(this.responsavel.nome)}</div>
+                    <div><strong>Autenticação:</strong> ${this.autenticacaoDisponivel.metodoEscolhido === 'passkey' ? '🔒 Biometria' : '🔐 QR Code (TOTP)'}</div>
                 </div>
             `;
         }

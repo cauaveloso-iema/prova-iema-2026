@@ -21,7 +21,6 @@ router.get('/health', (req, res) => {
 });
 
 // Rotas do módulo — carregadas em try/catch para NÃO derrubar o server
-// se algum model/middleware estiver ausente.
 let rotasInscricoes;
 try {
     rotasInscricoes = require('./routes/inscricoes');
@@ -33,11 +32,30 @@ try {
 if (rotasInscricoes) {
     router.use('/', rotasInscricoes);
 } else {
-    // Fallback: responde 503 em todas as rotas do módulo para não travar o server
     router.use((req, res) => {
         res.status(503).json({
             success: false,
             error: 'Módulo de inscrições indisponível. Verifique os logs do servidor.'
+        });
+    });
+}
+
+// 🆕 Autenticação por passkey (pública — usada por outros módulos, ex.: visitas)
+let rotasPasskeysAuth;
+try {
+    rotasPasskeysAuth = require('./routes/passkeys-auth');
+} catch (err) {
+    console.error('❌ [INSCRIÇÕES] Falha ao carregar routes/passkeys-auth.js:', err.message);
+    console.error(err.stack);
+}
+
+if (rotasPasskeysAuth) {
+    router.use('/passkeys', rotasPasskeysAuth);
+} else {
+    router.use('/passkeys', (req, res) => {
+        res.status(503).json({
+            success: false,
+            error: 'Módulo de autenticação por passkey indisponível.'
         });
     });
 }

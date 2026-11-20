@@ -27,6 +27,13 @@ const PasskeyCredencialSchema = new mongoose.Schema({
     alunoCurso: { type: String, default: '' }, // 🔥 NOVO: curso do aluno
     alunoOrigem: { type: String, default: '' }, // 🔥 NOVO: 'Inscrição' | 'Matrícula'
 
+    // 🆕 Escopo do vínculo (facilita consultas por contexto)
+    escopo: {
+        type: String,
+        enum: ['inscricao', 'matricula', 'ambos', ''],
+        default: ''
+    },
+
     ip: { type: String, default: '' },
     userAgent: { type: String, default: '' },
 
@@ -40,6 +47,30 @@ const PasskeyCredencialSchema = new mongoose.Schema({
 PasskeyCredencialSchema.index({ responsavelCpfHash: 1, ativo: 1 });
 PasskeyCredencialSchema.index({ alunoNome: 'text' });
 PasskeyCredencialSchema.index({ alunoTurma: 1 }); // 🔥 índice para filtro de turma
+
+// 🔥 ÍNDICES ÚNICOS PARCIAIS — garantem 1 passkey ativa por inscrição/matrícula
+//    partialFilterExpression: só aplica quando o campo é ObjectId e ativo=true
+PasskeyCredencialSchema.index(
+    { inscricaoId: 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            inscricaoId: { $type: 'objectId' },
+            ativo: true
+        }
+    }
+);
+
+PasskeyCredencialSchema.index(
+    { matriculaId: 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            matriculaId: { $type: 'objectId' },
+            ativo: true
+        }
+    }
+);
 
 const PasskeyCredencial = mongoose.models.PasskeyCredencial
     || mongoose.model('PasskeyCredencial', PasskeyCredencialSchema);

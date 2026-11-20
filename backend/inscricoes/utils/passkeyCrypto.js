@@ -2,6 +2,7 @@
 // backend/inscricoes/utils/passkeyCrypto.js
 //
 // Extrai a chave pública da attestationObject (cadastro de passkey).
+// Verifica assinatura da assertion (autenticação de passkey).
 // Só suporta attestation "none" (que é o que usamos no frontend).
 // ============================================================================
 'use strict';
@@ -142,10 +143,48 @@ function gerarChallenge() {
     return b64urlEncode(crypto.randomBytes(32));
 }
 
+// ----------------------------------------------------------------------------
+// 🆕 Verifica a assinatura de uma assertion WebAuthn (autenticação)
+// ----------------------------------------------------------------------------
+/**
+ * @param {Object} params
+ * @param {Object} params.publicKeyJwk   JWK salva no cadastro
+ * @param {String} params.clientDataJSON base64url
+ * @param {String} params.authenticatorData base64url
+ * @param {String} params.signature      base64url
+ * @returns {Boolean}
+ */
+function verificarAssertion({ publicKeyJwk, clientDataJSON, authenticatorData, signature }) {
+    try {
+        const clientDataHash = crypto
+            .createHash('sha256')
+            .update(b64urlDecode(clientDataJSON))
+            .digest();
+
+        const authData = b64urlDecode(authenticatorData);
+        const sig = b64urlDecode(signature);
+
+        // signedData = authenticatorData || SHA256(clientDataJSON)
+        const signedData = Buffer.concat([authData, clientDataHash]);
+
+        const key = crypto.createPublicKey({ key: publicKeyJwk, format: 'jwk' });
+
+        // ES256 (-7) ou RS256 (-257)
+        if (publicKeyJwk.alg === -257) {
+            return crypto.verify('RSA-SHA256', signedData, key, sig);
+        }
+        return crypto.verify('sha256', signedData, { key, dsaEncoding: 'der' }, sig);
+    } catch (err) {
+        console.error('❌ [PASSKEY-CRYPTO] verificarAssertion falhou:', err.message);
+        return false;
+    }
+}
+
 module.exports = {
     b64urlDecode,
     b64urlEncode,
     extrairChavePublicaDaAttestation,
     gerarChallenge,
-    sha256
+    sha256,
+    verificarAssertion
 };

@@ -383,6 +383,21 @@
                     </div>
                 </div>
 
+                <!-- 🆕 Bloco de biometria (aparece quando há passkey ativa) -->
+                <div id="passkeyBox" style="display:none;"></div>
+
+                <!-- O bloco TOTP atual continua igual, mas envolva o botão de verificar
+                    em uma div com id="totpVerifyBox" para podermos esconder no modo passkey: -->
+                <div class="totp-verify-box" id="totpVerifyBox">
+                    <label><i class="fas fa-key"></i> Código do Google Authenticator *</label>
+                    <input type="text" id="totpCodigo" class="form-input totp-codigo-input"
+                        placeholder="000000" maxlength="6" autocomplete="off"
+                        oninput="this.value = this.value.replace(/\D/g, '')">
+                    <button class="btn-continuar-grande" onclick="visitasPublico.verificarTOTP(event)">
+                        <i class="fas fa-check-circle"></i> Verificar Código e Continuar
+                    </button>
+                </div>
+
                 <div class="totp-qrcode-container">
                     <div id="totpLoading" class="totp-loading">
                         <i class="fas fa-spinner fa-spin"></i>

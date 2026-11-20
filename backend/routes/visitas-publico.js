@@ -801,7 +801,7 @@ router.post('/verificar-totp', rateLimit(10, 5), async (req, res) => {
 });
 
 // ============================================
-// ✅ AUTORIZAR VISITA (TOTP POR RESPONSÁVEL)
+// ✅ AUTORIZAR VISITA (passkey OU TOTP)
 // ============================================
 router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
   try {
@@ -811,9 +811,14 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
       lgpdAceito,
       assinaturaBase64,
       localizacao,
-      alunoId
+      alunoId,
+      metodoAutenticacao,     // 🆕 'passkey' | 'totp' (ou omitido = totp)
+      passkeyCredentialId     // 🆕 obrigatório quando metodoAutenticacao === 'passkey'
     } = req.body;
-    
+
+    // ──────────────────────────────────────────────
+    // Validações básicas (mantidas)
+    // ──────────────────────────────────────────────
     if (!nome || !rg || !cpf || !telefone) {
       return res.status(400).json({ success: false, error: 'Nome, RG, CPF e telefone são obrigatórios' });
     }
@@ -823,113 +828,162 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
     if (!assinaturaBase64) {
       return res.status(400).json({ success: false, error: 'Assinatura é obrigatória' });
     }
-    
+
     const termo = await TermoVisita.findById(termoId);
     if (!termo) return res.status(404).json({ success: false, error: 'Termo não encontrado' });
-    
-    // ============================================
-    // 🎯 LOCALIZAR O RESPONSÁVEL-ALVO
-    // ============================================
+
+    // ──────────────────────────────────────────────
+    // Localiza o responsável-alvo
+    // ──────────────────────────────────────────────
     const respIndex = localizarResponsavelIndex(termo, alunoId);
-    
     if (respIndex === -1) {
       return res.status(400).json({ success: false, error: 'Responsável não encontrado no termo' });
     }
-    
+
     const responsavelAlvo = termo.responsaveis[respIndex];
-    
-    // ============================================
-    // 🔐 VALIDAR TOTP DO RESPONSÁVEL (não do termo)
-    // ============================================
-    if (!responsavelAlvo.totpVerified) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Você precisa autenticar com o Google Authenticator primeiro' 
+
+    // ──────────────────────────────────────────────
+    // 🔐 Autenticação — passkey OU totp
+    // ──────────────────────────────────────────────
+    let autenticacaoMetodoFinal = null;
+    let passkeyDoc = null;
+
+    if (metodoAutenticacao === 'passkey') {
+      // --- Caminho PASSKEY ---
+      if (!passkeyCredentialId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Credencial de biometria ausente.'
+        });
+      }
+
+      const PasskeyCredencial = require('../inscricoes/models/PasskeyCredencial');
+      passkeyDoc = await PasskeyCredencial.findOne({
+        credentialId: passkeyCredentialId,
+        ativo: true
+      }).lean();
+
+      if (!passkeyDoc) {
+        return res.status(401).json({
+          success: false,
+          error: 'Biometria inválida ou revogada. Use o QR Code.'
+        });
+      }
+
+      // Confere que a passkey pertence ao aluno (matrícula) OU ao CPF do responsável
+      const cpfLimpoAuth = (cpf || '').replace(/\D/g, '');
+      const cpfHashAuth = cpfLimpoAuth.length === 11 ? hash(cpfLimpoAuth) : null;
+
+      const alunoIdNorm = normalizarId(alunoId);
+      const pertenceAoAluno = alunoIdNorm && String(passkeyDoc.matriculaId) === alunoIdNorm;
+      const pertenceAoResponsavel = cpfHashAuth && passkeyDoc.responsavelCpfHash === cpfHashAuth;
+
+      if (!pertenceAoAluno && !pertenceAoResponsavel) {
+        return res.status(403).json({
+          success: false,
+          error: 'Esta biometria não pertence a este aluno/responsável.'
+        });
+      }
+
+      autenticacaoMetodoFinal = 'passkey';
+
+    } else if (metodoAutenticacao === 'totp' || !metodoAutenticacao) {
+      // --- Caminho TOTP (fallback legado) ---
+      if (!responsavelAlvo.totpVerified) {
+        return res.status(400).json({
+          success: false,
+          error: 'Autentique-se por biometria ou pelo Google Authenticator.'
+        });
+      }
+      autenticacaoMetodoFinal = 'totp';
+
+    } else {
+      return res.status(400).json({
+        success: false,
+        error: 'Método de autenticação inválido.'
       });
     }
-    
-    // ============================================
-    // 🔁 VALIDAR STATUS ATUAL (não permite reautorizar / autorizar recusado)
-    // ============================================
+
+    // ──────────────────────────────────────────────
+    // 🔁 Validação de status (mantida)
+    // ──────────────────────────────────────────────
     if (responsavelAlvo.status === 'autorizado') {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Este aluno já foi autorizado por você' 
-      });
+      return res.status(400).json({ success: false, error: 'Este aluno já foi autorizado por você' });
     }
     if (responsavelAlvo.status === 'recusado') {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Este aluno já foi recusado por você' 
-      });
+      return res.status(400).json({ success: false, error: 'Este aluno já foi recusado por você' });
     }
-    
+
     const cpfLimpo = cpf.replace(/\D/g, '');
     if (cpfLimpo.length !== 11) {
       return res.status(400).json({ success: false, error: 'CPF inválido' });
     }
-    
-    // ============================================
-    // 👤 IDENTIFICAR ALUNO PARA SALVAR
-    // ============================================
+
+    // ──────────────────────────────────────────────
+    // 👤 Identifica o aluno para salvar (mantido)
+    // ──────────────────────────────────────────────
     let alunoIdParaSalvar = paraObjectId(normalizarId(alunoId));
-    
+
     if (!alunoIdParaSalvar) {
       alunoIdParaSalvar = paraObjectId(responsavelAlvo.alunoId);
     }
-    
+
     if (!alunoIdParaSalvar) {
       const alunoCorrespondente = termo.alunos?.[respIndex] || termo.alunos?.[0];
       alunoIdParaSalvar = paraObjectId(alunoCorrespondente?.alunoId || alunoCorrespondente?._id);
     }
-    
+
     if (!alunoIdParaSalvar && termo.alunos?.[0]) {
       alunoIdParaSalvar = paraObjectId(termo.alunos[0].alunoId || termo.alunos[0]._id);
     }
-    
+
     if (!alunoIdParaSalvar) {
-      return res.status(500).json({ 
-        success: false, 
-        error: 'Não foi possível identificar o aluno no termo' 
+      return res.status(500).json({
+        success: false,
+        error: 'Não foi possível identificar o aluno no termo'
       });
     }
-    
-    const alunoCorrespondente = termo.alunos?.find(a => 
+
+    const alunoCorrespondente = termo.alunos?.find(a =>
       normalizarId(a.alunoId) === alunoIdParaSalvar.toString()
     ) || termo.alunos?.[respIndex] || termo.alunos?.[0];
-    
+
     const alunoNomeParaSalvar = alunoCorrespondente?.nome || responsavelAlvo.alunoNome || '';
-    
-    // ============================================
-    // 💾 SALVAR AUTORIZAÇÃO
-    // ============================================
+
+    // ──────────────────────────────────────────────
+    // 💾 Salva autorização
+    // ──────────────────────────────────────────────
     termo.responsaveis[respIndex] = {
       ...termo.responsaveis[respIndex],
       alunoId: alunoIdParaSalvar,
       alunoNome: alunoNomeParaSalvar,
       nome: nome.trim(),
-      
+
       rg: encrypt(rg.trim()),
       cpf: encrypt(cpfLimpo),
       telefone: encrypt(telefone.replace(/\D/g, '')),
-      
+
       cpfHash: hash(cpfLimpo),
-      
+
       email: email ? email.toLowerCase().trim() : '',
-      
+
       autenticado: true,
       autenticacaoData: new Date(),
-      autenticacaoMetodo: 'totp',
-      
+      autenticacaoMetodo: autenticacaoMetodoFinal,   // 🆕 'passkey' | 'totp'
+
+      // 🆕 Auditoria da biometria
+      passkeyCredentialId: passkeyDoc?.credentialId || null,
+      passkeyAutenticadoEm: passkeyDoc ? new Date() : null,
+
       assinaturaBase64: encrypt(assinaturaBase64),
       assinaturaData: new Date(),
-      
+
       lgpdAceito: true,
       lgpdAceitoData: new Date(),
       lgpdVersao: process.env.LGPD_VERSAO || '1.0',
       lgpdIp: req.ip || req.headers['x-forwarded-for'] || 'unknown',
       lgpdUserAgent: req.headers['user-agent'],
-      
+
       localizacaoAssinatura: {
         latitude: localizacao?.latitude || null,
         longitude: localizacao?.longitude || null,
@@ -938,87 +992,38 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
         estado: localizacao?.estado || '',
         timestamp: new Date()
       },
-      
+
       status: 'autorizado'
     };
-    
+
     termo.atualizarStatusGeral();
     await termo.save();
-    
-    console.log(`✅ Termo ${termo.codigo} autorizado por ${nome} (aluno ${alunoNomeParaSalvar})`);
-    
-    // ============================================
-    // 💾 LGPD
-    // ============================================
-    try {
-      await ConsentimentoLGPD.create({
-        titular: {
-          nome: nome.trim(),
-          cpf: encrypt(cpfLimpo),
-          cpfHash: hash(cpfLimpo),
-          email: email ? email.toLowerCase().trim() : '',
-          telefone: encrypt(telefone.replace(/\D/g, ''))
-        },
-        tipo: 'autorizacao_visita',
-        finalidade: `Autorização de visita técnica - ${termo.atividade}`,
-        baseLegal: 'consentimento',
-        versaoPolitica: process.env.LGPD_VERSAO || '1.0',
-        ip: req.ip || req.headers['x-forwarded-for'] || 'unknown',
-        userAgent: req.headers['user-agent'],
-        geolocalizacao: {
-          latitude: localizacao?.latitude || null,
-          longitude: localizacao?.longitude || null
-        },
-        termoId: termo._id,
-        status: 'ativo',
-        expiraEm: termo.expiraEm,
-        assinaturaBase64: encrypt(assinaturaBase64)
-      });
-    } catch (lgpdErr) {
-      console.warn('⚠️ Erro ao registrar consentimento LGPD:', lgpdErr.message);
+
+    // ──────────────────────────────────────────────
+    // 🔔 Notifica quando 100% autorizado (mantido)
+    // ──────────────────────────────────────────────
+    if (termo.status === 'autorizado') {
+      notificarTermoCompleto(termo).catch(err =>
+        console.error('❌ Erro na notificação:', err.message)
+      );
     }
-    
-    // ============================================
-    // 🔔 NOTIFICAÇÃO
-    // ============================================
-    let resultadoNotificacao = { notificado: false };
-    try {
-      resultadoNotificacao = await notificarTermoCompleto(termo);
-    } catch (notifErr) {
-      console.warn('⚠️ Erro ao notificar professor(es)/criador:', notifErr.message);
-    }
-    
-    // ============================================
-    // RESPOSTA
-    // ============================================
+
     res.json({
       success: true,
-      message: 'Visita autorizada com sucesso!',
-      notificacaoDisparada: resultadoNotificacao.notificado === true,
-      destinatariosNotificados: resultadoNotificacao.destinatarios || [],
+      message: 'Autorização registrada com sucesso!',
       termo: {
         id: termo._id,
         codigo: termo.codigo,
+        alunoNome: alunoNomeParaSalvar,
         atividade: termo.atividade,
-        alunoNome: alunoNomeParaSalvar || 'Aluno',
-        alunoTurma: alunoCorrespondente?.turma || 'N/A',
-        alunoCurso: alunoCorrespondente?.curso || 'N/A',
-        professorNome: termo.professores?.[0]?.nome || 'Professor',
-        periodo: termo.periodo,
-        horario: termo.horario,
-        local: termo.local,
         dataVisita: termo.dataVisita,
-        cidade: termo.cidade,
+        local: termo.local,
         status: termo.status,
-        responsavel: {
-          nome: termo.responsaveis[respIndex].nome,
-          cpf: mascararCPF(cpfLimpo),
-          assinaturaData: termo.responsaveis[respIndex].assinaturaData
-        },
-        assinaturaGestor: termo.assinaturaGestor
-      }
+        alunoId: alunoIdParaSalvar.toString()
+      },
+      autenticacaoMetodo: autenticacaoMetodoFinal
     });
-    
+
   } catch (error) {
     console.error('❌ Erro ao autorizar:', error);
     res.status(500).json({ success: false, error: error.message });
