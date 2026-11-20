@@ -151,7 +151,9 @@ const estado = {
     filtros: { busca:'', status:'', faixaRenda:'', cadUnico:'', deficiencia:'', biometria:'', anoLetivo:'', ordenar:'recentes' },
     opcoes: null, listaAtual: [], editandoId: null, perfil: null,
     paginaPasskey: 1, limitePasskey: 20, totalPaginasPasskey: 1, totalPasskey: 0,
-    filtrosPasskey: { busca: '', ativo: '' }, listaPasskeys: []
+    filtrosPasskey: { busca: '', ativo: '', turma: '', curso: '' },
+    listaPasskeys: [],
+    _opcoesPasskeyCarregadas: false
 };
 
 // ============================================================================
@@ -762,14 +764,38 @@ async function salvarConfig(e) {
 // ============================================================================
 // GESTÃO DE PASSKEYS / BIOMETRIAS
 // ============================================================================
+
+/**
+ * Popula os selects de turma e curso da aba de biometrias.
+ * As opções vêm do backend no campo `data.opcoes`.
+ */
+function preencherOpcoesPasskey(opcoes) {
+    const selectTurma = document.getElementById('f-turma-passkey');
+    const selectCurso = document.getElementById('f-curso-passkey');
+
+    if (selectTurma && opcoes && Array.isArray(opcoes.turmas)) {
+        const valorAtual = selectTurma.value;
+        selectTurma.innerHTML = '<option value="">Todas as turmas</option>' +
+            opcoes.turmas.filter(Boolean).map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+        if (valorAtual) selectTurma.value = valorAtual;
+    }
+
+    if (selectCurso && opcoes && Array.isArray(opcoes.cursos)) {
+        const valorAtual = selectCurso.value;
+        selectCurso.innerHTML = '<option value="">Todos os cursos</option>' +
+            opcoes.cursos.filter(Boolean).map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+        if (valorAtual) selectCurso.value = valorAtual;
+    }
+}
+
 async function carregarPasskeys(pagina = 1) {
-    if (!isAdmin()) return; 
+    if (!isAdmin()) return;
 
     const tbody = document.getElementById('tbody-passkeys');
     if (!tbody) return;
 
     estado.paginaPasskey = pagina;
-    tbody.innerHTML = `<tr><td colspan="7"><div class="adm-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9"><div class="adm-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div></td></tr>`;
 
     try {
         const params = new URLSearchParams();
@@ -777,6 +803,8 @@ async function carregarPasskeys(pagina = 1) {
         params.set('limite', estado.limitePasskey);
         if (estado.filtrosPasskey.busca) params.set('busca', estado.filtrosPasskey.busca);
         if (estado.filtrosPasskey.ativo) params.set('ativo', estado.filtrosPasskey.ativo);
+        if (estado.filtrosPasskey.turma) params.set('turma', estado.filtrosPasskey.turma);
+        if (estado.filtrosPasskey.curso) params.set('curso', estado.filtrosPasskey.curso);
 
         const data = await api(`${API.passkeys}?${params.toString()}`);
         const lista = data.passkeys || [];
@@ -784,10 +812,13 @@ async function carregarPasskeys(pagina = 1) {
 
         estado.totalPaginasPasskey = pag.totalPaginas || 1;
         estado.totalPasskey = pag.total || 0;
-        estado.listaPasskeys = lista; 
+        estado.listaPasskeys = lista;
+
+        // Popula selects com as opções retornadas pelo backend
+        if (data.opcoes) preencherOpcoesPasskey(data.opcoes);
 
         if (lista.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7"><div class="adm-empty"><i class="fas fa-fingerprint"></i> Nenhuma biometria encontrada com os filtros atuais.</div></td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="9"><div class="adm-empty"><i class="fas fa-fingerprint"></i> Nenhuma biometria encontrada com os filtros atuais.</div></td></tr>`;
             renderPaginacaoPasskeys();
             return;
         }
@@ -795,21 +826,32 @@ async function carregarPasskeys(pagina = 1) {
         tbody.innerHTML = lista.map(p => {
             const dtCadastro = p.createdAt ? new Date(p.createdAt).toLocaleDateString('pt-BR') : '—';
             const dtUso = p.ultimoUsoEm ? new Date(p.ultimoUsoEm).toLocaleString('pt-BR') : 'Nunca';
-            
-            const badgeStatus = p.ativo 
-                ? '<span class="adm-badge adm-badge-aprovada">Ativa</span>' 
+
+            const badge = p.ativo
+                ? '<span class="adm-badge adm-badge-aprovada">Ativa</span>'
                 : '<span class="adm-badge adm-badge-cancelada">Revogada</span>';
 
-            const alunoVinculado = p.alunoNome && p.alunoNome !== 'Não vinculado'
-                ? `<span class="adm-cell-strong">${escapeHtml(p.alunoNome)}</span>` 
+            const temAluno = p.alunoNome && p.alunoNome !== 'Não vinculado' && p.alunoNome.trim() !== '';
+            const alunoVinculado = temAluno
+                ? `<span class="adm-cell-strong">${escapeHtml(p.alunoNome)}</span>`
                 : '<span class="adm-cell-sub" style="margin:0;font-style:italic;color:#ef4444;">Não vinculado</span>';
+
+            const turma = p.alunoTurma && p.alunoTurma !== '—' && p.alunoTurma.trim() !== ''
+                ? `<span class="adm-cell-strong">${escapeHtml(p.alunoTurma)}</span>`
+                : '<span class="adm-cell-sub" style="margin:0">—</span>';
+
+            const curso = p.alunoCurso && p.alunoCurso !== '—' && p.alunoCurso.trim() !== ''
+                ? `<span class="adm-cell-sub" style="margin:0">${escapeHtml(p.alunoCurso)}</span>`
+                : '<span class="adm-cell-sub" style="margin:0">—</span>';
 
             return `
                 <tr style="${!p.ativo ? 'opacity:0.6;' : ''}">
                     <td><span class="adm-cell-strong">${escapeHtml(p.responsavelNome)}</span></td>
                     <td>${alunoVinculado}</td>
-                    <td><code style="font-size:11px; background:#f3f4f6; padding:2px 6px; border-radius:4px;" title="${escapeHtml(p.credentialId)}">${escapeHtml(p.credentialId.substring(0, 15))}...</code></td>
-                    <td>${badgeStatus}</td>
+                    <td>${turma}</td>
+                    <td>${curso}</td>
+                    <td><code style="font-size:11px; background:#f3f4f6; padding:2px 6px; border-radius:4px;" title="${escapeHtml(p.credentialId)}">${escapeHtml(String(p.credentialId || '').substring(0, 15))}...</code></td>
+                    <td>${badge}</td>
                     <td><span class="adm-cell-sub" style="margin:0">${dtCadastro}</span></td>
                     <td><span class="adm-cell-sub" style="margin:0">${dtUso}</span></td>
                     <td>
@@ -840,7 +882,7 @@ async function carregarPasskeys(pagina = 1) {
         renderPaginacaoPasskeys();
     } catch (err) {
         console.error(err);
-        tbody.innerHTML = `<tr><td colspan="7"><div class="adm-empty"><i class="fas fa-circle-exclamation"></i> ${escapeHtml(err.message)}</div></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9"><div class="adm-empty"><i class="fas fa-circle-exclamation"></i> ${escapeHtml(err.message)}</div></td></tr>`;
     }
 }
 
@@ -879,34 +921,61 @@ function renderPaginacaoPasskeys() {
     });
 }
 
+function lerFiltrosPasskey() {
+    estado.filtrosPasskey = {
+        busca: (document.getElementById('f-busca-passkey')?.value || '').trim(),
+        ativo: document.getElementById('f-status-passkey')?.value || '',
+        turma: document.getElementById('f-turma-passkey')?.value || '',
+        curso: document.getElementById('f-curso-passkey')?.value || ''
+    };
+}
+
 function configurarFiltrosPasskeys() {
-    const recarregar = debounce(() => {
-        estado.filtrosPasskey.busca = (document.getElementById('f-busca-passkey')?.value || '').trim();
-        estado.filtrosPasskey.ativo = document.getElementById('f-status-passkey')?.value || '';
-        carregarPasskeys(1);
-    }, 400);
-
+    // Busca em tempo real (debounce)
     const busca = document.getElementById('f-busca-passkey');
-    if (busca) busca.addEventListener('input', recarregar);
+    if (busca) busca.addEventListener('input', debounce(() => { lerFiltrosPasskey(); carregarPasskeys(1); }, 400));
 
-    const status = document.getElementById('f-status-passkey');
-    if (status) status.addEventListener('change', recarregar);
+    // Selects recarregam imediatamente ao mudar
+    ['f-turma-passkey', 'f-curso-passkey', 'f-status-passkey'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('change', () => { lerFiltrosPasskey(); carregarPasskeys(1); });
+    });
+
+    // Botão "Filtrar" explícito
+    const btnFiltrar = document.getElementById('btn-filtrar-passkey');
+    if (btnFiltrar) btnFiltrar.addEventListener('click', () => { lerFiltrosPasskey(); carregarPasskeys(1); });
+
+    // Botão "Limpar"
+    const btnLimpar = document.getElementById('btn-limpar-filtros-passkey');
+    if (btnLimpar) btnLimpar.addEventListener('click', () => {
+        ['f-busca-passkey', 'f-turma-passkey', 'f-curso-passkey', 'f-status-passkey'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        estado.filtrosPasskey = { busca: '', ativo: '', turma: '', curso: '' };
+        carregarPasskeys(1);
+    });
 }
 
 function verDetalhePasskey(id) {
     const p = estado.listaPasskeys.find(x => x._id === id);
     if (!p) return;
 
-    const modal = document.getElementById('modal-passkey');
     const conteudo = document.getElementById('passkey-conteudo');
-    
+    if (!conteudo) return;
+
+    const temAluno = p.alunoNome && p.alunoNome !== 'Não vinculado' && p.alunoNome.trim() !== '';
+
     conteudo.innerHTML = `
         <div class="adm-det-bloco">
             <h4><i class="fas fa-fingerprint"></i> Credencial WebAuthn</h4>
             <div class="adm-det-grid">
-                <div class="adm-det-item"><span>Responsável</span><strong>${escapeHtml(p.responsavelNome)}</strong></div>
-                <div class="adm-det-item"><span>Aluno Vinculado</span><strong>${p.alunoNome && p.alunoNome !== 'Não vinculado' ? escapeHtml(p.alunoNome) : 'Não vinculado'}</strong></div>
-                <div class="adm-det-item"><span>ID da Credencial</span><strong style="word-break:break-all;font-size:12px">${escapeHtml(p.credentialId)}</strong></div>
+                <div class="adm-det-item"><span>Responsável</span><strong>${escapeHtml(p.responsavelNome || '—')}</strong></div>
+                <div class="adm-det-item"><span>Aluno Vinculado</span><strong>${temAluno ? escapeHtml(p.alunoNome) : '<span style="color:#ef4444">Não vinculado</span>'}</strong></div>
+                <div class="adm-det-item"><span>Turma</span><strong>${escapeHtml(p.alunoTurma || '—')}</strong></div>
+                <div class="adm-det-item"><span>Curso</span><strong>${escapeHtml(p.alunoCurso || '—')}</strong></div>
+                <div class="adm-det-item"><span>Origem do vínculo</span><strong>${escapeHtml(p.alunoOrigem || '—')}</strong></div>
+                <div class="adm-det-item"><span>ID da Credencial</span><strong style="word-break:break-all;font-size:12px">${escapeHtml(p.credentialId || '—')}</strong></div>
                 <div class="adm-det-item"><span>Status</span><strong>${p.ativo ? 'Ativa' : 'Revogada'}</strong></div>
                 <div class="adm-det-item"><span>Data do Cadastro</span><strong>${p.createdAt ? fmtDataHora(p.createdAt) : '—'}</strong></div>
                 <div class="adm-det-item"><span>Último Uso</span><strong>${p.ultimoUsoEm ? fmtDataHora(p.ultimoUsoEm) : 'Nunca usado'}</strong></div>
@@ -921,7 +990,7 @@ async function editarPasskey(id) {
     const p = estado.listaPasskeys.find(x => x._id === id);
     if (!p) return;
 
-    const novoNome = prompt("Digite o novo nome do responsável:", p.responsavelNome);
+    const novoNome = prompt('Digite o novo nome do responsável:', p.responsavelNome);
     if (novoNome === null || novoNome.trim() === '' || novoNome === p.responsavelNome) return;
 
     try {
@@ -1074,11 +1143,10 @@ document.addEventListener('DOMContentLoaded', () => {
     configurarFiltros();
     configurarFiltrosPasskeys();
 
-    const form = document.getElementById('config-form'); 
-    const formConfig = document.getElementById('form-config') || form;
+    const formConfig = document.getElementById('form-config');
     if (formConfig) formConfig.addEventListener('submit', salvarConfig);
 
-    carregarConfig(); 
+    carregarConfig();
     carregarDashboard();
 });
 

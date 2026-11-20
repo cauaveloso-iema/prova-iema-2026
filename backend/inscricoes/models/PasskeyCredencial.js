@@ -23,6 +23,9 @@ const PasskeyCredencialSchema = new mongoose.Schema({
     inscricaoId: { type: mongoose.Schema.Types.ObjectId, ref: 'Formulario', default: null },
     matriculaId: { type: mongoose.Schema.Types.ObjectId, default: null }, // ID do User (aluno antigo)
     alunoNome: { type: String, default: '' }, // Nome do aluno salvo direto no cadastro
+    alunoTurma: { type: String, default: '' }, // 🔥 NOVO: turma do aluno
+    alunoCurso: { type: String, default: '' }, // 🔥 NOVO: curso do aluno
+    alunoOrigem: { type: String, default: '' }, // 🔥 NOVO: 'Inscrição' | 'Matrícula'
 
     ip: { type: String, default: '' },
     userAgent: { type: String, default: '' },
@@ -36,6 +39,7 @@ const PasskeyCredencialSchema = new mongoose.Schema({
 
 PasskeyCredencialSchema.index({ responsavelCpfHash: 1, ativo: 1 });
 PasskeyCredencialSchema.index({ alunoNome: 'text' });
+PasskeyCredencialSchema.index({ alunoTurma: 1 }); // 🔥 índice para filtro de turma
 
 const PasskeyCredencial = mongoose.models.PasskeyCredencial
     || mongoose.model('PasskeyCredencial', PasskeyCredencialSchema);

@@ -145,7 +145,6 @@ class VincularBiometria {
         this._locks.carregarDados = true;
 
         try {
-            // Reutiliza as rotas de visitas (turmas, cursos, alunos)
             const [turmasRes, cursosRes] = await Promise.all([
                 fetch('/api/visitas-publico/turmas'),
                 fetch('/api/visitas-publico/cursos')
@@ -243,7 +242,6 @@ class VincularBiometria {
         }
 
         try {
-            // Reutiliza a rota de busca de alunos das visitas
             const params = new URLSearchParams();
             if (turma) params.append('turma', turma);
             if (curso) params.append('curso', curso);
@@ -342,11 +340,9 @@ class VincularBiometria {
 
         this.alunoSelecionado = aluno;
 
-        // Pré-preenche o nome do aluno na etapa 2
         const nomeEl = document.getElementById('nomeAlunoEtapa2');
         if (nomeEl) nomeEl.textContent = `Aluno: ${aluno.nome}`;
 
-        // Limpa campos
         ['respNome', 'respCPF', 'respTelefone', 'respEmail'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = '';
@@ -463,12 +459,27 @@ class VincularBiometria {
 
             if (!cred) throw new Error('Cadastro cancelado.');
 
-            // 3. Envia ao servidor
+            // 3. Envia ao servidor — 🔥 AGORA COM VÍNCULO DO ALUNO
             statusTexto.textContent = 'Salvando passkey...';
+
+            const aluno = this.alunoSelecionado || {};
+            // O aluno pode vir de "Inscrição" ou "Matrícula"
+            // O campo `origem` é definido pelo endpoint /api/visitas-publico/alunos
+            const origem = aluno.origem || '';
+            const ehInscricao = origem === 'Inscrição';
+            const ehMatricula = origem === 'Matrícula';
 
             const payload = {
                 cpf,
                 nome,
+                // 🔥 Vínculo do aluno
+                alunoNome: aluno.nome || '',
+                alunoTurma: aluno.turma || '',
+                alunoCurso: aluno.curso || '',
+                alunoOrigem: origem,
+                inscricaoId: ehInscricao ? aluno.id : null,
+                matriculaId: ehMatricula ? aluno.id : null,
+                // Credencial
                 credential: {
                     id: cred.id,
                     rawId: this._bufParaB64url(cred.rawId),
@@ -505,7 +516,6 @@ class VincularBiometria {
 
             this.showToast('✅ Passkey cadastrada com sucesso!', 'success');
 
-            // Redireciona para a tela de sucesso após 1s
             setTimeout(() => this._mostrarSucesso(dataFim.credentialId), 1200);
 
         } catch (err) {
@@ -521,7 +531,7 @@ class VincularBiometria {
 
     _mostrarSucesso(credentialId) {
         this._mostrarTela('telaSucesso');
-        this._atualizarStepper(0); // esconde o stepper
+        this._atualizarStepper(0);
 
         const msgEl = document.getElementById('sucessoMensagem');
         if (msgEl) {

@@ -195,6 +195,9 @@
         </div>
     </section>
 
+    <!-- ============================================================ -->
+    <!-- ABA BIOMETRIAS — COM FILTRO DE TURMA/CURSO (CORRIGIDA)       -->
+    <!-- ============================================================ -->
     <section class="adm-panel" id="panel-passkeys">
         <div class="adm-card">
             <div class="adm-card-head">
@@ -208,15 +211,27 @@
 
             <div class="adm-filters">
                 <input type="text" id="f-busca-passkey" placeholder="🔍 Nome do responsável, CPF ou ID da credencial...">
+
+                <!-- 🔥 NOVO: Filtro por turma -->
+                <select id="f-turma-passkey">
+                    <option value="">Todas as turmas</option>
+                </select>
+
+                <!-- 🔥 NOVO: Filtro por curso -->
+                <select id="f-curso-passkey">
+                    <option value="">Todos os cursos</option>
+                </select>
+
                 <select id="f-status-passkey">
                     <option value="">Todas as biometrias</option>
                     <option value="sim">Ativas</option>
                     <option value="nao">Revogadas</option>
                 </select>
-                <button class="adm-btn adm-btn-ghost adm-btn-sm" onclick="adm.buscarPasskeys()">
+
+                <button class="adm-btn adm-btn-ghost adm-btn-sm" id="btn-filtrar-passkey">
                     <i class="fas fa-search"></i> Filtrar
                 </button>
-                <button class="adm-btn adm-btn-ghost adm-btn-sm" id="btn-limpar-filtros-passkey" onclick="adm.limparFiltrosPasskeys()">
+                <button class="adm-btn adm-btn-ghost adm-btn-sm" id="btn-limpar-filtros-passkey">
                     <i class="fas fa-eraser"></i> Limpar
                 </button>
             </div>
@@ -227,6 +242,8 @@
                         <tr>
                             <th>Responsável</th>
                             <th>Aluno Vinculado</th>
+                            <th>Turma</th>       <!-- 🔥 NOVO -->
+                            <th>Curso</th>       <!-- 🔥 NOVO -->
                             <th>ID da Credencial</th>
                             <th>Status</th>
                             <th>Data do Cadastro</th>
@@ -235,7 +252,7 @@
                         </tr>
                     </thead>
                     <tbody id="tbody-passkeys">
-                        <tr><td colspan="7"><div class="adm-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div></td></tr>
+                        <tr><td colspan="9"><div class="adm-empty"><i class="fas fa-circle-notch fa-spin"></i> Carregando...</div></td></tr>
                     </tbody>
                 </table>
             </div>
@@ -404,7 +421,7 @@
     </div>
 </div>
 
-<!-- MODAL DE DETALHE DA PASSKEY (Adicionado) -->
+<!-- MODAL DE DETALHE DA PASSKEY -->
 <div class="adm-modal" id="modal-passkey">
     <div class="adm-modal-box adm-modal-md">
         <div class="adm-modal-head">

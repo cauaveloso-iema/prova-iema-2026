@@ -100,7 +100,12 @@ router.post('/registrar/iniciar', (req, res) => {
 // ---- POST /passkeys/registrar/concluir ----
 router.post('/registrar/concluir', async (req, res) => {
     try {
-        const { cpf, nome, credential, inscricaoId, matriculaId, alunoNome } = req.body || {};
+        const {
+            cpf, nome, credential,
+            inscricaoId, matriculaId,
+            alunoNome, alunoTurma, alunoCurso, alunoOrigem
+        } = req.body || {};
+
         const cpfDigitos = soDigitos(cpf);
 
         if (cpfDigitos.length !== 11) return res.status(400).json({ success: false, error: 'CPF inválido.' });
@@ -132,6 +137,12 @@ router.post('/registrar/concluir', async (req, res) => {
         const existente = await PasskeyCredencial.findOne({ credentialId: extraido.credentialId }).lean();
         if (existente) return res.status(409).json({ success: false, error: 'Esta passkey já está registrada.' });
 
+        // 🔥 Valida/normaliza campos de vínculo
+        const inscricaoIdValido = inscricaoId && /^[a-f0-9]{24}$/i.test(String(inscricaoId))
+            ? inscricaoId : null;
+        const matriculaIdValido = matriculaId && /^[a-f0-9]{24}$/i.test(String(matriculaId))
+            ? matriculaId : null;
+
         const doc = new PasskeyCredencial({
             responsavelCpfHash: cpfHash,
             responsavelNome: texto(nome, 150) || '',
@@ -143,9 +154,12 @@ router.post('/registrar/concluir', async (req, res) => {
             aaguid: extraido.aaguid || '',
             attestationType: 'none',
             userVerification: 'required',
-            inscricaoId: inscricaoId || null,
-            matriculaId: matriculaId || null,
-            alunoNome: alunoNome || '', // 🔥 SALVA O NOME DIRETO AQUI
+            inscricaoId: inscricaoIdValido,
+            matriculaId: matriculaIdValido,
+            alunoNome: texto(alunoNome, 150) || '',
+            alunoTurma: texto(alunoTurma, 120) || '',
+            alunoCurso: texto(alunoCurso, 120) || '',
+            alunoOrigem: texto(alunoOrigem, 40) || '',
             ip: req.ip || '',
             userAgent: req.headers['user-agent'] || ''
         });
@@ -206,6 +220,15 @@ router.get('/admin', authenticateToken, podeConsultar, async (req, res) => {
         if (req.query.ativo === 'sim') filtro.ativo = true;
         if (req.query.ativo === 'nao') filtro.ativo = false;
 
+        // 🔥 NOVO: filtro por turma
+        if (req.query.turma) {
+            filtro.alunoTurma = new RegExp(String(req.query.turma).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+        }
+        // 🔥 NOVO: filtro por curso
+        if (req.query.curso) {
+            filtro.alunoCurso = new RegExp(String(req.query.curso).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+        }
+
         const [total, docs] = await Promise.all([
             PasskeyCredencial.countDocuments(filtro),
             PasskeyCredencial.find(filtro)
@@ -215,6 +238,10 @@ router.get('/admin', authenticateToken, podeConsultar, async (req, res) => {
                 .select('-publicKeyJwk')
                 .lean()
         ]);
+
+        // 🔥 NOVO: lista de turmas disponíveis para o select do frontend
+        const turmas = await PasskeyCredencial.distinct('alunoTurma', { alunoTurma: { $ne: '' } });
+        const cursos = await PasskeyCredencial.distinct('alunoCurso', { alunoCurso: { $ne: '' } });
 
         res.json({
             success: true,
@@ -226,10 +253,17 @@ router.get('/admin', authenticateToken, podeConsultar, async (req, res) => {
                 ativo: d.ativo,
                 createdAt: d.createdAt,
                 ultimoUsoEm: d.ultimoUsoEm,
-                alunoNome: d.alunoNome || 'Não vinculado', // 🔥 Retorna o nome salvo
+                alunoNome: d.alunoNome || 'Não vinculado',
+                alunoTurma: d.alunoTurma || '—',
+                alunoCurso: d.alunoCurso || '—',
+                alunoOrigem: d.alunoOrigem || '',
                 inscricaoId: d.inscricaoId,
                 matriculaId: d.matriculaId
             })),
+            opcoes: {
+                turmas: turmas.filter(Boolean).sort(),
+                cursos: cursos.filter(Boolean).sort()
+            },
             paginacao: {
                 pagina,
                 limite,
@@ -256,7 +290,7 @@ router.put('/admin/:id', authenticateToken, podeEditar, async (req, res) => {
             { responsavelNome: texto(responsavelNome, 150) },
             { new: true }
         );
-        
+
         if (!doc) return res.status(404).json({ success: false, error: 'Passkey não encontrada.' });
 
         res.json({ success: true, mensagem: 'Passkey atualizada com sucesso.', passkey: doc });
