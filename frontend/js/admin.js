@@ -730,10 +730,7 @@ class AdminPanel {
         this.currentSection = section;
 
         if (window.innerWidth <= 768) {
-            const bottomNavSections = ['dashboard', 'usuarios', 'provas', 'turmas'];
-            if (bottomNavSections.includes(section)) {
-                this.updateBottomNav(section);
-            }
+            this.updateBottomNav(section);
         }
 
         // Atualizar classe ativa no menu
@@ -44232,151 +44229,6 @@ class AdminPanel {
         if (search) search.value = '';
     }
 
-    /**
-     * Constrói dinamicamente a lista do menu mobile
-     */
-    construirMenuMobile() {
-        const list = document.getElementById('mobileMenuList');
-        if (!list) return;
-        
-        // ===== AÇÕES RÁPIDAS =====
-        let html = `
-            <div class="mobile-menu-category">⚡ Ações Rápidas</div>
-            <div class="mobile-menu-actions">
-                <button class="mobile-action-card" onclick="admin.fecharMenuCompleto(); setTimeout(() => admin.abrirModalEnvioNotificacao(), 300);">
-                    <div class="action-icon orange">
-                        <i class="fas fa-bullhorn"></i>
-                    </div>
-                    <div class="action-text">
-                        <strong>Enviar Notificação</strong>
-                        <small>Para usuários</small>
-                    </div>
-                </button>
-                
-                <button class="mobile-action-card" onclick="admin.fecharMenuCompleto(); setTimeout(() => document.getElementById('btnPushGlobal')?.click(), 300);">
-                    <div class="action-icon green">
-                        <i class="fas fa-bell"></i>
-                    </div>
-                    <div class="action-text">
-                        <strong>Push Global</strong>
-                        <small>Ativar/Desativar</small>
-                    </div>
-                </button>
-                
-                <button class="mobile-action-card" onclick="admin.fecharMenuCompleto(); setTimeout(() => admin.confirmarResetAcessos(), 300);">
-                    <div class="action-icon red">
-                        <i class="fas fa-sync-alt"></i>
-                    </div>
-                    <div class="action-text">
-                        <strong>Resetar Acessos</strong>
-                        <small>Desconectar todos</small>
-                    </div>
-                </button>
-                
-                <button class="mobile-action-card" onclick="admin.fecharMenuCompleto(); setTimeout(() => window.open('https://drive.google.com/file/d/1qIspYZKZpYAcZbBXHqFPtY0yhZpvX2Wy/view?usp=sharing', '_blank'), 300);">
-                    <div class="action-icon blue">
-                        <i class="fas fa-download"></i>
-                    </div>
-                    <div class="action-text">
-                        <strong>Baixar App</strong>
-                        <small>Versão Android</small>
-                    </div>
-                </button>
-            </div>
-        `;
-        
-        // ===== CATEGORIAS DE NAVEGAÇÃO =====
-        const categorias = [
-            {
-                titulo: 'Principal',
-                itens: [
-                    { icone: 'fa-tachometer-alt', label: 'Dashboard', section: 'dashboard' },
-                    { icone: 'fa-users-cog', label: 'Usuários', section: 'usuarios' },
-                    { icone: 'fa-school', label: 'Turmas', section: 'turmas' },
-                    { icone: 'fa-file-alt', label: 'Provas', section: 'provas' },
-                    { icone: 'fa-chart-line', label: 'Resultados', section: 'resultados' },
-                    { icone: 'fa-terminal', label: 'Monitoramento', section: 'monitoramento' },
-                ]
-            },
-            {
-                titulo: 'Pedagógico',
-                itens: [
-                    { icone: 'fa-chalkboard-user', label: 'Setor Pedagógico', section: 'setor-pedagogico' },
-                    { icone: 'fa-user-shield', label: 'Supervisão', section: 'supervisao' },
-                    { icone: 'fa-brain', label: 'Psicologia', section: 'psicologia' },
-                    { icone: 'fa-hands-helping', label: 'Assistente Social', section: 'assistente-social' },
-                    { icone: 'fa-star', label: 'Protagonismo', section: 'protagonismo' },
-                    { icone: 'fa-book-reader', label: 'Biblioteca', section: 'biblioteca' },
-                    { icone: 'fa-graduation-cap', label: 'Secretaria', section: 'secretaria' },
-                    { icone: 'fa-concierge-bell', label: 'Recepção', section: 'recepcao' }
-                ]
-            },
-            {
-                titulo: 'Gestão',
-                itens: [
-                    { icone: 'fa-user-tie', label: 'Gestão Geral', section: 'gestao-geral' },
-                    { icone: 'fa-hospital-user', label: 'Enfermaria', section: 'enfermaria-monitoramento' },
-                    { icone: 'fa-chart-line', label: 'Cozinha', section: 'cozinha-monitoramento' },
-                    { icone: 'fa-user-graduate', label: 'Matrículas', section: 'matriculas' },
-                    { icone: 'fas fa-user-tie', label: 'Gestão ADM', section: 'gestao-adm' }
-                ]
-            },
-            {
-                titulo: 'Sistema',
-                itens: [
-                    { icone: 'fa-id-card', label: 'Face ID', section: 'faceid' },
-                    { icone: 'fa-qrcode', label: 'QR Codes', section: 'qrcode-management' },
-                    { icone: 'fa-bell', label: 'OneSignal', section: 'onesignal' },
-                    { icone: 'fa-camera', label: 'OMR Debug', section: 'omr-debug' },
-                    { icone: 'fa-tablet-alt', label: 'Tablets', section: 'tablets' },
-                    { icone: 'fa-sitemap', label: 'Eixos', section: 'eixos' },
-                    { icone: 'fa-graduation-cap', label: 'Cursos', section: 'cursos' },
-                    { icone: 'fa-database', label: 'Backups', section: 'backups' },
-                    { icone: 'fa-user-lock', label: 'Permissões', section: 'permissoes-especiais' },
-                    // ✅ NOVOS LINKS EXTERNOS
-                    { icone: 'fa-calendar-check', label: 'Eventos', href: '/eventos/eventos.html' },
-                    { icone: 'fa-clipboard-user', label: 'Inscrições', href: '/inscricoes/gerenciar.html' },
-                    { icone: 'fa-cog', label: 'Configurações', section: 'configuracoes' },
-                ]
-            }
-        ];
-        
-        categorias.forEach(cat => {
-            html += `<div class="mobile-menu-category">${cat.titulo}</div>`;
-            cat.itens.forEach(item => {
-                // Se tem href → link externo; senão → seção interna
-                const onclick = item.href
-                    ? `admin.fecharMenuCompleto(); setTimeout(() => window.location.href='${item.href}', 300);`
-                    : `admin.selecionarMenuMobile('${item.section}', this)`;
-
-                html += `
-                    <button class="mobile-menu-item" onclick="${onclick}">
-                        <i class="fas ${item.icone}"></i>
-                        <span>${item.label}</span>
-                    </button>
-                `;
-            });
-        });
-        
-        // ===== CONTA =====
-        html += `<div class="mobile-menu-category">Conta</div>`;
-        html += `
-            <button class="mobile-menu-item" onclick="window.location.href='editar-perfil.html'">
-                <i class="fas fa-user-edit"></i>
-                <span>Editar Perfil</span>
-            </button>
-            <button class="mobile-menu-item" onclick="admin.toggleModoEscuro(); admin.fecharMenuCompleto();">
-                <i class="fas fa-moon"></i>
-                <span>Alternar Tema</span>
-            </button>
-            <button class="mobile-menu-item danger" onclick="admin.logout()">
-                <i class="fas fa-sign-out-alt"></i>
-                <span>Sair</span>
-            </button>
-        `;
-        
-        list.innerHTML = html;
-    }
 
     /**
      * Confirma e executa o reset de acessos (movido para o menu mobile)
@@ -44433,62 +44285,132 @@ class AdminPanel {
         }
     }
 
-    /**
-     * Seleciona um item do menu mobile
-     */
+    construirMenuMobile() {
+        const list = document.getElementById('mobileMenuList');
+        if (!list) return;
+
+        const sidebarNav = document.querySelector('#sidebar .sidebar-nav');
+        if (!sidebarNav) {
+            list.innerHTML = '<div style="padding:20px;color:#ef4444;">Erro: sidebar não encontrado.</div>';
+            return;
+        }
+
+        // Ícones por seção (para o caso de precisarmos mapear)
+        // Se você quiser que o ícone venha 100% do desktop, basta pegar
+        // o próprio <i class="..."> do sidebar — é o que fazemos abaixo.
+        let html = '';
+
+        sidebarNav.querySelectorAll(':scope > li').forEach(li => {
+
+            // ── TÍTULO DE GRUPO (Principal, Acadêmico, Setores, Sistema) ──
+            if (li.classList.contains('nav-section-title')) {
+                const texto = (li.textContent || '').trim();
+                const dot = li.querySelector('.nav-section-dot');
+                const cor = dot?.getAttribute('data-color') || '#3b82f6';
+
+                html += `
+                    <div class="mobile-menu-category">
+                        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${cor};margin-right:8px;vertical-align:middle;"></span>
+                        ${texto}
+                    </div>
+                `;
+                return;
+            }
+
+            // ── ITEM DE NAVEGAÇÃO ──
+            const link = li.querySelector('.nav-link');
+            if (!link) return;
+
+            // Ícone: pega a classe completa do <i> do desktop
+            const iconEl = link.querySelector('i');
+            const iconClass = iconEl ? iconEl.className : 'fas fa-circle';
+
+            // Rótulo: texto do <span>
+            const labelEl = link.querySelector('span');
+            const label = labelEl ? labelEl.textContent.trim() : (link.textContent || '').trim();
+
+            // Destino:
+            //   - se tem data-section → seção interna (switchSection)
+            //   - se tem href → link externo (nova aba / navegação)
+            const section = link.dataset.section;
+            const href = link.getAttribute('href');
+
+            if (section) {
+                html += `
+                    <button type="button"
+                            class="mobile-menu-item"
+                            data-section="${section}"
+                            onclick="admin.selecionarMenuMobile('${section}', this)">
+                        <i class="${iconClass}"></i>
+                        <span>${label}</span>
+                    </button>
+                `;
+            } else if (href && href !== '#') {
+                const target = link.getAttribute('target') === '_blank' ? ' target="_blank"' : '';
+                html += `
+                    <a class="mobile-menu-item"
+                    href="${href}"${target}
+                    onclick="admin.fecharMenuCompleto()">
+                        <i class="${iconClass}"></i>
+                        <span>${label}</span>
+                    </a>
+                `;
+            }
+        });
+
+        list.innerHTML = html;
+    }
+
     selecionarMenuMobile(section, element) {
-        // Fecha o menu
         this.fecharMenuCompleto();
-        
-        // Aguarda a animação
+
         setTimeout(() => {
-            // Navega para a seção
             this.switchSection(section);
-            
-            // Atualiza bottom nav
-            const bottomNavSections = ['dashboard', 'usuarios', 'provas', 'turmas', 'tablets'];
-            if (bottomNavSections.includes(section)) {
-                this.updateBottomNav(section);
+
+            // Os 4 atalhos fixos do bottom nav
+            const PRIMARY = ['dashboard', 'usuarios', 'provas', 'turmas'];
+
+            document.querySelectorAll('.bottom-nav-item').forEach(item => item.classList.remove('active'));
+
+            if (PRIMARY.includes(section)) {
+                document.querySelector(`.bottom-nav-item[data-section="${section}"]`)?.classList.add('active');
             } else {
-                // Marca "Menu" como ativo
-                document.querySelectorAll('.bottom-nav-item').forEach(item => item.classList.remove('active'));
+                // Se não é um atalho, marca "Menu" como ativo
                 document.querySelector('.bottom-nav-item[data-section="menu"]')?.classList.add('active');
             }
         }, 300);
     }
 
-    /**
-     * Filtra o menu mobile pela busca
-     */
     filtrarMenuMobile(termo) {
         const list = document.getElementById('mobileMenuList');
         if (!list) return;
-        
-        const termoLower = termo.toLowerCase().trim();
-        
-        // Se vazio, re-constroi tudo
-        if (!termoLower) {
+
+        const t = (termo || '').toLowerCase().trim();
+
+        if (!t) {
+            // Reconstroi tudo do zero (garante sincronia com o desktop)
             this.construirMenuMobile();
             return;
         }
-        
-        // Filtra itens
-        const itens = list.querySelectorAll('.mobile-menu-item');
-        let temResultado = false;
-        
-        itens.forEach(item => {
-            const texto = item.querySelector('span')?.textContent.toLowerCase() || '';
-            if (texto.includes(termoLower)) {
-                item.style.display = 'flex';
-                temResultado = true;
-            } else {
-                item.style.display = 'none';
-            }
+
+        // Esconde itens que não batem
+        list.querySelectorAll('.mobile-menu-item').forEach(item => {
+            const txt = (item.textContent || '').toLowerCase();
+            item.style.display = txt.includes(t) ? 'flex' : 'none';
         });
-        
-        // Esconde categorias vazias (simplificado)
+
+        // Esconde categorias que ficaram sem itens visíveis
         list.querySelectorAll('.mobile-menu-category').forEach(cat => {
-            cat.style.display = termoLower ? 'none' : 'block';
+            let prox = cat.nextElementSibling;
+            let temVisivel = false;
+            while (prox && !prox.classList.contains('mobile-menu-category')) {
+                if (prox.classList.contains('mobile-menu-item') && prox.style.display !== 'none') {
+                    temVisivel = true;
+                    break;
+                }
+                prox = prox.nextElementSibling;
+            }
+            cat.style.display = temVisivel ? 'block' : 'none';
         });
     }
 

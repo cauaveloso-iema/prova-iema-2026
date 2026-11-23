@@ -1141,26 +1141,37 @@ function extrairAlunoId(decodedText) {
 
 async function setModo(modo) {
     modoAtual = modo;
-    safeGet('alunoInfo').style.display = 'none';
-    safeGet('formRegistro').style.display = 'none';
+
+    const hide = (id) => { const el = safeGet(id); if (el) el.style.display = 'none'; };
+    const show = (id, v = 'block') => { const el = safeGet(id); if (el) el.style.display = v; };
+    const addClass = (id, c) => { const el = safeGet(id); if (el) el.classList.add(c); };
+    const removeClass = (id, c) => { const el = safeGet(id); if (el) el.classList.remove(c); };
+
+    hide('alunoInfo');
+    hide('formRegistro');
     currentAluno = null;
     motivoSelecionado = null;
-    
+    __motivosSelecionados = [];
+
     if (modo === 'automatico') {
-        safeGet('modoAutomaticoBtn').classList.add('active');
-        safeGet('modoManualBtn').classList.remove('active');
-        safeGet('modoAutomatico').style.display = 'block';
-        safeGet('modoManual').style.display = 'none';
+        addClass('modoAutomaticoBtn', 'active');
+        removeClass('modoManualBtn', 'active');
+        show('modoAutomatico');
+        hide('modoManual');
         await iniciarScannerAutomatico();
     } else {
-        safeGet('modoManualBtn').classList.add('active');
-        safeGet('modoAutomaticoBtn').classList.remove('active');
-        safeGet('modoAutomatico').style.display = 'none';
-        safeGet('modoManual').style.display = 'block';
+        addClass('modoManualBtn', 'active');
+        removeClass('modoAutomaticoBtn', 'active');
+        hide('modoAutomatico');
+        show('modoManual');
         await pararScannerAutomatico();
-        const turmaSelecionada = safeGet('filtroTurmaManual').value;
-        if (turmaSelecionada) await carregarAlunosPorTurma();
-        else safeGet('listaAlunosManual').innerHTML = '<div class="text-center py-3">Selecione uma turma para ver os alunos</div>';
+        const turma = safeGet('filtroTurmaManual')?.value;
+        if (turma) {
+            await carregarAlunosPorTurma();
+        } else {
+            const lista = safeGet('listaAlunosManual');
+            if (lista) lista.innerHTML = '<div class="text-center py-3">Selecione uma turma para ver os alunos</div>';
+        }
     }
 }
 
