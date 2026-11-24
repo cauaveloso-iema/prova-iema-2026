@@ -2,6 +2,7 @@
 // frontend/js/validar-2fa.js
 // 2FA com suporte a passkey (WebAuthn) via /api/biometria
 // + Suporte a Biometria Nativa no Kodular (Biometric_Prompt)
+// + Verificação unificada: botão só aparece se houver credencial ativa
 // ============================================================================
 'use strict';
 
@@ -162,24 +163,46 @@
             // 1. AMBIENTE KODULAR (Custom WebView + Biometric_Prompt nativo)
             // =============================================================
             if (isKodularWebView) {
-                console.log('ℹ️ Kodular detectado — usando biometria nativa do app.');
+                console.log('ℹ️ Kodular detectado — verificando se há biometria cadastrada.');
 
-                this.biometriaDisponivel = true;
+                try {
+                    const resp = await fetch('/api/biometria/autenticar/iniciar', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${this.token}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    const data = await resp.json();
 
-                const secao = document.getElementById('biometricSection');
-                const btnText = document.getElementById('biometricBtnText');
-                const icon = document.getElementById('biometricIcon');
+                    if (!data.success) {
+                        if (data.codigo === 'NO_CREDENTIALS') {
+                            console.log('ℹ️ Nenhuma passkey cadastrada — botão oculto no Kodular');
+                        }
+                        return;
+                    }
 
-                if (icon) icon.className = 'fas fa-fingerprint';
-                if (btnText) btnText.textContent = 'Entrar com biometria';
-                if (secao) secao.classList.remove('hidden');
+                    // Tem credencial! Mostra o botão.
+                    this.biometriaDisponivel = true;
 
-                const btn = document.getElementById('biometricBtn');
-                if (btn) {
-                    // Clona o botão para remover ouvintes antigos e evitar duplicação
-                    const novoBtn = btn.cloneNode(true);
-                    btn.parentNode.replaceChild(novoBtn, btn);
-                    novoBtn.addEventListener('click', () => this.loginComBiometriaNativa());
+                    const secao = document.getElementById('biometricSection');
+                    const btnText = document.getElementById('biometricBtnText');
+                    const icon = document.getElementById('biometricIcon');
+
+                    if (icon) icon.className = 'fas fa-fingerprint';
+                    if (btnText) btnText.textContent = 'Entrar com biometria';
+                    if (secao) secao.classList.remove('hidden');
+
+                    const btn = document.getElementById('biometricBtn');
+                    if (btn) {
+                        // Clona o botão para remover ouvintes antigos e evitar duplicação
+                        const novoBtn = btn.cloneNode(true);
+                        btn.parentNode.replaceChild(novoBtn, btn);
+                        novoBtn.addEventListener('click', () => this.loginComBiometriaNativa());
+                    }
+                    console.log('✅ Botão de biometria (nativa Kodular) exibido');
+                } catch (err) {
+                    console.warn('⚠️ Falha ao checar biometria no Kodular:', err);
                 }
                 return;
             }
