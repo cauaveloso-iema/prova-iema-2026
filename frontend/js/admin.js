@@ -772,7 +772,8 @@ class AdminPanel {
             'secretaria': 'Painel da Secretaria',
             'recepcao': 'Painel da Recepção',
             'gestao-adm': 'Gestão ADM',
-            'admin-simples': 'Admin Simples'
+            'admin-simples': 'Admin Simples',
+            'biometrias-sistema': 'Biometrias do Sistema'
         };
         
         const pageTitle = document.getElementById('pageTitle');
@@ -847,6 +848,9 @@ class AdminPanel {
                 break;
             case 'permissoes-especiais':
                 await this.loadPermissoesEspeciais();
+                break;
+            case 'biometrias-sistema':
+                await this.loadBiometria();
                 break;
             case 'backups':
                 await this.loadBackups();
@@ -34003,6 +34007,873 @@ class AdminPanel {
         } catch (error) {
             console.error('❌ Erro ao carregar configurações:', error);
         }
+    }
+
+    // ============================================================================
+    // MÓDULO BIOMETRIAS DO SISTEMA (passkeys de LOGIN via 2FA)
+    // ============================================================================
+
+    async loadBiometria() {
+        const contentArea = document.getElementById('contentArea');
+        if (!contentArea) return;
+
+        // Estado do módulo
+        this.bioEstado = {
+            pagina: 1,
+            limite: 20,
+            busca: '',
+            role: 'todos',
+            ativo: 'todos',
+            lista: [],
+            estatisticas: { total: 0, ativas: 0, revogadas: 0, usuariosComPasskey: 0 },
+            opcoes: { roles: [] },
+            paginacao: { pagina: 1, limite: 20, total: 0, totalPaginas: 1 }
+        };
+
+        contentArea.innerHTML = `
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+                <p>Carregando biometrias do sistema...</p>
+            </div>
+        `;
+
+        try {
+            await this._carregarDadosBiometria();
+            contentArea.innerHTML = this._renderBiometriaUI();
+            this._bindEventosBiometria();
+        } catch (error) {
+            console.error('❌ Erro ao carregar biometrias:', error);
+            contentArea.innerHTML = `
+                <div class="alert alert-danger m-4">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Erro:</strong> ${error.message}
+                    <br>
+                    <button class="btn btn-sm btn-primary mt-2" onclick="admin.loadBiometria()">
+                        <i class="fas fa-sync-alt"></i> Tentar novamente
+                    </button>
+                </div>
+            `;
+        }
+    }
+
+    async _carregarDadosBiometria() {
+        const token = localStorage.getItem('auth_token');
+        const s = this.bioEstado;
+
+        const params = new URLSearchParams();
+        params.append('pagina', s.pagina);
+        params.append('limite', s.limite);
+        if (s.busca) params.append('busca', s.busca);
+        if (s.role && s.role !== 'todos') params.append('role', s.role);
+        if (s.ativo && s.ativo !== 'todos') params.append('ativo', s.ativo);
+
+        const response = await fetch(`/api/biometria/admin?${params.toString()}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Erro ao carregar biometrias');
+
+        s.lista = data.biometrias || [];
+        s.estatisticas = data.estatisticas || s.estatisticas;
+        s.opcoes = data.opcoes || s.opcoes;
+        s.paginacao = data.paginacao || s.paginacao;
+    }
+
+    _renderBiometriaUI() {
+        const s = this.bioEstado;
+        const stats = s.estatisticas;
+
+        // Opções do select de role
+        const rolesOptions = [
+            '<option value="todos">Todos os perfis</option>',
+            ...s.opcoes.roles.map(r => {
+                const sel = s.role === r ? 'selected' : '';
+                return `<option value="${r}" ${sel}>${this.getRoleLabelVincular(r)}</option>`;
+            })
+        ].join('');
+
+        return `
+            <div class="bio-container">
+                <!-- HEADER -->
+                <div class="bio-header">
+                    <div class="bio-header-left">
+                        <div class="bio-header-icon">
+                            <i class="fas fa-fingerprint"></i>
+                        </div>
+                        <div class="bio-header-text">
+                            <h1>Biometrias do Sistema</h1>
+                            <p>Passkeys cadastradas para login via 2FA (WebAuthn)</p>
+                        </div>
+                    </div>
+                    <div class="bio-header-actions">
+                        <button class="bio-btn bio-btn-ghost" onclick="admin.recarregarBiometria()" title="Recarregar">
+                            <i class="fas fa-sync-alt"></i> Recarregar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- CARDS DE ESTATÍSTICA -->
+                <div class="bio-stats-grid">
+                    <div class="bio-stat-card" onclick="admin.filtrarBiometriaPorStatus('todos')">
+                        <div class="bio-stat-icon" style="background: linear-gradient(135deg,#6366f1,#4f46e5);">
+                            <i class="fas fa-fingerprint"></i>
+                        </div>
+                        <div class="bio-stat-content">
+                            <span class="bio-stat-value">${stats.total}</span>
+                            <span class="bio-stat-label">Total de passkeys</span>
+                        </div>
+                    </div>
+
+                    <div class="bio-stat-card" onclick="admin.filtrarBiometriaPorStatus('sim')">
+                        <div class="bio-stat-icon" style="background: linear-gradient(135deg,#10b981,#059669);">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="bio-stat-content">
+                            <span class="bio-stat-value">${stats.ativas}</span>
+                            <span class="bio-stat-label">Ativas</span>
+                        </div>
+                    </div>
+
+                    <div class="bio-stat-card" onclick="admin.filtrarBiometriaPorStatus('nao')">
+                        <div class="bio-stat-icon" style="background: linear-gradient(135deg,#ef4444,#dc2626);">
+                            <i class="fas fa-ban"></i>
+                        </div>
+                        <div class="bio-stat-content">
+                            <span class="bio-stat-value">${stats.revogadas}</span>
+                            <span class="bio-stat-label">Revogadas</span>
+                        </div>
+                    </div>
+
+                    <div class="bio-stat-card">
+                        <div class="bio-stat-icon" style="background: linear-gradient(135deg,#f59e0b,#d97706);">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="bio-stat-content">
+                            <span class="bio-stat-value">${stats.usuariosComPasskey}</span>
+                            <span class="bio-stat-label">Usuários com biometria</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FILTROS -->
+                <div class="bio-filters-card">
+                    <div class="bio-filters-header">
+                        <div class="bio-filters-title">
+                            <i class="fas fa-sliders-h"></i>
+                            <h3>Filtros</h3>
+                        </div>
+                        <span class="bio-filters-badge" id="bioResultadosBadge">
+                            ${s.paginacao.total} resultado(s)
+                        </span>
+                    </div>
+
+                    <div class="bio-filters-grid">
+                        <div class="bio-filter-group">
+                            <label><i class="fas fa-search"></i> Buscar</label>
+                            <div class="bio-input-wrapper">
+                                <input type="text" id="bioSearch" placeholder="Nome, device label ou credential ID..." value="${s.busca}">
+                                <i class="fas fa-search bio-input-icon"></i>
+                            </div>
+                        </div>
+
+                        <div class="bio-filter-group">
+                            <label><i class="fas fa-user-tag"></i> Perfil</label>
+                            <select id="bioFilterRole" class="bio-filter-select">
+                                ${rolesOptions}
+                            </select>
+                        </div>
+
+                        <div class="bio-filter-group">
+                            <label><i class="fas fa-toggle-on"></i> Status</label>
+                            <select id="bioFilterStatus" class="bio-filter-select">
+                                <option value="todos" ${s.ativo === 'todos' ? 'selected' : ''}>Todos</option>
+                                <option value="sim"   ${s.ativo === 'sim'   ? 'selected' : ''}>Ativas</option>
+                                <option value="nao"   ${s.ativo === 'nao'   ? 'selected' : ''}>Revogadas</option>
+                            </select>
+                        </div>
+
+                        <div class="bio-filter-actions">
+                            <button class="bio-btn bio-btn-primary" onclick="admin.aplicarFiltrosBiometria()">
+                                <i class="fas fa-filter"></i> Filtrar
+                            </button>
+                            <button class="bio-btn bio-btn-ghost" onclick="admin.limparFiltrosBiometria()">
+                                <i class="fas fa-eraser"></i> Limpar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TABELA -->
+                <div class="bio-table-card">
+                    <div class="bio-table-header">
+                        <div class="bio-table-title">
+                            <i class="fas fa-list"></i>
+                            <h3>Passkeys cadastradas</h3>
+                        </div>
+                        <div class="bio-table-info">
+                            <span class="bio-items-per-page">
+                                <label>Mostrar:</label>
+                                <select onchange="admin.mudarItensPorPaginaBiometria(this.value)">
+                                    <option value="10" ${s.limite === 10 ? 'selected' : ''}>10</option>
+                                    <option value="20" ${s.limite === 20 ? 'selected' : ''}>20</option>
+                                    <option value="50" ${s.limite === 50 ? 'selected' : ''}>50</option>
+                                    <option value="100" ${s.limite === 100 ? 'selected' : ''}>100</option>
+                                </select>
+                            </span>
+                            <span class="bio-items-counter">
+                                ${s.paginacao.total} registro(s)
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="bio-table-responsive">
+                        <table class="bio-data-table">
+                            <thead>
+                                <tr>
+                                    <th>Usuário</th>
+                                    <th>Perfil</th>
+                                    <th>Dispositivo</th>
+                                    <th>Credential ID</th>
+                                    <th>Criado em</th>
+                                    <th>Último uso</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bioTableBody">
+                                ${this._renderLinhasBiometria()}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- PAGINAÇÃO -->
+                    <div class="bio-pagination">
+                        <div class="bio-pagination-info">
+                            Página ${s.paginacao.pagina} de ${s.paginacao.totalPaginas}
+                        </div>
+                        <div class="bio-pagination-controls">
+                            <button class="bio-btn-page" onclick="admin.irParaPaginaBiometria(${s.paginacao.pagina - 1})"
+                                ${s.paginacao.pagina <= 1 ? 'disabled' : ''}>‹</button>
+                            ${this._renderBotoesPaginaBio()}
+                            <button class="bio-btn-page" onclick="admin.irParaPaginaBiometria(${s.paginacao.pagina + 1})"
+                                ${s.paginacao.pagina >= s.paginacao.totalPaginas ? 'disabled' : ''}>›</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <style>
+                .bio-container { padding: 24px; max-width: 1400px; margin: 0 auto; }
+                .bio-header {
+                    background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
+                    border-radius: 20px; padding: 28px 30px; margin-bottom: 24px;
+                    display: flex; justify-content: space-between; align-items: center;
+                    flex-wrap: wrap; gap: 16px;
+                    box-shadow: 0 10px 30px rgba(79, 70, 229, 0.25);
+                }
+                .bio-header-left { display: flex; align-items: center; gap: 18px; }
+                .bio-header-icon {
+                    width: 64px; height: 64px;
+                    background: rgba(255,255,255,0.15); border-radius: 18px;
+                    display: flex; align-items: center; justify-content: center;
+                    font-size: 30px; color: white;
+                }
+                .bio-header-text h1 { color: white; font-size: 26px; font-weight: 600; margin: 0 0 4px; }
+                .bio-header-text p { color: rgba(255,255,255,0.85); font-size: 14px; margin: 0; }
+                .bio-header-actions { display: flex; gap: 10px; }
+
+                .bio-btn {
+                    padding: 10px 20px; border: none; border-radius: 40px;
+                    font-size: 13px; font-weight: 600; cursor: pointer;
+                    display: inline-flex; align-items: center; gap: 8px;
+                    transition: all 0.2s;
+                }
+                .bio-btn-ghost { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); }
+                .bio-btn-ghost:hover { background: rgba(255,255,255,0.25); }
+                .bio-btn-primary { background: #4f46e5; color: white; }
+                .bio-btn-primary:hover { background: #4338ca; }
+
+                .bio-stats-grid {
+                    display: grid; grid-template-columns: repeat(4, 1fr);
+                    gap: 16px; margin-bottom: 24px;
+                }
+                @media (max-width: 900px) { .bio-stats-grid { grid-template-columns: repeat(2, 1fr); } }
+
+                .bio-stat-card {
+                    background: white; border-radius: 16px; padding: 18px;
+                    display: flex; align-items: center; gap: 16px;
+                    border: 1px solid rgba(0,0,0,0.05);
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+                    cursor: pointer; transition: all 0.2s;
+                }
+                .bio-stat-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
+                .bio-stat-icon {
+                    width: 52px; height: 52px; border-radius: 14px;
+                    display: flex; align-items: center; justify-content: center;
+                    font-size: 22px; color: white; flex-shrink: 0;
+                }
+                .bio-stat-content { flex: 1; }
+                .bio-stat-value { display: block; font-size: 24px; font-weight: 700; color: #1f2937; line-height: 1; }
+                .bio-stat-label { font-size: 12px; color: #6b7280; margin-top: 4px; display: block; }
+
+                .bio-filters-card, .bio-table-card {
+                    background: white; border-radius: 16px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+                    border: 1px solid rgba(0,0,0,0.05);
+                    margin-bottom: 24px;
+                }
+                .bio-filters-card { padding: 20px; }
+                .bio-filters-header {
+                    display: flex; justify-content: space-between; align-items: center;
+                    margin-bottom: 18px; padding-bottom: 14px; border-bottom: 2px solid #f0f0f0;
+                }
+                .bio-filters-title { display: flex; align-items: center; gap: 10px; }
+                .bio-filters-title i { color: #4f46e5; background: #eef2ff; padding: 8px; border-radius: 10px; font-size: 16px; }
+                .bio-filters-title h3 { margin: 0; font-size: 16px; color: #374151; }
+                .bio-filters-badge { background: #4f46e5; color: white; padding: 4px 12px; border-radius: 30px; font-size: 12px; font-weight: 600; }
+
+                .bio-filters-grid {
+                    display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 14px; align-items: end;
+                }
+                @media (max-width: 900px) { .bio-filters-grid { grid-template-columns: 1fr 1fr; } }
+
+                .bio-filter-group { display: flex; flex-direction: column; gap: 6px; }
+                .bio-filter-group label { font-size: 12px; font-weight: 600; color: #4b5563; }
+                .bio-input-wrapper { position: relative; }
+                .bio-input-wrapper input {
+                    width: 100%; padding: 10px 14px 10px 38px;
+                    border: 2px solid #e5e7eb; border-radius: 12px; font-size: 14px;
+                    transition: border 0.2s;
+                }
+                .bio-input-wrapper input:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 4px rgba(79,70,229,0.1); }
+                .bio-input-icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: #9ca3af; }
+                .bio-filter-select {
+                    padding: 10px 14px; border: 2px solid #e5e7eb; border-radius: 12px;
+                    font-size: 14px; background: white;
+                }
+                .bio-filter-select:focus { outline: none; border-color: #4f46e5; }
+                .bio-filter-actions { display: flex; gap: 8px; }
+
+                .bio-table-header {
+                    padding: 16px 20px; background: #f9fafb;
+                    border-bottom: 1px solid #e5e7eb;
+                    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+                    border-radius: 16px 16px 0 0;
+                }
+                .bio-table-title { display: flex; align-items: center; gap: 10px; }
+                .bio-table-title i { color: #4f46e5; }
+                .bio-table-title h3 { margin: 0; font-size: 15px; color: #374151; }
+                .bio-table-info { display: flex; align-items: center; gap: 16px; font-size: 13px; color: #6b7280; }
+                .bio-items-per-page { display: flex; align-items: center; gap: 6px; }
+                .bio-items-per-page select {
+                    padding: 5px 10px; border: 1px solid #e5e7eb; border-radius: 8px;
+                    font-size: 13px; background: white;
+                }
+
+                .bio-table-responsive { overflow-x: auto; }
+                .bio-data-table { width: 100%; border-collapse: collapse; min-width: 900px; }
+                .bio-data-table th {
+                    padding: 14px 16px; text-align: left;
+                    font-size: 12px; font-weight: 600; color: #4b5563;
+                    background: #f9fafb; border-bottom: 2px solid #e5e7eb;
+                    text-transform: uppercase; letter-spacing: 0.3px;
+                }
+                .bio-data-table td {
+                    padding: 14px 16px; border-bottom: 1px solid #e5e7eb;
+                    font-size: 13px; color: #1f2937; vertical-align: middle;
+                }
+                .bio-data-table tr:hover td { background: #f9fafb; }
+
+                .bio-user-cell { display: flex; align-items: center; gap: 10px; }
+                .bio-user-avatar {
+                    width: 36px; height: 36px; border-radius: 50%;
+                    background: linear-gradient(135deg,#4f46e5,#7c3aed);
+                    display: flex; align-items: center; justify-content: center;
+                    color: white; font-weight: 700; font-size: 13px; flex-shrink: 0;
+                }
+                .bio-user-info strong { display: block; font-size: 13px; color: #1f2937; }
+                .bio-user-info small { font-size: 11px; color: #6b7280; }
+
+                .bio-role-badge {
+                    display: inline-block; padding: 3px 10px; border-radius: 30px;
+                    font-size: 11px; font-weight: 600;
+                    background: #eef2ff; color: #4338ca;
+                }
+
+                .bio-device-label {
+                    font-size: 13px; color: #1f2937; display: flex; align-items: center; gap: 6px;
+                }
+                .bio-device-label i { color: #6b7280; }
+
+                .bio-cred-id {
+                    font-family: 'Courier New', monospace;
+                    background: #f3f4f6; padding: 4px 8px; border-radius: 6px;
+                    font-size: 11px; color: #4b5563;
+                    max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                    display: inline-block;
+                }
+
+                .bio-status-badge {
+                    display: inline-block; padding: 4px 10px; border-radius: 30px;
+                    font-size: 11px; font-weight: 600;
+                }
+                .bio-status-badge.ativa { background: #d1fae5; color: #065f46; }
+                .bio-status-badge.revogada { background: #fee2e2; color: #991b1b; }
+
+                .bio-actions { display: flex; gap: 4px; }
+                .bio-icon-btn {
+                    width: 32px; height: 32px; border: none; border-radius: 8px;
+                    background: transparent; color: #6b7280; cursor: pointer;
+                    display: flex; align-items: center; justify-content: center;
+                    transition: all 0.15s;
+                }
+                .bio-icon-btn:hover { background: #f3f4f6; color: #4f46e5; }
+                .bio-icon-btn.danger:hover { background: #fee2e2; color: #dc2626; }
+                .bio-icon-btn.success:hover { background: #d1fae5; color: #059669; }
+
+                .bio-pagination {
+                    padding: 14px 20px; border-top: 1px solid #e5e7eb;
+                    display: flex; justify-content: space-between; align-items: center;
+                    flex-wrap: wrap; gap: 12px;
+                }
+                .bio-pagination-info { font-size: 13px; color: #6b7280; }
+                .bio-pagination-controls { display: flex; gap: 4px; }
+                .bio-btn-page {
+                    min-width: 36px; height: 36px; border: 1px solid #e5e7eb;
+                    background: white; border-radius: 10px; cursor: pointer;
+                    font-size: 13px; color: #4b5563;
+                    display: flex; align-items: center; justify-content: center;
+                    transition: all 0.15s;
+                }
+                .bio-btn-page:hover:not(:disabled) { background: #f3f4f6; }
+                .bio-btn-page:disabled { opacity: 0.4; cursor: not-allowed; }
+                .bio-btn-page.active { background: #4f46e5; border-color: #4f46e5; color: white; font-weight: 600; }
+            </style>
+        `;
+    }
+
+    _renderLinhasBiometria() {
+        const s = this.bioEstado;
+        if (!s.lista || s.lista.length === 0) {
+            return `
+                <tr>
+                    <td colspan="8" style="text-align: center; padding: 40px;">
+                        <i class="fas fa-fingerprint" style="font-size: 42px; color: #d1d5db; margin-bottom: 12px; display: block;"></i>
+                        <h3 style="color: #6b7280; margin: 0 0 6px;">Nenhuma biometria encontrada</h3>
+                        <p style="color: #9ca3af; margin: 0; font-size: 13px;">
+                            ${s.busca || s.role !== 'todos' || s.ativo !== 'todos'
+                                ? 'Nenhum resultado para os filtros aplicados.'
+                                : 'Ainda não há passkeys cadastradas no sistema.'}
+                        </p>
+                    </td>
+                </tr>
+            `;
+        }
+
+        const formatarData = (dt) => {
+            if (!dt) return '—';
+            return new Date(dt).toLocaleString('pt-BR', {
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
+        };
+
+        const iconeDispositivo = (label) => {
+            if (!label) return 'fa-mobile-alt';
+            if (/iphone|ipad/i.test(label)) return 'fa-mobile-alt';
+            if (/mac/i.test(label)) return 'fa-laptop';
+            if (/android/i.test(label)) return 'fa-mobile-alt';
+            if (/windows/i.test(label)) return 'fa-desktop';
+            return 'fa-mobile-alt';
+        };
+
+        return s.lista.map(b => {
+            const inicial = (b.userNome || '?').charAt(0).toUpperCase();
+            const ativa = b.ativo !== false;
+            return `
+                <tr>
+                    <td>
+                        <div class="bio-user-cell">
+                            <div class="bio-user-avatar">${inicial}</div>
+                            <div class="bio-user-info">
+                                <strong>${this.escapeHtmlAdmin(b.userNome)}</strong>
+                                <small>${this.escapeHtmlAdmin(String(b.userId).substring(0, 12))}...</small>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="bio-role-badge">${this.escapeHtmlAdmin(this.getRoleLabelVincular(b.userRole))}</span>
+                    </td>
+                    <td>
+                        <div class="bio-device-label">
+                            <i class="fas ${iconeDispositivo(b.deviceLabel)}"></i>
+                            ${this.escapeHtmlAdmin(b.deviceLabel || '—')}
+                        </div>
+                    </td>
+                    <td>
+                        <span class="bio-cred-id" title="${this.escapeHtmlAdmin(b.credentialId)}">
+                            ${this.escapeHtmlAdmin(String(b.credentialId).substring(0, 24))}...
+                        </span>
+                    </td>
+                    <td>${formatarData(b.createdAt)}</td>
+                    <td>${formatarData(b.ultimoUsoEm)}</td>
+                    <td>
+                        <span class="bio-status-badge ${ativa ? 'ativa' : 'revogada'}">
+                            ${ativa ? '✅ Ativa' : '❌ Revogada'}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="bio-actions">
+                            <button class="bio-icon-btn" title="Ver detalhes" onclick="admin.verDetalhesBiometria('${b._id}')">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            ${ativa
+                                ? `<button class="bio-icon-btn danger" title="Revogar" onclick="admin.revogarBiometria('${b._id}', '${this.escapeHtmlAdmin(b.userNome)}')">
+                                    <i class="fas fa-ban"></i>
+                                </button>`
+                                : `<button class="bio-icon-btn success" title="Reativar" onclick="admin.reativarBiometria('${b._id}')">
+                                    <i class="fas fa-check"></i>
+                                </button>`
+                            }
+                            <button class="bio-icon-btn danger" title="Excluir permanentemente" onclick="admin.excluirBiometria('${b._id}', '${this.escapeHtmlAdmin(b.userNome)}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    _renderBotoesPaginaBio() {
+        const s = this.bioEstado;
+        const { pagina, totalPaginas } = s.paginacao;
+        const maxBotoes = 5;
+        let inicio = Math.max(1, pagina - Math.floor(maxBotoes / 2));
+        let fim = Math.min(totalPaginas, inicio + maxBotoes - 1);
+        if (fim - inicio < maxBotoes - 1) inicio = Math.max(1, fim - maxBotoes + 1);
+
+        let html = '';
+        for (let i = inicio; i <= fim; i++) {
+            html += `<button class="bio-btn-page ${i === pagina ? 'active' : ''}"
+                        onclick="admin.irParaPaginaBiometria(${i})">${i}</button>`;
+        }
+        return html;
+    }
+
+    _bindEventosBiometria() {
+        // Enter no campo de busca
+        const search = document.getElementById('bioSearch');
+        if (search) {
+            search.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.aplicarFiltrosBiometria();
+                }
+            });
+        }
+    }
+
+    // ============================================================================
+    // AÇÕES DO MÓDULO BIOMETRIAS
+    // ============================================================================
+
+    aplicarFiltrosBiometria() {
+        const s = this.bioEstado;
+        s.busca = document.getElementById('bioSearch')?.value?.trim() || '';
+        s.role = document.getElementById('bioFilterRole')?.value || 'todos';
+        s.ativo = document.getElementById('bioFilterStatus')?.value || 'todos';
+        s.pagina = 1;
+        this._atualizarTabelaBiometria();
+    }
+
+    limparFiltrosBiometria() {
+        const s = this.bioEstado;
+        s.busca = '';
+        s.role = 'todos';
+        s.ativo = 'todos';
+        s.pagina = 1;
+        document.getElementById('bioSearch').value = '';
+        document.getElementById('bioFilterRole').value = 'todos';
+        document.getElementById('bioFilterStatus').value = 'todos';
+        this._atualizarTabelaBiometria();
+    }
+
+    filtrarBiometriaPorStatus(status) {
+        const select = document.getElementById('bioFilterStatus');
+        if (select) select.value = status;
+        this.aplicarFiltrosBiometria();
+    }
+
+    mudarItensPorPaginaBiometria(qtd) {
+        this.bioEstado.limite = parseInt(qtd, 10) || 20;
+        this.bioEstado.pagina = 1;
+        this._atualizarTabelaBiometria();
+    }
+
+    irParaPaginaBiometria(pagina) {
+        const s = this.bioEstado;
+        if (pagina < 1 || pagina > s.paginacao.totalPaginas) return;
+        s.pagina = pagina;
+        this._atualizarTabelaBiometria();
+    }
+
+    recarregarBiometria() {
+        this.loadBiometria();
+    }
+
+    async _atualizarTabelaBiometria() {
+        try {
+            await this._carregarDadosBiometria();
+            // Atualiza só o tbody + paginação + estatísticas para não re-renderizar tudo
+            const tbody = document.getElementById('bioTableBody');
+            if (tbody) tbody.innerHTML = this._renderLinhasBiometria();
+
+            const s = this.bioEstado;
+            const badge = document.getElementById('bioResultadosBadge');
+            if (badge) badge.textContent = `${s.paginacao.total} resultado(s)`;
+
+            const paginacaoInfo = document.querySelector('.bio-pagination-info');
+            if (paginacaoInfo) {
+                paginacaoInfo.textContent = `Página ${s.paginacao.pagina} de ${s.paginacao.totalPaginas}`;
+            }
+
+            // Atualiza botões de paginação
+            const controls = document.querySelector('.bio-pagination-controls');
+            if (controls) {
+                const btnPrev = `<button class="bio-btn-page" onclick="admin.irParaPaginaBiometria(${s.paginacao.pagina - 1})"
+                    ${s.paginacao.pagina <= 1 ? 'disabled' : ''}>‹</button>`;
+                const btnNext = `<button class="bio-btn-page" onclick="admin.irParaPaginaBiometria(${s.paginacao.pagina + 1})"
+                    ${s.paginacao.pagina >= s.paginacao.totalPaginas ? 'disabled' : ''}>›</button>`;
+                controls.innerHTML = btnPrev + this._renderBotoesPaginaBio() + btnNext;
+            }
+
+            // Atualiza os 4 cards de estatística
+            const statEls = document.querySelectorAll('.bio-stat-value');
+            if (statEls.length >= 4) {
+                statEls[0].textContent = s.estatisticas.total;
+                statEls[1].textContent = s.estatisticas.ativas;
+                statEls[2].textContent = s.estatisticas.revogadas;
+                statEls[3].textContent = s.estatisticas.usuariosComPasskey;
+            }
+        } catch (error) {
+            console.error('❌ Erro ao atualizar tabela:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    async verDetalhesBiometria(id) {
+        const item = this.bioEstado.lista.find(b => String(b._id) === String(id));
+        if (!item) return;
+
+        const modalBody = document.getElementById('modalBody');
+        if (!modalBody) return;
+
+        const fmt = (dt) => dt ? new Date(dt).toLocaleString('pt-BR') : '—';
+
+        modalBody.innerHTML = `
+            <div style="padding: 0; max-height: 80vh; overflow-y: auto;">
+                <div style="background: linear-gradient(135deg,#4f46e5,#3730a3); padding: 24px; color: white; position: sticky; top: 0; z-index: 10;">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <div style="width: 48px; height: 48px; background: rgba(255,255,255,0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px;">
+                            <i class="fas fa-fingerprint"></i>
+                        </div>
+                        <div>
+                            <h2 style="margin: 0; font-size: 1.3rem;">Detalhes da Biometria</h2>
+                            <p style="margin: 4px 0 0; opacity: 0.9; font-size: 0.9rem;">
+                                ${this.escapeHtmlAdmin(item.userNome)}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="padding: 24px;">
+                    <div style="background: #f8fafc; border-radius: 12px; padding: 18px; margin-bottom: 16px; border: 1px solid #e2e8f0;">
+                        <h3 style="margin: 0 0 14px; font-size: 1rem; color: #334155;">
+                            <i class="fas fa-user" style="color: #4f46e5;"></i> Usuário
+                        </h3>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.9rem;">
+                            <div>
+                                <div style="font-size: 0.75rem; color: #64748b;">Nome</div>
+                                <div style="font-weight: 600;">${this.escapeHtmlAdmin(item.userNome)}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.75rem; color: #64748b;">Perfil</div>
+                                <div style="font-weight: 600;">${this.escapeHtmlAdmin(this.getRoleLabelVincular(item.userRole))}</div>
+                            </div>
+                            <div style="grid-column: 1 / -1;">
+                                <div style="font-size: 0.75rem; color: #64748b;">User ID</div>
+                                <div style="font-family: monospace; background: #f1f5f9; padding: 6px 10px; border-radius: 6px; font-size: 0.8rem; word-break: break-all;">
+                                    ${this.escapeHtmlAdmin(String(item.userId))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="background: #f8fafc; border-radius: 12px; padding: 18px; margin-bottom: 16px; border: 1px solid #e2e8f0;">
+                        <h3 style="margin: 0 0 14px; font-size: 1rem; color: #334155;">
+                            <i class="fas fa-mobile-alt" style="color: #4f46e5;"></i> Dispositivo
+                        </h3>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.9rem;">
+                            <div>
+                                <div style="font-size: 0.75rem; color: #64748b;">Label</div>
+                                <div style="font-weight: 600;">${this.escapeHtmlAdmin(item.deviceLabel || '—')}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.75rem; color: #64748b;">Transports</div>
+                                <div style="font-weight: 600;">${this.escapeHtmlAdmin((item.transports || []).join(', ') || '—')}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.75rem; color: #64748b;">Counter</div>
+                                <div style="font-weight: 600;">${item.counter || 0}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.75rem; color: #64748b;">AAGUID</div>
+                                <div style="font-family: monospace; font-size: 0.75rem; word-break: break-all;">
+                                    ${this.escapeHtmlAdmin(item.aaguid || '—')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="background: #f8fafc; border-radius: 12px; padding: 18px; margin-bottom: 16px; border: 1px solid #e2e8f0;">
+                        <h3 style="margin: 0 0 14px; font-size: 1rem; color: #334155;">
+                            <i class="fas fa-key" style="color: #4f46e5;"></i> Credencial
+                        </h3>
+                        <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 4px;">Credential ID</div>
+                        <div style="font-family: monospace; background: #f1f5f9; padding: 8px 10px; border-radius: 6px; font-size: 0.8rem; word-break: break-all;">
+                            ${this.escapeHtmlAdmin(item.credentialId)}
+                        </div>
+                    </div>
+
+                    <div style="background: #f8fafc; border-radius: 12px; padding: 18px; margin-bottom: 16px; border: 1px solid #e2e8f0;">
+                        <h3 style="margin: 0 0 14px; font-size: 1rem; color: #334155;">
+                            <i class="fas fa-history" style="color: #4f46e5;"></i> Histórico
+                        </h3>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.9rem;">
+                            <div>
+                                <div style="font-size: 0.75rem; color: #64748b;">Criado em</div>
+                                <div style="font-weight: 600;">${fmt(item.createdAt)}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.75rem; color: #64748b;">Último uso</div>
+                                <div style="font-weight: 600;">${fmt(item.ultimoUsoEm)}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.75rem; color: #64748b;">IP de cadastro</div>
+                                <div style="font-weight: 600; font-family: monospace; font-size: 0.85rem;">${this.escapeHtmlAdmin(item.ip || '—')}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.75rem; color: #64748b;">Status</div>
+                                <div>
+                                    <span class="bio-status-badge ${item.ativo ? 'ativa' : 'revogada'}">
+                                        ${item.ativo ? '✅ Ativa' : '❌ Revogada'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 14px; border-radius: 8px; font-size: 0.85rem; color: #92400e;">
+                        <strong><i class="fas fa-info-circle"></i> User-Agent:</strong>
+                        <div style="font-family: monospace; font-size: 0.75rem; margin-top: 4px; word-break: break-all;">
+                            ${this.escapeHtmlAdmin(item.userAgent || '—')}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-fingerprint"></i> Detalhes da Biometria';
+        this.configurarModal({
+            title: '<i class="fas fa-fingerprint"></i> Detalhes da Biometria',
+            saveText: null, // só botão fechar
+            onSave: null
+        });
+        this.openModal();
+    }
+
+    async revogarBiometria(id, nomeUsuario) {
+        const ok = await this.confirmar(
+            '🔒 Revogar Biometria',
+            `Deseja revogar a biometria de <strong>${this.escapeHtmlAdmin(nomeUsuario)}</strong>?<br><br>
+            O usuário voltará a usar apenas SMS/QR/backup no próximo login.`
+        );
+        if (!ok) return;
+
+        try {
+            const token = localStorage.getItem('auth_token');
+            const resp = await fetch(`/api/biometria/admin/${id}/revogar`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await resp.json();
+            if (!data.success) throw new Error(data.error || 'Erro ao revogar');
+
+            this.showToast('✅ Biometria revogada!', 'success');
+            await this._atualizarTabelaBiometria();
+        } catch (e) {
+            console.error('❌', e);
+            this.showToast('❌ ' + e.message, 'error');
+        }
+    }
+
+    async reativarBiometria(id) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            const resp = await fetch(`/api/biometria/admin/${id}/reativar`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await resp.json();
+            if (!data.success) throw new Error(data.error || 'Erro ao reativar');
+
+            this.showToast('✅ Biometria reativada!', 'success');
+            await this._atualizarTabelaBiometria();
+        } catch (e) {
+            console.error('❌', e);
+            this.showToast('❌ ' + e.message, 'error');
+        }
+    }
+
+    async excluirBiometria(id, nomeUsuario) {
+        const ok = await this.confirmar(
+            '🗑️ Excluir Biometria',
+            `<strong style="color:#dc3545;">ATENÇÃO!</strong><br><br>
+            Excluir permanentemente a biometria de <strong>${this.escapeHtmlAdmin(nomeUsuario)}</strong>?<br><br>
+            Esta ação não pode ser desfeita. O usuário poderá cadastrar nova biometria depois.`
+        );
+        if (!ok) return;
+
+        try {
+            const token = localStorage.getItem('auth_token');
+            const resp = await fetch(`/api/biometria/admin/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await resp.json();
+            if (!data.success) throw new Error(data.error || 'Erro ao excluir');
+
+            this.showToast('✅ Biometria excluída!', 'success');
+            await this._atualizarTabelaBiometria();
+        } catch (e) {
+            console.error('❌', e);
+            this.showToast('❌ ' + e.message, 'error');
+        }
+    }
+
+    // Helper: escapa HTML (caso não exista no admin.js)
+    escapeHtmlAdmin(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
     
     // ==================== EXECUÇÃO DE COMANDOS (VERSÃO CORRIGIDA) ====================

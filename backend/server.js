@@ -1173,9 +1173,13 @@ app.use('/api', omrRoutes);
 app.use('/api/admin', require('./routes/admin'));
 const tabletsRoutes = require('./routes/tablets-routes');
 app.use('/api/tablets', tabletsRoutes);
+
 // Rota de Protocolo de Provas
 const protocoloProvasRoutes = require('./routes/protocolo-provas-routes');
 app.use('/api/protocolo-provas', protocoloProvasRoutes);
+
+//SISTEMA DE BIOMETRIA
+app.use('/api/biometria', require('./routes/biometria'));
 
 // ── Rotas do Módulo de Eventos (blindado) ──
 try {
