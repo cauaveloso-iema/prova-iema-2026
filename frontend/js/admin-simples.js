@@ -1976,9 +1976,9 @@ class AdminSimples {
             this.filtrarUsuariosServidor();
         }, 400);
     }
-    
+
     filtrarUsuariosServidor() {
-        // 🔥 Lê TODOS os campos de uma vez
+        // Lê todos os filtros do DOM
         this.filtros = {
             role:   document.getElementById('filtroRole')?.value || 'todos',
             status: document.getElementById('filtroStatus')?.value || 'todos',
@@ -1988,43 +1988,51 @@ class AdminSimples {
 
         console.log('🔍 Filtros aplicados:', JSON.stringify(this.filtros));
 
-        // 🔥 Sempre recarrega da página 1 com os filtros atualizados
-        this.carregarUsuarios(1);
+        // 🔥 preservarInput = true → não recria a tela inteira
+        this.carregarUsuarios(1, { preservarInput: true });
     }
 
     paginaAnteriorServidor() {
         if (this.paginaAtualUsuario > 1) {
-            this.carregarUsuarios(this.paginaAtualUsuario - 1);
+            this.carregarUsuarios(this.paginaAtualUsuario - 1, { preservarInput: true });
         }
     }
 
     proximaPaginaServidor() {
-        if (this.paginaAtualUsuario < this.pagination.pages) {
-            this.carregarUsuarios(this.paginaAtualUsuario + 1);
+        if (this.pagination && this.paginaAtualUsuario < this.pagination.pages) {
+            this.carregarUsuarios(this.paginaAtualUsuario + 1, { preservarInput: true });
         }
+    }
+
+    irParaPagina(pagina) {
+        if (isNaN(pagina) || pagina < 1) return;
+        if (!this.pagination || pagina > this.pagination.pages) return;
+        if (pagina === this.paginaAtualUsuario) return;
+        this.carregarUsuarios(pagina, { preservarInput: true });
     }
 
     invalidarCacheUsuarios() {
         this._statsCache = null;
-        this._dashboardCache = null; 
+        this._dashboardCache = null;
         console.log('🔄 Cache de estatísticas invalidado');
     }
 
     // ============================================================================
     // USUÁRIOS
     // ============================================================================
-    async carregarUsuarios(pagina = 1) {
-        console.log(`📢 CARREGANDO USUÁRIOS (página ${pagina})...`);
+    async carregarUsuarios(pagina = 1, opcoes = {}) {
+        const { preservarInput = false } = opcoes;
+        console.log(`📢 CARREGANDO USUÁRIOS (página ${pagina}) | preservarInput=${preservarInput}`);
+
         const content = document.getElementById('contentArea');
         if (!content) return;
 
-        // ============ LOADING (sempre, em toda troca) ============
         const tbodyExistente = document.getElementById('tabelaUsuarios');
+
+        // ============ LOADING ============
         if (tbodyExistente) {
-            // Já tem tabela na tela → só cobre com overlay
             this._mostrarLoadingTabelaUsuarios(true);
         } else {
-            // Primeira carga → loading fullscreen
             content.innerHTML = `
                 <div style="text-align:center;padding:60px;background:white;border-radius:12px;">
                     <div style="width:50px;height:50px;border:5px solid #f3f3f3;border-top:5px solid #1e3a8a;border-radius:50%;margin:0 auto 20px;animation:spin 1s linear infinite;"></div>
@@ -2070,7 +2078,7 @@ class AdminSimples {
             const data = await response.json();
             if (!data.success) throw new Error(data.error || 'Erro ao carregar usuários');
 
-            // ============ TURMAS (banco + alunos) ============
+            // ============ TURMAS ============
             let turmasDoBanco = this._turmasCache || [];
             if (turmasRes) {
                 const turmasData = await turmasRes.json().catch(() => ({ success: false }));
@@ -2133,23 +2141,33 @@ class AdminSimples {
 
             // ============ ARMAZENAR ============
             this.usuarios = usuarios;
-            this.pagination = data.pagination || { page: 1, total: 0, pages: 1 };
+            this.pagination = data.pagination || { page: 1, total: 0, pages: 1, limit: this.itensPorPagina };
             this.paginaAtualUsuario = this.pagination.page;
             this.turmas = todasTurmas;
 
             // ============ RENDERIZAR ============
-            content.innerHTML = this._renderTelaUsuarios({
-                usuarios: this.usuarios,
-                pagination: this.pagination,
-                todasTurmas,
-                estatisticas,
-                filtros
-            });
+            if (preservarInput && tbodyExistente) {
+                // 🔥 Só atualiza a tabela + paginação (input permanece intacto com foco)
+                tbodyExistente.innerHTML = this.gerarLinhasUsuarios(usuarios);
+                this._atualizarPaginacaoUsuarios();
+                this._mostrarLoadingTabelaUsuarios(false);
+            } else {
+                // Primeira carga / troca de aba → renderiza tela completa
+                content.innerHTML = this._renderTelaUsuarios({
+                    usuarios: this.usuarios,
+                    pagination: this.pagination,
+                    todasTurmas,
+                    estatisticas,
+                    filtros
+                });
+            }
 
             console.log(`✅ Usuários carregados: ${this.usuarios.length} de ${this.pagination.total} (página ${this.paginaAtualUsuario}/${this.pagination.pages})`);
 
         } catch (error) {
             console.error('❌ Erro ao carregar usuários:', error);
+            this._mostrarLoadingTabelaUsuarios(false);
+
             content.innerHTML = `
                 <div class="error-container" style="text-align:center;padding:40px;">
                     <i class="fas fa-exclamation-triangle" style="font-size:48px;color:#dc3545;margin-bottom:15px;"></i>
@@ -2159,6 +2177,100 @@ class AdminSimples {
                         <i class="fas fa-sync-alt"></i> Tentar novamente
                     </button>
                 </div>`;
+        }
+    }
+
+    // ============================================================================
+    // 🔁 ATUALIZAR APENAS A PAGINAÇÃO (sem re-renderizar a tela toda)
+    // ============================================================================
+    _atualizarPaginacaoUsuarios() {
+        const pagination = this.pagination || {};
+        const totalPaginas = pagination.pages || 1;
+        const paginaAtual = pagination.page || 1;
+        const totalRegistros = pagination.total || 0;
+        const itensPorPagina = pagination.limit || this.itensPorPagina || 10;
+
+        const inicioExibicao = totalRegistros === 0 ? 0 : (paginaAtual - 1) * itensPorPagina + 1;
+        const fimExibicao = Math.min(paginaAtual * itensPorPagina, totalRegistros);
+
+        // Localiza o container da paginação (o div irmão logo após .table-responsive)
+        const tabela = document.getElementById('tabelaUsuarios');
+        if (!tabela) return;
+
+        const tableWrapper = tabela.closest('.table-responsive');
+        if (!tableWrapper) return;
+
+        const containerPaginacao = tableWrapper.nextElementSibling;
+        if (!containerPaginacao) return;
+
+        // ============ BOTÕES NUMÉRICOS ============
+        const botoesPagina = [];
+        const maxBotoes = 5;
+        let inicio = Math.max(1, paginaAtual - Math.floor(maxBotoes / 2));
+        let fim = Math.min(totalPaginas, inicio + maxBotoes - 1);
+        if (fim - inicio < maxBotoes - 1) {
+            inicio = Math.max(1, fim - maxBotoes + 1);
+        }
+
+        for (let i = inicio; i <= fim; i++) {
+            const isActive = i === paginaAtual;
+            botoesPagina.push(`
+                <button class="btn-page"
+                    onclick="${isActive ? '' : `adminSimples.carregarUsuarios(${i}, { preservarInput: true })`}"
+                    ${isActive ? 'disabled' : ''}
+                    style="
+                        min-width: 36px; height: 36px; padding: 0 10px;
+                        border: 1px solid ${isActive ? '#7b93c4' : '#e5e7eb'};
+                        background: ${isActive ? '#7b93c4' : 'white'};
+                        color: ${isActive ? 'white' : '#4b5563'};
+                        border-radius: 8px; font-size: 13px; font-weight: 500;
+                        cursor: ${isActive ? 'default' : 'pointer'};
+                        margin: 0 2px; transition: all 0.2s;
+                    "
+                    onmouseover="${isActive ? '' : "this.style.background='#f3f4f6'; this.style.borderColor='#7b93c4'; this.style.color='#1e3a8a';"}"
+                    onmouseout="${isActive ? '' : "this.style.background='white'; this.style.borderColor='#e5e7eb'; this.style.color='#4b5563';"}">
+                    ${i}
+                </button>
+            `);
+        }
+
+        if (paginaAtual < totalPaginas) {
+            botoesPagina.push(`
+                <button class="btn-page" onclick="adminSimples.carregarUsuarios(${paginaAtual + 1}, { preservarInput: true })"
+                    style="min-width: 36px; height: 36px; padding: 0 10px; border: 1px solid #e5e7eb; background: white; border-radius: 8px; font-size: 13px; color: #4b5563; cursor: pointer; margin: 0 2px; transition: all 0.2s;"
+                    onmouseover="this.style.background='#f3f4f6'; this.style.borderColor='#7b93c4'; this.style.color='#1e3a8a';"
+                    onmouseout="this.style.background='white'; this.style.borderColor='#e5e7eb'; this.style.color='#4b5563';">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            `);
+        }
+
+        // ============ SUBSTITUI O CONTEÚDO DA PAGINAÇÃO ============
+        if (totalPaginas > 1) {
+            containerPaginacao.innerHTML = `
+                <div style="font-size: 13px; color: #4b5563; font-weight: 500;">
+                    Mostrando <strong>${inicioExibicao}</strong> a <strong>${fimExibicao}</strong> de <strong>${totalRegistros}</strong> registros
+                </div>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                    ${botoesPagina.join('')}
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #4b5563;">
+                    <span>Ir para:</span>
+                    <input type="number" min="1" max="${totalPaginas}" value="${paginaAtual}"
+                        onchange="adminSimples.irParaPagina(parseInt(this.value))"
+                        style="width: 60px; padding: 6px 8px; border: 1px solid #e5e7eb; border-radius: 6px; text-align: center; font-size: 13px; outline: none;">
+                    <span>de ${totalPaginas}</span>
+                </div>
+            `;
+            // Garante os estilos de layout do container
+            containerPaginacao.style.cssText = "display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding: 15px 0; flex-wrap: wrap; gap: 15px;";
+        } else {
+            containerPaginacao.innerHTML = `
+                <div style="font-size: 13px; color: #4b5563; font-weight: 500;">
+                    Mostrando <strong>${totalRegistros}</strong> registro${totalRegistros === 1 ? '' : 's'}
+                </div>
+            `;
+            containerPaginacao.style.cssText = "margin-top: 20px; padding: 15px 0;";
         }
     }
 
@@ -2243,11 +2355,11 @@ class AdminSimples {
         const totalPaginas = pagination?.pages || 1;
         const totalRegistros = pagination?.total || 0;
         const itensPorPagina = pagination?.limit || 10;
-        
-        const inicioExibicao = (paginaAtual - 1) * itensPorPagina + 1;
+
+        const inicioExibicao = totalRegistros === 0 ? 0 : (paginaAtual - 1) * itensPorPagina + 1;
         const fimExibicao = Math.min(paginaAtual * itensPorPagina, totalRegistros);
 
-        // ============ GERAR BOTÕES NUMÉRICOS ============
+        // ============ BOTÕES NUMÉRICOS ============
         const botoesPagina = [];
         const maxBotoes = 5;
         let inicio = Math.max(1, paginaAtual - Math.floor(maxBotoes / 2));
@@ -2259,8 +2371,8 @@ class AdminSimples {
         for (let i = inicio; i <= fim; i++) {
             const isActive = i === paginaAtual;
             botoesPagina.push(`
-                <button class="btn-page" 
-                    onclick="${isActive ? '' : `adminSimples.carregarUsuarios(${i})`}"
+                <button class="btn-page"
+                    onclick="${isActive ? '' : `adminSimples.carregarUsuarios(${i}, { preservarInput: true })`}"
                     ${isActive ? 'disabled' : ''}
                     style="
                         min-width: 36px; height: 36px; padding: 0 10px;
@@ -2278,10 +2390,9 @@ class AdminSimples {
             `);
         }
 
-        // Botão "Próximo" (seta)
         if (paginaAtual < totalPaginas) {
             botoesPagina.push(`
-                <button class="btn-page" onclick="adminSimples.carregarUsuarios(${paginaAtual + 1})"
+                <button class="btn-page" onclick="adminSimples.carregarUsuarios(${paginaAtual + 1}, { preservarInput: true })"
                     style="min-width: 36px; height: 36px; padding: 0 10px; border: 1px solid #e5e7eb; background: white; border-radius: 8px; font-size: 13px; color: #4b5563; cursor: pointer; margin: 0 2px; transition: all 0.2s;"
                     onmouseover="this.style.background='#f3f4f6'; this.style.borderColor='#7b93c4'; this.style.color='#1e3a8a';"
                     onmouseout="this.style.background='white'; this.style.borderColor='#e5e7eb'; this.style.color='#4b5563';">
@@ -2303,7 +2414,7 @@ class AdminSimples {
                 <div class="filter-group" style="flex: 2;">
                     <label><i class="fas fa-search"></i> Buscar</label>
                     <input type="text" id="buscaUsuario" placeholder="Nome, email, CPF ou matrícula..."
-                        class="form-control" value="${filtros.search || ''}"
+                        class="form-control" value="${this.escapeHtml(filtros.search || '')}"
                         onkeyup="adminSimples.debounceBuscaUsuario()" autocomplete="off">
                 </div>
                 <div class="filter-group">
@@ -2324,7 +2435,7 @@ class AdminSimples {
                         <span style="background: #1e3a8a; color: white; padding: 1px 6px; border-radius: 10px; font-size: 10px; margin-left: 4px;">${todasTurmas.length}</span>
                     </label>
                     <select id="filtroTurma" class="form-control" onchange="adminSimples.filtrarUsuariosServidor()">
-                        <option value="todos" ${filtros.turma === 'todos' ? 'selected' : ''}>Todas as turmas (${todasTurmas.length})</option>
+                        <option value="todas" ${filtros.turma === 'todas' ? 'selected' : ''}>Todas as turmas (${todasTurmas.length})</option>
                         ${opcoesTurmas}
                     </select>
                 </div>
@@ -2349,21 +2460,15 @@ class AdminSimples {
                 </table>
             </div>
 
-            <!-- PAGINAÇÃO LIMPA (igual à imagem) -->
+            <!-- PAGINAÇÃO -->
             ${totalPaginas > 1 ? `
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding: 15px 0; flex-wrap: wrap; gap: 15px;">
-                
-                <!-- Contador de registros (esquerda) -->
                 <div style="font-size: 13px; color: #4b5563; font-weight: 500;">
                     Mostrando <strong>${inicioExibicao}</strong> a <strong>${fimExibicao}</strong> de <strong>${totalRegistros}</strong> registros
                 </div>
-
-                <!-- Botões centrais -->
                 <div style="display: flex; align-items: center; gap: 4px;">
                     ${botoesPagina.join('')}
                 </div>
-
-                <!-- Ir para página (direita) -->
                 <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #4b5563;">
                     <span>Ir para:</span>
                     <input type="number" min="1" max="${totalPaginas}" value="${paginaAtual}"
@@ -2681,18 +2786,18 @@ class AdminSimples {
     limparFiltrosUsuarios() {
         this.filtros = { role: 'todos', status: 'todos', turma: 'todas', search: '' };
 
-        // Limpa campos visuais
+        // Limpa os campos no DOM antes de recarregar
         const busca = document.getElementById('buscaUsuario');
         const role = document.getElementById('filtroRole');
         const status = document.getElementById('filtroStatus');
         const turma = document.getElementById('filtroTurma');
+
         if (busca) busca.value = '';
         if (role) role.value = 'todos';
         if (status) status.value = 'todos';
-        if (turma) turma.value = 'todos';
+        if (turma) turma.value = 'todas';
 
-        this.carregarUsuarios(1);
-        this.showToast('✅ Filtros limpos', 'success');
+        this.carregarUsuarios(1, { preservarInput: true });
     }
 
     paginaAnterior(tipo) {
@@ -2727,14 +2832,36 @@ class AdminSimples {
 
     novoUsuario() { this.abrirModalUsuario(); }
 
-    async editarUsuario(id) {
-        const usuario = this.usuarios.find(u => u._id === id);
-        if (usuario) {
-            if (usuario.role === 'super_admin') {
-                this.showToast('❌ Não é possível editar Super Admins', 'error');
-                return;
+    // ============ EDITAR USUÁRIO (VERSÃO CORRIGIDA - BUSCA DADOS ATUALIZADOS) ============
+    async editarUsuario(usuarioId) {
+        console.log('✏️ Admin editando usuário:', usuarioId);
+
+        try {
+            this.showToast('🔄 Carregando dados do usuário...', 'info');
+
+            const token = localStorage.getItem('auth_token');
+
+            // 🔥 BUSCAR DADOS ATUALIZADOS DIRETAMENTE DO BANCO
+            const response = await fetch(`/api/admin/usuarios/${usuarioId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.error || 'Erro ao carregar usuário');
             }
-            this.abrirModalUsuario(usuario);
+
+            const usuario = data.user;
+
+            console.log('📋 Dados atualizados do usuário:', usuario);
+
+            // Abrir modal com os dados atualizados
+            this.abrirModalUsuario(usuarioId);
+
+        } catch (error) {
+            console.error('❌ Erro ao editar usuário:', error);
+            this.showToast('❌ ' + error.message, 'error');
         }
     }
 
@@ -2935,14 +3062,31 @@ class AdminSimples {
             .replace(/\n/g, '\\n');
     }
 
-    async abrirModalUsuario(usuario = null) {
-        console.log('📝 Abrindo modal usuário');
+    // ============ ABRIR MODAL USUÁRIO (CURSOS + EIXOS DO BANCO) ============
+    async abrirModalUsuario(usuarioId = null) {
+        let usuario = null;
 
-        if (usuario && usuario.role === 'super_admin') {
-            this.showToast('❌ Não é possível editar Super Admins', 'error');
-            return;
+        if (usuarioId) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`/api/admin/usuarios/${usuarioId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    usuario = data.user;
+                } else {
+                    throw new Error(data.error || 'Erro ao carregar usuário');
+                }
+            } catch (error) {
+                this.showToast('❌ Erro ao carregar dados do usuário', 'error');
+                return;
+            }
         }
 
+        // Buscar cursos do banco
         let cursosDoBanco = [];
         try {
             const token = localStorage.getItem('auth_token');
@@ -2953,6 +3097,31 @@ class AdminSimples {
             if (data.success && data.cursos) cursosDoBanco = data.cursos;
         } catch (error) {
             console.error('❌ Erro ao buscar cursos:', error);
+        }
+
+        // Buscar eixos do banco
+        let eixosDoBanco = [];
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/eixos', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await response.json();
+            if (data.success && data.eixos) eixosDoBanco = data.eixos;
+        } catch (error) {
+            console.error('❌ Erro ao buscar eixos:', error);
+        }
+
+        if (eixosDoBanco.length === 0) {
+            eixosDoBanco = [
+                { nome: 'natureza', label: '🌿 Ciências da Natureza', icone: 'fa-leaf', cor: '#10b981' },
+                { nome: 'humanas', label: '📜 Ciências Humanas', icone: 'fa-book', cor: '#8b5cf6' },
+                { nome: 'linguagens', label: '📚 Linguagens', icone: 'fa-language', cor: '#f59e0b' },
+                { nome: 'desenvolvimento', label: '💻 Desenvolvimento de Sistemas', icone: 'fa-code', cor: '#3b82f6' },
+                { nome: 'gestao', label: '📊 Gestão e Negócios', icone: 'fa-chart-line', cor: '#ec4899' },
+                { nome: 'turismo', label: '✈️ Turismo e Hospitalidade', icone: 'fa-plane', cor: '#06b6d4' },
+                { nome: 'ambiente', label: '🌱 Meio Ambiente', icone: 'fa-seedling', cor: '#10b981' }
+            ];
         }
 
         const nome = usuario?.nome || '';
@@ -2966,10 +3135,14 @@ class AdminSimples {
         const cursoSelecionado = usuario?.curso || '';
         const turma = usuario?.turma || '';
         const eixo = usuario?.eixo || '';
-        const precisaAcessibilidade = usuario?.precisaAcessibilidade === true;
+        const departamento = usuario?.departamento || '';
+        const titulacao = usuario?.titulacao || '';
+        const precisaAcessibilidade = usuario?.precisaAcessibilidade || false;
+        // 🔥 USA O CAMPO CORRETO DO BANCO
         const condicaoAcessibilidade = usuario?.condicaoAcessibilidade || '';
+        const atribuicoes = usuario?.atribuicoes || '';
         const perfilAlimentar = usuario?.perfilAlimentar || 'nao_informado';
-        const refeicoesQueParticipa = usuario?.refeicoesQueParticipa || [];
+        const refeicoesQueParticipa = usuario?.refeicoesParticipa || [];
 
         const escapeStr = (str) => String(str || '').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 
@@ -2978,8 +3151,8 @@ class AdminSimples {
                 return '<option value="">Nenhum curso disponível</option>';
             }
             let options = '<option value="">Selecione um curso...</option>';
-            const ordenados = [...cursosDoBanco].sort((a, b) => a.nome.localeCompare(b.nome));
-            ordenados.forEach(curso => {
+            const cursosOrdenados = [...cursosDoBanco].sort((a, b) => a.nome.localeCompare(b.nome));
+            cursosOrdenados.forEach(curso => {
                 if (curso.ativo === false) return;
                 const selected = cursoSelecionado === curso.nome ? 'selected' : '';
                 options += `<option value="${escapeStr(curso.nome)}" ${selected}>${curso.nome}</option>`;
@@ -2987,20 +3160,43 @@ class AdminSimples {
             return options;
         };
 
-        const conteudoHTML = `
-            <form id="formUsuario">
+        const gerarOpcoesEixos = () => {
+            if (!eixosDoBanco || eixosDoBanco.length === 0) {
+                return '<option value="">Nenhum eixo cadastrado</option>';
+            }
+            let options = '<option value="">Selecione um eixo...</option>';
+            const eixosOrdenados = [...eixosDoBanco].sort((a, b) =>
+                (a.label || a.nome).localeCompare(b.label || b.nome)
+            );
+            eixosOrdenados.forEach(item => {
+                if (item.ativo === false) return;
+                const valor = item.nome;
+                const label = item.label || item.nome;
+                const icone = item.icone ? `<i class="fas ${item.icone}"></i> ` : '';
+                const selected = eixo === valor ? 'selected' : '';
+                options += `<option value="${escapeStr(valor)}" ${selected}>${icone}${label}</option>`;
+            });
+            return options;
+        };
+
+        const modalBody = document.getElementById('modalBody');
+
+        modalBody.innerHTML = `
+            <form id="userForm" style="padding: 20px;">
                 <div class="form-group">
-                    <label>Nome</label>
-                    <input type="text" id="nomeUsuario" class="form-control" value="${escapeStr(nome)}" required>
+                    <label><i class="fas fa-user"></i> Nome Completo</label>
+                    <input type="text" id="userNome" class="form-control" value="${escapeStr(nome)}" required>
                 </div>
+
                 <div class="form-group">
-                    <label>Email</label>
-                    <input type="email" id="emailUsuario" class="form-control" value="${escapeStr(email)}" required>
+                    <label><i class="fas fa-envelope"></i> Email</label>
+                    <input type="email" id="userEmail" class="form-control" value="${escapeStr(email)}" required>
                 </div>
+
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Perfil</label>
-                        <select id="roleUsuario" class="form-control">
+                        <label><i class="fas fa-user-tag"></i> Perfil</label>
+                        <select id="userRole" class="form-control" onchange="adminSimples.toggleCamposRole()">
                             <option value="aluno" ${role === 'aluno' ? 'selected' : ''}>Aluno</option>
                             <option value="professor" ${role === 'professor' ? 'selected' : ''}>Professor</option>
                             <option value="admin" ${role === 'admin' ? 'selected' : ''}>Admin</option>
@@ -3020,151 +3216,437 @@ class AdminSimples {
                             <option value="recepcao" ${role === 'recepcao' ? 'selected' : ''}>Recepção</option>
                         </select>
                     </div>
+
                     <div class="form-group">
-                        <label>Status</label>
-                        <select id="statusUsuario" class="form-control">
+                        <label><i class="fas fa-circle"></i> Status</label>
+                        <select id="userStatus" class="form-control">
                             <option value="true" ${ativo ? 'selected' : ''}>Ativo</option>
                             <option value="false" ${!ativo ? 'selected' : ''}>Inativo</option>
                         </select>
                     </div>
                 </div>
+
                 <div class="form-row">
                     <div class="form-group">
-                        <label>CPF</label>
-                        <input type="text" id="cpfUsuario" class="form-control" value="${escapeStr(cpf)}" placeholder="Apenas números">
+                        <label><i class="fas fa-id-card"></i> CPF</label>
+                        <input type="text" id="userCPF" class="form-control" value="${cpf}" oninput="formatarCPF(this)" maxlength="14" required>
                     </div>
                     <div class="form-group">
-                        <label>Telefone</label>
-                        <input type="text" id="telefoneUsuario" class="form-control" value="${escapeStr(telefone)}" placeholder="(99) 99999-9999">
+                        <label><i class="fas fa-phone"></i> Telefone</label>
+                        <input type="text" id="userTelefone" class="form-control" value="${telefone}" oninput="formatarTelefone(this)" maxlength="15" required>
                     </div>
                 </div>
+
                 <div class="form-group">
-                    <label>Matrícula</label>
-                    <input type="text" id="matriculaUsuario" class="form-control" value="${escapeStr(matricula)}">
+                    <label><i class="fas fa-hashtag"></i> Matrícula</label>
+                    <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
                 </div>
 
-                <div id="alunoFields" style="${role === 'aluno' ? 'display:block;' : 'display:none;'}">
+                <!-- ALUNO -->
+                <div id="alunoFields" class="role-specific" style="${role === 'aluno' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Curso</label>
-                            <select id="cursoUsuario" class="form-control">${gerarOpcoesCursos()}</select>
-                            ${cursosDoBanco.length === 0 ? '<small style="color:#ef4444;">⚠️ Nenhum curso encontrado.</small>' : ''}
+                            <label><i class="fas fa-graduation-cap"></i> Curso</label>
+                            <select id="userCurso" class="form-control">
+                                ${gerarOpcoesCursos()}
+                            </select>
+                            ${cursosDoBanco.length === 0 ? '<small style="color: #ef4444;">⚠️ Nenhum curso encontrado no banco. Contate o administrador.</small>' : ''}
                         </div>
                         <div class="form-group">
-                            <label>Turma</label>
-                            <input type="text" id="turmaUsuario" class="form-control" value="${escapeStr(turma)}" placeholder="Ex: 101">
+                            <label><i class="fas fa-users"></i> Turma</label>
+                            <input type="text" id="userTurma" class="form-control" value="${escapeStr(turma)}" placeholder="Ex: 101, 102">
                         </div>
                     </div>
 
-                    <div style="margin-top:15px;padding:15px;background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;">
-                        <h4 style="margin:0 0 12px;font-size:0.9rem;color:#334155;">
-                            <i class="fas fa-utensils" style="color:#10b981;"></i> Preferências Alimentares
+                    <div style="margin-top: 15px; padding: 15px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+                        <h4 style="margin: 0 0 10px 0; font-size: 0.9rem; color: #334155;">
+                            <i class="fas fa-utensils"></i> Preferências Alimentares
                         </h4>
                         <div class="form-group">
                             <label>Participa das refeições?</label>
-                            <select id="perfilAlimentarUsuario" class="form-control" onchange="adminSimples.toggleRefeicoesUsuario()">
-                                <option value="sempre" ${perfilAlimentar === 'sempre' ? 'selected' : ''}>✅ Sim, sempre</option>
-                                <option value="as_vezes" ${perfilAlimentar === 'as_vezes' ? 'selected' : ''}>⚠️ Às vezes</option>
-                                <option value="nunca" ${perfilAlimentar === 'nunca' ? 'selected' : ''}>❌ Nunca</option>
+                            <select id="userPerfilAlimentar" class="form-control">
+                                <option value="sempre" ${perfilAlimentar === 'sempre' ? 'selected' : ''}>✅ Sim, sempre participo</option>
+                                <option value="as_vezes" ${perfilAlimentar === 'as_vezes' ? 'selected' : ''}>⚠️ Participo às vezes</option>
+                                <option value="nunca" ${perfilAlimentar === 'nunca' ? 'selected' : ''}>❌ Não, nunca participo</option>
                                 <option value="nao_informado" ${perfilAlimentar === 'nao_informado' ? 'selected' : ''}>❓ Prefiro não informar</option>
                             </select>
                         </div>
-                        <div id="refeicoesUsuarioDiv" style="${(perfilAlimentar === 'sempre' || perfilAlimentar === 'as_vezes') ? 'display:block;margin-top:12px;' : 'display:none;'}">
-                            <label style="display:block;margin-bottom:8px;font-size:0.85rem;color:#4b5563;font-weight:600;">
-                                Quais refeições participa?
-                            </label>
-                            <div style="display:flex;gap:15px;flex-wrap:wrap;">
-                                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem;">
-                                    <input type="checkbox" value="manha" class="refeicao-checkbox" ${refeicoesQueParticipa.includes('manha') ? 'checked' : ''}> ☀️ Manhã
+
+                        <div id="refeicoesDiv" style="${perfilAlimentar === 'sempre' || perfilAlimentar === 'as_vezes' ? 'display: block;' : 'display: none;'}">
+                            <label>Quais refeições participa?</label>
+                            <div style="display: flex; gap: 15px; margin-top: 8px;">
+                                <label>
+                                    <input type="checkbox" value="manha" ${refeicoesQueParticipa.includes('manha') ? 'checked' : ''}> ☀️ Manhã (8h-10h)
                                 </label>
-                                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem;">
-                                    <input type="checkbox" value="almoco" class="refeicao-checkbox" ${refeicoesQueParticipa.includes('almoco') ? 'checked' : ''}> 🍽️ Almoço
+                                <label>
+                                    <input type="checkbox" value="almoco" ${refeicoesQueParticipa.includes('almoco') ? 'checked' : ''}> 🍽️ Almoço (11h-13h)
                                 </label>
-                                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem;">
-                                    <input type="checkbox" value="tarde" class="refeicao-checkbox" ${refeicoesQueParticipa.includes('tarde') ? 'checked' : ''}> 🌙 Tarde
+                                <label>
+                                    <input type="checkbox" value="tarde" ${refeicoesQueParticipa.includes('tarde') ? 'checked' : ''}> 🌙 Tarde (14h-16h)
                                 </label>
                             </div>
                         </div>
                     </div>
 
-                    <div style="margin-top:15px;padding:15px;background:#eef2ff;border-radius:12px;border-left:4px solid #6366f1;">
-                        <div style="display:flex;align-items:center;gap:10px;">
-                            <input type="checkbox" id="userAcessibilidade" ${precisaAcessibilidade ? 'checked' : ''}
-                                style="width:20px;height:20px;accent-color:#6366f1;"
-                                onchange="adminSimples.toggleCondicaoAcessibilidade()">
-                            <label for="userAcessibilidade" style="cursor:pointer;font-weight:600;color:#3730a3;font-size:0.9rem;">
-                                <i class="fas fa-wheelchair"></i> Necessita de acessibilidade
-                            </label>
-                        </div>
-                        <div id="condicaoAcessibilidadeDiv" style="${precisaAcessibilidade ? 'display:block;margin-top:12px;' : 'display:none;margin-top:12px;'}">
-                            <label style="display:block;margin-bottom:6px;font-size:0.8rem;color:#4b5563;font-weight:600;">Qual a condição?</label>
-                            <select id="condicaoAcessibilidadeUsuario" class="form-control">
-                                <option value="">Selecione...</option>
-                                <option value="baixa_visao" ${condicaoAcessibilidade === 'baixa_visao' ? 'selected' : ''}>👁️ Baixa Visão</option>
-                                <option value="cegueira" ${condicaoAcessibilidade === 'cegueira' ? 'selected' : ''}>👁️ Cegueira</option>
-                                <option value="dislexia" ${condicaoAcessibilidade === 'dislexia' ? 'selected' : ''}>📖 Dislexia</option>
-                                <option value="discalculia" ${condicaoAcessibilidade === 'discalculia' ? 'selected' : ''}>🔢 Discalculia</option>
-                                <option value="tdah" ${condicaoAcessibilidade === 'tdah' ? 'selected' : ''}>🧠 TDAH</option>
-                                <option value="tea" ${condicaoAcessibilidade === 'tea' ? 'selected' : ''}>🧩 TEA (Autismo)</option>
-                                <option value="deficiencia_auditiva" ${condicaoAcessibilidade === 'deficiencia_auditiva' ? 'selected' : ''}>👂 Def. Auditiva</option>
-                                <option value="deficiencia_fisica" ${condicaoAcessibilidade === 'deficiencia_fisica' ? 'selected' : ''}>🦽 Def. Física</option>
-                                <option value="outra" ${condicaoAcessibilidade === 'outra' ? 'selected' : ''}>📝 Outra</option>
+                    <!-- 🔥 ACESSIBILIDADE COM DESCRIÇÃO (condicaoAcessibilidade) -->
+                    <div class="checkbox-group" style="margin: 10px 0;">
+                        <input type="checkbox" id="userAcessibilidade" ${precisaAcessibilidade ? 'checked' : ''}>
+                        <label for="userAcessibilidade"><i class="fas fa-wheelchair"></i> Necessita de acessibilidade</label>
+                    </div>
+
+                    <div id="campoDescricaoAcessibilidade" style="display: ${precisaAcessibilidade ? 'block' : 'none'}; margin: 12px 0 0 0; background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 10px; padding: 15px;">
+                        <label for="userCondicaoAcessibilidade" style="font-weight: 600; font-size: 13px; color: #5b21b6; display: block; margin-bottom: 8px;">
+                            <i class="fas fa-pen"></i> Descreva a acessibilidade
+                        </label>
+                        <textarea id="userCondicaoAcessibilidade"
+                                rows="3"
+                                maxlength="500"
+                                placeholder="Ex: Baixa visão, intérprete de Libras, cadeirante, TDAH, autismo, dislexia..."
+                                style="width: 100%; padding: 10px 12px; border: 1px solid #c4b5fd; border-radius: 8px; font-size: 14px; resize: vertical; font-family: inherit; box-sizing: border-box;">${escapeStr(condicaoAcessibilidade)}</textarea>
+                        <small style="color: #7c3aed; font-size: 11px; display: block; margin-top: 6px;">
+                            <i class="fas fa-info-circle"></i> Esta informação ajuda professores e equipe pedagógica a adaptar atividades.
+                        </small>
+                    </div>
+                </div>
+
+                <!-- PROFESSOR -->
+                <div id="professorFields" class="role-specific" style="${role === 'professor' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-sitemap"></i> Eixo</label>
+                            <select id="userEixo" class="form-control">
+                                ${gerarOpcoesEixos()}
                             </select>
+                            ${eixosDoBanco.length === 0 ? `
+                                <small style="color: #ef4444; font-size: 11px;">
+                                    <i class="fas fa-exclamation-triangle"></i> Nenhum eixo cadastrado.
+                                    <a href="#" onclick="adminSimples.fecharModal(); adminSimples.mudarAba('eixos'); return false;" style="color: #3b82f6;">
+                                        Cadastrar eixos
+                                    </a>
+                                </small>
+                            ` : ''}
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-building"></i> Departamento</label>
+                            <input type="text" id="userDepartamento" class="form-control" value="${escapeStr(departamento)}">
                         </div>
                     </div>
-                </div>
-
-                <div id="professorFields" style="${role === 'professor' ? 'display:block;' : 'display:none;'}">
                     <div class="form-group">
-                        <label>Eixo</label>
-                        <select id="eixoUsuario" class="form-control">
-                            <option value="">Selecione...</option>
-                            <option value="natureza" ${eixo === 'natureza' ? 'selected' : ''}>Natureza</option>
-                            <option value="humanas" ${eixo === 'humanas' ? 'selected' : ''}>Humanas</option>
-                            <option value="linguagens" ${eixo === 'linguagens' ? 'selected' : ''}>Linguagens</option>
-                            <option value="desenvolvimento" ${eixo === 'desenvolvimento' ? 'selected' : ''}>Desenvolvimento</option>
-                            <option value="gestao" ${eixo === 'gestao' ? 'selected' : ''}>Gestão</option>
-                            <option value="turismo" ${eixo === 'turismo' ? 'selected' : ''}>Turismo</option>
-                            <option value="ambiente" ${eixo === 'ambiente' ? 'selected' : ''}>Ambiente</option>
-                        </select>
+                        <label><i class="fas fa-award"></i> Titulação</label>
+                        <input type="text" id="userTitulacao" class="form-control" value="${escapeStr(titulacao)}">
                     </div>
                 </div>
 
-                ${!usuario ? `
+                <!-- SETOR PEDAGÓGICO -->
+                <div id="setorPedagogicoFields" class="role-specific" style="${role === 'setor_pedagogico' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-building"></i> Departamento</label>
+                            <input type="text" id="userDepartamento" class="form-control" value="${escapeStr(departamento)}">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-id-card"></i> Matrícula</label>
+                            <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-tasks"></i> Atribuições</label>
+                        <textarea id="userAtribuicoes" class="form-control" rows="2" placeholder="Ex: Acompanhamento AEE, Sala de Recursos...">${escapeStr(atribuicoes)}</textarea>
+                    </div>
+                </div>
+
+                <!-- GESTÃO GERAL -->
+                <div id="gestaoGeralFields" class="role-specific" style="${role === 'gestao_geral' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-group">
+                        <label><i class="fas fa-building"></i> Departamento</label>
+                        <input type="text" id="departamentoUsuario" class="form-control" value="${escapeStr(usuario?.departamento || '')}">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-id-card"></i> Matrícula</label>
+                        <input type="text" id="matriculaUsuario" class="form-control" value="${escapeStr(usuario?.matricula || '')}" maxlength="6" placeholder="6 dígitos">
+                    </div>
+                    <div class="info-card" style="background: #e0f2fe; margin-top: 10px;">
+                        <i class="fas fa-info-circle"></i>
+                        <span>A Gestão Geral controla o rodízio de refeições por turma.</span>
+                    </div>
+                </div>
+
+                <!-- SUPERVISÃO -->
+                <div id="supervisaoFields" class="role-specific" style="${role === 'supervisao' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-building"></i> Departamento</label>
+                            <input type="text" id="userDepartamento" class="form-control" value="${escapeStr(departamento)}">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-id-card"></i> Matrícula</label>
+                            <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
+                        </div>
+                    </div>
+                    <div class="info-card" style="background: #e0f2fe; margin-top: 10px;">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Supervisão gerencia ocorrências, advertências, suspensões e encaminhamentos de alunos.</span>
+                    </div>
+                </div>
+
+                <!-- PSICOLOGIA -->
+                <div id="psicologiaFields" class="role-specific" style="${role === 'psicologia' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-building"></i> Departamento</label>
+                            <input type="text" id="userDepartamento" class="form-control" value="${escapeStr(departamento)}">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-id-card"></i> Matrícula</label>
+                            <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-brain"></i> Especialidade</label>
+                        <input type="text" id="userEspecialidade" class="form-control"
+                            value="${escapeStr(usuario?.especialidade || '')}"
+                            placeholder="Ex: Psicologia Clínica, Psicopedagogia...">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-id-badge"></i> CRP</label>
+                        <input type="text" id="userCrp" class="form-control"
+                            value="${escapeStr(usuario?.crp || '')}"
+                            placeholder="Ex: CRP 06/123456">
+                    </div>
+                    <div class="info-card" style="background: #ccfbf1; margin-top: 10px;">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Psicologia gerencia escutas, manejo de crises emocionais e ações socioemocionais.</span>
+                    </div>
+                </div>
+
+                <!-- ASSISTENTE SOCIAL -->
+                <div id="assistenteSocialFields" class="role-specific" style="${role === 'assistente-social' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-building"></i> Departamento</label>
+                            <input type="text" id="userDepartamento" class="form-control" value="${escapeStr(departamento)}">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-id-card"></i> Matrícula</label>
+                            <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-id-badge"></i> CRESS</label>
+                        <input type="text" id="userCress" class="form-control"
+                            value="${escapeStr(usuario?.cress || '')}"
+                            placeholder="Ex: CRESS 12345">
+                    </div>
+                    <div class="info-card" style="background: #ede9fe; margin-top: 10px;">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Assistente Social gerencia evasão escolar, vulnerabilidades e encaminhamentos.</span>
+                    </div>
+                </div>
+
+                <!-- PROTAGONISMO -->
+                <div id="protagonismoFields" class="role-specific" style="${role === 'protagonismo' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-building"></i> Departamento</label>
+                            <input type="text" id="userDepartamento" class="form-control" value="${escapeStr(departamento)}">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-id-card"></i> Matrícula</label>
+                            <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
+                        </div>
+                    </div>
+                    <div class="info-card" style="background: #ffedd5; margin-top: 10px;">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Protagonismo gerencia clubes, tutoria, candidatos e eleições de líderes.</span>
+                    </div>
+                </div>
+
+                <!-- BIBLIOTECA -->
+                <div id="bibliotecaFields" class="role-specific" style="${role === 'biblioteca' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-building"></i> Departamento</label>
+                            <input type="text" id="userDepartamento" class="form-control" value="${escapeStr(departamento)}">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-id-card"></i> Matrícula</label>
+                            <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
+                        </div>
+                    </div>
+                    <div class="info-card" style="background: #e0f2fe; margin-top: 10px;">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Biblioteca gerencia registros de frequência, atividades e empréstimos de livros.</span>
+                    </div>
+                </div>
+
+                <!-- SECRETARIA -->
+                <div id="secretariaFields" class="role-specific" style="${role === 'secretaria' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-group">
+                        <label><i class="fas fa-building"></i> Departamento</label>
+                        <input type="text" id="userDepartamento" class="form-control" value="${escapeStr(departamento)}">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-id-card"></i> Matrícula</label>
+                        <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
+                    </div>
+                    <div class="info-card" style="background: #d1fae5; margin-top: 10px;">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Secretaria consulta as justificativas de falta cadastradas pela Gestão Geral.</span>
+                    </div>
+                </div>
+
+                <!-- RECEPÇÃO -->
+                <div id="recepcaoFields" class="role-specific" style="${role === 'recepcao' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-building"></i> Departamento</label>
+                            <input type="text" id="userDepartamento" class="form-control" value="${escapeStr(departamento)}">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-id-card"></i> Matrícula</label>
+                            <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
+                        </div>
+                    </div>
+                    <div class="info-card" style="background: #cffafe; margin-top: 10px;">
+                        <i class="fas fa-info-circle"></i>
+                        <span>A Recepção verifica/busca as autorizações de alunos por QR Code ou manualmente, com filtro por data.</span>
+                    </div>
+                </div>
+
+                <!-- GESTÃO ADM -->
+                <div id="gestaoAdmFields" class="role-specific" style="${role === 'gestao-adm' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-building"></i> Departamento</label>
+                            <input type="text" id="userDepartamento" class="form-control" value="${escapeStr(departamento)}">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-id-card"></i> Matrícula</label>
+                            <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
+                        </div>
+                    </div>
+                    <div class="info-card" style="background: #e0e7ff; margin-top: 10px;">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Gestão ADM gerencia funcionalidades administrativas específicas.</span>
+                    </div>
+                </div>
+
+                <!-- COORDENAÇÃO DE PÁTIO -->
+                <div id="coordenacaoPatioFields" class="role-specific" style="${role === 'coordenacao_patio' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-group">
+                        <label><i class="fas fa-building"></i> Departamento</label>
+                        <input type="text" id="userDepartamento" class="form-control" value="${escapeStr(departamento)}">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-id-card"></i> Matrícula</label>
+                        <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
+                    </div>
+                </div>
+
+                <!-- ENFERMARIA -->
+                <div id="enfermariaFields" class="role-specific" style="${role === 'enfermaria' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-building"></i> Departamento</label>
+                            <input type="text" id="userDepartamento" class="form-control" value="${escapeStr(departamento)}">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-id-card"></i> Matrícula</label>
+                            <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-stethoscope"></i> Especialidade</label>
+                        <input type="text" id="userEspecialidade" class="form-control" value="${escapeStr(usuario?.especialidade || '')}" placeholder="Ex: Enfermagem Geral, Técnico de Enfermagem...">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-id-badge"></i> COREN</label>
+                        <input type="text" id="userCoren" class="form-control" value="${escapeStr(usuario?.coren || '')}" placeholder="Ex: COREN/MA 123456">
+                    </div>
+                    <div class="info-card" style="background: #e0f2fe; margin-top: 10px;">
+                        <i class="fas fa-info-circle"></i>
+                        <span>A Enfermaria gerencia atendimentos de alunos, registrando queixas e desfechos.</span>
+                    </div>
+                </div>
+
+                <!-- COZINHA -->
+                <div id="cozinhaFields" class="role-specific" style="${role === 'cozinha' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-group">
+                        <label><i class="fas fa-building"></i> Departamento</label>
+                        <input type="text" id="userDepartamento" class="form-control" value="${escapeStr(departamento)}">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-id-card"></i> Matrícula</label>
+                        <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
+                    </div>
+                </div>
+
+                ${!id ? `
                 <div class="form-group">
-                    <label>Senha Temporária</label>
-                    <div style="display:flex;gap:10px;">
-                        <input type="text" id="senhaUsuario" class="form-control" value="${this.gerarSenha()}" required>
+                    <label><i class="fas fa-key"></i> Senha Temporária</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="userPassword" class="form-control" value="${this.gerarSenha()}" required>
                         <button type="button" class="btn-icon" onclick="adminSimples.gerarNovaSenha()" title="Gerar nova senha">
                             <i class="fas fa-sync-alt"></i>
                         </button>
                     </div>
-                    <small style="color:#6c757d;">O usuário usará esta senha para fazer login</small>
-                </div>` : ''}
+                    <small style="color: #6c757d;">O usuário usará esta senha para fazer login</small>
+                </div>
+                ` : ''}
 
-                <div class="info-card">
+                <div class="info-card" style="background: #eef2ff; padding: 10px; border-radius: 8px; margin-top: 10px;">
                     <i class="fas fa-info-circle"></i>
                     <span>Email institucional (@iemasaoluiscentro.net) é obrigatório</span>
                 </div>
-            </form>`;
+            </form>
+        `;
 
-        const titulo = usuario
-            ? '<i class="fas fa-edit"></i> Editar Usuário'
-            : '<i class="fas fa-user-plus"></i> Novo Usuário';
-
-        // 🔥 ABRE COM CALLBACK ISOLADO
-        this.abrirModal(titulo, conteudoHTML, true, () => this.salvarUsuario(id));
+        document.getElementById('modalTitle').innerHTML = usuario ?
+            '<i class="fas fa-edit"></i> Editar Usuário' :
+            '<i class="fas fa-user-plus"></i> Novo Usuário';
 
         setTimeout(() => {
-            const btn = document.getElementById('modalSaveBtn');
-            if (btn) {
-                btn.innerHTML = usuario
-                    ? '<i class="fas fa-save"></i> Salvar Alterações'
-                    : '<i class="fas fa-user-plus"></i> Criar Usuário';
+            const modalSaveBtn = document.getElementById('modalSaveBtn');
+            if (modalSaveBtn) {
+                modalSaveBtn.onclick = () => this.salvarUsuario(id);
+                modalSaveBtn.style.display = 'inline-block';
             }
-            const roleSelect = document.getElementById('roleUsuario');
-            if (roleSelect) roleSelect.addEventListener('change', () => this.toggleCamposRole());
-        }, 50);
+
+            const roleSelect = document.getElementById('userRole');
+            if (roleSelect) {
+                roleSelect.addEventListener('change', () => this.toggleCamposRole());
+            }
+
+            const perfilSelect = document.getElementById('userPerfilAlimentar');
+            if (perfilSelect) {
+                perfilSelect.addEventListener('change', () => {
+                    const refeicoesDiv = document.getElementById('refeicoesDiv');
+                    if (refeicoesDiv) {
+                        refeicoesDiv.style.display = (perfilSelect.value === 'sempre' || perfilSelect.value === 'as_vezes') ? 'block' : 'none';
+                    }
+                });
+            }
+
+            // 🔥 LISTENER DO CHECKBOX DE ACESSIBILIDADE
+            const chkAcess = document.getElementById('userAcessibilidade');
+            const campoDesc = document.getElementById('campoDescricaoAcessibilidade');
+            const txtDesc = document.getElementById('userCondicaoAcessibilidade');
+
+            if (chkAcess && campoDesc) {
+                campoDesc.style.display = chkAcess.checked ? 'block' : 'none';
+
+                chkAcess.addEventListener('change', function() {
+                    campoDesc.style.display = this.checked ? 'block' : 'none';
+                    if (!this.checked && txtDesc) {
+                        txtDesc.value = '';
+                    } else if (this.checked && txtDesc) {
+                        setTimeout(() => txtDesc.focus(), 150);
+                    }
+                });
+            }
+        }, 100);
+
+        this.openModal();
     }
 
     toggleRefeicoesUsuario() {
@@ -3260,73 +3742,123 @@ class AdminSimples {
         return labels[role] || 'Área do Sistema';
     }
 
+    // ============ SALVAR USUÁRIO ============
     async salvarUsuario(id = null) {
         try {
             console.log('💾 Salvando usuário. ID:', id);
 
-            const roleSelecionada = document.getElementById('roleUsuario')?.value;
-            if (roleSelecionada === 'super_admin') {
-                this.showToast('❌ Não é possível criar/editar Super Admins', 'error');
-                return;
-            }
+            const role = document.getElementById('userRole').value;
 
             const dados = {
-                nome: document.getElementById('nomeUsuario')?.value?.trim() || '',
-                email: document.getElementById('emailUsuario')?.value?.trim() || '',
-                role: roleSelecionada,
-                ativo: document.getElementById('statusUsuario')?.value === 'true'
+                nome: document.getElementById('userNome').value,
+                email: document.getElementById('userEmail').value,
+                cpf: document.getElementById('userCPF').value.replace(/\D/g, ''),
+                telefone: document.getElementById('userTelefone').value.replace(/\D/g, ''),
+                role: role,
+                matricula: document.getElementById('userMatricula').value || undefined,
+                ativo: document.getElementById('userStatus').value === 'true'
             };
 
-            const cpf = document.getElementById('cpfUsuario')?.value;
-            const telefone = document.getElementById('telefoneUsuario')?.value;
-            const matricula = document.getElementById('matriculaUsuario')?.value;
+            // Campos específicos por role
+            if (role === 'aluno') {
+                dados.curso = document.getElementById('userCurso').value;
+                dados.turma = document.getElementById('userTurma').value;
 
-            if (cpf) dados.cpf = cpf.replace(/\D/g, '');
-            if (telefone) dados.telefone = telefone.replace(/\D/g, '');
-            if (matricula) dados.matricula = matricula;
+                // 🔥 ACESSIBILIDADE — USA condicaoAcessibilidade (campo real do banco)
+                const chkAcess = document.getElementById('userAcessibilidade');
+                const txtCond = document.getElementById('userCondicaoAcessibilidade');
 
-            if (roleSelecionada === 'aluno') {
-                dados.curso = document.getElementById('cursoUsuario')?.value || '';
-                dados.turma = document.getElementById('turmaUsuario')?.value || '';
-                dados.precisaAcessibilidade = document.getElementById('userAcessibilidade')?.checked || false;
+                dados.precisaAcessibilidade = chkAcess ? chkAcess.checked : false;
+                dados.condicaoAcessibilidade = (chkAcess && chkAcess.checked && txtCond)
+                    ? (txtCond.value || '').trim()
+                    : '';
 
-                if (dados.precisaAcessibilidade) {
-                    dados.condicaoAcessibilidade = document.getElementById('condicaoAcessibilidadeUsuario')?.value || '';
-                } else {
-                    dados.condicaoAcessibilidade = '';
-                }
+            } else if (role === 'professor') {
+                dados.eixo = document.getElementById('userEixo').value;
+                dados.departamento = document.getElementById('userDepartamento').value || undefined;
+                dados.titulacao = document.getElementById('userTitulacao').value || undefined;
+            } else if (role === 'setor_pedagogico') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.atribuicoes = document.getElementById('userAtribuicoes')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
+            } else if (role === 'coordenador_patio') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.atribuicoes = document.getElementById('userAtribuicoes')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
 
-                dados.perfilAlimentar = document.getElementById('perfilAlimentarUsuario')?.value || 'nao_informado';
+            } else if (role === 'admin') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.atribuicoes = document.getElementById('userAtribuicoes')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
 
-                const refeicoes = [];
-                document.querySelectorAll('.refeicao-checkbox:checked').forEach(cb => refeicoes.push(cb.value));
-                dados.refeicoesQueParticipa = refeicoes;
-            } else if (roleSelecionada === 'professor') {
-                dados.eixo = document.getElementById('eixoUsuario')?.value || '';
-            } else if (roleSelecionada === 'biblioteca' || roleSelecionada === 'secretaria ||') {
-                dados.departamento = document.getElementById('departamentoUsuario')?.value || '';
-                dados.matricula = document.getElementById('matriculaUsuario')?.value || '';
+            } else if (role === 'cozinha') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.atribuicoes = document.getElementById('userAtribuicoes')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
+
+            } else if (role === 'enfermaria') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.especialidade = document.getElementById('userEspecialidade')?.value || undefined;
+                dados.coren = document.getElementById('userCoren')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
+
+            } else if (role === 'supervisao') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
+
+            } else if (role === 'psicologia') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.especialidade = document.getElementById('userEspecialidade')?.value || undefined;
+                dados.crp = document.getElementById('userCrp')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
+
+            } else if (role === 'assistente-social') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.cress = document.getElementById('userCress')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
+
+            } else if (role === 'protagonismo') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
+
+            } else if (role === 'biblioteca') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
+
+            } else if (role === 'secretaria') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
+
+            } else if (role === 'recepcao') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
+
+            } else if (role === 'gestao-adm') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
+
+            } else if (role === 'gestao_geral') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.atribuicoes = document.getElementById('userAtribuicoes')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
             }
 
+            // Se for criação (sem ID), adicionar senha
             if (!id) {
-                const senha = document.getElementById('senhaUsuario')?.value;
-                if (senha) dados.password = senha;
+                dados.password = document.getElementById('userPassword').value;
+                dados.forcePasswordChange = true;
             }
 
-            if (!dados.nome) { this.showToast('❌ Nome é obrigatório', 'error'); return; }
-            if (!dados.email) { this.showToast('❌ Email é obrigatório', 'error'); return; }
+            console.log('📤 Dados a serem enviados:', dados);
 
-            console.log('📤 Dados:', dados);
-            this.showToast('💾 Salvando...', 'info');
-
-            const url = id ? `/api/admin/usuarios/${id}` : '/api/admin/usuarios';
+            const url = id ? `/api/admin/usuarios/${id}` : `/api/admin/usuarios`;
             const method = id ? 'PUT' : 'POST';
 
             const response = await fetch(url, {
                 method,
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
                 },
                 body: JSON.stringify(dados)
             });
@@ -3334,16 +3866,18 @@ class AdminSimples {
             const data = await response.json();
 
             if (data.success) {
-                this.showToast(id ? '✅ Usuário atualizado!' : '✅ Usuário criado!', 'success');
-                this.invalidarCacheUsuarios(); 
+                this.showToast(id ? 'Usuário atualizado com sucesso!' : 'Usuário criado com sucesso!', 'success');
                 this.fecharModal();
-                await this.carregarUsuarios();
+                this.invalidarCacheUsuarios();
+                this.carregarUsuarios(1, { preservarInput: true });
+                this.carregarDashboard(true);
             } else {
                 throw new Error(data.error || 'Erro ao salvar usuário');
             }
+
         } catch (error) {
-            console.error('❌ Erro:', error);
-            this.showToast('❌ ' + error.message, 'error');
+            console.error('❌ Erro ao salvar usuário:', error);
+            this.showToast('Erro: ' + error.message, 'error');
         }
     }
 
