@@ -1505,28 +1505,27 @@ window.AeeModule = {
         const stats = data.estatisticas || {};
 
         pane.innerHTML = `
-            <div class="aee-notas-header">
-                <div class="aee-mini-stats-grid">
-                    <div class="aee-mini-stat-box" style="border-left: 4px solid #6366f1;">
-                        <div class="aee-mini-value">${stats.total || 0}</div>
-                        <div class="aee-mini-label">Total de Notas</div>
-                    </div>
-                    <div class="aee-mini-stat-box" style="border-left: 4px solid #10b981;">
-                        <div class="aee-mini-value" style="color: #10b981;">${stats.aprovados || 0}</div>
-                        <div class="aee-mini-label">Aprovados</div>
-                    </div>
-                    <div class="aee-mini-stat-box" style="border-left: 4px solid #ef4444;">
-                        <div class="aee-mini-value" style="color: #ef4444;">${stats.reprovados || 0}</div>
-                        <div class="aee-mini-label">Reprovados</div>
-                    </div>
-                    <div class="aee-mini-stat-box" style="border-left: 4px solid #f59e0b;">
-                        <div class="aee-mini-value" style="color: #f59e0b;">${stats.pendentes || 0}</div>
-                        <div class="aee-mini-label">Pendentes</div>
-                    </div>
-                    <div class="aee-mini-stat-box" style="border-left: 4px solid #8b5cf6;">
-                        <div class="aee-mini-value" style="color: #8b5cf6;">${stats.media || '0.0'}</div>
-                        <div class="aee-mini-label">Média Geral</div>
-                    </div>
+            <!-- 🔥 NOVOS CARDS DE ESTATÍSTICA -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                <div style="background: white; border-radius: 12px; padding: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border-left: 4px solid #6366f1;">
+                    <div style="font-size: 24px; font-weight: 700; color: #1e293b;">${stats.total || 0}</div>
+                    <div style="font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 4px;">Total de Notas</div>
+                </div>
+                <div style="background: white; border-radius: 12px; padding: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border-left: 4px solid #10b981;">
+                    <div style="font-size: 24px; font-weight: 700; color: #10b981;">${stats.aprovados || 0}</div>
+                    <div style="font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 4px;">Aprovados</div>
+                </div>
+                <div style="background: white; border-radius: 12px; padding: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border-left: 4px solid #ef4444;">
+                    <div style="font-size: 24px; font-weight: 700; color: #ef4444;">${stats.reprovados || 0}</div>
+                    <div style="font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 4px;">Reprovados</div>
+                </div>
+                <div style="background: white; border-radius: 12px; padding: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border-left: 4px solid #f59e0b;">
+                    <div style="font-size: 24px; font-weight: 700; color: #f59e0b;">${stats.pendentes || 0}</div>
+                    <div style="font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 4px;">Pendentes</div>
+                </div>
+                <div style="background: white; border-radius: 12px; padding: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border-left: 4px solid #8b5cf6;">
+                    <div style="font-size: 24px; font-weight: 700; color: #8b5cf6;">${stats.media || '0.0'}</div>
+                    <div style="font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 4px;">Média Geral</div>
                 </div>
             </div>
 
@@ -1534,7 +1533,7 @@ window.AeeModule = {
                 <div class="aee-filtros-row">
                     <div class="aee-filtro-item aee-filtro-busca">
                         <i class="fas fa-search"></i>
-                        <input type="text" id="aeeNotasBusca" placeholder="Buscar por aluno, prova..." value="${this.escapeHtml(this.filtrosNotas.busca)}">
+                        <input type="text" id="aeeNotasBusca" placeholder="Buscar por aluno ou prova..." value="${this.escapeHtml(this.filtrosNotas.busca)}">
                     </div>
 
                     <div class="aee-filtro-item">
@@ -1595,54 +1594,65 @@ window.AeeModule = {
             </div>
 
             ${data.notas.length > 0 ? `
-                <div class="aee-table-wrapper">
-                    <table class="aee-table">
-                        <thead>
+                <div class="aee-table-wrapper" style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); overflow: hidden;">
+                    <table class="aee-table" style="width: 100%; border-collapse: collapse;">
+                        <thead style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
                             <tr>
-                                <th>Aluno</th>
-                                <th>Prova</th>
-                                <th>Turma</th>
-                                <th>Tipo</th>
-                                <th>Nota</th>
-                                <th>Data</th>
-                                <th>Status</th>
-                                <th>Ações</th>
+                                <th style="text-align: left; padding: 12px 15px; color: #475569; font-size: 12px; text-transform: uppercase;">Aluno</th>
+                                <th style="text-align: left; padding: 12px 15px; color: #475569; font-size: 12px; text-transform: uppercase;">Prova</th>
+                                <th style="text-align: left; padding: 12px 15px; color: #475569; font-size: 12px; text-transform: uppercase;">Turma</th>
+                                <th style="text-align: left; padding: 12px 15px; color: #475569; font-size: 12px; text-transform: uppercase;">Nota</th>
+                                <th style="text-align: left; padding: 12px 15px; color: #475569; font-size: 12px; text-transform: uppercase;">Data</th>
+                                <th style="text-align: left; padding: 12px 15px; color: #475569; font-size: 12px; text-transform: uppercase;">Status</th>
+                                <th style="text-align: center; padding: 12px 15px; color: #475569; font-size: 12px; text-transform: uppercase;">Ações</th>
                             </tr>
                         </thead>
                         <tbody>
                             ${data.notas.map(n => `
-                                <tr class="aee-nota-row ${n.status === 'pendente' ? 'aee-nota-pendente' : ''}">
-                                    <td>
-                                        <div class="aee-td-aluno">
-                                            <div class="aee-td-avatar">${(n.alunoNome || '?').charAt(0).toUpperCase()}</div>
+                                <tr style="border-bottom: 1px solid #f1f5f9; transition: background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
+                                    <td style="padding: 12px 15px;">
+                                        <div style="display: flex; align-items: center; gap: 10px;">
+                                            <div style="width: 32px; height: 32px; border-radius: 50%; background: #e0e7ff; color: #4338ca; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;">
+                                                ${(n.alunoNome || '?').charAt(0).toUpperCase()}
+                                            </div>
                                             <div>
-                                                <strong>${this.escapeHtml(n.alunoNome)}</strong>
-                                                <small>${this.escapeHtml(n.alunoMatricula || '')}</small>
+                                                <div style="font-weight: 600; color: #1e293b; font-size: 14px;">${this.escapeHtml(n.alunoNome)}</div>
+                                                <div style="color: #64748b; font-size: 12px;">${this.escapeHtml(n.alunoMatricula || '')}</div>
                                             </div>
                                         </div>
                                     </td>
-                                    <td>${this.escapeHtml(n.provaTitulo)}</td>
-                                    <td>${this.escapeHtml(n.alunoTurma || '-')}</td>
-                                    <td>
-                                        <span class="aee-badge-tipo ${n.adaptada ? 'adaptada' : 'normal'}">
-                                            ${n.adaptada ? '🎯 Adaptada' : '📝 Normal'}
-                                        </span>
+                                    <td style="padding: 12px 15px;">
+                                        <div style="font-weight: 500; color: #334155; font-size: 14px;">${this.escapeHtml(n.provaTitulo)}</div>
+                                        <div style="margin-top: 4px;">
+                                            <span style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: ${n.adaptada ? '#fef3c7' : '#f1f5f9'}; color: ${n.adaptada ? '#92400e' : '#475569'}; font-weight: 600;">
+                                                ${n.adaptada ? '🎯 Adaptada' : '📝 Normal'}
+                                            </span>
+                                        </div>
                                     </td>
-                                    <td>
-                                        <span class="aee-nota-valor ${n.notaLiberada ? (n.nota >= 7 ? 'nota-alta' : 'nota-baixa') : 'nota-pendente'}">
+                                    <td style="padding: 12px 15px; color: #475569; font-size: 14px;">${this.escapeHtml(n.alunoTurma || '-')}</td>
+                                    <td style="padding: 12px 15px;">
+                                        <span style="font-size: 15px; font-weight: 700; color: ${n.notaLiberada ? (n.nota >= 7 ? '#10b981' : '#ef4444') : '#94a3b8'};">
                                             ${n.notaLiberada && n.nota !== null ? n.nota.toFixed(1) : '—'}
                                         </span>
                                     </td>
-                                    <td>${this.formatarData(n.data)}</td>
-                                    <td>
-                                        <span class="aee-status-badge aee-status-${n.status}">
+                                    <td style="padding: 12px 15px; color: #64748b; font-size: 13px;">${this.formatarData(n.data)}</td>
+                                    <td style="padding: 12px 15px;">
+                                        <span style="font-size: 12px; padding: 4px 10px; border-radius: 20px; font-weight: 600; background: ${
+                                            n.status === 'aprovado' ? '#d1fae5' : 
+                                            n.status === 'reprovado' ? '#fee2e2' : 
+                                            n.status === 'cancelada' ? '#f1f5f9' : '#fef3c7'
+                                        }; color: ${
+                                            n.status === 'aprovado' ? '#065f46' : 
+                                            n.status === 'reprovado' ? '#991b1b' : 
+                                            n.status === 'cancelada' ? '#475569' : '#92400e'
+                                        };">
                                             ${n.status === 'aprovado' ? '✓ Aprovado' : 
-                                              n.status === 'reprovado' ? '✗ Reprovado' : 
-                                              n.status === 'cancelada' ? '🚫 Cancelada' : '⏳ Pendente'}
+                                            n.status === 'reprovado' ? '✗ Reprovado' : 
+                                            n.status === 'cancelada' ? '🚫 Cancelada' : '⏳ Pendente'}
                                         </span>
                                     </td>
-                                    <td>
-                                        <button class="aee-btn-icon" onclick="AeeModule.verDetalhesNota('${n.id}')" title="Ver detalhes">
+                                    <td style="padding: 12px 15px; text-align: center;">
+                                        <button onclick="AeeModule.verDetalhesNota('${n.id}')" title="Ver detalhes" style="background: #eff6ff; color: #3b82f6; border: none; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; transition: 0.2s;">
                                             <i class="fas fa-eye"></i>
                                         </button>
                                     </td>
@@ -3678,7 +3688,7 @@ window.AeeModule = {
     },
 
     // ============================================================================
-    // RELATÓRIOS — mesmo padrão do Setor Pedagógico
+    // RELATÓRIOS — Corrigido: Sem status e com texto dinâmico do banco
     // ============================================================================
     renderizarRelatorios() {
         const pane = this.safeGet('aeePaneRelatorios');
@@ -3718,15 +3728,6 @@ window.AeeModule = {
                             <label style="font-weight: 600; font-size: 13px; color: #374151;">Condição</label>
                             <select id="aeeRelatorioCondicao" class="form-select">
                                 ${this.gerarOpcoesSelect(this.filtrosDisponiveis.condicoes, '', 'Todas')}
-                            </select>
-                        </div>
-
-                        <div class="aee-filtro-item">
-                            <label style="font-weight: 600; font-size: 13px; color: #374151;">Status</label>
-                            <select id="aeeRelatorioStatus" class="form-select">
-                                <option value="">Todos</option>
-                                <option value="aprovada">Aprovada</option>
-                                <option value="pendente">Pendente</option>
                             </select>
                         </div>
 
@@ -3836,7 +3837,6 @@ window.AeeModule = {
             const turma = this.safeGet('aeeRelatorioTurma')?.value || '';
             const alunoId = this.safeGet('aeeRelatorioAluno')?.value || '';
             const condicao = this.safeGet('aeeRelatorioCondicao')?.value || '';
-            const status = this.safeGet('aeeRelatorioStatus')?.value || '';
             const curso = this.safeGet('aeeRelatorioCurso')?.value || '';
             const periodo = this.safeGet('aeeRelatorioPeriodo')?.value || '';
 
@@ -3849,7 +3849,6 @@ window.AeeModule = {
                 url = `/api/aee/relatorio/aluno/${alunoId}`;
             } else {
                 if (condicao && condicao !== 'todos') params.append('condicao', condicao);
-                if (status) params.append('status', status);
                 if (curso && curso !== 'todos') params.append('curso', curso);
                 if (periodo && periodo !== 'todos') params.append('periodo', periodo);
                 if (params.toString()) url += '?' + params.toString();
@@ -3891,6 +3890,7 @@ window.AeeModule = {
         // ---------- RELATÓRIO POR ALUNO ----------
         if (tipo === 'aluno' && data.aluno) {
             const a = data.aluno;
+            const condTexto = a.condicao?.label || 'Não especificada';
 
             container.innerHTML = `
                 <div class="aee-card">
@@ -3908,16 +3908,10 @@ window.AeeModule = {
                                 <span class="aee-info-label" style="display: block; font-size: 12px; color: #64748b; text-transform: uppercase; font-weight: 600;">Email</span>
                                 <span class="aee-info-value" style="font-size: 15px; color: #1e293b;">${this.escapeHtml(a.email || '-')}</span>
                             </div>
-                            <div class="aee-info-item">
-                                <span class="aee-info-label" style="display: block; font-size: 12px; color: #64748b; text-transform: uppercase; font-weight: 600;">Condição</span>
-                                <span class="aee-info-value" style="font-size: 15px; font-weight: 600; color: ${this.getCorCondicao(a.condicao.tipo)};">
-                                    <i class="fas ${this.getIconeCondicao(a.condicao.tipo)}"></i> ${this.escapeHtml(a.condicao.label)}
-                                </span>
-                            </div>
-                            <div class="aee-info-item">
-                                <span class="aee-info-label" style="display: block; font-size: 12px; color: #64748b; text-transform: uppercase; font-weight: 600;">Status</span>
-                                <span class="aee-info-value aee-status-${a.status}" style="font-size: 15px; font-weight: 600;">
-                                    ${a.status === 'aprovada' ? '✓ Aprovada' : '⏳ Pendente'}
+                            <div class="aee-info-item" style="grid-column: 1 / -1;">
+                                <span class="aee-info-label" style="display: block; font-size: 12px; color: #64748b; text-transform: uppercase; font-weight: 600;">Condição / Acessibilidade</span>
+                                <span class="aee-info-value" style="font-size: 15px; font-weight: 600; color: #6366f1;">
+                                    <i class="fas fa-heart"></i> ${this.escapeHtml(condTexto)}
                                 </span>
                             </div>
                         </div>
@@ -3978,7 +3972,6 @@ window.AeeModule = {
                                         <th style="padding: 10px; text-align: left; font-size: 12px;">Nome</th>
                                         <th style="padding: 10px; text-align: left; font-size: 12px;">Matrícula</th>
                                         <th style="padding: 10px; text-align: left; font-size: 12px;">Condição</th>
-                                        <th style="padding: 10px; text-align: center; font-size: 12px;">Status</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -3987,13 +3980,8 @@ window.AeeModule = {
                                             <td style="padding: 10px;"><strong>${this.escapeHtml(a.nome)}</strong></td>
                                             <td style="padding: 10px;">${this.escapeHtml(a.matricula || '-')}</td>
                                             <td style="padding: 10px;">
-                                                <span style="background: ${this.getCorCondicao(a.condicaoTipo)}20; color: ${this.getCorCondicao(a.condicaoTipo)}; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600;">
-                                                    <i class="fas ${this.getIconeCondicao(a.condicaoTipo)}"></i> ${this.escapeHtml(a.condicao)}
-                                                </span>
-                                            </td>
-                                            <td style="padding: 10px; text-align: center;">
-                                                <span style="background: ${a.status === 'aprovada' ? '#d1fae5' : '#fef3c7'}; color: ${a.status === 'aprovada' ? '#065f46' : '#92400e'}; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">
-                                                    ${a.status === 'aprovada' ? '✓ Aprovada' : '⏳ Pendente'}
+                                                <span style="background: #e0e7ff; color: #4338ca; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600;">
+                                                    <i class="fas fa-heart"></i> ${this.escapeHtml(a.condicao || 'Não especificada')}
                                                 </span>
                                             </td>
                                         </tr>
@@ -4016,18 +4004,14 @@ window.AeeModule = {
 
         container.innerHTML = `
             <div class="aee-relatorio-geral">
-                <div class="aee-relatorio-stats" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px;">
-                    <div class="aee-stat-mini" style="background: white; border-radius: 12px; padding: 20px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                <div class="aee-relatorio-stats" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 20px;">
+                    <div class="aee-stat-mini" style="background: white; border-radius: 12px; padding: 20px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border-left: 4px solid #6366f1;">
                         <div class="aee-stat-mini-value" style="font-size: 32px; font-weight: 700; color: #6366f1;">${rel.totalAlunos}</div>
                         <div class="aee-stat-mini-label" style="font-size: 13px; color: #64748b; margin-top: 5px;">Total de Alunos</div>
                     </div>
                     <div class="aee-stat-mini" style="background: white; border-radius: 12px; padding: 20px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border-left: 4px solid #10b981;">
-                        <div class="aee-stat-mini-value" style="font-size: 32px; font-weight: 700; color: #10b981;">${rel.totalAprovados}</div>
-                        <div class="aee-stat-mini-label" style="font-size: 13px; color: #64748b; margin-top: 5px;">Aprovados</div>
-                    </div>
-                    <div class="aee-stat-mini" style="background: white; border-radius: 12px; padding: 20px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border-left: 4px solid #f59e0b;">
-                        <div class="aee-stat-mini-value" style="font-size: 32px; font-weight: 700; color: #f59e0b;">${rel.totalPendentes}</div>
-                        <div class="aee-stat-mini-label" style="font-size: 13px; color: #64748b; margin-top: 5px;">Pendentes</div>
+                        <div class="aee-stat-mini-value" style="font-size: 32px; font-weight: 700; color: #10b981;">${rel.porTurma.length}</div>
+                        <div class="aee-stat-mini-label" style="font-size: 13px; color: #64748b; margin-top: 5px;">Turmas Envolvidas</div>
                     </div>
                 </div>
 
@@ -4038,7 +4022,7 @@ window.AeeModule = {
                     <div class="aee-card-body">
                         ${rel.porCondicao.map(c => `
                             <div class="aee-condicao-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f5f9;">
-                                <span style="font-size: 14px; color: #374151;">${this.escapeHtml(c.condicao)}</span>
+                                <span style="font-size: 14px; color: #374151; max-width: 80%;"><i class="fas fa-heart" style="color: #ec4899; margin-right: 8px;"></i> ${this.escapeHtml(c.condicao)}</span>
                                 <span class="aee-count-badge" style="background: #e0e7ff; color: #4338ca; padding: 4px 14px; border-radius: 20px; font-weight: 700; font-size: 13px;">${c.total}</span>
                             </div>
                         `).join('')}
@@ -4059,7 +4043,6 @@ window.AeeModule = {
                                             <th style="padding: 10px; text-align: left; font-size: 12px;">Nome</th>
                                             <th style="padding: 10px; text-align: left; font-size: 12px;">Matrícula</th>
                                             <th style="padding: 10px; text-align: left; font-size: 12px;">Condição</th>
-                                            <th style="padding: 10px; text-align: center; font-size: 12px;">Status</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -4068,11 +4051,6 @@ window.AeeModule = {
                                                 <td style="padding: 10px;">${this.escapeHtml(a.nome)}</td>
                                                 <td style="padding: 10px;">${this.escapeHtml(a.matricula || '-')}</td>
                                                 <td style="padding: 10px;">${this.escapeHtml(a.condicao)}</td>
-                                                <td style="padding: 10px; text-align: center;">
-                                                    <span style="background: ${a.status === 'aprovada' ? '#d1fae5' : '#fef3c7'}; color: ${a.status === 'aprovada' ? '#065f46' : '#92400e'}; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">
-                                                        ${a.status === 'aprovada' ? '✓ Aprovada' : '⏳ Pendente'}
-                                                    </span>
-                                                </td>
                                             </tr>
                                         `).join('')}
                                     </tbody>
@@ -4094,9 +4072,6 @@ window.AeeModule = {
         const data = this.relatorioAtual;
         const tipo = this.relatorioTipo;
 
-        // ============================================
-        // TÍTULO / SUBTÍTULO
-        // ============================================
         let titulo = 'Relatório AEE';
         let subtitulo = '';
 
@@ -4111,23 +4086,16 @@ window.AeeModule = {
             subtitulo = `${data.relatorio.totalAlunos} aluno(s) AEE`;
         }
 
-        // ============================================
-        // FILTROS APLICADOS
-        // ============================================
         const filtros = [];
         const condicao = this.safeGet('aeeRelatorioCondicao')?.value;
-        const status = this.safeGet('aeeRelatorioStatus')?.value;
         const curso = this.safeGet('aeeRelatorioCurso')?.value;
         const periodo = this.safeGet('aeeRelatorioPeriodo')?.value;
 
         if (condicao && condicao !== 'todos') filtros.push({ label: 'Condição', valor: condicao });
-        if (status) filtros.push({ label: 'Status', valor: status === 'aprovada' ? 'Aprovada' : 'Pendente' });
         if (curso && curso !== 'todos') filtros.push({ label: 'Curso', valor: curso });
         if (periodo && periodo !== 'todos') filtros.push({ label: 'Período', valor: `${periodo}º` });
 
-        // ============================================
         // TIPO: ALUNO
-        // ============================================
         if (tipo === 'aluno' && data.aluno) {
             const a = data.aluno;
 
@@ -4138,15 +4106,7 @@ window.AeeModule = {
                 { label: 'Turma', format: () => a.turma || '' },
                 { label: 'Curso', format: () => a.curso || '' },
                 { label: 'Condição', format: () => a.condicao?.label || '' },
-                { label: 'Detalhes', format: () => a.condicao?.detalhes || '' },
-                {
-                    label: 'Status AEE',
-                    format: () => a.status === 'aprovada' ? 'Aprovada' : 'Pendente'
-                },
-                {
-                    label: 'Data da Solicitação',
-                    format: () => this.formatarData(a.dataSolicitacao)
-                }
+                { label: 'Data da Solicitação', format: () => this.formatarData(a.dataSolicitacao) }
             ];
 
             const ok = this.gerarBaixarCSV({
@@ -4156,9 +4116,7 @@ window.AeeModule = {
                 colunas,
                 registros: [a],
                 filtros,
-                metricas: {
-                    'Total de provas realizadas': (data.provasRealizadas || []).length
-                },
+                metricas: { 'Total de provas realizadas': (data.provasRealizadas || []).length },
                 nomeArquivo: `aee-aluno-${(a.nome || 'sem-nome').replace(/\s+/g, '-').toLowerCase()}`,
                 observacoes: 'Relatório individual do aluno'
             });
@@ -4167,20 +4125,14 @@ window.AeeModule = {
             return;
         }
 
-        // ============================================
         // TIPO: TURMA
-        // ============================================
         if (tipo === 'turma' && data.alunos) {
             const colunas = [
                 { label: 'Turma', format: () => data.turma || '' },
                 { label: 'Aluno', format: (a) => a.nome || '' },
                 { label: 'Matrícula', format: (a) => a.matricula || '' },
                 { label: 'Curso', format: (a) => a.curso || '' },
-                { label: 'Condição', format: (a) => a.condicao || '' },
-                {
-                    label: 'Status AEE',
-                    format: (a) => a.status === 'aprovada' ? 'Aprovada' : 'Pendente'
-                }
+                { label: 'Condição', format: (a) => a.condicao || '' }
             ];
 
             const ok = this.gerarBaixarCSV({
@@ -4190,11 +4142,7 @@ window.AeeModule = {
                 colunas,
                 registros: data.alunos,
                 filtros,
-                metricas: {
-                    'Total de alunos': data.alunos.length,
-                    'Aprovados': data.alunos.filter(a => a.status === 'aprovada').length,
-                    'Pendentes': data.alunos.filter(a => a.status !== 'aprovada').length
-                },
+                metricas: { 'Total de alunos': data.alunos.length },
                 nomeArquivo: `aee-turma-${(data.turma || 'sem-turma').replace(/\s+/g, '-').toLowerCase()}`,
                 observacoes: `${data.alunos.length} aluno(s) da turma ${data.turma}`
             });
@@ -4203,13 +4151,10 @@ window.AeeModule = {
             return;
         }
 
-        // ============================================
         // TIPO: GERAL
-        // ============================================
         if (tipo === 'geral' && data.relatorio) {
             const rel = data.relatorio;
 
-            // Achata os alunos por turma em linhas
             const linhas = [];
             rel.porTurma.forEach(t => {
                 t.alunos.forEach(a => {
@@ -4219,8 +4164,7 @@ window.AeeModule = {
                         matricula: a.matricula,
                         curso: a.curso,
                         condicao: a.condicao,
-                        detalhes: a.detalhes,
-                        status: a.status
+                        detalhes: a.detalhes
                     });
                 });
             });
@@ -4231,18 +4175,11 @@ window.AeeModule = {
                 { label: 'Matrícula', format: (l) => l.matricula || '' },
                 { label: 'Curso', format: (l) => l.curso || '' },
                 { label: 'Condição', format: (l) => l.condicao || '' },
-                { label: 'Detalhes', format: (l) => l.detalhes || '' },
-                {
-                    label: 'Status AEE',
-                    format: (l) => l.status === 'aprovada' ? 'Aprovada' : 'Pendente'
-                }
+                { label: 'Detalhes', format: (l) => l.detalhes || '' }
             ];
 
-            // Distribuição por condição (métricas extra)
             const metricas = {
                 'Total de alunos': rel.totalAlunos,
-                'Aprovados': rel.totalAprovados,
-                'Pendentes': rel.totalPendentes,
                 'Turmas envolvidas': rel.porTurma.length
             };
             (rel.porCondicao || []).forEach(c => {
@@ -4266,16 +4203,6 @@ window.AeeModule = {
         }
 
         this.mostrarToast('⚠️ Nenhum dado disponível para exportar', 'warning');
-    },
-
-    downloadCSV(csv, filename) {
-        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = filename;
-        link.click();
-        URL.revokeObjectURL(link.href);
-        this.mostrarToast('✅ CSV exportado!', 'success');
     },
 
     imprimirRelatorio() {
@@ -4303,9 +4230,10 @@ window.AeeModule = {
 
         let corpoHTML = '';
 
-        // ---------- POR ALUNO ----------
+        // POR ALUNO
         if (tipo === 'aluno' && data.aluno) {
             const a = data.aluno;
+            const condTexto = a.condicao?.label || 'Não especificada';
 
             corpoHTML = `
                 <div class="section-title">DADOS DO ALUNO</div>
@@ -4328,13 +4256,7 @@ window.AeeModule = {
                     </tr>
                     <tr>
                         <td><strong>Condição:</strong></td>
-                        <td colspan="3">${this.escapeHtml(a.condicao?.label || '-')}</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Status AEE:</strong></td>
-                        <td colspan="3">
-                            ${a.status === 'aprovada' ? '✅ Aprovada' : '⏳ Pendente'}
-                        </td>
+                        <td colspan="3">${this.escapeHtml(condTexto)}</td>
                     </tr>
                 </table>
 
@@ -4366,7 +4288,7 @@ window.AeeModule = {
             `;
         }
 
-        // ---------- POR TURMA ----------
+        // POR TURMA
         if (tipo === 'turma' && data.alunos) {
             corpoHTML = `
                 <div class="section-title">ALUNOS AEE DA TURMA</div>
@@ -4377,7 +4299,6 @@ window.AeeModule = {
                             <th>Nome</th>
                             <th style="width: 100px;">Matrícula</th>
                             <th>Condição</th>
-                            <th style="width: 90px; text-align: center;">Status</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -4387,9 +4308,6 @@ window.AeeModule = {
                                 <td>${this.escapeHtml(a.nome)}</td>
                                 <td>${this.escapeHtml(a.matricula || '-')}</td>
                                 <td>${this.escapeHtml(a.condicao)}</td>
-                                <td style="text-align: center;">
-                                    ${a.status === 'aprovada' ? '✅ Aprovada' : '⏳ Pendente'}
-                                </td>
                             </tr>
                         `).join('')}
                     </tbody>
@@ -4397,7 +4315,7 @@ window.AeeModule = {
             `;
         }
 
-        // ---------- GERAL ----------
+        // GERAL
         if (tipo === 'geral' && data.relatorio) {
             const rel = data.relatorio;
 
@@ -4405,9 +4323,7 @@ window.AeeModule = {
                 <div class="stats-table">
                     <table>
                         <tr>
-                            <td><strong>${rel.totalAlunos}</strong><br><span>Total</span></td>
-                            <td><strong>${rel.totalAprovados}</strong><br><span>Aprovados</span></td>
-                            <td><strong>${rel.totalPendentes}</strong><br><span>Pendentes</span></td>
+                            <td><strong>${rel.totalAlunos}</strong><br><span>Total de Alunos</span></td>
                             <td><strong>${rel.porTurma.length}</strong><br><span>Turmas</span></td>
                         </tr>
                     </table>
@@ -4440,7 +4356,6 @@ window.AeeModule = {
                                 <th>Nome</th>
                                 <th style="width: 100px;">Matrícula</th>
                                 <th>Condição</th>
-                                <th style="width: 90px; text-align: center;">Status</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -4450,9 +4365,6 @@ window.AeeModule = {
                                     <td>${this.escapeHtml(a.nome)}</td>
                                     <td>${this.escapeHtml(a.matricula || '-')}</td>
                                     <td>${this.escapeHtml(a.condicao)}</td>
-                                    <td style="text-align: center;">
-                                        ${a.status === 'aprovada' ? '✅ Aprovada' : '⏳ Pendente'}
-                                    </td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -4469,204 +4381,36 @@ window.AeeModule = {
             <style>
                 @page { size: A4 portrait; margin: 10mm 12mm; }
                 * { box-sizing: border-box; margin: 0; padding: 0; }
-
-                body {
-                    font-family: 'Times New Roman', Times, serif;
-                    font-size: 9pt;
-                    line-height: 1.25;
-                    color: #000;
-                }
-
-                .header {
-                    text-align: center;
-                    border-bottom: 1.5px solid #000;
-                    padding-bottom: 5px;
-                    margin-bottom: 8px;
-                }
-                .header img {
-                    max-width: 100%;
-                    max-height: 16mm;
-                    object-fit: contain;
-                    display: block;
-                    margin: 0 auto 3px;
-                }
-                .header h1 {
-                    font-size: 11pt;
-                    text-transform: uppercase;
-                    font-weight: bold;
-                    letter-spacing: 0.5px;
-                }
-                .header p {
-                    font-size: 8pt;
-                    margin-top: 2px;
-                    color: #333;
-                }
-
-                .titulo {
-                    text-align: center;
-                    font-size: 11pt;
-                    font-weight: bold;
-                    background: #e8e8e8;
-                    padding: 4px 8px;
-                    border: 1px solid #000;
-                    margin: 8px 0 4px;
-                    text-transform: uppercase;
-                    letter-spacing: 1px;
-                }
-                .subtitulo {
-                    text-align: center;
-                    font-size: 9pt;
-                    margin: 0 0 8px;
-                    font-style: italic;
-                }
-
-                .section-title {
-                    font-size: 8.5pt;
-                    font-weight: bold;
-                    background: #e8e8e8;
-                    padding: 3px 8px;
-                    border-left: 3px solid #000;
-                    margin: 10px 0 5px;
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-                }
-
-                .stats-table {
-                    width: 100%;
-                    margin: 8px 0 12px;
-                    border: 1px solid #000;
-                    border-collapse: collapse;
-                }
-                .stats-table td {
-                    text-align: center;
-                    padding: 6px 4px;
-                    border-right: 1px solid #ccc;
-                }
+                body { font-family: 'Times New Roman', Times, serif; font-size: 9pt; line-height: 1.25; color: #000; }
+                .header { text-align: center; border-bottom: 1.5px solid #000; padding-bottom: 5px; margin-bottom: 8px; }
+                .header img { max-width: 100%; max-height: 16mm; object-fit: contain; display: block; margin: 0 auto 3px; }
+                .header h1 { font-size: 11pt; text-transform: uppercase; font-weight: bold; letter-spacing: 0.5px; }
+                .header p { font-size: 8pt; margin-top: 2px; color: #333; }
+                .titulo { text-align: center; font-size: 11pt; font-weight: bold; background: #e8e8e8; padding: 4px 8px; border: 1px solid #000; margin: 8px 0 4px; text-transform: uppercase; letter-spacing: 1px; }
+                .subtitulo { text-align: center; font-size: 9pt; margin: 0 0 8px; font-style: italic; }
+                .section-title { font-size: 8.5pt; font-weight: bold; background: #e8e8e8; padding: 3px 8px; border-left: 3px solid #000; margin: 10px 0 5px; text-transform: uppercase; letter-spacing: 0.5px; }
+                .stats-table { width: 100%; margin: 8px 0 12px; border: 1px solid #000; border-collapse: collapse; }
+                .stats-table td { text-align: center; padding: 6px 4px; border-right: 1px solid #ccc; width: 50%; }
                 .stats-table td:last-child { border-right: none; }
-                .stats-table td strong {
-                    font-size: 14pt;
-                    font-weight: bold;
-                    display: block;
-                }
-                .stats-table td span {
-                    font-size: 7.5pt;
-                    color: #333;
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-                }
-
-                .info-table {
-                    width: 100%;
-                    border-collapse: collapse;
-                    font-size: 8.5pt;
-                    margin-bottom: 10px;
-                }
-                .info-table td {
-                    padding: 5px 8px;
-                    border: 1px solid #ccc;
-                }
-
-                .data-table {
-                    width: 100%;
-                    border-collapse: collapse;
-                    font-size: 8pt;
-                    margin-bottom: 10px;
-                }
-                .data-table th {
-                    background: #333;
-                    color: white;
-                    padding: 5px 6px;
-                    text-align: left;
-                    border: 1px solid #000;
-                    font-size: 8pt;
-                    text-transform: uppercase;
-                    letter-spacing: 0.3px;
-                    font-weight: bold;
-                }
-                .data-table td {
-                    padding: 4px 6px;
-                    border: 1px solid #ccc;
-                    vertical-align: top;
-                }
+                .stats-table td strong { font-size: 14pt; font-weight: bold; display: block; }
+                .stats-table td span { font-size: 7.5pt; color: #333; text-transform: uppercase; letter-spacing: 0.5px; }
+                .info-table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 10px; }
+                .info-table td { padding: 5px 8px; border: 1px solid #ccc; }
+                .data-table { width: 100%; border-collapse: collapse; font-size: 8pt; margin-bottom: 10px; }
+                .data-table th { background: #333; color: white; padding: 5px 6px; text-align: left; border: 1px solid #000; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.3px; font-weight: bold; }
+                .data-table td { padding: 4px 6px; border: 1px solid #ccc; vertical-align: top; }
                 .data-table tr:nth-child(even) { background: #f5f5f5; }
-
-                .assinaturas {
-                    display: flex;
-                    justify-content: center;
-                    margin-top: 30px;
-                    gap: 30px;
-                    page-break-inside: avoid;
-                }
-                .assinatura {
-                    flex: 0 0 55%;
-                    text-align: center;
-                }
-                .assinatura-container-relatorio {
-                    position: relative;
-                    border-bottom: 1px solid #000;
-                    min-height: 15mm;
-                    display: flex;
-                    align-items: flex-end;
-                    justify-content: center;
-                    padding-bottom: 2px;
-                }
-                .carimbo-overlay {
-                    position: absolute;
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%);
-                    max-height: 14mm;
-                    max-width: 55%;
-                    object-fit: contain;
-                    opacity: 0.85;
-                    pointer-events: none;
-                    z-index: 2;
-                }
-                .assinatura-linha {
-                    padding-top: 3px;
-                    font-size: 8pt;
-                    margin-top: 2px;
-                }
-
-                .footer {
-                    text-align: center;
-                    margin-top: 15px;
-                    padding-top: 5px;
-                    border-top: 1px solid #000;
-                    font-size: 7pt;
-                    color: #333;
-                }
+                .assinaturas { display: flex; justify-content: center; margin-top: 30px; gap: 30px; page-break-inside: avoid; }
+                .assinatura { flex: 0 0 55%; text-align: center; }
+                .assinatura-container-relatorio { position: relative; border-bottom: 1px solid #000; min-height: 15mm; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; }
+                .carimbo-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); max-height: 14mm; max-width: 55%; object-fit: contain; opacity: 0.85; pointer-events: none; z-index: 2; }
+                .assinatura-linha { padding-top: 3px; font-size: 8pt; margin-top: 2px; }
+                .footer { text-align: center; margin-top: 15px; padding-top: 5px; border-top: 1px solid #000; font-size: 7pt; color: #333; }
                 .footer p { margin: 1px 0; }
-
-                .registro-info {
-                    font-size: 8pt;
-                    color: #333;
-                    margin-top: 10px;
-                    text-align: center;
-                }
-
-                .btn-print {
-                    display: block;
-                    margin: 15px auto;
-                    padding: 10px 28px;
-                    background: #333;
-                    color: white;
-                    border: none;
-                    border-radius: 6px;
-                    font-weight: bold;
-                    cursor: pointer;
-                    font-size: 13px;
-                    font-family: Arial, sans-serif;
-                }
+                .registro-info { font-size: 8pt; color: #333; margin-top: 10px; text-align: center; }
+                .btn-print { display: block; margin: 15px auto; padding: 10px 28px; background: #333; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 13px; font-family: Arial, sans-serif; }
                 .btn-print:hover { background: #000; }
-
-                @media print {
-                    .no-print { display: none !important; }
-                    body { padding: 0; }
-                    .section-title { page-break-after: avoid; page-break-inside: avoid; }
-                    table { page-break-inside: auto; }
-                    tr { page-break-inside: avoid; page-break-after: auto; }
-                }
+                @media print { .no-print { display: none !important; } body { padding: 0; } .section-title { page-break-after: avoid; page-break-inside: avoid; } table { page-break-inside: auto; } tr { page-break-inside: avoid; page-break-after: auto; } }
             </style>
         </head>
         <body>
@@ -4707,7 +4451,7 @@ window.AeeModule = {
         win.document.write(html);
         win.document.close();
         win.onload = () => setTimeout(() => win.print(), 500);
-    },
+    }
 
 };
 
