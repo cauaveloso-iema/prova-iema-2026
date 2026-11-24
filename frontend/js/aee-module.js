@@ -4196,10 +4196,17 @@ window.AeeModule = {
 
         let corpoHTML = '';
 
-        // POR ALUNO
+        // ---------- POR ALUNO ----------
         if (tipo === 'aluno' && data.aluno) {
             const a = data.aluno;
-            const condTexto = a.condicao?.label || 'Não especificada';
+            
+            // 🔥 Limpa a palavra "outra" do texto principal
+            let condTexto = a.condicao?.label || 'Não especificada';
+            if (condTexto.toLowerCase().startsWith('outra - ')) {
+                condTexto = condTexto.substring(8).trim();
+            } else if (condTexto.toLowerCase() === 'outra') {
+                condTexto = a.condicao?.detalhes || 'Outra Condição';
+            }
 
             corpoHTML = `
                 <div class="section-title">DADOS DO ALUNO</div>
@@ -4254,7 +4261,7 @@ window.AeeModule = {
             `;
         }
 
-        // POR TURMA
+        // ---------- POR TURMA ----------
         if (tipo === 'turma' && data.alunos) {
             corpoHTML = `
                 <div class="section-title">ALUNOS AEE DA TURMA</div>
@@ -4268,20 +4275,28 @@ window.AeeModule = {
                         </tr>
                     </thead>
                     <tbody>
-                        ${data.alunos.map((a, i) => `
+                        ${data.alunos.map((a, i) => {
+                            // 🔥 LIMPEZA DO TEXTO
+                            let condTexto = a.condicao || 'Não especificada';
+                            if (condTexto.toLowerCase().startsWith('outra - ')) {
+                                condTexto = condTexto.substring(8).trim();
+                            }
+                            
+                            return `
                             <tr>
                                 <td style="text-align: center;">${i + 1}</td>
                                 <td>${this.escapeHtml(a.nome)}</td>
                                 <td>${this.escapeHtml(a.matricula || '-')}</td>
-                                <td>${this.escapeHtml(a.condicao)}</td>
+                                <td>${this.escapeHtml(condTexto)}</td>
                             </tr>
-                        `).join('')}
+                            `;
+                        }).join('')}
                     </tbody>
                 </table>
             `;
         }
 
-        // GERAL
+        // ---------- GERAL ----------
         if (tipo === 'geral' && data.relatorio) {
             const rel = data.relatorio;
 
@@ -4304,12 +4319,20 @@ window.AeeModule = {
                         </tr>
                     </thead>
                     <tbody>
-                        ${rel.porCondicao.map(c => `
+                        ${rel.porCondicao.map(c => {
+                            // 🔥 LIMPEZA DO TEXTO NO RESUMO
+                            let condResumo = c.condicao || 'Não especificada';
+                            if (condResumo.toLowerCase().startsWith('outra - ')) {
+                                condResumo = condResumo.substring(8).trim();
+                            }
+
+                            return `
                             <tr>
-                                <td>${this.escapeHtml(c.condicao)}</td>
+                                <td>${this.escapeHtml(condResumo)}</td>
                                 <td style="text-align: center; font-weight: bold;">${c.total}</td>
                             </tr>
-                        `).join('')}
+                            `;
+                        }).join('')}
                     </tbody>
                 </table>
 
@@ -4325,14 +4348,22 @@ window.AeeModule = {
                             </tr>
                         </thead>
                         <tbody>
-                            ${t.alunos.map((a, i) => `
+                            ${t.alunos.map((a, i) => {
+                                // 🔥 LIMPEZA DO TEXTO NAS TURMAS
+                                let condAluno = a.condicao || 'Não especificada';
+                                if (condAluno.toLowerCase().startsWith('outra - ')) {
+                                    condAluno = condAluno.substring(8).trim();
+                                }
+
+                                return `
                                 <tr>
                                     <td style="text-align: center;">${i + 1}</td>
                                     <td>${this.escapeHtml(a.nome)}</td>
                                     <td>${this.escapeHtml(a.matricula || '-')}</td>
-                                    <td>${this.escapeHtml(a.condicao)}</td>
+                                    <td>${this.escapeHtml(condAluno)}</td>
                                 </tr>
-                            `).join('')}
+                                `;
+                            }).join('')}
                         </tbody>
                     </table>
                 `).join('')}
@@ -4417,7 +4448,7 @@ window.AeeModule = {
         win.document.write(html);
         win.document.close();
         win.onload = () => setTimeout(() => win.print(), 500);
-    }
+    },
 
 };
 
