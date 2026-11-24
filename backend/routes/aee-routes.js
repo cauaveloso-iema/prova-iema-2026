@@ -1,15 +1,12 @@
 // ============================================================================
 // AEE - ATENDIMENTO EDUCACIONAL ESPECIALIZADO - EducaPleno
 // ============================================================================
-// VERSÃO 2.2 - Reescrito com:
-//   - Dashboard corrigido (dados reais agregados)
-//   - Filtros dinâmicos (vêm do banco)
-//   - Rotas: /api/aee/notas (histórico de notas)
-//   - Rotas: /api/aee/notas/:id (detalhes da nota)
-//   - Rotas: /api/aee/respostas/:provaId/:alunoId (NOVO - respostas do aluno)
-//   - Provas com filtros e paginação
-//   - Relatórios no padrão Setor Pedagógico
-//   - Status duplo: cadastro AEE + notas liberadas
+// VERSÃO 2.4 - Correções:
+//   - /provas lista SOMENTE provas adaptadas de turmas com alunos AEE ativos
+//   - /provas/:id bloqueia (403) provas não adaptadas ou de turmas sem AEE
+//   - Dashboard: totalProvasAdaptadas conta apenas provas AEE-relevantes
+//   - Dropdown de turmas em /provas lista apenas turmas com AEE
+//   - Fonte única de verdade para condições de acessibilidade
 // ============================================================================
 
 const express = require('express');
@@ -38,56 +35,78 @@ let ProvaRealizada = null;
 try { ProvaRealizada = mongoose.model('ProvaRealizada'); } catch (err) { console.warn('[aee] ProvaRealizada:', err.message); }
 
 // ============================================================================
-// HELPERS
+// HELPERS — Fonte única de verdade das condições de acessibilidade
 // ============================================================================
-const CONDICOES_LABELS = {
-  'visual': 'Deficiência Visual',
-  'baixa_visao': 'Baixa Visão',
-  'cegueira': 'Cegueira',
-  'auditiva': 'Deficiência Auditiva',
-  'deficiencia_auditiva': 'Deficiência Auditiva',
-  'motora': 'Deficiência Motora',
-  'deficiencia_fisica': 'Deficiência Física',
-  'intelectual': 'Deficiência Intelectual',
-  'dislexia': 'Dislexia',
-  'discalculia': 'Discalculia',
-  'tdah': 'TDAH',
-  'tea': 'Transtorno do Espectro Autista (TEA)',
-  'altas_habilidades': 'Altas Habilidades/Superdotação',
-  'deficiencia_multipla': 'Deficiência Múltipla',
-  'surdocegueira': 'Surdocegueira',
-  'outra': 'Outra Condição',
-  null: 'Não especificada',
-  'nao_especificada': 'Não especificada'
-};
-
-const CONDICOES_LISTA = [
-  { valor: 'visual', label: 'Deficiência Visual' },
-  { valor: 'baixa_visao', label: 'Baixa Visão' },
-  { valor: 'cegueira', label: 'Cegueira' },
-  { valor: 'auditiva', label: 'Deficiência Auditiva' },
-  { valor: 'deficiencia_auditiva', label: 'Deficiência Auditiva' },
-  { valor: 'motora', label: 'Deficiência Motora' },
-  { valor: 'deficiencia_fisica', label: 'Deficiência Física' },
-  { valor: 'intelectual', label: 'Deficiência Intelectual' },
-  { valor: 'dislexia', label: 'Dislexia' },
-  { valor: 'discalculia', label: 'Discalculia' },
-  { valor: 'tdah', label: 'TDAH' },
-  { valor: 'tea', label: 'Transtorno do Espectro Autista (TEA)' },
-  { valor: 'altas_habilidades', label: 'Altas Habilidades/Superdotação' },
-  { valor: 'deficiencia_multipla', label: 'Deficiência Múltipla' },
-  { valor: 'surdocegueira', label: 'Surdocegueira' },
-  { valor: 'outra', label: 'Outra Condição' }
-];
-
-function obterLabelCondicao(c) { return CONDICOES_LABELS[c] || 'Condição Especial'; }
+const {
+  CONDICOES_LISTA,
+  CONDICOES_VALORES,
+  CONDICOES_LABELS,
+  obterLabelCondicao
+} = require('../constants/acessibilidade');
 
 function escaparRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // ============================================================================
-// HELPERS DE NORMALIZAÇÃO
+// HELPERS DE PROVAS AEE
+// ============================================================================
+
+// Critério "é prova adaptada" — reutilizado em várias rotas
+function filtroProvaAdaptada() {
+  return {
+    $or: [
+      { tipoProva: 'adaptada' },
+      { adaptada: true },
+      { alternativas: 3 }
+    ]
+  };
+}
+
+/**
+ * Retorna os IDs das turmas que possuem pelo menos um aluno AEE ativo
+ * e a lista de IDs desses alunos.
+ *
+ * Estratégia:
+ *  1) Alunos AEE ativos (User.precisaAcessibilidade = true, ativo = true)
+ *  2) Vínculo por User.turmaId (mais confiável)
+ *  3) Fallback por Turma.alunos (caso User.turmaId esteja nulo)
+ *  União dos dois conjuntos.
+ */
+async function obterTurmasComAlunosAEE() {
+  const alunosAEE = await User.find({
+    role: 'aluno',
+    precisaAcessibilidade: true,
+    ativo: true
+  }).select('_id turmaId').lean();
+
+  const alunosAEEIds = alunosAEE.map(a => a._id);
+
+  // Vínculo via User.turmaId
+  const turmaIdsViaUser = alunosAEE
+    .map(a => a.turmaId)
+    .filter(Boolean)
+    .map(id => id.toString());
+
+  // Vínculo via Turma.alunos
+  let turmaIdsViaTurma = [];
+  if (Turma && alunosAEEIds.length > 0) {
+    const turmas = await Turma.find({ alunos: { $in: alunosAEEIds } })
+      .select('_id')
+      .lean();
+    turmaIdsViaTurma = turmas.map(t => t._id.toString());
+  }
+
+  const uniao = new Set([...turmaIdsViaUser, ...turmaIdsViaTurma]);
+
+  return {
+    turmaIds: Array.from(uniao).map(id => new mongoose.Types.ObjectId(id)),
+    alunosAEEIds
+  };
+}
+
+// ============================================================================
+// HELPERS DE NORMALIZAÇÃO (notas)
 // ============================================================================
 function extrairNota(doc) {
   if (!doc) return null;
@@ -195,7 +214,7 @@ router.get('/health', (req, res) => {
   res.json({
     success: true,
     status: 'online',
-    service: 'AEE v2.2',
+    service: 'AEE v2.4',
     models: { Prova: !!Prova, Turma: !!Turma, Resultado: !!Resultado, ProvaRealizada: !!ProvaRealizada }
   });
 });
@@ -206,6 +225,9 @@ router.get('/health', (req, res) => {
 router.get('/dashboard', authenticateTokenLocal, verificarPermissaoAEE, async (req, res) => {
   try {
     logger.info(`📋 AEE Dashboard - user ${req.userId}`);
+
+    // Turmas com alunos AEE (reutilizado em várias contagens)
+    const { turmaIds, alunosAEEIds } = await obterTurmasComAlunosAEE();
 
     const [
       totalAlunos,
@@ -218,10 +240,16 @@ router.get('/dashboard', authenticateTokenLocal, verificarPermissaoAEE, async (r
       User.countDocuments({ role: 'aluno', ativo: true }),
       User.countDocuments({ role: 'aluno', precisaAcessibilidade: true, ativo: true }),
       Turma ? Turma.countDocuments({ ativa: true }) : 0,
-      Prova ? Prova.countDocuments({
-        publicada: true,
-        $or: [{ tipoProva: 'adaptada' }, { adaptada: true }, { alternativas: 3 }]
-      }) : 0,
+
+      // 🔥 CORRIGIDO: provas adaptadas E de turmas com alunos AEE
+      (Prova && turmaIds.length > 0)
+        ? Prova.countDocuments({
+            publicada: true,
+            turmaId: { $in: turmaIds },
+            ...filtroProvaAdaptada()
+          })
+        : 0,
+
       User.countDocuments({
         role: 'aluno',
         precisaAcessibilidade: true,
@@ -275,9 +303,7 @@ router.get('/dashboard', authenticateTokenLocal, verificarPermissaoAEE, async (r
 
     let totalResultados = 0, totalProvasRealizadas = 0, mediaGeral = '0.0', taxaAprovacao = 0;
 
-    if (Resultado) {
-      const alunosAEEIds = await User.find({ role: 'aluno', precisaAcessibilidade: true, ativo: true }).distinct('_id');
-
+    if (Resultado && alunosAEEIds.length > 0) {
       const [resultados, provasRealizadas] = await Promise.all([
         Resultado.find({ userId: { $in: alunosAEEIds } }).lean(),
         ProvaRealizada ? ProvaRealizada.find({ alunoId: { $in: alunosAEEIds } }).lean() : []
@@ -347,7 +373,6 @@ router.get('/dashboard', authenticateTokenLocal, verificarPermissaoAEE, async (r
 
 // ============================================================================
 // GET /api/aee/alunos
-// 🔥 NOVO: retorna statusCadastro E statusNotas
 // ============================================================================
 router.get('/alunos', authenticateTokenLocal, verificarPermissaoAEE, async (req, res) => {
   try {
@@ -405,7 +430,7 @@ router.get('/alunos', authenticateTokenLocal, verificarPermissaoAEE, async (req,
       curso: { $ne: null, $exists: true, $nin: ['', null] }
     });
 
-    // 🔥 Conta notas liberadas por aluno
+    // Conta notas liberadas por aluno
     const alunosIds = alunos.map(a => a._id);
     const notasPorAluno = new Map();
 
@@ -432,10 +457,8 @@ router.get('/alunos', authenticateTokenLocal, verificarPermissaoAEE, async (req,
 
       const [resultadosPack, provasPack] = await Promise.all(promises);
 
-      // 🔥 Chave composta alunoId_provaId para evitar deduplicação errada
       const provasContadas = new Set();
 
-      // Primeiro, conta resultados
       if (resultadosPack) {
         resultadosPack.dados.forEach(r => {
           const alunoId = r.userId?.toString();
@@ -459,7 +482,6 @@ router.get('/alunos', authenticateTokenLocal, verificarPermissaoAEE, async (req,
         });
       }
 
-      // Depois, conta provas realizadas (sem duplicar)
       if (provasPack) {
         provasPack.dados.forEach(p => {
           const alunoId = p.alunoId?.toString();
@@ -501,9 +523,7 @@ router.get('/alunos', authenticateTokenLocal, verificarPermissaoAEE, async (req,
           descricao: aluno.outraCondicao || null
         },
         dataSolicitacao: aluno.dataSolicitacaoAcessibilidade,
-        // 🔥 Status do cadastro AEE
         statusCadastro: aluno.acessibilidadeAprovadaPor ? 'aprovada' : 'pendente',
-        // 🔥 Status das notas
         statusNotas: {
           total: stats.total,
           liberadas: stats.liberadas,
@@ -512,7 +532,6 @@ router.get('/alunos', authenticateTokenLocal, verificarPermissaoAEE, async (req,
           temNotas: stats.total > 0,
           temPendentes: stats.pendentes > 0
         },
-        // 🔥 Compatibilidade com código antigo
         status: aluno.acessibilidadeAprovadaPor ? 'aprovada' : 'pendente'
       };
     });
@@ -654,8 +673,7 @@ router.get('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
 });
 
 // ============================================================================
-// 🔥 NOVO: GET /api/aee/respostas/:provaId/:alunoId
-// Retorna as respostas que o aluno marcou na prova
+// GET /api/aee/respostas/:provaId/:alunoId
 // ============================================================================
 router.get('/respostas/:provaId/:alunoId', authenticateTokenLocal, verificarPermissaoAEE, async (req, res) => {
   try {
@@ -668,7 +686,6 @@ router.get('/respostas/:provaId/:alunoId', authenticateTokenLocal, verificarPerm
       return res.status(400).json({ success: false, error: 'ID do aluno inválido' });
     }
 
-    // Busca a prova
     const prova = await Prova.findById(provaId)
       .populate('turmaId', 'nome disciplina')
       .lean();
@@ -677,7 +694,6 @@ router.get('/respostas/:provaId/:alunoId', authenticateTokenLocal, verificarPerm
       return res.status(404).json({ success: false, error: 'Prova não encontrada' });
     }
 
-    // Busca o aluno
     const aluno = await User.findById(alunoId)
       .select('nome matricula turma curso')
       .lean();
@@ -686,7 +702,6 @@ router.get('/respostas/:provaId/:alunoId', authenticateTokenLocal, verificarPerm
       return res.status(404).json({ success: false, error: 'Aluno não encontrado' });
     }
 
-    // 🔥 Busca a resposta do aluno (tenta Resultado primeiro)
     let doc = null;
     let origem = null;
 
@@ -707,14 +722,12 @@ router.get('/respostas/:provaId/:alunoId', authenticateTokenLocal, verificarPerm
       });
     }
 
-    // 🔥 Monta a lista de questões com as respostas do aluno
     const questoes = (prova.questoes || []).map((q, index) => {
       const respostaAluno = doc.respostas?.[index] || null;
       const respostaCorretaIndex = q.respostaCorreta;
       const letrasUsadas = ['A', 'B', 'C', 'D', 'E'];
       const respostaCorretaLetra = letrasUsadas[respostaCorretaIndex] || '?';
 
-      // Normaliza a resposta do aluno (pode vir como "A" ou índice)
       let respostaAlunoLetra = null;
       if (respostaAluno !== null && respostaAluno !== undefined) {
         if (typeof respostaAluno === 'number') {
@@ -726,7 +739,6 @@ router.get('/respostas/:provaId/:alunoId', authenticateTokenLocal, verificarPerm
 
       const correta = respostaAlunoLetra === respostaCorretaLetra;
 
-      // Limpa prefixo das opções
       const opcoes = (q.opcoes || []).map((opcao, optIdx) => {
         const letra = letrasUsadas[optIdx];
         let textoLimpo = String(opcao || '').trim();
@@ -766,7 +778,6 @@ router.get('/respostas/:provaId/:alunoId', authenticateTokenLocal, verificarPerm
       };
     });
 
-    // Estatísticas
     const totalQuestoes = questoes.length;
     const acertos = questoes.filter(q => q.correta).length;
     const nota = extrairNota(doc);
@@ -1050,33 +1061,47 @@ router.get('/notas/:id', authenticateTokenLocal, verificarPermissaoAEE, async (r
 });
 
 // ============================================================================
-// GET /api/aee/provas - COM FILTROS
+// GET /api/aee/provas — SOMENTE provas adaptadas de turmas com alunos AEE
 // ============================================================================
 router.get('/provas', authenticateTokenLocal, verificarPermissaoAEE, async (req, res) => {
   try {
     if (!Prova) return res.status(503).json({ success: false, error: 'Módulo de provas indisponível' });
 
-    const { busca, turma, tipo, periodo, page = 1, limit = 20 } = req.query;
+    const { busca, turma, periodo, page = 1, limit = 20 } = req.query;
 
-    let query = { publicada: true };
+    // 1) Turmas com alunos AEE
+    const { turmaIds } = await obterTurmasComAlunosAEE();
 
-    if (tipo === 'adaptada') {
-      query.$or = [{ tipoProva: 'adaptada' }, { adaptada: true }, { alternativas: 3 }];
-    } else if (tipo === 'normal') {
-      query.$nor = [{ tipoProva: 'adaptada' }, { adaptada: true }, { alternativas: 3 }];
+    if (turmaIds.length === 0) {
+      return res.json({
+        success: true,
+        provas: [],
+        total: 0,
+        paginacao: { page: 1, limit: parseInt(limit), pages: 0 },
+        filtros: { turmas: [] },
+        aviso: 'Nenhuma turma possui alunos AEE ativos no momento'
+      });
     }
 
-    if (turma && turma !== 'todas') query.turmaId = turma;
-    if (periodo && periodo !== 'todos') query.periodo = periodo;
+    // 2) Query base — publicada + adaptada + turma com AEE
+    const condicoes = [
+      { publicada: true },
+      { turmaId: { $in: turmaIds } },
+      filtroProvaAdaptada()
+    ];
 
+    if (turma && turma !== 'todas' && mongoose.Types.ObjectId.isValid(turma)) {
+      condicoes.push({ turmaId: new mongoose.Types.ObjectId(turma) });
+    }
+    if (periodo && periodo !== 'todos') {
+      condicoes.push({ periodo });
+    }
     if (busca) {
       const r = new RegExp(escaparRegex(busca), 'i');
-      query.$or = query.$or
-        ? [{ $and: [{ $or: query.$or }, { $or: [{ titulo: r }, { codigo: r }, { conteudo: r }] }] }]
-        : [{ titulo: r }, { codigo: r }, { conteudo: r }];
-      if (query.$or.length === 1 && query.$or[0].$and) query.$or = query.$or[0].$and;
+      condicoes.push({ $or: [{ titulo: r }, { codigo: r }, { conteudo: r }, { disciplina: r }] });
     }
 
+    const query = { $and: condicoes };
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const [provas, total] = await Promise.all([
@@ -1090,7 +1115,12 @@ router.get('/provas', authenticateTokenLocal, verificarPermissaoAEE, async (req,
       Prova.countDocuments(query)
     ]);
 
-    const turmas = Turma ? await Turma.find({ ativa: true }).select('nome disciplina').lean() : [];
+    // Dropdown: só turmas com AEE
+    const turmas = Turma
+      ? await Turma.find({ _id: { $in: turmaIds }, ativa: true })
+          .select('nome disciplina')
+          .lean()
+      : [];
 
     const provasFormatadas = provas.map(prova => {
       const isAdaptada = prova.tipoProva === 'adaptada' || prova.adaptada === true || prova.alternativas === 3;
@@ -1101,6 +1131,7 @@ router.get('/provas', authenticateTokenLocal, verificarPermissaoAEE, async (req,
         tipo: isAdaptada ? 'adaptada' : (prova.tipoProva || 'normal'),
         alternativas: isAdaptada ? 3 : (prova.alternativas || 5),
         quantidadeQuestoes: prova.questoes?.length || 0,
+        disciplina: prova.disciplina || prova.turmaId?.disciplina || null,
         turma: prova.turmaId ? {
           id: prova.turmaId._id,
           nome: prova.turmaId.nome,
@@ -1130,7 +1161,7 @@ router.get('/provas', authenticateTokenLocal, verificarPermissaoAEE, async (req,
 });
 
 // ============================================================================
-// GET /api/aee/provas/:id
+// GET /api/aee/provas/:id — bloqueia provas não adaptadas / sem AEE
 // ============================================================================
 router.get('/provas/:id', authenticateTokenLocal, verificarPermissaoAEE, async (req, res) => {
   try {
@@ -1144,6 +1175,18 @@ router.get('/provas/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
     if (!prova) return res.status(404).json({ success: false, error: 'Prova não encontrada' });
 
     const isAdaptada = prova.tipoProva === 'adaptada' || prova.adaptada === true || prova.alternativas === 3;
+
+    // Segurança: só permite se for adaptada E de turma com AEE
+    const { turmaIds } = await obterTurmasComAlunosAEE();
+    const turmaDaProva = prova.turmaId?._id?.toString();
+    const pertenceTurmaAEE = turmaDaProva && turmaIds.some(id => id.toString() === turmaDaProva);
+
+    if (!isAdaptada || !pertenceTurmaAEE) {
+      return res.status(403).json({
+        success: false,
+        error: 'Esta prova não é adaptada ou não pertence a uma turma com alunos AEE'
+      });
+    }
 
     const questoes = (prova.questoes || []).map((q, index) => ({
       numero: index + 1,
@@ -1161,7 +1204,7 @@ router.get('/provas/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
         codigo: prova.codigo,
         conteudo: prova.conteudo,
         periodo: prova.periodo,
-        tipo: isAdaptada ? 'adaptada' : (prova.tipoProva || 'normal'),
+        tipo: 'adaptada',
         alternativas: isAdaptada ? 3 : (prova.alternativas || 5),
         quantidadeQuestoes: questoes.length,
         turma: prova.turmaId ? {
@@ -1358,8 +1401,7 @@ router.post('/alunos/:id/condicao', authenticateTokenLocal, verificarPermissaoAE
     if (!id.match(/^[0-9a-fA-F]{24}$/)) return res.status(400).json({ success: false, error: 'ID inválido' });
     if (!condicao) return res.status(400).json({ success: false, error: 'Condição é obrigatória' });
 
-    const condicoesValidas = CONDICOES_LISTA.map(c => c.valor);
-    if (!condicoesValidas.includes(condicao)) return res.status(400).json({ success: false, error: 'Condição inválida' });
+    if (!CONDICOES_VALORES.includes(condicao)) return res.status(400).json({ success: false, error: 'Condição inválida' });
 
     const updateData = {
       precisaAcessibilidade: true,
@@ -1395,6 +1437,126 @@ router.post('/alunos/:id/condicao', authenticateTokenLocal, verificarPermissaoAE
 
   } catch (error) {
     logger.error('❌ AEE condicao:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================================
+// PUT /api/aee/alunos/:id
+// ============================================================================
+router.put('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ success: false, error: 'ID inválido' });
+    }
+
+    const {
+      nome,
+      email,
+      matricula,
+      turma,
+      curso,
+      periodo,
+      condicao,
+      detalhes,
+      status
+    } = req.body;
+
+    if (!nome || !nome.trim()) {
+      return res.status(400).json({ success: false, error: 'Nome é obrigatório' });
+    }
+
+    if (!condicao) {
+      return res.status(400).json({ success: false, error: 'Condição de acessibilidade é obrigatória' });
+    }
+
+    if (!CONDICOES_VALORES.includes(condicao)) {
+      return res.status(400).json({ success: false, error: 'Condição inválida' });
+    }
+
+    const alunoAtual = await User.findById(id).lean();
+    if (!alunoAtual || alunoAtual.role !== 'aluno') {
+      return res.status(404).json({ success: false, error: 'Aluno não encontrado' });
+    }
+
+    if (email && email !== alunoAtual.email) {
+      const emailEmUso = await User.findOne({
+        email: email.toLowerCase(),
+        _id: { $ne: id }
+      }).lean();
+      if (emailEmUso) {
+        return res.status(400).json({
+          success: false,
+          error: 'Este email já está em uso por outro usuário'
+        });
+      }
+    }
+
+    const updateData = {
+      nome: nome.trim().toUpperCase(),
+      precisaAcessibilidade: true,
+      condicaoAcessibilidade: condicao,
+      outraCondicao: detalhes || ''
+    };
+
+    if (email && email.trim()) updateData.email = email.trim().toLowerCase();
+    if (matricula !== undefined) updateData.matricula = (matricula || '').trim();
+    if (turma !== undefined) updateData.turma = (turma || '').trim();
+    if (curso !== undefined) updateData.curso = (curso || '').trim();
+    if (periodo !== undefined) updateData.periodo = periodo || null;
+
+    if (status === 'aprovada') {
+      if (!alunoAtual.acessibilidadeAprovadaPor) {
+        updateData.acessibilidadeAprovadaPor = req.userId;
+        updateData.acessibilidadeAprovadaEm = new Date();
+      }
+    } else if (status === 'pendente') {
+      updateData.acessibilidadeAprovadaPor = null;
+      updateData.acessibilidadeAprovadaEm = null;
+    }
+
+    if (!alunoAtual.dataSolicitacaoAcessibilidade) {
+      updateData.dataSolicitacaoAcessibilidade = new Date();
+    }
+
+    const alunoAtualizado = await User.findByIdAndUpdate(id, updateData, {
+      new: true,
+      runValidators: true
+    })
+      .select('nome email matricula turma curso periodo condicaoAcessibilidade outraCondicao dataSolicitacaoAcessibilidade acessibilidadeAprovadaPor')
+      .lean();
+
+    if (!alunoAtualizado) {
+      return res.status(404).json({ success: false, error: 'Aluno não encontrado após atualização' });
+    }
+
+    logger.info(`✏️ AEE - Aluno ${alunoAtualizado.nome} editado por ${req.userNome}`);
+
+    res.json({
+      success: true,
+      message: 'Aluno atualizado com sucesso',
+      aluno: {
+        id: alunoAtualizado._id,
+        nome: alunoAtualizado.nome,
+        email: alunoAtualizado.email,
+        matricula: alunoAtualizado.matricula,
+        turma: alunoAtualizado.turma,
+        curso: alunoAtualizado.curso,
+        periodo: alunoAtualizado.periodo,
+        condicao: {
+          tipo: alunoAtualizado.condicaoAcessibilidade,
+          label: obterLabelCondicao(alunoAtualizado.condicaoAcessibilidade),
+          detalhes: alunoAtualizado.outraCondicao
+        },
+        dataSolicitacao: alunoAtualizado.dataSolicitacaoAcessibilidade,
+        status: alunoAtualizado.acessibilidadeAprovadaPor ? 'aprovada' : 'pendente'
+      }
+    });
+
+  } catch (error) {
+    logger.error('❌ AEE editar aluno:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

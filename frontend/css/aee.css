@@ -2059,3 +2059,51 @@
     color: #3b82f6;
     margin-right: 5px;
 }
+
+/* Botões de ação no card do aluno */
+.aee-aluno-card {
+    position: relative;
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.aee-aluno-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+}
+
+.aee-aluno-actions .aee-btn-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.aee-btn-icon.aee-btn-edit {
+    background: #fef3c7;
+    color: #d97706;
+}
+.aee-btn-icon.aee-btn-edit:hover {
+    background: #d97706;
+    color: white;
+    transform: scale(1.1);
+}
+
+.aee-btn-icon.aee-btn-view {
+    background: #e0e7ff;
+    color: #4f46e5;
+}
+.aee-btn-icon.aee-btn-view:hover {
+    background: #4f46e5;
+    color: white;
+    transform: scale(1.1);
+}

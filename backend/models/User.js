@@ -1,6 +1,7 @@
 // models/User.js
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const { CONDICOES_VALORES } = require('../constants/acessibilidade');
 
 const UserSchema = new mongoose.Schema({
   nome: {
@@ -65,7 +66,7 @@ const UserSchema = new mongoose.Schema({
       type: Date,
       default: null
   },
-  
+
   forcePasswordChange: {
       type: Boolean,
       default: false
@@ -79,7 +80,7 @@ const UserSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
-  
+
   role: {
     type: String,
     enum: ['aluno', 'professor', 'admin', 'super_admin', 'setor_pedagogico','coordenacao_patio','cozinha', 'gestao_geral', 'enfermaria','supervisao','psicologia','assistente-social','protagonismo','biblioteca', 'secretaria','recepcao', 'gestao-adm'],
@@ -94,44 +95,44 @@ const UserSchema = new mongoose.Schema({
     default: null,
     description: 'URL da foto de perfil do usuário (armazenada em Base64)'
   },
-  
+
   fotoPerfilTipo: {
     type: String,
     default: null,
     description: 'Tipo da imagem (image/jpeg, image/png, etc)'
   },
-  
+
   bio: {
     type: String,
     default: null,
     trim: true,
     maxlength: 500
   },
-  
+
   dataNascimento: {
     type: Date,
     default: null
   },
-  
+
   genero: {
     type: String,
     enum: ['masculino', 'feminino', 'outro', null],
     default: null,
     set: v => (v === '' || v === undefined) ? null : v
   },
-  
+
   endereco: {
     type: String,
     default: null,
     trim: true
   },
-  
+
   cidade: {
     type: String,
     default: null,
     trim: true
   },
-  
+
   estado: {
     type: String,
     default: null,
@@ -139,36 +140,36 @@ const UserSchema = new mongoose.Schema({
     uppercase: true,
     maxlength: 2
   },
-  
+
   cep: {
     type: String,
     default: null,
     trim: true
   },
-  
+
   instagram: {
     type: String,
     default: null,
     trim: true
   },
-  
+
   linkedin: {
     type: String,
     default: null,
     trim: true
   },
-  
+
   website: {
     type: String,
     default: null,
     trim: true
   },
-  
+
   interesses: {
     type: [String],
     default: []
   },
-  
+
   preferenciasNotificacao: {
     type: Object,
     default: {
@@ -180,12 +181,12 @@ const UserSchema = new mongoose.Schema({
       novidades: false
     }
   },
-  
+
   ultimaAtualizacaoPerfil: {
     type: Date,
     default: null
   },
-  
+
   ultimoLoginDispositivo: {
     type: String,
     default: null
@@ -197,12 +198,12 @@ const UserSchema = new mongoose.Schema({
     default: null,
     select: false
   },
-  
+
   qrCodeUsuarioGeradoEm: {
     type: Date,
     default: null
   },
-  
+
   qrCodeUsuarioTipo: {
     type: String,
     enum: ['aluno', 'professor', 'admin', 'super_admin', 'setor_pedagogico', 'coordenacao_patio', 'cozinha', 'gestao_geral', 'enfermaria','supervisao','psicologia','assistente-social','protagonismo','biblioteca', 'secretaria', 'recepcao','gestao-adm', null],
@@ -259,7 +260,7 @@ const UserSchema = new mongoose.Schema({
   superUserLastAction: {
     type: Date
   },
-  
+
   // ========== EIXO DINÂMICO (SEM ENUM) ==========
   eixo: {
     type: String,
@@ -267,19 +268,19 @@ const UserSchema = new mongoose.Schema({
     trim: true,
     set: v => (v === '' || v === undefined) ? null : v
   },
-  
+
   matricula: {
     type: String,
     unique: true,
     sparse: true
   },
-  
+
   turma: {
     type: String,
     default: null,
     set: v => (v === '' || v === undefined) ? null : v
   },
-  
+
   turmas: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Turma'
@@ -306,94 +307,94 @@ const UserSchema = new mongoose.Schema({
     default: null,
     index: true
   },
-  
+
   // ========== CAMPOS DE ACESSIBILIDADE ==========
   precisaAcessibilidade: {
     type: Boolean,
     default: false
   },
-  
-  // 🔥 CORREÇÃO: Aceita null E converte '' automaticamente para null
+
+  // 🔥 CORREÇÃO: enum alinhado com a lista do AEE (fonte única de verdade)
   condicaoAcessibilidade: {
     type: String,
-    enum: ['visual', 'auditiva', 'motora', 'intelectual', 'dislexia', 'tdah', 'outra', null],
+    enum: [...CONDICOES_VALORES, null],
     default: null,
     set: v => (v === '' || v === undefined) ? null : v
   },
-  
+
   outraCondicao: {
     type: String,
     default: null,
     trim: true,
     set: v => (v === '' || v === undefined) ? null : v
   },
-  
+
   dataSolicitacaoAcessibilidade: {
     type: Date,
     default: null
   },
-  
+
   acessibilidadeAprovadaPor: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     default: null
   },
-  
+
   curso: {
     type: String,
     default: null,
     set: v => (v === '' || v === undefined) ? null : v
   },
-  
+
   periodo: {
     type: String,
     default: null,
     set: v => (v === '' || v === undefined) ? null : v
   },
-  
+
   departamento: {
     type: String,
     default: null,
     set: v => (v === '' || v === undefined) ? null : v
   },
-  
+
   titulacao: {
     type: String,
     default: null,
     set: v => (v === '' || v === undefined) ? null : v
   },
-  
+
   atribuicoes: {
     type: String,
     default: null,
     set: v => (v === '' || v === undefined) ? null : v
   },
-  
+
   // ========== CAMPOS ADICIONAIS PARA PERFIS ESPECÍFICOS ==========
   especialidade: {
     type: String,
     default: null,
     set: v => (v === '' || v === undefined) ? null : v
   },
-  
+
   crp: {
     type: String,
     default: null,
     set: v => (v === '' || v === undefined) ? null : v
   },
-  
+
   cress: {
     type: String,
     default: null,
     set: v => (v === '' || v === undefined) ? null : v
   },
-  
+
   coren: {
     type: String,
     default: null,
     set: v => (v === '' || v === undefined) ? null : v
   },
-  
+
   // ========== CAMPOS DE CONTROLE DE LOGIN E 2FA ==========
   loginAttempts: {
     type: Number,
@@ -405,41 +406,41 @@ const UserSchema = new mongoose.Schema({
   lastLogin: {
     type: Date
   },
-  
+
   // 🔥 NOVO: Última vez que o usuário teve atividade (atualizado a cada requisição)
   lastActive: {
     type: Date,
     default: null
   },
-  
+
   // 🔥 NOVO: Último logout EXPLÍCITO (só quando o usuário clica em "Sair")
   ultimoLogout: {
     type: Date,
     default: null
   },
-  
+
   // 🔥 NOVO: Contador de versão do token (para reset global)
   tokenVersion: {
     type: Number,
     default: 0
   },
-  
+
   // ========== CAMPOS PARA 2FA ==========
   telefoneVerificado: {
     type: Boolean,
     default: false
   },
-  
+
   twoFactorEnabled: {
     type: Boolean,
     default: false
   },
-  
+
   twoFactorSecret: {
     type: String,
     select: false
   },
-  
+
   twoFactorBackupCodes: {
     type: [String],
     select: false
@@ -449,7 +450,7 @@ const UserSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  
+
   twoFactorTempSecret: {
     type: String,
     select: false
@@ -461,22 +462,22 @@ const UserSchema = new mongoose.Schema({
     type: String,
     select: false
   },
-  
+
   lastOtpRequest: {
     type: Date,
     default: null
   },
-  
+
   otpRequestCount: {
     type: Number,
     default: 0
   },
-  
+
   dataAtivacao2FA: {
     type: Date,
     default: null
   },
-  
+
   dataCadastro: {
     type: Date,
     default: Date.now
@@ -512,19 +513,19 @@ UserSchema.pre('save', async function(next) {
   if (this.cpf) {
     this.cpf = this.cpf.replace(/\D/g, '');
   }
-  
+
   if (this.telefone) {
     this.telefone = this.telefone.replace(/\D/g, '');
   }
-  
+
   if (this.email) {
     this.email = this.email.toLowerCase().trim();
-    
+
     if (!this.email.includes('@')) {
       this.email = this.email + '@iemasaoluiscentro.net';
     }
   }
-  
+
   // 🔥 LIMPEZA GERAL: Converter strings vazias em null para campos opcionais
   const camposOpcionais = [
     'condicaoAcessibilidade',
@@ -554,15 +555,15 @@ UserSchema.pre('save', async function(next) {
     'ultimoLoginDispositivo',
     'lgpdConsentIp'
   ];
-  
+
   camposOpcionais.forEach(campo => {
     if (this[campo] === '') {
       this[campo] = null;
     }
   });
-  
+
   if (!this.isModified('password')) return next();
-  
+
   try {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
@@ -581,12 +582,12 @@ UserSchema.methods.comparePassword = async function(candidatePassword) {
             console.error('❌ comparePassword: candidatePassword inválido:', candidatePassword);
             return false;
         }
-        
+
         if (!this.password) {
             console.error('❌ comparePassword: this.password não existe');
             return false;
         }
-        
+
         return await bcrypt.compare(candidatePassword, this.password);
     } catch (error) {
         console.error('❌ Erro em comparePassword:', error);
@@ -610,13 +611,13 @@ UserSchema.methods.incLoginAttempts = async function() {
     this.lockUntil = undefined;
     return await this.save();
   }
-  
+
   this.loginAttempts += 1;
-  
+
   if (this.loginAttempts >= 5) {
     this.lockUntil = Date.now() + 15 * 60 * 1000;
   }
-  
+
   return await this.save();
 };
 
@@ -641,10 +642,10 @@ UserSchema.statics.findByTelefone = async function(telefone) {
 // ============================================
 UserSchema.virtual('cpfFormatado').get(function() {
   if (!this.cpf) return '';
-  
+
   const cpf = this.cpf.replace(/\D/g, '');
   if (cpf.length !== 11) return cpf;
-  
+
   return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
 });
 
@@ -653,15 +654,15 @@ UserSchema.virtual('cpfFormatado').get(function() {
 // ============================================
 UserSchema.virtual('telefoneFormatado').get(function() {
   if (!this.telefone) return '';
-  
+
   const telefone = this.telefone.replace(/\D/g, '');
-  
+
   if (telefone.length === 10) {
     return telefone.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
   } else if (telefone.length === 11) {
     return telefone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
   }
-  
+
   return telefone;
 });
 

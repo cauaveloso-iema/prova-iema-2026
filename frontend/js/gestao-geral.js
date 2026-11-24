@@ -3176,6 +3176,8 @@ function exportarCSV() {
         notificar(`✅ Relatório exportado (${registros.length} registro(s))!`, 'success');
     }
 }
+
+
 // ============================================================================
 // ============ MÓDULOS: AUTORIZAÇÃO / JUSTIFICATIVA / 2ª CHAMADA / UNIFORME ==
 // ============================================================================
@@ -5809,6 +5811,7 @@ async function carregarRelatorioModulo(modulo) {
         notificar('Erro ao carregar relatório', 'error');
     }
 }
+
 // ============================================
 // 🖨️ EXPORTAR PDF - ATRASOS
 // ============================================

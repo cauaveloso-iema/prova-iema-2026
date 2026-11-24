@@ -857,13 +857,11 @@ window.AeeModule = {
             ${data.alunos.length > 0 ? `
                 <div class="aee-alunos-grid">
                     ${data.alunos.map(aluno => {
-                        // 🔥 STATUS DO CADASTRO
                         const statusCadastro = aluno.statusCadastro || aluno.status || 'pendente';
                         const badgeCadastro = statusCadastro === 'aprovada'
                             ? '<span class="aee-badge-status aprovado"><i class="fas fa-check-circle"></i> Cadastro Aprovado</span>'
                             : '<span class="aee-badge-status pendente"><i class="fas fa-clock"></i> Cadastro Pendente</span>';
 
-                        // 🔥 STATUS DAS NOTAS
                         const sn = aluno.statusNotas || { total: 0, liberadas: 0, pendentes: 0, temNotas: false };
                         let badgeNotas = '';
 
@@ -876,11 +874,11 @@ window.AeeModule = {
                         }
 
                         return `
-                            <div class="aee-aluno-card" onclick="AeeModule.verDetalhesAluno('${aluno.id}')">
-                                <div class="aee-aluno-avatar" style="background: ${this.getCorCondicao(aluno.condicao.tipo)}20; color: ${this.getCorCondicao(aluno.condicao.tipo)};">
+                            <div class="aee-aluno-card" data-aluno-id="${aluno.id}">
+                                <div class="aee-aluno-avatar" style="background: ${this.getCorCondicao(aluno.condicao.tipo)}20; color: ${this.getCorCondicao(aluno.condicao.tipo)};" onclick="AeeModule.verDetalhesAluno('${aluno.id}')">
                                     <i class="fas ${this.getIconeCondicao(aluno.condicao.tipo)}"></i>
                                 </div>
-                                <div class="aee-aluno-info">
+                                <div class="aee-aluno-info" onclick="AeeModule.verDetalhesAluno('${aluno.id}')" style="cursor: pointer;">
                                     <div class="aee-aluno-nome">${this.escapeHtml(aluno.nome)}</div>
                                     <div class="aee-aluno-detalhes">
                                         <span><i class="fas fa-id-card"></i> ${this.escapeHtml(aluno.matricula)}</span>
@@ -896,8 +894,13 @@ window.AeeModule = {
                                         ${badgeNotas}
                                     </div>
                                 </div>
-                                <div class="aee-aluno-arrow">
-                                    <i class="fas fa-chevron-right"></i>
+                                <div class="aee-aluno-actions">
+                                    <button class="aee-btn-icon aee-btn-edit" onclick="event.stopPropagation(); AeeModule.editarAlunoAEE('${aluno.id}')" title="Editar informações">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="aee-btn-icon aee-btn-view" onclick="event.stopPropagation(); AeeModule.verDetalhesAluno('${aluno.id}')" title="Ver detalhes">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
                                 </div>
                             </div>
                         `;
@@ -914,6 +917,333 @@ window.AeeModule = {
         `;
 
         setTimeout(() => this.aplicarEventosFiltros(), 50);
+    },
+
+    // ============================================================================
+    // ✏️ EDITAR ALUNO AEE — Modal com todos os campos editáveis
+    // ============================================================================
+    async editarAlunoAEE(alunoId) {
+        console.log('✏️ AEE - Editar aluno:', alunoId);
+
+        try {
+            const token = this.getToken();
+
+            const antigo = document.getElementById('aeeModalEditarAluno');
+            if (antigo) antigo.remove();
+
+            this.mostrarToast('📄 Carregando dados do aluno...', 'info');
+
+            const response = await fetch(`/api/aee/alunos/${alunoId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!response.ok) throw new Error('Erro ao carregar aluno');
+
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || 'Erro ao carregar aluno');
+
+            const aluno = data.aluno;
+            const acess = aluno.acessibilidade || {};
+            const condicaoAtual = acess.condicao?.tipo || '';
+            const detalhesAtual = acess.condicao?.detalhes || acess.condicao?.descricao || '';
+            const statusAtual = acess.status || 'pendente';
+
+            // Gera opções de condição
+            const opcoesCondicao = Object.entries(this.CONDICOES_LABELS)
+                .filter(([valor]) => valor !== 'nao_especificada')
+                .map(([valor, label]) =>
+                    `<option value="${valor}" ${valor === condicaoAtual ? 'selected' : ''}>${label}</option>`
+                ).join('');
+
+            const modalHtml = `
+                <div class="aee-modal-backdrop" id="aeeModalEditarAluno" style="
+                    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                    background: rgba(0,0,0,0.6); z-index: 10000;
+                    display: flex; align-items: center; justify-content: center;
+                    padding: 20px; box-sizing: border-box;
+                ">
+                    <div class="aee-modal" style="
+                        background: white; border-radius: 20px; max-width: 650px; width: 100%;
+                        max-height: 90vh; display: flex; flex-direction: column;
+                        box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden;
+                    ">
+                        <div class="aee-modal-header" style="
+                            background: linear-gradient(135deg, #f59e0b, #d97706);
+                            color: white; padding: 20px 25px;
+                            display: flex; justify-content: space-between; align-items: center;
+                        ">
+                            <div style="display: flex; align-items: center; gap: 15px;">
+                                <div style="
+                                    width: 48px; height: 48px; background: rgba(255,255,255,0.2);
+                                    border-radius: 12px; display: flex; align-items: center; justify-content: center;
+                                    font-size: 22px;
+                                ">
+                                    <i class="fas fa-user-edit"></i>
+                                </div>
+                                <div>
+                                    <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700;">
+                                        Editar Aluno AEE
+                                    </h3>
+                                    <p style="margin: 4px 0 0; opacity: 0.9; font-size: 0.85rem;">
+                                        <i class="fas fa-user"></i> ${this.escapeHtml(aluno.nome)}
+                                    </p>
+                                </div>
+                            </div>
+                            <button onclick="document.getElementById('aeeModalEditarAluno').remove()" style="
+                                background: rgba(255,255,255,0.2); border: none; color: white;
+                                width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
+                                font-size: 20px; display: flex; align-items: center; justify-content: center;
+                            ">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+
+                        <div class="aee-modal-body" style="padding: 20px 25px; overflow-y: auto; flex: 1;">
+                            <!-- Dados pessoais -->
+                            <div style="margin-bottom: 20px;">
+                                <h4 style="margin: 0 0 12px; font-size: 0.95rem; color: #374151; display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas fa-user" style="color: #f59e0b;"></i>
+                                    Dados Pessoais
+                                </h4>
+
+                                <div style="display: grid; gap: 12px;">
+                                    <div>
+                                        <label style="display: block; font-size: 12px; font-weight: 600; color: #64748b; margin-bottom: 4px; text-transform: uppercase;">
+                                            Nome Completo *
+                                        </label>
+                                        <input type="text" id="aeeEditNome" value="${this.escapeHtml(aluno.nome || '')}"
+                                            style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+                                    </div>
+
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                        <div>
+                                            <label style="display: block; font-size: 12px; font-weight: 600; color: #64748b; margin-bottom: 4px; text-transform: uppercase;">
+                                                Email
+                                            </label>
+                                            <input type="email" id="aeeEditEmail" value="${this.escapeHtml(aluno.email || '')}"
+                                                style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+                                        </div>
+                                        <div>
+                                            <label style="display: block; font-size: 12px; font-weight: 600; color: #64748b; margin-bottom: 4px; text-transform: uppercase;">
+                                                Matrícula
+                                            </label>
+                                            <input type="text" id="aeeEditMatricula" value="${this.escapeHtml(aluno.matricula || '')}"
+                                                style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+                                        </div>
+                                    </div>
+
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                        <div>
+                                            <label style="display: block; font-size: 12px; font-weight: 600; color: #64748b; margin-bottom: 4px; text-transform: uppercase;">
+                                                Turma
+                                            </label>
+                                            <input type="text" id="aeeEditTurma" value="${this.escapeHtml(aluno.turma || '')}"
+                                                style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+                                        </div>
+                                        <div>
+                                            <label style="display: block; font-size: 12px; font-weight: 600; color: #64748b; margin-bottom: 4px; text-transform: uppercase;">
+                                                Curso
+                                            </label>
+                                            <input type="text" id="aeeEditCurso" value="${this.escapeHtml(aluno.curso || '')}"
+                                                style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label style="display: block; font-size: 12px; font-weight: 600; color: #64748b; margin-bottom: 4px; text-transform: uppercase;">
+                                            Período
+                                        </label>
+                                        <select id="aeeEditPeriodo" style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; background: white; box-sizing: border-box;">
+                                            <option value="">Não informado</option>
+                                            <option value="1" ${aluno.periodo === '1' ? 'selected' : ''}>1º Período</option>
+                                            <option value="2" ${aluno.periodo === '2' ? 'selected' : ''}>2º Período</option>
+                                            <option value="3" ${aluno.periodo === '3' ? 'selected' : ''}>3º Período</option>
+                                            <option value="4" ${aluno.periodo === '4' ? 'selected' : ''}>4º Período</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Acessibilidade -->
+                            <div style="margin-bottom: 20px; padding: 15px; background: #fef3c7; border-radius: 12px; border: 1px solid #fde68a;">
+                                <h4 style="margin: 0 0 12px; font-size: 0.95rem; color: #92400e; display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas fa-universal-access"></i>
+                                    Acessibilidade
+                                </h4>
+
+                                <div style="display: grid; gap: 12px;">
+                                    <div>
+                                        <label style="display: block; font-size: 12px; font-weight: 600; color: #92400e; margin-bottom: 4px; text-transform: uppercase;">
+                                            Condição / Tipo de Acessibilidade *
+                                        </label>
+                                        <select id="aeeEditCondicao" style="width: 100%; padding: 10px 12px; border: 2px solid #fde68a; border-radius: 8px; font-size: 14px; background: white; box-sizing: border-box;">
+                                            <option value="">Selecione...</option>
+                                            ${opcoesCondicao}
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label style="display: block; font-size: 12px; font-weight: 600; color: #92400e; margin-bottom: 4px; text-transform: uppercase;">
+                                            Detalhes / Descrição
+                                        </label>
+                                        <textarea id="aeeEditDetalhes" rows="3"
+                                            placeholder="Ex: cadeirante, baixa visão no olho esquerdo, TDAH nível moderado..."
+                                            style="width: 100%; padding: 10px 12px; border: 2px solid #fde68a; border-radius: 8px; font-size: 14px; resize: vertical; font-family: inherit; box-sizing: border-box;"
+                                        >${this.escapeHtml(detalhesAtual)}</textarea>
+                                    </div>
+
+                                    <div>
+                                        <label style="display: block; font-size: 12px; font-weight: 600; color: #92400e; margin-bottom: 4px; text-transform: uppercase;">
+                                            Status do Cadastro AEE
+                                        </label>
+                                        <select id="aeeEditStatus" style="width: 100%; padding: 10px 12px; border: 2px solid #fde68a; border-radius: 8px; font-size: 14px; background: white; box-sizing: border-box;">
+                                            <option value="pendente" ${statusAtual === 'pendente' ? 'selected' : ''}>⏳ Pendente</option>
+                                            <option value="aprovada" ${statusAtual === 'aprovada' ? 'selected' : ''}>✅ Aprovada</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="padding: 12px; background: #eff6ff; border-left: 4px solid #3b82f6; border-radius: 8px;">
+                                <p style="margin: 0; font-size: 0.85rem; color: #1e40af;">
+                                    <i class="fas fa-info-circle"></i>
+                                    Alterações serão registradas no histórico do aluno.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="aee-modal-footer" style="
+                            padding: 15px 25px; border-top: 1px solid #e2e8f0;
+                            display: flex; justify-content: flex-end; gap: 10px;
+                            background: #f8fafc;
+                        ">
+                            <button onclick="document.getElementById('aeeModalEditarAluno').remove()" style="
+                                padding: 10px 20px; background: #6b7280; color: white;
+                                border: none; border-radius: 10px; font-weight: 600;
+                                cursor: pointer; font-size: 0.9rem;
+                            ">
+                                <i class="fas fa-times"></i> Cancelar
+                            </button>
+                            <button id="aeeBtnSalvarEdicao" onclick="AeeModule.salvarEdicaoAlunoAEE('${alunoId}')" style="
+                                padding: 10px 20px; background: linear-gradient(135deg, #10b981, #059669);
+                                color: white; border: none; border-radius: 10px; font-weight: 600;
+                                cursor: pointer; font-size: 0.9rem;
+                            ">
+                                <i class="fas fa-save"></i> Salvar Alterações
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+            // Fecha ao clicar no backdrop
+            setTimeout(() => {
+                const backdrop = document.getElementById('aeeModalEditarAluno');
+                if (backdrop) {
+                    backdrop.addEventListener('click', (e) => {
+                        if (e.target === backdrop) backdrop.remove();
+                    });
+                }
+
+                const condicaoSelect = document.getElementById('aeeEditCondicao');
+                if (condicaoSelect) {
+                    condicaoSelect.addEventListener('change', function () {
+                        const detalhesField = document.getElementById('aeeEditDetalhes');
+                        const wrapper = detalhesField?.closest('div');
+                        if (wrapper) {
+                            wrapper.style.opacity = this.value ? '1' : '0.5';
+                        }
+                    });
+                }
+            }, 50);
+
+            this.mostrarToast('✅ Dados carregados', 'success');
+
+        } catch (error) {
+            console.error('❌ Erro ao abrir edição:', error);
+            this.mostrarToast('❌ ' + error.message, 'error');
+        }
+    },
+
+    // ============================================================================
+    // 💾 SALVAR EDIÇÃO DO ALUNO AEE
+    // ============================================================================
+    async salvarEdicaoAlunoAEE(alunoId) {
+        console.log('💾 AEE - Salvando edição:', alunoId);
+
+        const btn = document.getElementById('aeeBtnSalvarEdicao');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+        }
+
+        try {
+            const token = this.getToken();
+
+            const payload = {
+                nome: document.getElementById('aeeEditNome')?.value?.trim(),
+                email: document.getElementById('aeeEditEmail')?.value?.trim(),
+                matricula: document.getElementById('aeeEditMatricula')?.value?.trim(),
+                turma: document.getElementById('aeeEditTurma')?.value?.trim(),
+                curso: document.getElementById('aeeEditCurso')?.value?.trim(),
+                periodo: document.getElementById('aeeEditPeriodo')?.value || null,
+                condicao: document.getElementById('aeeEditCondicao')?.value,
+                detalhes: document.getElementById('aeeEditDetalhes')?.value?.trim() || '',
+                status: document.getElementById('aeeEditStatus')?.value || 'pendente'
+            };
+
+            if (!payload.nome) {
+                this.mostrarToast('⚠️ Nome é obrigatório', 'warning');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-save"></i> Salvar Alterações';
+                }
+                return;
+            }
+            if (!payload.condicao) {
+                this.mostrarToast('⚠️ Selecione a condição de acessibilidade', 'warning');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-save"></i> Salvar Alterações';
+                }
+                return;
+            }
+
+            const response = await fetch(`/api/aee/alunos/${alunoId}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.error || 'Erro ao salvar');
+            }
+
+            this.mostrarToast('✅ Aluno atualizado com sucesso!', 'success');
+
+            const modal = document.getElementById('aeeModalEditarAluno');
+            if (modal) modal.remove();
+
+            await this.carregarAlunos();
+            if (this.safeGet('aeeBadgeAlunos')) {
+                this.carregarDashboard();
+            }
+
+        } catch (error) {
+            console.error('❌ Erro ao salvar:', error);
+            this.mostrarToast('❌ ' + error.message, 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save"></i> Salvar Alterações';
+            }
+        }
     },
 
     // ============================================================================

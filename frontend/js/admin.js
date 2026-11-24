@@ -11747,47 +11747,32 @@ class AdminPanel {
             }
         }
 
-        // ============================================
-        // 🔥 BUSCAR CURSOS DO BANCO
-        // ============================================
+        // Buscar cursos do banco
         let cursosDoBanco = [];
-        
         try {
             const token = localStorage.getItem('auth_token');
             const response = await fetch('/api/admin/cursos', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            
             const data = await response.json();
-            
-            if (data.success && data.cursos) {
-                cursosDoBanco = data.cursos;
-            }
+            if (data.success && data.cursos) cursosDoBanco = data.cursos;
         } catch (error) {
             console.error('❌ Erro ao buscar cursos:', error);
         }
 
-        // ============================================
-        // 🔥 BUSCAR EIXOS DO BANCO
-        // ============================================
+        // Buscar eixos do banco
         let eixosDoBanco = [];
-
         try {
             const token = localStorage.getItem('auth_token');
             const response = await fetch('/api/admin/eixos', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            
             const data = await response.json();
-            
-            if (data.success && data.eixos) {
-                eixosDoBanco = data.eixos;
-            }
+            if (data.success && data.eixos) eixosDoBanco = data.eixos;
         } catch (error) {
             console.error('❌ Erro ao buscar eixos:', error);
         }
 
-        // 🔥 Fallback: se não tiver eixos no banco, usar padrão (opcional)
         if (eixosDoBanco.length === 0) {
             eixosDoBanco = [
                 { nome: 'natureza', label: '🌿 Ciências da Natureza', icone: 'fa-leaf', cor: '#10b981' },
@@ -11798,7 +11783,6 @@ class AdminPanel {
                 { nome: 'turismo', label: '✈️ Turismo e Hospitalidade', icone: 'fa-plane', cor: '#06b6d4' },
                 { nome: 'ambiente', label: '🌱 Meio Ambiente', icone: 'fa-seedling', cor: '#10b981' }
             ];
-            console.log('⚠️ Usando eixos padrão (banco vazio)');
         }
 
         const nome = usuario?.nome || '';
@@ -11815,62 +11799,44 @@ class AdminPanel {
         const departamento = usuario?.departamento || '';
         const titulacao = usuario?.titulacao || '';
         const precisaAcessibilidade = usuario?.precisaAcessibilidade || false;
+        // 🔥 USA O CAMPO CORRETO DO BANCO
+        const condicaoAcessibilidade = usuario?.condicaoAcessibilidade || '';
         const atribuicoes = usuario?.atribuicoes || '';
         const perfilAlimentar = usuario?.perfilAlimentar || 'nao_informado';
         const refeicoesQueParticipa = usuario?.refeicoesParticipa || [];
         
         const escapeStr = (str) => String(str || '').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
         
-        // ============================================
-        // 🔥 GERAR OPÇÕES DE CURSOS
-        // ============================================
         const gerarOpcoesCursos = () => {
             if (!cursosDoBanco || cursosDoBanco.length === 0) {
                 return '<option value="">Nenhum curso disponível</option>';
             }
-            
             let options = '<option value="">Selecione um curso...</option>';
             const cursosOrdenados = [...cursosDoBanco].sort((a, b) => a.nome.localeCompare(b.nome));
-            
             cursosOrdenados.forEach(curso => {
-                const isAtivo = curso.ativo !== false;
-                if (!isAtivo) return;
-                
+                if (curso.ativo === false) return;
                 const selected = cursoSelecionado === curso.nome ? 'selected' : '';
                 options += `<option value="${escapeStr(curso.nome)}" ${selected}>${curso.nome}</option>`;
             });
-            
             return options;
         };
 
-        // ============================================
-        // 🔥 GERAR OPÇÕES DE EIXOS (DINÂMICO DO BANCO)
-        // ============================================
         const gerarOpcoesEixos = () => {
             if (!eixosDoBanco || eixosDoBanco.length === 0) {
                 return '<option value="">Nenhum eixo cadastrado</option>';
             }
-            
             let options = '<option value="">Selecione um eixo...</option>';
-            
-            // Ordenar por label/nome
             const eixosOrdenados = [...eixosDoBanco].sort((a, b) => 
                 (a.label || a.nome).localeCompare(b.label || b.nome)
             );
-            
             eixosOrdenados.forEach(item => {
-                // Verificar se está ativo
                 if (item.ativo === false) return;
-                
-                // Usar o nome como valor (para compatibilidade)
                 const valor = item.nome;
                 const label = item.label || item.nome;
                 const icone = item.icone ? `<i class="fas ${item.icone}"></i> ` : '';
                 const selected = eixo === valor ? 'selected' : '';
-                
                 options += `<option value="${escapeStr(valor)}" ${selected}>${icone}${label}</option>`;
             });
-            
             return options;
         };
         
@@ -11937,9 +11903,7 @@ class AdminPanel {
                     <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
                 </div>
                 
-                <!-- ============================================ -->
                 <!-- ALUNO -->
-                <!-- ============================================ -->
                 <div id="alunoFields" class="role-specific" style="${role === 'aluno' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -11985,15 +11949,28 @@ class AdminPanel {
                         </div>
                     </div>
                     
+                    <!-- 🔥 ACESSIBILIDADE COM DESCRIÇÃO (condicaoAcessibilidade) -->
                     <div class="checkbox-group" style="margin: 10px 0;">
                         <input type="checkbox" id="userAcessibilidade" ${precisaAcessibilidade ? 'checked' : ''}>
                         <label for="userAcessibilidade"><i class="fas fa-wheelchair"></i> Necessita de acessibilidade</label>
                     </div>
+                    
+                    <div id="campoDescricaoAcessibilidade" style="display: ${precisaAcessibilidade ? 'block' : 'none'}; margin: 12px 0 0 0; background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 10px; padding: 15px;">
+                        <label for="userCondicaoAcessibilidade" style="font-weight: 600; font-size: 13px; color: #5b21b6; display: block; margin-bottom: 8px;">
+                            <i class="fas fa-pen"></i> Descreva a acessibilidade
+                        </label>
+                        <textarea id="userCondicaoAcessibilidade"
+                                rows="3"
+                                maxlength="500"
+                                placeholder="Ex: Baixa visão, intérprete de Libras, cadeirante, TDAH, autismo, dislexia..."
+                                style="width: 100%; padding: 10px 12px; border: 1px solid #c4b5fd; border-radius: 8px; font-size: 14px; resize: vertical; font-family: inherit; box-sizing: border-box;">${escapeStr(condicaoAcessibilidade)}</textarea>
+                        <small style="color: #7c3aed; font-size: 11px; display: block; margin-top: 6px;">
+                            <i class="fas fa-info-circle"></i> Esta informação ajuda professores e equipe pedagógica a adaptar atividades.
+                        </small>
+                    </div>
                 </div>
                 
-                <!-- ============================================ -->
                 <!-- PROFESSOR -->
-                <!-- ============================================ -->
                 <div id="professorFields" class="role-specific" style="${role === 'professor' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -12021,9 +11998,7 @@ class AdminPanel {
                     </div>
                 </div>
                 
-                <!-- ============================================ -->
                 <!-- SETOR PEDAGÓGICO -->
-                <!-- ============================================ -->
                 <div id="setorPedagogicoFields" class="role-specific" style="${role === 'setor_pedagogico' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -12041,9 +12016,7 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- ============================================ -->
                 <!-- GESTÃO GERAL -->
-                <!-- ============================================ -->
                 <div id="gestaoGeralFields" class="role-specific" style="${role === 'gestao_geral' ? 'display: block;' : 'display: none;'}">
                     <div class="form-group">
                         <label><i class="fas fa-building"></i> Departamento</label>
@@ -12059,9 +12032,7 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- ============================================ -->
                 <!-- SUPERVISÃO -->
-                <!-- ============================================ -->
                 <div id="supervisaoFields" class="role-specific" style="${role === 'supervisao' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -12079,9 +12050,7 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- ============================================ -->
                 <!-- PSICOLOGIA -->
-                <!-- ============================================ -->
                 <div id="psicologiaFields" class="role-specific" style="${role === 'psicologia' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -12111,9 +12080,7 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- ============================================ -->
                 <!-- ASSISTENTE SOCIAL -->
-                <!-- ============================================ -->
                 <div id="assistenteSocialFields" class="role-specific" style="${role === 'assistente-social' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -12137,9 +12104,7 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- ============================================ -->
                 <!-- PROTAGONISMO -->
-                <!-- ============================================ -->
                 <div id="protagonismoFields" class="role-specific" style="${role === 'protagonismo' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -12157,9 +12122,7 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- ============================================ -->
                 <!-- BIBLIOTECA -->
-                <!-- ============================================ -->
                 <div id="bibliotecaFields" class="role-specific" style="${role === 'biblioteca' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -12177,9 +12140,7 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- ============================================ -->
                 <!-- SECRETARIA -->
-                <!-- ============================================ -->
                 <div id="secretariaFields" class="role-specific" style="${role === 'secretaria' ? 'display: block;' : 'display: none;'}">
                     <div class="form-group">
                         <label><i class="fas fa-building"></i> Departamento</label>
@@ -12195,9 +12156,7 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- ============================================ -->
-                <!-- 🔥 RECEPÇÃO -->
-                <!-- ============================================ -->
+                <!-- RECEPÇÃO -->
                 <div id="recepcaoFields" class="role-specific" style="${role === 'recepcao' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -12215,9 +12174,7 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- ============================================ -->
                 <!-- GESTÃO ADM -->
-                <!-- ============================================ -->
                 <div id="gestaoAdmFields" class="role-specific" style="${role === 'gestao-adm' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -12235,9 +12192,7 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- ============================================ -->
                 <!-- COORDENAÇÃO DE PÁTIO -->
-                <!-- ============================================ -->
                 <div id="coordenacaoPatioFields" class="role-specific" style="${role === 'coordenacao_patio' ? 'display: block;' : 'display: none;'}">
                     <div class="form-group">
                         <label><i class="fas fa-building"></i> Departamento</label>
@@ -12249,9 +12204,7 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- ============================================ -->
                 <!-- ENFERMARIA -->
-                <!-- ============================================ -->
                 <div id="enfermariaFields" class="role-specific" style="${role === 'enfermaria' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -12277,9 +12230,7 @@ class AdminPanel {
                     </div>
                 </div>
                 
-                <!-- ============================================ -->
                 <!-- COZINHA -->
-                <!-- ============================================ -->
                 <div id="cozinhaFields" class="role-specific" style="${role === 'cozinha' ? 'display: block;' : 'display: none;'}">
                     <div class="form-group">
                         <label><i class="fas fa-building"></i> Departamento</label>
@@ -12333,6 +12284,24 @@ class AdminPanel {
                     const refeicoesDiv = document.getElementById('refeicoesDiv');
                     if (refeicoesDiv) {
                         refeicoesDiv.style.display = (perfilSelect.value === 'sempre' || perfilSelect.value === 'as_vezes') ? 'block' : 'none';
+                    }
+                });
+            }
+
+            // 🔥 LISTENER DO CHECKBOX DE ACESSIBILIDADE
+            const chkAcess = document.getElementById('userAcessibilidade');
+            const campoDesc = document.getElementById('campoDescricaoAcessibilidade');
+            const txtDesc = document.getElementById('userCondicaoAcessibilidade');
+
+            if (chkAcess && campoDesc) {
+                campoDesc.style.display = chkAcess.checked ? 'block' : 'none';
+
+                chkAcess.addEventListener('change', function() {
+                    campoDesc.style.display = this.checked ? 'block' : 'none';
+                    if (!this.checked && txtDesc) {
+                        txtDesc.value = '';
+                    } else if (this.checked && txtDesc) {
+                        setTimeout(() => txtDesc.focus(), 150);
                     }
                 });
             }
@@ -12506,7 +12475,16 @@ class AdminPanel {
             if (role === 'aluno') {
                 dados.curso = document.getElementById('userCurso').value;
                 dados.turma = document.getElementById('userTurma').value;
-                dados.precisaAcessibilidade = document.getElementById('userAcessibilidade').checked;
+                
+                // 🔥 ACESSIBILIDADE — USA condicaoAcessibilidade (campo real do banco)
+                const chkAcess = document.getElementById('userAcessibilidade');
+                const txtCond = document.getElementById('userCondicaoAcessibilidade');
+                
+                dados.precisaAcessibilidade = chkAcess ? chkAcess.checked : false;
+                dados.condicaoAcessibilidade = (chkAcess && chkAcess.checked && txtCond)
+                    ? (txtCond.value || '').trim()
+                    : '';
+                    
             } else if (role === 'professor') {
                 dados.eixo = document.getElementById('userEixo').value;
                 dados.departamento = document.getElementById('userDepartamento').value || undefined;
@@ -12577,7 +12555,6 @@ class AdminPanel {
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
             }
             
-
             // Se for criação (sem ID), adicionar senha
             if (!id) {
                 dados.password = document.getElementById('userPassword').value;
