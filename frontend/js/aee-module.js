@@ -465,9 +465,6 @@ window.AeeModule = {
         }
     },
 
-    // ============================================
-    // 🔥 DASHBOARD AEE (CORRIGIDO - pega dados reais do banco)
-    // ============================================
     async carregarDashboard() {
         const pane = this.safeGet('aeePaneDashboard');
         if (!pane) return;
@@ -504,20 +501,8 @@ window.AeeModule = {
                         <div class="aee-stat-label">Alunos AEE</div>
                         <div class="aee-stat-sub">de ${d.totalAlunos} alunos</div>
                     </div>
-
-                    <div class="aee-stat-card" style="background: linear-gradient(135deg, #10b981, #059669);">
-                        <div class="aee-stat-icon"><i class="fas fa-check-circle"></i></div>
-                        <div class="aee-stat-value">${d.alunosAprovados}</div>
-                        <div class="aee-stat-label">Aprovados</div>
-                        <div class="aee-stat-sub">adaptações ativas</div>
-                    </div>
-
-                    <div class="aee-stat-card" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
-                        <div class="aee-stat-icon"><i class="fas fa-clock"></i></div>
-                        <div class="aee-stat-value">${d.alunosPendentes}</div>
-                        <div class="aee-stat-label">Pendentes</div>
-                        <div class="aee-stat-sub">aguardando aprovação</div>
-                    </div>
+                    
+                    <!-- 🔥 Removido o card de "Aprovados" e "Pendentes" -->
 
                     <div class="aee-stat-card" style="background: linear-gradient(135deg, #ec4899, #db2777);">
                         <div class="aee-stat-icon"><i class="fas fa-file-alt"></i></div>
@@ -558,11 +543,11 @@ window.AeeModule = {
                                     ${d.distribuicaoCondicoes.map(c => `
                                         <div class="aee-condicao-item">
                                             <div class="aee-condicao-label">
-                                                <i class="fas ${this.getIconeCondicao(c.condicao)}" style="color: ${this.getCorCondicao(c.condicao)};"></i>
+                                                <i class="fas fa-heart" style="color: #6366f1;"></i>
                                                 <span>${this.escapeHtml(c.label)}</span>
                                             </div>
                                             <div class="aee-condicao-count">
-                                                <span class="aee-count-badge" style="background: ${this.getCorCondicao(c.condicao)}20; color: ${this.getCorCondicao(c.condicao)};">
+                                                <span class="aee-count-badge" style="background: #6366f120; color: #6366f1;">
                                                     ${c.count}
                                                 </span>
                                             </div>
@@ -589,32 +574,6 @@ window.AeeModule = {
 
                 <div class="aee-card">
                     <div class="aee-card-header">
-                        <h3><i class="fas fa-chart-line"></i> Desempenho Geral</h3>
-                    </div>
-                    <div class="aee-card-body">
-                        <div class="aee-grid-4">
-                            <div class="aee-mini-stat">
-                                <div class="aee-mini-value" style="color: #10b981;">${d.mediaGeral || '0.0'}</div>
-                                <div class="aee-mini-label">Média Geral</div>
-                            </div>
-                            <div class="aee-mini-stat">
-                                <div class="aee-mini-value" style="color: #3b82f6;">${d.totalResultados || 0}</div>
-                                <div class="aee-mini-label">Resultados</div>
-                            </div>
-                            <div class="aee-mini-stat">
-                                <div class="aee-mini-value" style="color: #f59e0b;">${d.totalProvasRealizadas || 0}</div>
-                                <div class="aee-mini-label">Provas Realizadas</div>
-                            </div>
-                            <div class="aee-mini-stat">
-                                <div class="aee-mini-value" style="color: #8b5cf6;">${d.taxaAprovacao || 0}%</div>
-                                <div class="aee-mini-label">Taxa Aprovação</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="aee-card">
-                    <div class="aee-card-header">
                         <h3><i class="fas fa-user-plus"></i> Alunos Recentes</h3>
                         <button class="aee-btn aee-btn-outline" onclick="AeeModule.trocarTab('alunos')">
                             Ver todos <i class="fas fa-arrow-right"></i>
@@ -625,12 +584,13 @@ window.AeeModule = {
                             <div class="aee-recentes-list">
                                 ${d.alunosRecentes.map(a => `
                                     <div class="aee-recente-item" onclick="AeeModule.verDetalhesAluno('${a.id}')">
-                                        <div class="aee-recente-avatar">
-                                            <i class="fas ${this.getIconeCondicao(a.condicao)}"></i>
+                                        <div class="aee-recente-avatar" style="background: #6366f120; color: #6366f1;">
+                                            <i class="fas fa-user"></i>
                                         </div>
                                         <div class="aee-recente-info">
                                             <strong>${this.escapeHtml(a.nome)}</strong>
-                                            <span>${this.escapeHtml(a.turma || 'Sem turma')} • ${this.escapeHtml(a.condicaoLabel)}</span>
+                                            <!-- 🔥 Removido o Status e ajustada a label da condição -->
+                                            <span>${this.escapeHtml(a.turma || 'Sem turma')} • ${this.escapeHtml(a.condicaoLabel || 'Acessibilidade')}</span>
                                         </div>
                                         <i class="fas fa-chevron-right"></i>
                                     </div>
@@ -669,13 +629,16 @@ window.AeeModule = {
                 try { this.charts.condicoes.destroy(); } catch (e) {}
             }
 
+            // 🔥 Paleta de cores para condições dinâmicas (texto livre)
+            const coresDinamicas = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#ef4444', '#f97316', '#14b8a6', '#a855f7'];
+
             this.charts.condicoes = new Chart(ctxCond.getContext('2d'), {
                 type: 'doughnut',
                 data: {
                     labels: d.distribuicaoCondicoes.map(c => c.label),
                     datasets: [{
                         data: d.distribuicaoCondicoes.map(c => c.count),
-                        backgroundColor: d.distribuicaoCondicoes.map(c => this.getCorCondicao(c.condicao)),
+                        backgroundColor: d.distribuicaoCondicoes.map((_, i) => coresDinamicas[i % coresDinamicas.length]),
                         borderWidth: 3,
                         borderColor: '#ffffff'
                     }]
@@ -1857,9 +1820,6 @@ window.AeeModule = {
         }
     },
 
-    // ============================================
-    // 🔥 DETALHES DO ALUNO (com notas)
-    // ============================================
     async verDetalhesAluno(id) {
         try {
             const response = await fetch(`/api/aee/alunos/${id}`, {
@@ -1870,6 +1830,10 @@ window.AeeModule = {
             if (!data.success) throw new Error(data.error);
 
             const a = data.aluno;
+            
+            // 🔥 CORREÇÃO: Pega a condição exata (texto livre) do banco
+            const condicaoTexto = a.acessibilidade?.condicao?.tipo || 'Não especificada';
+            const detalhesTexto = a.acessibilidade?.condicao?.detalhes || '';
 
             const antigo = this.safeGet('aeeModalDetalhes');
             if (antigo) antigo.remove();
@@ -1877,14 +1841,15 @@ window.AeeModule = {
             const modalHtml = `
                 <div class="aee-modal-backdrop" id="aeeModalDetalhes">
                     <div class="aee-modal">
-                        <div class="aee-modal-header" style="background: linear-gradient(135deg, ${this.getCorCondicao(a.acessibilidade.condicao.tipo)}, ${this.getCorCondicao(a.acessibilidade.condicao.tipo)}cc);">
+                        <div class="aee-modal-header" style="background: linear-gradient(135deg, #6366f1, #8b5cf6);">
                             <div class="aee-modal-header-content">
                                 <div class="aee-modal-avatar">
-                                    <i class="fas ${this.getIconeCondicao(a.acessibilidade.condicao.tipo)}"></i>
+                                    <i class="fas fa-user"></i>
                                 </div>
                                 <div>
                                     <h3>${this.escapeHtml(a.nome)}</h3>
-                                    <p>${this.escapeHtml(a.acessibilidade.condicao.label)}</p>
+                                    <!-- 🔥 Exibe o texto real, não o genérico -->
+                                    <p>${this.escapeHtml(condicaoTexto)}</p>
                                 </div>
                             </div>
                             <button class="aee-modal-close" onclick="AeeModule.fecharModal()">
@@ -1918,24 +1883,15 @@ window.AeeModule = {
                             <div class="aee-modal-section">
                                 <h4><i class="fas fa-universal-access"></i> Acessibilidade</h4>
                                 <div class="aee-info-grid">
-                                    <div class="aee-info-item">
-                                        <span class="aee-info-label">Condição</span>
-                                        <span class="aee-info-value">${this.escapeHtml(a.acessibilidade.condicao.label)}</span>
-                                    </div>
-                                    <div class="aee-info-item">
-                                        <span class="aee-info-label">Status</span>
-                                        <span class="aee-info-value aee-status-${a.acessibilidade.status}">
-                                            ${a.acessibilidade.status === 'aprovada' ? '<i class="fas fa-check-circle"></i> Aprovada' : '<i class="fas fa-clock"></i> Pendente'}
-                                        </span>
-                                    </div>
                                     <div class="aee-info-item aee-info-full">
-                                        <span class="aee-info-label">Data da Solicitação</span>
-                                        <span class="aee-info-value">${this.formatarData(a.acessibilidade.dataSolicitacao)}</span>
+                                        <span class="aee-info-label">Condição</span>
+                                        <span class="aee-info-value"><strong>${this.escapeHtml(condicaoTexto)}</strong></span>
                                     </div>
-                                    ${a.acessibilidade.condicao.detalhes ? `
+                                    <!-- 🔥 REMOVIDO O BLOCO DE STATUS AQUI -->
+                                    ${detalhesTexto ? `
                                         <div class="aee-info-item aee-info-full">
                                             <span class="aee-info-label">Detalhes</span>
-                                            <span class="aee-info-value">${this.escapeHtml(a.acessibilidade.condicao.detalhes)}</span>
+                                            <span class="aee-info-value">${this.escapeHtml(detalhesTexto)}</span>
                                         </div>
                                     ` : ''}
                                 </div>

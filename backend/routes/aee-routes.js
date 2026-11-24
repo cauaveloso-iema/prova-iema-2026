@@ -1,12 +1,11 @@
 // ============================================================================
 // AEE - ATENDIMENTO EDUCACIONAL ESPECIALIZADO - EducaPleno
 // ============================================================================
-// VERSÃO 2.4 - Correções:
-//   - /provas lista SOMENTE provas adaptadas de turmas com alunos AEE ativos
-//   - /provas/:id bloqueia (403) provas não adaptadas ou de turmas sem AEE
-//   - Dashboard: totalProvasAdaptadas conta apenas provas AEE-relevantes
-//   - Dropdown de turmas em /provas lista apenas turmas com AEE
-//   - Fonte única de verdade para condições de acessibilidade
+// VERSÃO 2.5 - Correções:
+//   - Retorna a condição EXATA salva no banco (texto livre)
+//   - Removido controle de "status pendente/aprovado"
+//   - Dashboard sem métricas de aprovação de cadastro
+//   - Rota PUT aceita texto livre para a condição
 // ============================================================================
 
 const express = require('express');
@@ -51,8 +50,6 @@ function escaparRegex(str) {
 // ============================================================================
 // HELPERS DE PROVAS AEE
 // ============================================================================
-
-// Critério "é prova adaptada" — reutilizado em várias rotas
 function filtroProvaAdaptada() {
   return {
     $or: [
@@ -63,16 +60,6 @@ function filtroProvaAdaptada() {
   };
 }
 
-/**
- * Retorna os IDs das turmas que possuem pelo menos um aluno AEE ativo
- * e a lista de IDs desses alunos.
- *
- * Estratégia:
- *  1) Alunos AEE ativos (User.precisaAcessibilidade = true, ativo = true)
- *  2) Vínculo por User.turmaId (mais confiável)
- *  3) Fallback por Turma.alunos (caso User.turmaId esteja nulo)
- *  União dos dois conjuntos.
- */
 async function obterTurmasComAlunosAEE() {
   const alunosAEE = await User.find({
     role: 'aluno',
@@ -82,13 +69,11 @@ async function obterTurmasComAlunosAEE() {
 
   const alunosAEEIds = alunosAEE.map(a => a._id);
 
-  // Vínculo via User.turmaId
   const turmaIdsViaUser = alunosAEE
     .map(a => a.turmaId)
     .filter(Boolean)
     .map(id => id.toString());
 
-  // Vínculo via Turma.alunos
   let turmaIdsViaTurma = [];
   if (Turma && alunosAEEIds.length > 0) {
     const turmas = await Turma.find({ alunos: { $in: alunosAEEIds } })
@@ -214,7 +199,7 @@ router.get('/health', (req, res) => {
   res.json({
     success: true,
     status: 'online',
-    service: 'AEE v2.4',
+    service: 'AEE v2.5',
     models: { Prova: !!Prova, Turma: !!Turma, Resultado: !!Resultado, ProvaRealizada: !!ProvaRealizada }
   });
 });
@@ -226,48 +211,31 @@ router.get('/dashboard', authenticateTokenLocal, verificarPermissaoAEE, async (r
   try {
     logger.info(`📋 AEE Dashboard - user ${req.userId}`);
 
-    // Turmas com alunos AEE (reutilizado em várias contagens)
     const { turmaIds, alunosAEEIds } = await obterTurmasComAlunosAEE();
 
     const [
       totalAlunos,
       totalAlunosComAcessibilidade,
       totalTurmas,
-      totalProvasAdaptadas,
-      alunosPendentes,
-      alunosAprovados
+      totalProvasAdaptadas
     ] = await Promise.all([
       User.countDocuments({ role: 'aluno', ativo: true }),
       User.countDocuments({ role: 'aluno', precisaAcessibilidade: true, ativo: true }),
       Turma ? Turma.countDocuments({ ativa: true }) : 0,
-
-      // 🔥 CORRIGIDO: provas adaptadas E de turmas com alunos AEE
       (Prova && turmaIds.length > 0)
         ? Prova.countDocuments({
             publicada: true,
             turmaId: { $in: turmaIds },
             ...filtroProvaAdaptada()
           })
-        : 0,
-
-      User.countDocuments({
-        role: 'aluno',
-        precisaAcessibilidade: true,
-        ativo: true,
-        $or: [{ acessibilidadeAprovadaPor: { $exists: false } }, { acessibilidadeAprovadaPor: null }]
-      }),
-      User.countDocuments({
-        role: 'aluno',
-        precisaAcessibilidade: true,
-        ativo: true,
-        acessibilidadeAprovadaPor: { $exists: true, $ne: null }
-      })
+        : 0
     ]);
 
     const taxaAcessibilidade = totalAlunos > 0
       ? ((totalAlunosComAcessibilidade / totalAlunos) * 100).toFixed(1)
       : 0;
 
+    // 🔥 Agrupa pela condição exata do banco
     const distribuicaoCondicoes = await User.aggregate([
       { $match: { role: 'aluno', precisaAcessibilidade: true, ativo: true } },
       { $group: { _id: '$condicaoAcessibilidade', count: { $sum: 1 } } },
@@ -286,7 +254,7 @@ router.get('/dashboard', authenticateTokenLocal, verificarPermissaoAEE, async (r
       precisaAcessibilidade: true,
       ativo: true
     })
-      .select('nome matricula turma condicaoAcessibilidade dataSolicitacaoAcessibilidade')
+      .select('nome matricula turma condicaoAcessibilidade outraCondicao dataSolicitacaoAcessibilidade')
       .sort({ dataSolicitacaoAcessibilidade: -1, createdAt: -1 })
       .limit(5)
       .lean();
@@ -333,15 +301,14 @@ router.get('/dashboard', authenticateTokenLocal, verificarPermissaoAEE, async (r
         taxaAcessibilidade: parseFloat(taxaAcessibilidade),
         totalTurmas,
         totalProvasAdaptadas,
-        alunosPendentes,
-        alunosAprovados,
         totalResultados,
         totalProvasRealizadas,
         mediaGeral,
         taxaAprovacao,
         distribuicaoCondicoes: distribuicaoCondicoes.map(c => ({
           condicao: c._id || 'nao_especificada',
-          label: obterLabelCondicao(c._id),
+          // 🔥 Retorna o texto EXATO salvo no banco
+          label: c._id || 'Não especificada',
           count: c.count
         })),
         distribuicaoTurmas: distribuicaoTurmas.map(t => ({
@@ -354,7 +321,10 @@ router.get('/dashboard', authenticateTokenLocal, verificarPermissaoAEE, async (r
           matricula: a.matricula,
           turma: a.turma,
           condicao: a.condicaoAcessibilidade || 'nao_especificada',
-          condicaoLabel: obterLabelCondicao(a.condicaoAcessibilidade),
+          // 🔥 Se tiver detalhes (texto livre extra), junta com o tipo. Se não, mostra o tipo.
+          condicaoLabel: a.outraCondicaao 
+            ? `${a.condicaoAcessibilidade} - ${a.outraCondicao}` 
+            : (a.condicaoAcessibilidade || 'Acessibilidade'),
           dataSolicitacao: a.dataSolicitacaoAcessibilidade
         })),
         filtrosDisponiveis: {
@@ -376,7 +346,7 @@ router.get('/dashboard', authenticateTokenLocal, verificarPermissaoAEE, async (r
 // ============================================================================
 router.get('/alunos', authenticateTokenLocal, verificarPermissaoAEE, async (req, res) => {
   try {
-    const { condicao, turma, curso, periodo, status, busca, page = 1, limit = 20 } = req.query;
+    const { condicao, turma, curso, periodo, busca, page = 1, limit = 20 } = req.query;
 
     let query = { role: 'aluno', precisaAcessibilidade: true, ativo: true };
 
@@ -385,35 +355,20 @@ router.get('/alunos', authenticateTokenLocal, verificarPermissaoAEE, async (req,
     if (curso && curso !== 'todos') query.curso = curso;
     if (periodo && periodo !== 'todos') query.periodo = periodo;
 
-    if (status === 'aprovada') {
-      query.acessibilidadeAprovadaPor = { $exists: true, $ne: null };
-    } else if (status === 'pendente') {
-      query.$or = [
-        { acessibilidadeAprovadaPor: { $exists: false } },
-        { acessibilidadeAprovadaPor: null }
-      ];
-    }
-
     if (busca) {
       const buscaRegex = new RegExp(escaparRegex(busca), 'i');
-      const buscaOr = [
+      query.$or = [
         { nome: buscaRegex },
         { matricula: buscaRegex },
         { email: buscaRegex }
       ];
-      if (query.$or) {
-        query.$and = [{ $or: query.$or }, { $or: buscaOr }];
-        delete query.$or;
-      } else {
-        query.$or = buscaOr;
-      }
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const [alunos, total] = await Promise.all([
       User.find(query)
-        .select('nome email matricula turma curso periodo condicaoAcessibilidade outraCondicao dataSolicitacaoAcessibilidade acessibilidadeAprovadaPor')
+        .select('nome email matricula turma curso periodo condicaoAcessibilidade outraCondicao dataSolicitacaoAcessibilidade')
         .sort({ nome: 1 })
         .skip(skip)
         .limit(parseInt(limit))
@@ -508,6 +463,12 @@ router.get('/alunos', authenticateTokenLocal, verificarPermissaoAEE, async (req,
 
     const alunosFormatados = alunos.map(aluno => {
       const stats = notasPorAluno.get(aluno._id.toString()) || { total: 0, liberadas: 0, pendentes: 0 };
+      
+      // 🔥 Monta o texto exato da condição
+      let condLabel = aluno.condicaoAcessibilidade || 'Não especificada';
+      if (aluno.outraCondicao) {
+          condLabel = `${condLabel} - ${aluno.outraCondicao}`;
+      }
 
       return {
         id: aluno._id,
@@ -519,11 +480,10 @@ router.get('/alunos', authenticateTokenLocal, verificarPermissaoAEE, async (req,
         periodo: aluno.periodo,
         condicao: {
           tipo: aluno.condicaoAcessibilidade,
-          label: obterLabelCondicao(aluno.condicaoAcessibilidade),
+          label: condLabel,
           descricao: aluno.outraCondicao || null
         },
         dataSolicitacao: aluno.dataSolicitacaoAcessibilidade,
-        statusCadastro: aluno.acessibilidadeAprovadaPor ? 'aprovada' : 'pendente',
         statusNotas: {
           total: stats.total,
           liberadas: stats.liberadas,
@@ -531,8 +491,7 @@ router.get('/alunos', authenticateTokenLocal, verificarPermissaoAEE, async (req,
           todasLiberadas: stats.total > 0 && stats.pendentes === 0,
           temNotas: stats.total > 0,
           temPendentes: stats.pendentes > 0
-        },
-        status: aluno.acessibilidadeAprovadaPor ? 'aprovada' : 'pendente'
+        }
       };
     });
 
@@ -569,7 +528,7 @@ router.get('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
     }
 
     const aluno = await User.findOne({ _id: id, role: 'aluno' })
-      .select('nome email matricula turma curso periodo condicaoAcessibilidade outraCondicao dataSolicitacaoAcessibilidade acessibilidadeAprovadaPor')
+      .select('nome email matricula turma curso periodo condicaoAcessibilidade outraCondicao dataSolicitacaoAcessibilidade')
       .lean();
 
     if (!aluno) return res.status(404).json({ success: false, error: 'Aluno não encontrado' });
@@ -641,6 +600,11 @@ router.get('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
         : '0.0'
     };
 
+    let condLabel = aluno.condicaoAcessibilidade || 'Não especificada';
+    if (aluno.outraCondicao) {
+        condLabel = `${condLabel} - ${aluno.outraCondicao}`;
+    }
+
     res.json({
       success: true,
       aluno: {
@@ -655,11 +619,10 @@ router.get('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
           precisa: true,
           condicao: {
             tipo: aluno.condicaoAcessibilidade,
-            label: obterLabelCondicao(aluno.condicaoAcessibilidade),
+            label: condLabel,
             detalhes: aluno.outraCondicao
           },
-          dataSolicitacao: aluno.dataSolicitacaoAcessibilidade,
-          status: aluno.acessibilidadeAprovadaPor ? 'aprovada' : 'pendente'
+          dataSolicitacao: aluno.dataSolicitacaoAcessibilidade
         },
         estatisticas,
         provasRealizadas
@@ -671,7 +634,6 @@ router.get('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
     res.status(500).json({ success: false, error: error.message });
   }
 });
-
 // ============================================================================
 // GET /api/aee/respostas/:provaId/:alunoId
 // ============================================================================
@@ -1069,7 +1031,6 @@ router.get('/provas', authenticateTokenLocal, verificarPermissaoAEE, async (req,
 
     const { busca, turma, periodo, page = 1, limit = 20 } = req.query;
 
-    // 1) Turmas com alunos AEE
     const { turmaIds } = await obterTurmasComAlunosAEE();
 
     if (turmaIds.length === 0) {
@@ -1083,7 +1044,6 @@ router.get('/provas', authenticateTokenLocal, verificarPermissaoAEE, async (req,
       });
     }
 
-    // 2) Query base — publicada + adaptada + turma com AEE
     const condicoes = [
       { publicada: true },
       { turmaId: { $in: turmaIds } },
@@ -1115,7 +1075,6 @@ router.get('/provas', authenticateTokenLocal, verificarPermissaoAEE, async (req,
       Prova.countDocuments(query)
     ]);
 
-    // Dropdown: só turmas com AEE
     const turmas = Turma
       ? await Turma.find({ _id: { $in: turmaIds }, ativa: true })
           .select('nome disciplina')
@@ -1176,7 +1135,6 @@ router.get('/provas/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
 
     const isAdaptada = prova.tipoProva === 'adaptada' || prova.adaptada === true || prova.alternativas === 3;
 
-    // Segurança: só permite se for adaptada E de turma com AEE
     const { turmaIds } = await obterTurmasComAlunosAEE();
     const turmaDaProva = prova.turmaId?._id?.toString();
     const pertenceTurmaAEE = turmaDaProva && turmaIds.some(id => id.toString() === turmaDaProva);
@@ -1231,7 +1189,7 @@ router.get('/provas/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
 // ============================================================================
 router.get('/relatorio', authenticateTokenLocal, verificarPermissaoAEE, async (req, res) => {
   try {
-    const { turma, curso, condicao, status, periodo } = req.query;
+    const { turma, curso, condicao, periodo } = req.query;
 
     let query = { role: 'aluno', precisaAcessibilidade: true, ativo: true };
     if (condicao && condicao !== 'todos') query.condicaoAcessibilidade = condicao;
@@ -1239,14 +1197,8 @@ router.get('/relatorio', authenticateTokenLocal, verificarPermissaoAEE, async (r
     if (curso && curso !== 'todos') query.curso = curso;
     if (periodo && periodo !== 'todos') query.periodo = periodo;
 
-    if (status === 'aprovada') query.acessibilidadeAprovadaPor = { $exists: true, $ne: null };
-    else if (status === 'pendente') query.$or = [
-      { acessibilidadeAprovadaPor: { $exists: false } },
-      { acessibilidadeAprovadaPor: null }
-    ];
-
     const alunos = await User.find(query)
-      .select('nome email matricula turma curso periodo condicaoAcessibilidade outraCondicao dataSolicitacaoAcessibilidade acessibilidadeAprovadaPor')
+      .select('nome email matricula turma curso periodo condicaoAcessibilidade outraCondicao dataSolicitacaoAcessibilidade')
       .sort({ turma: 1, nome: 1 })
       .lean();
 
@@ -1261,8 +1213,7 @@ router.get('/relatorio', authenticateTokenLocal, verificarPermissaoAEE, async (r
         curso: aluno.curso,
         condicao: obterLabelCondicao(aluno.condicaoAcessibilidade),
         condicaoTipo: aluno.condicaoAcessibilidade,
-        detalhes: aluno.outraCondicao,
-        status: aluno.acessibilidadeAprovadaPor ? 'aprovada' : 'pendente'
+        detalhes: aluno.outraCondicao
       });
     });
 
@@ -1272,15 +1223,11 @@ router.get('/relatorio', authenticateTokenLocal, verificarPermissaoAEE, async (r
       porCondicao[c] = (porCondicao[c] || 0) + 1;
     });
 
-    const aprovados = alunos.filter(a => a.acessibilidadeAprovadaPor).length;
-
     res.json({
       success: true,
       relatorio: {
         dataGeracao: new Date(),
         totalAlunos: alunos.length,
-        totalAprovados: aprovados,
-        totalPendentes: alunos.length - aprovados,
         porCondicao: Object.entries(porCondicao).map(([cond, count]) => ({ condicao: cond, total: count })),
         porTurma: Object.entries(porTurma).map(([t, lista]) => ({ turma: t, total: lista.length, alunos: lista }))
       }
@@ -1293,156 +1240,7 @@ router.get('/relatorio', authenticateTokenLocal, verificarPermissaoAEE, async (r
 });
 
 // ============================================================================
-// GET /api/aee/relatorio/turma/:turma
-// ============================================================================
-router.get('/relatorio/turma/:turma', authenticateTokenLocal, verificarPermissaoAEE, async (req, res) => {
-  try {
-    const { turma } = req.params;
-
-    const alunos = await User.find({
-      role: 'aluno', precisaAcessibilidade: true, ativo: true, turma
-    })
-      .select('nome email matricula curso condicaoAcessibilidade outraCondicao acessibilidadeAprovadaPor')
-      .sort({ nome: 1 })
-      .lean();
-
-    res.json({
-      success: true,
-      turma,
-      total: alunos.length,
-      alunos: alunos.map(a => ({
-        id: a._id,
-        nome: a.nome,
-        email: a.email,
-        matricula: a.matricula,
-        curso: a.curso,
-        condicao: obterLabelCondicao(a.condicaoAcessibilidade),
-        condicaoTipo: a.condicaoAcessibilidade,
-        detalhes: a.outraCondicao,
-        status: a.acessibilidadeAprovadaPor ? 'aprovada' : 'pendente'
-      }))
-    });
-
-  } catch (error) {
-    logger.error('❌ AEE relatorio turma:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ============================================================================
-// GET /api/aee/relatorio/aluno/:id
-// ============================================================================
-router.get('/relatorio/aluno/:id', authenticateTokenLocal, verificarPermissaoAEE, async (req, res) => {
-  try {
-    const { id } = req.params;
-    if (!id.match(/^[0-9a-fA-F]{24}$/)) return res.status(400).json({ success: false, error: 'ID inválido' });
-
-    const aluno = await User.findOne({ _id: id, role: 'aluno' })
-      .select('nome email matricula turma curso condicaoAcessibilidade outraCondicao acessibilidadeAprovadaPor')
-      .lean();
-
-    if (!aluno) return res.status(404).json({ success: false, error: 'Aluno não encontrado' });
-
-    let provas = [];
-    if (Resultado) {
-      const resultados = await Resultado.find({ userId: id })
-        .populate('provaId', 'titulo tipoProva adaptada')
-        .sort({ createdAt: -1 })
-        .limit(20)
-        .lean();
-
-      provas = resultados.map(r => {
-        const nota = extrairNota(r);
-        const notaLiberada = extrairNotaLiberada(r);
-
-        return {
-          provaTitulo: r.provaId?.titulo,
-          adaptada: r.provaId?.adaptada || r.provaId?.tipoProva === 'adaptada',
-          nota: notaLiberada ? nota : null,
-          data: r.createdAt
-        };
-      });
-    }
-
-    res.json({
-      success: true,
-      aluno: {
-        id: aluno._id,
-        nome: aluno.nome,
-        email: aluno.email,
-        matricula: aluno.matricula,
-        turma: aluno.turma,
-        curso: aluno.curso,
-        condicao: {
-          tipo: aluno.condicaoAcessibilidade,
-          label: obterLabelCondicao(aluno.condicaoAcessibilidade),
-          detalhes: aluno.outraCondicao
-        },
-        dataSolicitacao: aluno.dataSolicitacaoAcessibilidade,
-        status: aluno.acessibilidadeAprovadaPor ? 'aprovada' : 'pendente'
-      },
-      provasRealizadas: provas
-    });
-
-  } catch (error) {
-    logger.error('❌ AEE relatorio aluno:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ============================================================================
-// POST /api/aee/alunos/:id/condicao
-// ============================================================================
-router.post('/alunos/:id/condicao', authenticateTokenLocal, verificarPermissaoAEE, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { condicao, outraCondicao, aprovada } = req.body;
-
-    if (!id.match(/^[0-9a-fA-F]{24}$/)) return res.status(400).json({ success: false, error: 'ID inválido' });
-    if (!condicao) return res.status(400).json({ success: false, error: 'Condição é obrigatória' });
-
-    if (!CONDICOES_VALORES.includes(condicao)) return res.status(400).json({ success: false, error: 'Condição inválida' });
-
-    const updateData = {
-      precisaAcessibilidade: true,
-      condicaoAcessibilidade: condicao,
-      outraCondicao: condicao === 'outra' ? (outraCondicao || '') : '',
-      dataSolicitacaoAcessibilidade: new Date()
-    };
-
-    if (aprovada !== false) {
-      updateData.acessibilidadeAprovadaPor = req.userId;
-      updateData.acessibilidadeAprovadaEm = new Date();
-    }
-
-    const aluno = await User.findByIdAndUpdate(id, updateData, { new: true })
-      .select('nome email matricula turma condicaoAcessibilidade outraCondicao acessibilidadeAprovadaPor');
-
-    if (!aluno) return res.status(404).json({ success: false, error: 'Aluno não encontrado' });
-
-    res.json({
-      success: true,
-      message: 'Condição atualizada',
-      aluno: {
-        id: aluno._id,
-        nome: aluno.nome,
-        condicao: {
-          tipo: aluno.condicaoAcessibilidade,
-          label: obterLabelCondicao(aluno.condicaoAcessibilidade),
-          detalhes: aluno.outraCondicao
-        },
-        status: aluno.acessibilidadeAprovadaPor ? 'aprovada' : 'pendente'
-      }
-    });
-
-  } catch (error) {
-    logger.error('❌ AEE condicao:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ============================================================================
-// PUT /api/aee/alunos/:id
+// PUT /api/aee/alunos/:id (CORRIGIDO - Aceita Texto Livre)
 // ============================================================================
 router.put('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (req, res) => {
   try {
@@ -1460,8 +1258,7 @@ router.put('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
       curso,
       periodo,
       condicao,
-      detalhes,
-      status
+      detalhes
     } = req.body;
 
     if (!nome || !nome.trim()) {
@@ -1472,10 +1269,8 @@ router.put('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
       return res.status(400).json({ success: false, error: 'Condição de acessibilidade é obrigatória' });
     }
 
-    if (!CONDICOES_VALORES.includes(condicao)) {
-      return res.status(400).json({ success: false, error: 'Condição inválida' });
-    }
-
+    // 🔥 Não valida mais contra CONDICOES_VALORES. Aceita o texto que vier.
+    
     const alunoAtual = await User.findById(id).lean();
     if (!alunoAtual || alunoAtual.role !== 'aluno') {
       return res.status(404).json({ success: false, error: 'Aluno não encontrado' });
@@ -1507,16 +1302,6 @@ router.put('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
     if (curso !== undefined) updateData.curso = (curso || '').trim();
     if (periodo !== undefined) updateData.periodo = periodo || null;
 
-    if (status === 'aprovada') {
-      if (!alunoAtual.acessibilidadeAprovadaPor) {
-        updateData.acessibilidadeAprovadaPor = req.userId;
-        updateData.acessibilidadeAprovadaEm = new Date();
-      }
-    } else if (status === 'pendente') {
-      updateData.acessibilidadeAprovadaPor = null;
-      updateData.acessibilidadeAprovadaEm = null;
-    }
-
     if (!alunoAtual.dataSolicitacaoAcessibilidade) {
       updateData.dataSolicitacaoAcessibilidade = new Date();
     }
@@ -1525,7 +1310,7 @@ router.put('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
       new: true,
       runValidators: true
     })
-      .select('nome email matricula turma curso periodo condicaoAcessibilidade outraCondicao dataSolicitacaoAcessibilidade acessibilidadeAprovadaPor')
+      .select('nome email matricula turma curso periodo condicaoAcessibilidade outraCondicao dataSolicitacaoAcessibilidade')
       .lean();
 
     if (!alunoAtualizado) {
@@ -1533,6 +1318,11 @@ router.put('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
     }
 
     logger.info(`✏️ AEE - Aluno ${alunoAtualizado.nome} editado por ${req.userNome}`);
+
+    let condLabel = alunoAtualizado.condicaoAcessibilidade || 'Não especificada';
+    if (alunoAtualizado.outraCondicao) {
+        condLabel = `${condLabel} - ${alunoAtualizado.outraCondicao}`;
+    }
 
     res.json({
       success: true,
@@ -1547,11 +1337,10 @@ router.put('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
         periodo: alunoAtualizado.periodo,
         condicao: {
           tipo: alunoAtualizado.condicaoAcessibilidade,
-          label: obterLabelCondicao(alunoAtualizado.condicaoAcessibilidade),
+          label: condLabel,
           detalhes: alunoAtualizado.outraCondicao
         },
-        dataSolicitacao: alunoAtualizado.dataSolicitacaoAcessibilidade,
-        status: alunoAtualizado.acessibilidadeAprovadaPor ? 'aprovada' : 'pendente'
+        dataSolicitacao: alunoAtualizado.dataSolicitacaoAcessibilidade
       }
     });
 
