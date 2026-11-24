@@ -3764,7 +3764,6 @@ class AdminSimples {
                 dados.curso = document.getElementById('userCurso').value;
                 dados.turma = document.getElementById('userTurma').value;
 
-                // 🔥 ACESSIBILIDADE — USA condicaoAcessibilidade (campo real do banco)
                 const chkAcess = document.getElementById('userAcessibilidade');
                 const txtCond = document.getElementById('userCondicaoAcessibilidade');
 
@@ -3868,9 +3867,12 @@ class AdminSimples {
             if (data.success) {
                 this.showToast(id ? 'Usuário atualizado com sucesso!' : 'Usuário criado com sucesso!', 'success');
                 this.fecharModal();
+
+                // 🔥 INVALIDA TODOS OS CACHES (não chama carregarDashboard!)
                 this.invalidarCacheUsuarios();
-                this.carregarUsuarios(1, { preservarInput: true });
-                this.carregarDashboard(true);
+
+                // 🔥 Recarrega a lista de usuários (mantém na tela de usuários)
+                await this.carregarUsuarios(1);
             } else {
                 throw new Error(data.error || 'Erro ao salvar usuário');
             }

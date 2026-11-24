@@ -202,7 +202,8 @@
                             </div>
                             <div class="user-details">
                                 <div class="user-name" id="userName">Carregando...</div>
-                                <div class="user-role" id="userRole">Admin</div>
+                                <!-- 🔥 CORRIGIDO: id="userRoleHeader" (era userRole — duplicava com o select do modal) -->
+                                <div class="user-role" id="userRoleHeader">Admin</div>
                             </div>
                             <i class="fas fa-chevron-down user-chevron" id="userChevron"></i>
                         </div>
@@ -353,7 +354,7 @@
         const roleLabel = usuario.role === 'super_admin' ? 'Super Admin' : 'Admin';
         const email = usuario.email || '';
 
-        // Preenche nome / email / role na sidebar
+        // Preenche nome / email na sidebar
         const adminNome = document.getElementById('adminNome');
         const adminEmail = document.getElementById('adminEmail');
         if (adminNome) adminNome.textContent = nomeCompleto;
@@ -361,9 +362,10 @@
 
         // Preenche nome / role no header
         const userName = document.getElementById('userName');
-        const userRole = document.getElementById('userRole');
+        // 🔥 CORRIGIDO: usa userRoleHeader (não userRole)
+        const userRoleHeader = document.getElementById('userRoleHeader');
         if (userName) userName.textContent = primeiroNome;
-        if (userRole) userRole.textContent = roleLabel;
+        if (userRoleHeader) userRoleHeader.textContent = roleLabel;
 
         // Foto do usuário (se tiver em user_data)
         if (usuario.fotoPerfil) {
@@ -395,8 +397,9 @@
                         if (nomeApi && adminNome) adminNome.textContent = nomeApi;
                         if (nomeApi && userName) userName.textContent = nomeApi.split(' ')[0];
                         if (emailApi && adminEmail) adminEmail.textContent = emailApi;
-                        if (roleApi && userRole) {
-                            userRole.textContent = roleApi === 'super_admin' ? 'Super Admin' : 'Admin';
+                        // 🔥 CORRIGIDO: usa userRoleHeader
+                        if (roleApi && userRoleHeader) {
+                            userRoleHeader.textContent = roleApi === 'super_admin' ? 'Super Admin' : 'Admin';
                         }
                     }
                 }
