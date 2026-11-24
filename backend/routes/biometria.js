@@ -840,6 +840,56 @@ router.delete('/admin/:id', autenticarJWT, exigirAdmin, async (req, res) => {
     }
 });
 
+router.post('/autenticar/nativo', autenticar2FA, async (req, res) => {
+    try {
+        const userId = req.twoFA.id;
+
+        // Verifica se o usuário tem alguma biometria ativa no banco
+        const creds = await BiometriaSistema.find({ userId, ativo: true });
+        if (creds.length === 0) {
+            return res.status(404).json({
+                success: false,
+                codigo: 'NO_CREDENTIALS',
+                error: 'Nenhuma biometria cadastrada.'
+            });
+        }
+
+        // (Opcional) Verificar se a requisição veio do app Kodular
+        // Ex: checar um header secreto que só o app envia
+        const appSecret = req.headers['x-app-secret'];
+        if (appSecret !== process.env.KODULAR_APP_SECRET) {
+            return res.status(403).json({ success: false, error: 'Origem não autorizada.' });
+        }
+
+        // Emite o token final
+        const userDoc = await User.findById(userId).lean();
+        const novoToken = jwt.sign(
+            {
+                id: String(userId),
+                nome: userDoc?.nome || req.twoFA.nome,
+                email: userDoc?.email || req.twoFA.email,
+                role: userDoc?.role || req.twoFA.role
+            },
+            JWT_SECRET,
+            { expiresIn: TOKEN_FINAL_TTL }
+        );
+
+        res.json({
+            success: true,
+            token: novoToken,
+            user: {
+                id: String(userId),
+                nome: userDoc?.nome,
+                email: userDoc?.email,
+                role: userDoc?.role
+            },
+            redirectTo: calcularRedirect(userDoc?.role)
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: 'Falha na autenticação nativa.' });
+    }
+});
+
 // ============================================================================
 // EXPORTAR
 // ============================================================================

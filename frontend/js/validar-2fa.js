@@ -1,6 +1,7 @@
 // ============================================================================
 // frontend/js/validar-2fa.js
 // 2FA com suporte a passkey (WebAuthn) via /api/biometria
+// + Suporte a Biometria Nativa no Kodular (Biometric_Prompt)
 // ============================================================================
 'use strict';
 
@@ -41,7 +42,7 @@
         return typeof id === 'string' && /^[a-fA-F0-9]{24}$/.test(id);
     }
 
-    // Base64url helpers
+    // Base64url helpers (usados apenas no fluxo WebAuthn do navegador)
     function b64urlParaBuf(b64url) {
         const s = String(b64url).replace(/-/g, '+').replace(/_/g, '/');
         const pad = s.length % 4 === 0 ? '' : '='.repeat(4 - (s.length % 4));
@@ -59,6 +60,47 @@
     }
 
     // ---------------------------------------------------------------------
+    // Função global que o Kodular chama via EvaluateJavascript
+    // ---------------------------------------------------------------------
+    window.receberResultadoBiometria = function (sucesso, mensagem) {
+        const instancia = window.twoFactorInstance;
+        if (!instancia) return;
+
+        if (!sucesso) {
+            instancia.showAlert(mensagem || 'Biometria cancelada.', 'error');
+            return;
+        }
+
+        const token2fa = sessionStorage.getItem('2fa_token');
+        if (!token2fa) {
+            instancia.showAlert('Sessão expirada. Faça login novamente.', 'error');
+            return;
+        }
+
+        // Biometria nativa passou. Agora valida no backend.
+        fetch('/api/biometria/autenticar/nativo', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token2fa}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ nativo: true })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                instancia.showAlert('✅ Biometria validada!', 'success');
+                instancia._finalizarLogin(data.token, data.user, data.redirectTo);
+            } else {
+                instancia.showAlert(data.error || 'Falha na autenticação nativa.', 'error');
+            }
+        })
+        .catch(() => {
+            instancia.showAlert('Erro ao validar biometria nativa.', 'error');
+        });
+    };
+
+    // ---------------------------------------------------------------------
     // Classe principal
     // ---------------------------------------------------------------------
     class TwoFactorAuth {
@@ -73,8 +115,9 @@
             this.biometriaDisponivel = false;
             this.userRoleDestino = null;
 
-            // Estado WebAuthn do fluxo de autenticação
+            // Estado WebAuthn do fluxo de autenticação (navegador)
             this._bioChallenge = null;
+            this._bioOptions = null;
             this._bioLoading = false;
 
             if (!this.token || !this.userId) {
@@ -112,13 +155,38 @@
         }
 
         // =================================================================
-        // BIOMETRIA — verificar se há passkey e mostrar botão
+        // BIOMETRIA — verificar disponibilidade (Kodular ou Navegador)
         // =================================================================
         async verificarBiometriaDisponivel() {
+            // =============================================================
+            // 1. AMBIENTE KODULAR (Custom WebView + Biometric_Prompt nativo)
+            // =============================================================
             if (isKodularWebView) {
-                console.log('ℹ️ WebView detectado — WebAuthn desativado.');
+                console.log('ℹ️ Kodular detectado — usando biometria nativa do app.');
+
+                this.biometriaDisponivel = true;
+
+                const secao = document.getElementById('biometricSection');
+                const btnText = document.getElementById('biometricBtnText');
+                const icon = document.getElementById('biometricIcon');
+
+                if (icon) icon.className = 'fas fa-fingerprint';
+                if (btnText) btnText.textContent = 'Entrar com biometria';
+                if (secao) secao.classList.remove('hidden');
+
+                const btn = document.getElementById('biometricBtn');
+                if (btn) {
+                    // Clona o botão para remover ouvintes antigos e evitar duplicação
+                    const novoBtn = btn.cloneNode(true);
+                    btn.parentNode.replaceChild(novoBtn, btn);
+                    novoBtn.addEventListener('click', () => this.loginComBiometriaNativa());
+                }
                 return;
             }
+
+            // =============================================================
+            // 2. AMBIENTE NAVEGADOR NORMAL (WebAuthn puro)
+            // =============================================================
             if (!window.PublicKeyCredential) {
                 console.log('ℹ️ WebAuthn não suportado');
                 return;
@@ -133,7 +201,6 @@
                 }
             } catch (_) {}
 
-            // Consulta o servidor: existe passkey cadastrada pra este user?
             try {
                 const resp = await fetch('/api/biometria/autenticar/iniciar', {
                     method: 'POST',
@@ -176,18 +243,29 @@
                 if (btn) {
                     btn.addEventListener('click', () => this.loginComBiometria());
                 }
-                console.log('✅ Botão de biometria exibido');
+                console.log('✅ Botão de biometria (WebAuthn) exibido');
             } catch (err) {
                 console.warn('⚠️ Falha ao checar biometria:', err);
             }
         }
 
+        // =================================================================
+        // BIOMETRIA NATIVA (KODULAR)
+        // =================================================================
+        loginComBiometriaNativa() {
+            if (window.AppInventor && typeof window.AppInventor.setWebViewString === 'function') {
+                // Envia o comando para o app nativo abrir a biometria
+                window.AppInventor.setWebViewString('SOLICITAR_BIOMETRIA');
+            } else {
+                this.showAlert('Biometria indisponível neste aplicativo.', 'error');
+            }
+        }
+
+        // =================================================================
+        // BIOMETRIA WEBAUTHN (NAVEGADOR)
+        // =================================================================
         async loginComBiometria() {
             if (this._bioLoading) return;
-            if (isKodularWebView) {
-                this.showAlert('Use o código SMS neste aplicativo.', 'info');
-                return;
-            }
             if (!this._bioOptions || !this._bioChallenge) {
                 this.showAlert('Biometria indisponível. Use um código abaixo.', 'info');
                 return;
@@ -304,7 +382,6 @@
                 if (data.success && Array.isArray(data.biometrias)) {
                     const ativas = data.biometrias.filter(b => b.ativo !== false);
                     if (ativas.length > 0) {
-                        // já tem biometria — não oferece de novo, só segue
                         this.redirecionarFinal();
                         return;
                     }
@@ -453,7 +530,7 @@
         }
 
         // =================================================================
-        // LOGIN GENÉRICO (usado pelo verifyCode e pela biometria)
+        // LOGIN GENÉRICO (usado pelo verifyCode, biometria WebAuthn e Nativa)
         // =================================================================
         _finalizarLogin(token, user, redirectTo) {
             localStorage.setItem('auth_token', token);
@@ -489,7 +566,6 @@
 
         // =================================================================
         // EVENTOS / CÓDIGOS / BACKUP / QR / TIMER
-        // (mantidos como no seu original, sem alterações funcionais)
         // =================================================================
         setupEventListeners() {
             const addListener = (id, event, handler) => {
