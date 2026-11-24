@@ -508,16 +508,57 @@ window.AeeModule = {
                     </div>
                 </div>
 
-                <div class="aee-grid-2" style="margin-top: 20px;">
-                    <!-- 🔥 NOVO GRÁFICO DE CONDIÇÕES -->
+                <div class="aee-card">
+                    <div class="aee-card-header">
+                        <h3><i class="fas fa-percentage"></i> Taxa de Acessibilidade</h3>
+                    </div>
+                    <div class="aee-card-body">
+                        <div class="aee-taxa-container">
+                            <div class="aee-taxa-valor">${d.taxaAcessibilidade}%</div>
+                            <div class="aee-taxa-barra">
+                                <div class="aee-taxa-progresso" style="width: ${d.taxaAcessibilidade}%"></div>
+                            </div>
+                            <p class="aee-taxa-desc">
+                                ${d.totalAlunosComAcessibilidade} de ${d.totalAlunos} alunos possuem necessidades educacionais específicas
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="aee-grid-2">
                     <div class="aee-card">
                         <div class="aee-card-header">
-                            <h3><i class="fas fa-heart"></i> Top Condições</h3>
+                            <h3><i class="fas fa-heart"></i> Distribuição por Condição</h3>
                         </div>
-                        <div class="aee-card-body" style="padding: 15px;">
+                        <div class="aee-card-body">
                             ${d.distribuicaoCondicoes.length > 0 ? `
-                                <div class="aee-chart-container" style="height: 350px; position: relative;">
+                                <div class="aee-chart-container">
                                     <canvas id="aeeChartCondicoes"></canvas>
+                                </div>
+                                <div class="aee-condicoes-list">
+                                    ${d.distribuicaoCondicoes.map(c => {
+                                        // 🔥 CORREÇÃO AQUI: Limpa o "outra" do gráfico de distribuição
+                                        let labelLimpa = c.label || 'Não especificada';
+                                        if (labelLimpa.toLowerCase().startsWith('outra - ')) {
+                                            labelLimpa = labelLimpa.substring(8).trim();
+                                        } else if (labelLimpa.toLowerCase() === 'outra') {
+                                            labelLimpa = 'Outra Condição';
+                                        }
+
+                                        return `
+                                        <div class="aee-condicao-item">
+                                            <div class="aee-condicao-label">
+                                                <i class="fas fa-heart" style="color: #6366f1;"></i>
+                                                <span>${this.escapeHtml(labelLimpa)}</span>
+                                            </div>
+                                            <div class="aee-condicao-count">
+                                                <span class="aee-count-badge" style="background: #6366f120; color: #6366f1;">
+                                                    ${c.count}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        `;
+                                    }).join('')}
                                 </div>
                             ` : '<div class="aee-empty">Nenhum dado disponível</div>'}
                         </div>
@@ -527,9 +568,9 @@ window.AeeModule = {
                         <div class="aee-card-header">
                             <h3><i class="fas fa-school"></i> Top Turmas</h3>
                         </div>
-                        <div class="aee-card-body" style="padding: 15px;">
+                        <div class="aee-card-body">
                             ${d.distribuicaoTurmas.length > 0 ? `
-                                <div class="aee-chart-container" style="height: 350px; position: relative;">
+                                <div class="aee-chart-container">
                                     <canvas id="aeeChartTurmas"></canvas>
                                 </div>
                             ` : '<div class="aee-empty">Nenhum dado disponível</div>'}
@@ -547,8 +588,17 @@ window.AeeModule = {
                     <div class="aee-card-body">
                         ${d.alunosRecentes.length > 0 ? `
                             <div class="aee-recentes-list">
-                                ${d.alunosRecentes.map(a => `
-                                    <div class="aee-recente-item" onclick="AeeModule.verDetalhesAluno('${a.id}')" style="border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 10px;">
+                                ${d.alunosRecentes.map(a => {
+                                    // 🔥 CORREÇÃO AQUI: Limpa o "outra" dos Alunos Recentes
+                                    let condLabel = a.condicaoLabel || a.condicao || 'Acessibilidade';
+                                    if (condLabel.toLowerCase().startsWith('outra - ')) {
+                                        condLabel = condLabel.substring(8).trim();
+                                    } else if (condLabel.toLowerCase() === 'outra') {
+                                        condLabel = 'Outra Condição';
+                                    }
+
+                                    return `
+                                    <div class="aee-recente-item" onclick="AeeModule.verDetalhesAluno('${a.id}')" style="border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 10px; cursor: pointer;">
                                         <div class="aee-recente-avatar" style="background: #6366f120; color: #6366f1;">
                                             <i class="fas fa-user"></i>
                                         </div>
@@ -556,12 +606,13 @@ window.AeeModule = {
                                             <strong style="color: #1e293b; font-size: 15px;">${this.escapeHtml(a.nome)}</strong>
                                             <span style="color: #64748b; font-size: 13px; display: block; margin-top: 2px;">
                                                 <i class="fas fa-graduation-cap"></i> ${this.escapeHtml(a.turma || 'Sem turma')} 
-                                                • <i class="fas fa-heart" style="color: #ec4899;"></i> ${this.escapeHtml(a.condicaoLabel || 'Acessibilidade')}
+                                                • <i class="fas fa-heart" style="color: #ec4899;"></i> ${this.escapeHtml(condLabel)}
                                             </span>
                                         </div>
                                         <i class="fas fa-chevron-right" style="color: #cbd5e1;"></i>
                                     </div>
-                                `).join('')}
+                                    `;
+                                }).join('')}
                             </div>
                         ` : '<div class="aee-empty">Nenhum aluno recente</div>'}
                     </div>
