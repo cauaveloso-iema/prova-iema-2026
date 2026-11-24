@@ -34017,7 +34017,6 @@ class AdminPanel {
         const contentArea = document.getElementById('contentArea');
         if (!contentArea) return;
 
-        // Estado do módulo
         this.bioEstado = {
             pagina: 1,
             limite: 20,
@@ -34046,7 +34045,7 @@ class AdminPanel {
             contentArea.innerHTML = `
                 <div class="alert alert-danger m-4">
                     <i class="fas fa-exclamation-triangle"></i>
-                    <strong>Erro:</strong> ${error.message}
+                    <strong>Erro:</strong> ${this.escapeHtmlAdmin(error.message)}
                     <br>
                     <button class="btn btn-sm btn-primary mt-2" onclick="admin.loadBiometria()">
                         <i class="fas fa-sync-alt"></i> Tentar novamente
@@ -34086,12 +34085,11 @@ class AdminPanel {
         const s = this.bioEstado;
         const stats = s.estatisticas;
 
-        // Opções do select de role
         const rolesOptions = [
             '<option value="todos">Todos os perfis</option>',
-            ...s.opcoes.roles.map(r => {
+            ...(s.opcoes.roles || []).map(r => {
                 const sel = s.role === r ? 'selected' : '';
-                return `<option value="${r}" ${sel}>${this.getRoleLabelVincular(r)}</option>`;
+                return `<option value="${this.escapeHtmlAdmin(r)}" ${sel}>${this.escapeHtmlAdmin(this.getRoleLabelVincular(r))}</option>`;
             })
         ].join('');
 
@@ -34118,7 +34116,7 @@ class AdminPanel {
                 <!-- CARDS DE ESTATÍSTICA -->
                 <div class="bio-stats-grid">
                     <div class="bio-stat-card" onclick="admin.filtrarBiometriaPorStatus('todos')">
-                        <div class="bio-stat-icon" style="background: linear-gradient(135deg,#6366f1,#4f46e5);">
+                        <div class="bio-stat-icon bio-stat-icon--indigo">
                             <i class="fas fa-fingerprint"></i>
                         </div>
                         <div class="bio-stat-content">
@@ -34128,7 +34126,7 @@ class AdminPanel {
                     </div>
 
                     <div class="bio-stat-card" onclick="admin.filtrarBiometriaPorStatus('sim')">
-                        <div class="bio-stat-icon" style="background: linear-gradient(135deg,#10b981,#059669);">
+                        <div class="bio-stat-icon bio-stat-icon--green">
                             <i class="fas fa-check-circle"></i>
                         </div>
                         <div class="bio-stat-content">
@@ -34138,7 +34136,7 @@ class AdminPanel {
                     </div>
 
                     <div class="bio-stat-card" onclick="admin.filtrarBiometriaPorStatus('nao')">
-                        <div class="bio-stat-icon" style="background: linear-gradient(135deg,#ef4444,#dc2626);">
+                        <div class="bio-stat-icon bio-stat-icon--red">
                             <i class="fas fa-ban"></i>
                         </div>
                         <div class="bio-stat-content">
@@ -34148,7 +34146,7 @@ class AdminPanel {
                     </div>
 
                     <div class="bio-stat-card">
-                        <div class="bio-stat-icon" style="background: linear-gradient(135deg,#f59e0b,#d97706);">
+                        <div class="bio-stat-icon bio-stat-icon--amber">
                             <i class="fas fa-users"></i>
                         </div>
                         <div class="bio-stat-content">
@@ -34174,7 +34172,7 @@ class AdminPanel {
                         <div class="bio-filter-group">
                             <label><i class="fas fa-search"></i> Buscar</label>
                             <div class="bio-input-wrapper">
-                                <input type="text" id="bioSearch" placeholder="Nome, device label ou credential ID..." value="${s.busca}">
+                                <input type="text" id="bioSearch" placeholder="Nome, device label ou credential ID..." value="${this.escapeHtmlAdmin(s.busca)}">
                                 <i class="fas fa-search bio-input-icon"></i>
                             </div>
                         </div>
@@ -34229,7 +34227,7 @@ class AdminPanel {
                         </div>
                     </div>
 
-                    <div class="bio-table-responsive">
+                    <div class="bio-table-responsive" tabindex="0">
                         <table class="bio-data-table">
                             <thead>
                                 <tr>
@@ -34264,194 +34262,6 @@ class AdminPanel {
                     </div>
                 </div>
             </div>
-
-            <style>
-                .bio-container { padding: 24px; max-width: 1400px; margin: 0 auto; }
-                .bio-header {
-                    background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
-                    border-radius: 20px; padding: 28px 30px; margin-bottom: 24px;
-                    display: flex; justify-content: space-between; align-items: center;
-                    flex-wrap: wrap; gap: 16px;
-                    box-shadow: 0 10px 30px rgba(79, 70, 229, 0.25);
-                }
-                .bio-header-left { display: flex; align-items: center; gap: 18px; }
-                .bio-header-icon {
-                    width: 64px; height: 64px;
-                    background: rgba(255,255,255,0.15); border-radius: 18px;
-                    display: flex; align-items: center; justify-content: center;
-                    font-size: 30px; color: white;
-                }
-                .bio-header-text h1 { color: white; font-size: 26px; font-weight: 600; margin: 0 0 4px; }
-                .bio-header-text p { color: rgba(255,255,255,0.85); font-size: 14px; margin: 0; }
-                .bio-header-actions { display: flex; gap: 10px; }
-
-                .bio-btn {
-                    padding: 10px 20px; border: none; border-radius: 40px;
-                    font-size: 13px; font-weight: 600; cursor: pointer;
-                    display: inline-flex; align-items: center; gap: 8px;
-                    transition: all 0.2s;
-                }
-                .bio-btn-ghost { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); }
-                .bio-btn-ghost:hover { background: rgba(255,255,255,0.25); }
-                .bio-btn-primary { background: #4f46e5; color: white; }
-                .bio-btn-primary:hover { background: #4338ca; }
-
-                .bio-stats-grid {
-                    display: grid; grid-template-columns: repeat(4, 1fr);
-                    gap: 16px; margin-bottom: 24px;
-                }
-                @media (max-width: 900px) { .bio-stats-grid { grid-template-columns: repeat(2, 1fr); } }
-
-                .bio-stat-card {
-                    background: white; border-radius: 16px; padding: 18px;
-                    display: flex; align-items: center; gap: 16px;
-                    border: 1px solid rgba(0,0,0,0.05);
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-                    cursor: pointer; transition: all 0.2s;
-                }
-                .bio-stat-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
-                .bio-stat-icon {
-                    width: 52px; height: 52px; border-radius: 14px;
-                    display: flex; align-items: center; justify-content: center;
-                    font-size: 22px; color: white; flex-shrink: 0;
-                }
-                .bio-stat-content { flex: 1; }
-                .bio-stat-value { display: block; font-size: 24px; font-weight: 700; color: #1f2937; line-height: 1; }
-                .bio-stat-label { font-size: 12px; color: #6b7280; margin-top: 4px; display: block; }
-
-                .bio-filters-card, .bio-table-card {
-                    background: white; border-radius: 16px;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-                    border: 1px solid rgba(0,0,0,0.05);
-                    margin-bottom: 24px;
-                }
-                .bio-filters-card { padding: 20px; }
-                .bio-filters-header {
-                    display: flex; justify-content: space-between; align-items: center;
-                    margin-bottom: 18px; padding-bottom: 14px; border-bottom: 2px solid #f0f0f0;
-                }
-                .bio-filters-title { display: flex; align-items: center; gap: 10px; }
-                .bio-filters-title i { color: #4f46e5; background: #eef2ff; padding: 8px; border-radius: 10px; font-size: 16px; }
-                .bio-filters-title h3 { margin: 0; font-size: 16px; color: #374151; }
-                .bio-filters-badge { background: #4f46e5; color: white; padding: 4px 12px; border-radius: 30px; font-size: 12px; font-weight: 600; }
-
-                .bio-filters-grid {
-                    display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 14px; align-items: end;
-                }
-                @media (max-width: 900px) { .bio-filters-grid { grid-template-columns: 1fr 1fr; } }
-
-                .bio-filter-group { display: flex; flex-direction: column; gap: 6px; }
-                .bio-filter-group label { font-size: 12px; font-weight: 600; color: #4b5563; }
-                .bio-input-wrapper { position: relative; }
-                .bio-input-wrapper input {
-                    width: 100%; padding: 10px 14px 10px 38px;
-                    border: 2px solid #e5e7eb; border-radius: 12px; font-size: 14px;
-                    transition: border 0.2s;
-                }
-                .bio-input-wrapper input:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 4px rgba(79,70,229,0.1); }
-                .bio-input-icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: #9ca3af; }
-                .bio-filter-select {
-                    padding: 10px 14px; border: 2px solid #e5e7eb; border-radius: 12px;
-                    font-size: 14px; background: white;
-                }
-                .bio-filter-select:focus { outline: none; border-color: #4f46e5; }
-                .bio-filter-actions { display: flex; gap: 8px; }
-
-                .bio-table-header {
-                    padding: 16px 20px; background: #f9fafb;
-                    border-bottom: 1px solid #e5e7eb;
-                    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
-                    border-radius: 16px 16px 0 0;
-                }
-                .bio-table-title { display: flex; align-items: center; gap: 10px; }
-                .bio-table-title i { color: #4f46e5; }
-                .bio-table-title h3 { margin: 0; font-size: 15px; color: #374151; }
-                .bio-table-info { display: flex; align-items: center; gap: 16px; font-size: 13px; color: #6b7280; }
-                .bio-items-per-page { display: flex; align-items: center; gap: 6px; }
-                .bio-items-per-page select {
-                    padding: 5px 10px; border: 1px solid #e5e7eb; border-radius: 8px;
-                    font-size: 13px; background: white;
-                }
-
-                .bio-table-responsive { overflow-x: auto; }
-                .bio-data-table { width: 100%; border-collapse: collapse; min-width: 900px; }
-                .bio-data-table th {
-                    padding: 14px 16px; text-align: left;
-                    font-size: 12px; font-weight: 600; color: #4b5563;
-                    background: #f9fafb; border-bottom: 2px solid #e5e7eb;
-                    text-transform: uppercase; letter-spacing: 0.3px;
-                }
-                .bio-data-table td {
-                    padding: 14px 16px; border-bottom: 1px solid #e5e7eb;
-                    font-size: 13px; color: #1f2937; vertical-align: middle;
-                }
-                .bio-data-table tr:hover td { background: #f9fafb; }
-
-                .bio-user-cell { display: flex; align-items: center; gap: 10px; }
-                .bio-user-avatar {
-                    width: 36px; height: 36px; border-radius: 50%;
-                    background: linear-gradient(135deg,#4f46e5,#7c3aed);
-                    display: flex; align-items: center; justify-content: center;
-                    color: white; font-weight: 700; font-size: 13px; flex-shrink: 0;
-                }
-                .bio-user-info strong { display: block; font-size: 13px; color: #1f2937; }
-                .bio-user-info small { font-size: 11px; color: #6b7280; }
-
-                .bio-role-badge {
-                    display: inline-block; padding: 3px 10px; border-radius: 30px;
-                    font-size: 11px; font-weight: 600;
-                    background: #eef2ff; color: #4338ca;
-                }
-
-                .bio-device-label {
-                    font-size: 13px; color: #1f2937; display: flex; align-items: center; gap: 6px;
-                }
-                .bio-device-label i { color: #6b7280; }
-
-                .bio-cred-id {
-                    font-family: 'Courier New', monospace;
-                    background: #f3f4f6; padding: 4px 8px; border-radius: 6px;
-                    font-size: 11px; color: #4b5563;
-                    max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-                    display: inline-block;
-                }
-
-                .bio-status-badge {
-                    display: inline-block; padding: 4px 10px; border-radius: 30px;
-                    font-size: 11px; font-weight: 600;
-                }
-                .bio-status-badge.ativa { background: #d1fae5; color: #065f46; }
-                .bio-status-badge.revogada { background: #fee2e2; color: #991b1b; }
-
-                .bio-actions { display: flex; gap: 4px; }
-                .bio-icon-btn {
-                    width: 32px; height: 32px; border: none; border-radius: 8px;
-                    background: transparent; color: #6b7280; cursor: pointer;
-                    display: flex; align-items: center; justify-content: center;
-                    transition: all 0.15s;
-                }
-                .bio-icon-btn:hover { background: #f3f4f6; color: #4f46e5; }
-                .bio-icon-btn.danger:hover { background: #fee2e2; color: #dc2626; }
-                .bio-icon-btn.success:hover { background: #d1fae5; color: #059669; }
-
-                .bio-pagination {
-                    padding: 14px 20px; border-top: 1px solid #e5e7eb;
-                    display: flex; justify-content: space-between; align-items: center;
-                    flex-wrap: wrap; gap: 12px;
-                }
-                .bio-pagination-info { font-size: 13px; color: #6b7280; }
-                .bio-pagination-controls { display: flex; gap: 4px; }
-                .bio-btn-page {
-                    min-width: 36px; height: 36px; border: 1px solid #e5e7eb;
-                    background: white; border-radius: 10px; cursor: pointer;
-                    font-size: 13px; color: #4b5563;
-                    display: flex; align-items: center; justify-content: center;
-                    transition: all 0.15s;
-                }
-                .bio-btn-page:hover:not(:disabled) { background: #f3f4f6; }
-                .bio-btn-page:disabled { opacity: 0.4; cursor: not-allowed; }
-                .bio-btn-page.active { background: #4f46e5; border-color: #4f46e5; color: white; font-weight: 600; }
-            </style>
         `;
     }
 
@@ -34460,10 +34270,10 @@ class AdminPanel {
         if (!s.lista || s.lista.length === 0) {
             return `
                 <tr>
-                    <td colspan="8" style="text-align: center; padding: 40px;">
-                        <i class="fas fa-fingerprint" style="font-size: 42px; color: #d1d5db; margin-bottom: 12px; display: block;"></i>
-                        <h3 style="color: #6b7280; margin: 0 0 6px;">Nenhuma biometria encontrada</h3>
-                        <p style="color: #9ca3af; margin: 0; font-size: 13px;">
+                    <td colspan="8" class="bio-empty-cell">
+                        <i class="fas fa-fingerprint bio-empty-icon"></i>
+                        <h3 class="bio-empty-title">Nenhuma biometria encontrada</h3>
+                        <p class="bio-empty-text">
                             ${s.busca || s.role !== 'todos' || s.ativo !== 'todos'
                                 ? 'Nenhum resultado para os filtros aplicados.'
                                 : 'Ainda não há passkeys cadastradas no sistema.'}
@@ -34493,52 +34303,60 @@ class AdminPanel {
         return s.lista.map(b => {
             const inicial = (b.userNome || '?').charAt(0).toUpperCase();
             const ativa = b.ativo !== false;
+            const nomeEsc = this.escapeHtmlAdmin(b.userNome);
+
             return `
                 <tr>
-                    <td>
+                    <td data-label="Usuário">
                         <div class="bio-user-cell">
-                            <div class="bio-user-avatar">${inicial}</div>
+                            <div class="bio-user-avatar">${this.escapeHtmlAdmin(inicial)}</div>
                             <div class="bio-user-info">
-                                <strong>${this.escapeHtmlAdmin(b.userNome)}</strong>
-                                <small>${this.escapeHtmlAdmin(String(b.userId).substring(0, 12))}...</small>
+                                <strong>${nomeEsc}</strong>
+                                <small title="${this.escapeHtmlAdmin(String(b.userId))}">
+                                    ${this.escapeHtmlAdmin(String(b.userId).substring(0, 12))}...
+                                </small>
                             </div>
                         </div>
                     </td>
-                    <td>
+                    <td data-label="Perfil">
                         <span class="bio-role-badge">${this.escapeHtmlAdmin(this.getRoleLabelVincular(b.userRole))}</span>
                     </td>
-                    <td>
+                    <td data-label="Dispositivo">
                         <div class="bio-device-label">
                             <i class="fas ${iconeDispositivo(b.deviceLabel)}"></i>
                             ${this.escapeHtmlAdmin(b.deviceLabel || '—')}
                         </div>
                     </td>
-                    <td>
+                    <td data-label="Credential ID">
                         <span class="bio-cred-id" title="${this.escapeHtmlAdmin(b.credentialId)}">
                             ${this.escapeHtmlAdmin(String(b.credentialId).substring(0, 24))}...
                         </span>
                     </td>
-                    <td>${formatarData(b.createdAt)}</td>
-                    <td>${formatarData(b.ultimoUsoEm)}</td>
-                    <td>
+                    <td data-label="Criado em">${formatarData(b.createdAt)}</td>
+                    <td data-label="Último uso">${formatarData(b.ultimoUsoEm)}</td>
+                    <td data-label="Status">
                         <span class="bio-status-badge ${ativa ? 'ativa' : 'revogada'}">
                             ${ativa ? '✅ Ativa' : '❌ Revogada'}
                         </span>
                     </td>
-                    <td>
+                    <td data-label="Ações">
                         <div class="bio-actions">
-                            <button class="bio-icon-btn" title="Ver detalhes" onclick="admin.verDetalhesBiometria('${b._id}')">
+                            <button class="bio-icon-btn" title="Ver detalhes"
+                                data-action="ver" data-id="${this.escapeHtmlAdmin(b._id)}">
                                 <i class="fas fa-eye"></i>
                             </button>
                             ${ativa
-                                ? `<button class="bio-icon-btn danger" title="Revogar" onclick="admin.revogarBiometria('${b._id}', '${this.escapeHtmlAdmin(b.userNome)}')">
+                                ? `<button class="bio-icon-btn danger" title="Revogar"
+                                    data-action="revogar" data-id="${this.escapeHtmlAdmin(b._id)}" data-nome="${nomeEsc}">
                                     <i class="fas fa-ban"></i>
                                 </button>`
-                                : `<button class="bio-icon-btn success" title="Reativar" onclick="admin.reativarBiometria('${b._id}')">
+                                : `<button class="bio-icon-btn success" title="Reativar"
+                                    data-action="reativar" data-id="${this.escapeHtmlAdmin(b._id)}">
                                     <i class="fas fa-check"></i>
                                 </button>`
                             }
-                            <button class="bio-icon-btn danger" title="Excluir permanentemente" onclick="admin.excluirBiometria('${b._id}', '${this.escapeHtmlAdmin(b.userNome)}')">
+                            <button class="bio-icon-btn danger" title="Excluir permanentemente"
+                                data-action="excluir" data-id="${this.escapeHtmlAdmin(b._id)}" data-nome="${nomeEsc}">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </div>
@@ -34565,7 +34383,6 @@ class AdminPanel {
     }
 
     _bindEventosBiometria() {
-        // Enter no campo de busca
         const search = document.getElementById('bioSearch');
         if (search) {
             search.addEventListener('keydown', (e) => {
@@ -34573,6 +34390,21 @@ class AdminPanel {
                     e.preventDefault();
                     this.aplicarFiltrosBiometria();
                 }
+            });
+        }
+
+        // Delegação de eventos na tabela (evita quebra de HTML com aspas em nomes)
+        const tbody = document.getElementById('bioTableBody');
+        if (tbody && !tbody.dataset.bound) {
+            tbody.dataset.bound = '1';
+            tbody.addEventListener('click', (e) => {
+                const btn = e.target.closest('button[data-action]');
+                if (!btn) return;
+                const { action, id, nome } = btn.dataset;
+                if (action === 'ver') this.verDetalhesBiometria(id);
+                else if (action === 'revogar') this.revogarBiometria(id, nome);
+                else if (action === 'reativar') this.reativarBiometria(id);
+                else if (action === 'excluir') this.excluirBiometria(id, nome);
             });
         }
     }
@@ -34628,7 +34460,6 @@ class AdminPanel {
     async _atualizarTabelaBiometria() {
         try {
             await this._carregarDadosBiometria();
-            // Atualiza só o tbody + paginação + estatísticas para não re-renderizar tudo
             const tbody = document.getElementById('bioTableBody');
             if (tbody) tbody.innerHTML = this._renderLinhasBiometria();
 
@@ -34641,7 +34472,6 @@ class AdminPanel {
                 paginacaoInfo.textContent = `Página ${s.paginacao.pagina} de ${s.paginacao.totalPaginas}`;
             }
 
-            // Atualiza botões de paginação
             const controls = document.querySelector('.bio-pagination-controls');
             if (controls) {
                 const btnPrev = `<button class="bio-btn-page" onclick="admin.irParaPaginaBiometria(${s.paginacao.pagina - 1})"
@@ -34651,7 +34481,6 @@ class AdminPanel {
                 controls.innerHTML = btnPrev + this._renderBotoesPaginaBio() + btnNext;
             }
 
-            // Atualiza os 4 cards de estatística
             const statEls = document.querySelectorAll('.bio-stat-value');
             if (statEls.length >= 4) {
                 statEls[0].textContent = s.estatisticas.total;
@@ -34675,99 +34504,81 @@ class AdminPanel {
         const fmt = (dt) => dt ? new Date(dt).toLocaleString('pt-BR') : '—';
 
         modalBody.innerHTML = `
-            <div style="padding: 0; max-height: 80vh; overflow-y: auto;">
-                <div style="background: linear-gradient(135deg,#4f46e5,#3730a3); padding: 24px; color: white; position: sticky; top: 0; z-index: 10;">
-                    <div style="display: flex; align-items: center; gap: 14px;">
-                        <div style="width: 48px; height: 48px; background: rgba(255,255,255,0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px;">
-                            <i class="fas fa-fingerprint"></i>
-                        </div>
-                        <div>
-                            <h2 style="margin: 0; font-size: 1.3rem;">Detalhes da Biometria</h2>
-                            <p style="margin: 4px 0 0; opacity: 0.9; font-size: 0.9rem;">
-                                ${this.escapeHtmlAdmin(item.userNome)}
-                            </p>
-                        </div>
+            <div class="bio-detail-wrap">
+                <div class="bio-detail-hero">
+                    <div class="bio-detail-hero-icon">
+                        <i class="fas fa-fingerprint"></i>
+                    </div>
+                    <div>
+                        <h2 class="bio-detail-hero-title">Detalhes da Biometria</h2>
+                        <p class="bio-detail-hero-sub">${this.escapeHtmlAdmin(item.userNome)}</p>
                     </div>
                 </div>
 
-                <div style="padding: 24px;">
-                    <div style="background: #f8fafc; border-radius: 12px; padding: 18px; margin-bottom: 16px; border: 1px solid #e2e8f0;">
-                        <h3 style="margin: 0 0 14px; font-size: 1rem; color: #334155;">
-                            <i class="fas fa-user" style="color: #4f46e5;"></i> Usuário
-                        </h3>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.9rem;">
-                            <div>
-                                <div style="font-size: 0.75rem; color: #64748b;">Nome</div>
-                                <div style="font-weight: 600;">${this.escapeHtmlAdmin(item.userNome)}</div>
+                <div class="bio-detail-body">
+                    <div class="bio-detail-card">
+                        <h3 class="bio-detail-card-title"><i class="fas fa-user"></i> Usuário</h3>
+                        <div class="bio-detail-grid">
+                            <div class="bio-detail-field">
+                                <div class="bio-detail-label">Nome</div>
+                                <div class="bio-detail-value">${this.escapeHtmlAdmin(item.userNome)}</div>
                             </div>
-                            <div>
-                                <div style="font-size: 0.75rem; color: #64748b;">Perfil</div>
-                                <div style="font-weight: 600;">${this.escapeHtmlAdmin(this.getRoleLabelVincular(item.userRole))}</div>
+                            <div class="bio-detail-field">
+                                <div class="bio-detail-label">Perfil</div>
+                                <div class="bio-detail-value">${this.escapeHtmlAdmin(this.getRoleLabelVincular(item.userRole))}</div>
                             </div>
-                            <div style="grid-column: 1 / -1;">
-                                <div style="font-size: 0.75rem; color: #64748b;">User ID</div>
-                                <div style="font-family: monospace; background: #f1f5f9; padding: 6px 10px; border-radius: 6px; font-size: 0.8rem; word-break: break-all;">
-                                    ${this.escapeHtmlAdmin(String(item.userId))}
-                                </div>
+                            <div class="bio-detail-field bio-detail-field--full">
+                                <div class="bio-detail-label">User ID</div>
+                                <div class="bio-detail-code">${this.escapeHtmlAdmin(String(item.userId))}</div>
                             </div>
                         </div>
                     </div>
 
-                    <div style="background: #f8fafc; border-radius: 12px; padding: 18px; margin-bottom: 16px; border: 1px solid #e2e8f0;">
-                        <h3 style="margin: 0 0 14px; font-size: 1rem; color: #334155;">
-                            <i class="fas fa-mobile-alt" style="color: #4f46e5;"></i> Dispositivo
-                        </h3>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.9rem;">
-                            <div>
-                                <div style="font-size: 0.75rem; color: #64748b;">Label</div>
-                                <div style="font-weight: 600;">${this.escapeHtmlAdmin(item.deviceLabel || '—')}</div>
+                    <div class="bio-detail-card">
+                        <h3 class="bio-detail-card-title"><i class="fas fa-mobile-alt"></i> Dispositivo</h3>
+                        <div class="bio-detail-grid">
+                            <div class="bio-detail-field">
+                                <div class="bio-detail-label">Label</div>
+                                <div class="bio-detail-value">${this.escapeHtmlAdmin(item.deviceLabel || '—')}</div>
                             </div>
-                            <div>
-                                <div style="font-size: 0.75rem; color: #64748b;">Transports</div>
-                                <div style="font-weight: 600;">${this.escapeHtmlAdmin((item.transports || []).join(', ') || '—')}</div>
+                            <div class="bio-detail-field">
+                                <div class="bio-detail-label">Transports</div>
+                                <div class="bio-detail-value">${this.escapeHtmlAdmin((item.transports || []).join(', ') || '—')}</div>
                             </div>
-                            <div>
-                                <div style="font-size: 0.75rem; color: #64748b;">Counter</div>
-                                <div style="font-weight: 600;">${item.counter || 0}</div>
+                            <div class="bio-detail-field">
+                                <div class="bio-detail-label">Counter</div>
+                                <div class="bio-detail-value">${item.counter || 0}</div>
                             </div>
-                            <div>
-                                <div style="font-size: 0.75rem; color: #64748b;">AAGUID</div>
-                                <div style="font-family: monospace; font-size: 0.75rem; word-break: break-all;">
-                                    ${this.escapeHtmlAdmin(item.aaguid || '—')}
-                                </div>
+                            <div class="bio-detail-field">
+                                <div class="bio-detail-label">AAGUID</div>
+                                <div class="bio-detail-code bio-detail-code--sm">${this.escapeHtmlAdmin(item.aaguid || '—')}</div>
                             </div>
                         </div>
                     </div>
 
-                    <div style="background: #f8fafc; border-radius: 12px; padding: 18px; margin-bottom: 16px; border: 1px solid #e2e8f0;">
-                        <h3 style="margin: 0 0 14px; font-size: 1rem; color: #334155;">
-                            <i class="fas fa-key" style="color: #4f46e5;"></i> Credencial
-                        </h3>
-                        <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 4px;">Credential ID</div>
-                        <div style="font-family: monospace; background: #f1f5f9; padding: 8px 10px; border-radius: 6px; font-size: 0.8rem; word-break: break-all;">
-                            ${this.escapeHtmlAdmin(item.credentialId)}
-                        </div>
+                    <div class="bio-detail-card">
+                        <h3 class="bio-detail-card-title"><i class="fas fa-key"></i> Credencial</h3>
+                        <div class="bio-detail-label">Credential ID</div>
+                        <div class="bio-detail-code">${this.escapeHtmlAdmin(item.credentialId)}</div>
                     </div>
 
-                    <div style="background: #f8fafc; border-radius: 12px; padding: 18px; margin-bottom: 16px; border: 1px solid #e2e8f0;">
-                        <h3 style="margin: 0 0 14px; font-size: 1rem; color: #334155;">
-                            <i class="fas fa-history" style="color: #4f46e5;"></i> Histórico
-                        </h3>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.9rem;">
-                            <div>
-                                <div style="font-size: 0.75rem; color: #64748b;">Criado em</div>
-                                <div style="font-weight: 600;">${fmt(item.createdAt)}</div>
+                    <div class="bio-detail-card">
+                        <h3 class="bio-detail-card-title"><i class="fas fa-history"></i> Histórico</h3>
+                        <div class="bio-detail-grid">
+                            <div class="bio-detail-field">
+                                <div class="bio-detail-label">Criado em</div>
+                                <div class="bio-detail-value">${fmt(item.createdAt)}</div>
                             </div>
-                            <div>
-                                <div style="font-size: 0.75rem; color: #64748b;">Último uso</div>
-                                <div style="font-weight: 600;">${fmt(item.ultimoUsoEm)}</div>
+                            <div class="bio-detail-field">
+                                <div class="bio-detail-label">Último uso</div>
+                                <div class="bio-detail-value">${fmt(item.ultimoUsoEm)}</div>
                             </div>
-                            <div>
-                                <div style="font-size: 0.75rem; color: #64748b;">IP de cadastro</div>
-                                <div style="font-weight: 600; font-family: monospace; font-size: 0.85rem;">${this.escapeHtmlAdmin(item.ip || '—')}</div>
+                            <div class="bio-detail-field">
+                                <div class="bio-detail-label">IP de cadastro</div>
+                                <div class="bio-detail-code bio-detail-code--sm">${this.escapeHtmlAdmin(item.ip || '—')}</div>
                             </div>
-                            <div>
-                                <div style="font-size: 0.75rem; color: #64748b;">Status</div>
+                            <div class="bio-detail-field">
+                                <div class="bio-detail-label">Status</div>
                                 <div>
                                     <span class="bio-status-badge ${item.ativo ? 'ativa' : 'revogada'}">
                                         ${item.ativo ? '✅ Ativa' : '❌ Revogada'}
@@ -34777,11 +34588,9 @@ class AdminPanel {
                         </div>
                     </div>
 
-                    <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 14px; border-radius: 8px; font-size: 0.85rem; color: #92400e;">
+                    <div class="bio-detail-alert">
                         <strong><i class="fas fa-info-circle"></i> User-Agent:</strong>
-                        <div style="font-family: monospace; font-size: 0.75rem; margin-top: 4px; word-break: break-all;">
-                            ${this.escapeHtmlAdmin(item.userAgent || '—')}
-                        </div>
+                        <div class="bio-detail-alert-code">${this.escapeHtmlAdmin(item.userAgent || '—')}</div>
                     </div>
                 </div>
             </div>
@@ -34790,7 +34599,7 @@ class AdminPanel {
         document.getElementById('modalTitle').innerHTML = '<i class="fas fa-fingerprint"></i> Detalhes da Biometria';
         this.configurarModal({
             title: '<i class="fas fa-fingerprint"></i> Detalhes da Biometria',
-            saveText: null, // só botão fechar
+            saveText: null,
             onSave: null
         });
         this.openModal();
@@ -34842,7 +34651,7 @@ class AdminPanel {
     async excluirBiometria(id, nomeUsuario) {
         const ok = await this.confirmar(
             '🗑️ Excluir Biometria',
-            `<strong style="color:#dc3545;">ATENÇÃO!</strong><br><br>
+            `<strong class="bio-danger-text">ATENÇÃO!</strong><br><br>
             Excluir permanentemente a biometria de <strong>${this.escapeHtmlAdmin(nomeUsuario)}</strong>?<br><br>
             Esta ação não pode ser desfeita. O usuário poderá cadastrar nova biometria depois.`
         );
@@ -34865,7 +34674,7 @@ class AdminPanel {
         }
     }
 
-    // Helper: escapa HTML (caso não exista no admin.js)
+    // Helper: escapa HTML
     escapeHtmlAdmin(str) {
         if (str === null || str === undefined) return '';
         return String(str)
