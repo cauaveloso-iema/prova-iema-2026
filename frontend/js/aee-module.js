@@ -3890,7 +3890,8 @@ window.AeeModule = {
         // ---------- RELATÓRIO POR ALUNO ----------
         if (tipo === 'aluno' && data.aluno) {
             const a = data.aluno;
-            const condTexto = a.condicao?.label || 'Não especificada';
+            // 🔥 Usa o texto exato que o backend mandou
+            const condTexto = a.condicao?.label || a.condicaoAcessibilidade || 'Não especificada';
 
             container.innerHTML = `
                 <div class="aee-card">

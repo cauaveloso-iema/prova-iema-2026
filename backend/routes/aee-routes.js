@@ -1187,6 +1187,9 @@ router.get('/provas/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
 // ============================================================================
 // GET /api/aee/relatorio
 // ============================================================================
+// ============================================================================
+// GET /api/aee/relatorio
+// ============================================================================
 router.get('/relatorio', authenticateTokenLocal, verificarPermissaoAEE, async (req, res) => {
   try {
     const { turma, curso, condicao, periodo } = req.query;
@@ -1206,12 +1209,19 @@ router.get('/relatorio', authenticateTokenLocal, verificarPermissaoAEE, async (r
     alunos.forEach(aluno => {
       const t = aluno.turma || 'Sem turma';
       if (!porTurma[t]) porTurma[t] = [];
+      
+      // 🔥 AQUI ESTAVA O ERRO: Pega o texto exato do banco
+      let condTexto = aluno.condicaoAcessibilidade || 'Acessibilidade';
+      if (aluno.outraCondicao) {
+          condTexto = `${condTexto} - ${aluno.outraCondicao}`;
+      }
+
       porTurma[t].push({
         id: aluno._id,
         nome: aluno.nome,
         matricula: aluno.matricula,
         curso: aluno.curso,
-        condicao: obterLabelCondicao(aluno.condicaoAcessibilidade),
+        condicao: condTexto, // Retorna o texto exato
         condicaoTipo: aluno.condicaoAcessibilidade,
         detalhes: aluno.outraCondicao
       });
@@ -1219,8 +1229,11 @@ router.get('/relatorio', authenticateTokenLocal, verificarPermissaoAEE, async (r
 
     const porCondicao = {};
     alunos.forEach(a => {
-      const c = obterLabelCondicao(a.condicaoAcessibilidade);
-      porCondicao[c] = (porCondicao[c] || 0) + 1;
+      let condTexto = a.condicaoAcessibilidade || 'Não especificada';
+      if (a.outraCondicao) {
+        condTexto = `${condTexto} - ${a.outraCondicao}`;
+      }
+      porCondicao[condTexto] = (porCondicao[condTexto] || 0) + 1;
     });
 
     res.json({
