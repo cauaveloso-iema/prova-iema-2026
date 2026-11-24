@@ -600,9 +600,19 @@ router.get('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
         : '0.0'
     };
 
-    let condLabel = aluno.condicaoAcessibilidade || 'Não especificada';
-    if (aluno.outraCondicao) {
-        condLabel = `${condLabel} - ${aluno.outraCondicao}`;
+    // 🔥 CORREÇÃO DO TEXTO AQUI
+    let condLabel = 'Não especificada';
+    if (aluno.condicaoAcessibilidade) {
+        if (aluno.condicaoAcessibilidade.toLowerCase() === 'outra') {
+            // Se o enum for 'outra', mostra apenas o texto salvo em 'outraCondicao'
+            condLabel = aluno.outraCondicao || 'Outra Condição';
+        } else {
+            // Se for um enum normal (ex: 'visual'), mostra a label bonita
+            condLabel = obterLabelCondicao(aluno.condicaoAcessibilidade);
+            if (aluno.outraCondicao) {
+                condLabel += ` - ${aluno.outraCondicao}`;
+            }
+        }
     }
 
     res.json({
@@ -619,7 +629,7 @@ router.get('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
           precisa: true,
           condicao: {
             tipo: aluno.condicaoAcessibilidade,
-            label: condLabel,
+            label: condLabel, // 🔥 Retorna o texto limpo
             detalhes: aluno.outraCondicao
           },
           dataSolicitacao: aluno.dataSolicitacaoAcessibilidade
@@ -634,6 +644,7 @@ router.get('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
 // ============================================================================
 // GET /api/aee/respostas/:provaId/:alunoId
 // ============================================================================
@@ -1253,7 +1264,7 @@ router.get('/relatorio', authenticateTokenLocal, verificarPermissaoAEE, async (r
 });
 
 // ============================================================================
-// PUT /api/aee/alunos/:id (CORRIGIDO - Salva texto livre sem quebrar o Enum)
+// PUT /api/aee/alunos/:id (BLINDADO CONTRA ERRO DE MATRÍCULA DUPLICADA)
 // ============================================================================
 router.put('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (req, res) => {
   try {
@@ -1263,16 +1274,7 @@ router.put('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
       return res.status(400).json({ success: false, error: 'ID inválido' });
     }
 
-    const {
-      nome,
-      email,
-      matricula,
-      turma,
-      curso,
-      periodo,
-      condicao, // Aqui vem o texto livre
-      detalhes
-    } = req.body;
+    const { nome, email, matricula, turma, curso, periodo, condicao } = req.body;
 
     if (!nome || !nome.trim()) {
       return res.status(400).json({ success: false, error: 'Nome é obrigatório' });
@@ -1288,78 +1290,85 @@ router.put('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
     }
 
     if (email && email !== alunoAtual.email) {
-      const emailEmUso = await User.findOne({
-        email: email.toLowerCase(),
-        _id: { $ne: id }
-      }).lean();
-      if (emailEmUso) {
-        return res.status(400).json({
-          success: false,
-          error: 'Este email já está em uso por outro usuário'
-        });
-      }
+      const emailEmUso = await User.findOne({ email: email.toLowerCase(), _id: { $ne: id } }).lean();
+      if (emailEmUso) return res.status(400).json({ success: false, error: 'Este email já está em uso.' });
     }
 
-    // 🔥 CORREÇÃO DO ENUM: 
-    // Em vez de tentar jogar o texto livre no 'condicaoAcessibilidade' (que dá erro de enum),
-    // nós salvamos 'outra' no enum e colocamos o texto completo no campo 'outraCondicao'.
     const updateData = {
       nome: nome.trim().toUpperCase(),
       precisaAcessibilidade: true,
-      condicaoAcessibilidade: 'outra', // Força o enum válido
-      outraCondicao: condicao.trim()   // Salva o texto exato aqui
+      condicaoAcessibilidade: 'outra', 
+      outraCondicao: condicao.trim()   
     };
 
     if (email && email.trim()) updateData.email = email.trim().toLowerCase();
-    if (matricula !== undefined) updateData.matricula = (matricula || '').trim();
+
+    // 🔥 BLINDAGEM DA MATRÍCULA
+    // Só mexe na matrícula se ela vier de fato preenchida e não for a palavra 'undefined'
+    if (matricula && typeof matricula === 'string' && matricula.trim() !== '' && matricula !== 'undefined') {
+      const matLimpa = matricula.trim();
+      const matriculaEmUso = await User.findOne({ matricula: matLimpa, _id: { $ne: id } }).lean();
+      
+      if (!matriculaEmUso) {
+        updateData.matricula = matLimpa; 
+      } else {
+        console.warn(`⚠️ Matrícula ${matLimpa} já existe no banco. Ignorando alteração.`);
+      }
+    }
+
     if (turma !== undefined) updateData.turma = (turma || '').trim();
     if (curso !== undefined) updateData.curso = (curso || '').trim();
     if (periodo !== undefined) updateData.periodo = periodo || null;
-
-    // Se o usuário digitou algo no campo "Detalhes", a gente junta com o texto principal
-    if (detalhes && detalhes.trim()) {
-        updateData.outraCondicao += ` - ${detalhes.trim()}`;
-    }
 
     if (!alunoAtual.dataSolicitacaoAcessibilidade) {
       updateData.dataSolicitacaoAcessibilidade = new Date();
     }
 
-    const alunoAtualizado = await User.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true
-    })
-      .select('nome email matricula turma curso periodo condicaoAcessibilidade outraCondicao dataSolicitacaoAcessibilidade')
-      .lean();
+    try {
+      const alunoAtualizado = await User.findByIdAndUpdate(id, updateData, {
+        new: true,
+        runValidators: true
+      })
+        .select('nome email matricula turma curso periodo condicaoAcessibilidade outraCondicao dataSolicitacaoAcessibilidade')
+        .lean();
 
-    if (!alunoAtualizado) {
-      return res.status(404).json({ success: false, error: 'Aluno não encontrado após atualização' });
+      if (!alunoAtualizado) {
+        return res.status(404).json({ success: false, error: 'Aluno não encontrado após atualização' });
+      }
+
+      res.json({
+        success: true,
+        message: 'Aluno atualizado com sucesso',
+        aluno: {
+          id: alunoAtualizado._id,
+          nome: alunoAtualizado.nome,
+          email: alunoAtualizado.email,
+          matricula: alunoAtualizado.matricula,
+          turma: alunoAtualizado.turma,
+          curso: alunoAtualizado.curso,
+          periodo: alunoAtualizado.periodo,
+          condicao: {
+            tipo: alunoAtualizado.condicaoAcessibilidade,
+            label: alunoAtualizado.outraCondicao || alunoAtualizado.condicaoAcessibilidade,
+            detalhes: null
+          },
+          dataSolicitacao: alunoAtualizado.dataSolicitacaoAcessibilidade
+        }
+      });
+
+    } catch (dbError) {
+      // Se por algum motivo bizarro o erro 11000 ainda acontecer, tratamos
+      if (dbError.code === 11000) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Erro no banco de dados: A matrícula informada já está em uso. Deixe-a em branco.' 
+        });
+      }
+      throw dbError;
     }
 
-    logger.info(`✏️ AEE - Aluno ${alunoAtualizado.nome} editado por ${req.userNome}`);
-
-    res.json({
-      success: true,
-      message: 'Aluno atualizado com sucesso',
-      aluno: {
-        id: alunoAtualizado._id,
-        nome: alunoAtualizado.nome,
-        email: alunoAtualizado.email,
-        matricula: alunoAtualizado.matricula,
-        turma: alunoAtualizado.turma,
-        curso: alunoAtualizado.curso,
-        periodo: alunoAtualizado.periodo,
-        condicao: {
-          tipo: alunoAtualizado.condicaoAcessibilidade,
-          label: alunoAtualizado.outraCondicao || alunoAtualizado.condicaoAcessibilidade,
-          detalhes: null // Já foi mesclado acima
-        },
-        dataSolicitacao: alunoAtualizado.dataSolicitacaoAcessibilidade
-      }
-    });
-
   } catch (error) {
-    logger.error('❌ AEE editar aluno:', error);
+    console.error('❌ Erro ao salvar aluno:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

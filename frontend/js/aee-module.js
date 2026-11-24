@@ -799,9 +799,15 @@ window.AeeModule = {
                 <div class="aee-alunos-grid">
                     ${lista.map(aluno => {
                         const condTipo = aluno.condicao?.tipo || aluno.condicao || 'nao_especificada';
-                        const condLabel = aluno.condicao?.label || this.getLabelCondicao(condTipo);
+                        
+                        // 🔥 CORREÇÃO: Limpa a palavra "outra" antes de mostrar no card
+                        let condLabel = aluno.condicao?.label || this.getLabelCondicao(condTipo);
+                        if (condLabel.toLowerCase().startsWith('outra - ')) {
+                            condLabel = condLabel.substring(8).trim();
+                        } else if (condLabel.toLowerCase() === 'outra') {
+                            condLabel = aluno.condicao?.descricao || 'Outra Condição';
+                        }
 
-                        // Se não tiver notas, simplesmente não mostra o badge
                         const sn = aluno.statusNotas || { total: 0, liberadas: 0, pendentes: 0, temNotas: false };
                         let badgeNotas = '';
                         if (sn.temNotas) {
@@ -858,30 +864,29 @@ window.AeeModule = {
     },
 
     async editarAlunoAEE(alunoId) {
-        console.log('✏️ AEE - Editar aluno:', alunoId);
-
         try {
             const token = this.getToken();
-
             const antigo = document.getElementById('aeeModalEditarAluno');
             if (antigo) antigo.remove();
 
-            this.mostrarToast('📄 Carregando dados do aluno...', 'info');
+            this.mostrarToast('📄 Carregando dados...', 'info');
 
             const response = await fetch(`/api/aee/alunos/${alunoId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
-            if (!response.ok) throw new Error('Erro ao carregar aluno');
-
             const data = await response.json();
-            if (!data.success) throw new Error(data.error || 'Erro ao carregar aluno');
+            if (!data.success) throw new Error(data.error);
 
             const aluno = data.aluno;
-            const acess = aluno.acessibilidade || {};
             
-            // 🔥 CORREÇÃO: Pega o texto livre que está salvo no banco
-            const condicaoAtual = acess.condicao?.tipo || '';
+            // 🔥 LÓGICA DE EXIBIÇÃO NO FORMULÁRIO
+            let textoCondicao = aluno.acessibilidade?.condicao?.label || '';
+            if (textoCondicao.toLowerCase().startsWith('outra - ')) {
+                textoCondicao = textoCondicao.substring(8).trim();
+            } else if (textoCondicao.toLowerCase() === 'outra') {
+                textoCondicao = aluno.acessibilidade?.condicao?.detalhes || '';
+            }
 
             const modalHtml = `
                 <div class="aee-modal-backdrop" id="aeeModalEditarAluno" style="
@@ -895,145 +900,74 @@ window.AeeModule = {
                         max-height: 90vh; display: flex; flex-direction: column;
                         box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden;
                     ">
-                        <div class="aee-modal-header" style="
-                            background: linear-gradient(135deg, #f59e0b, #d97706);
-                            color: white; padding: 20px 25px;
-                            display: flex; justify-content: space-between; align-items: center;
-                        ">
+                        <div class="aee-modal-header" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white; padding: 20px 25px; display: flex; justify-content: space-between; align-items: center;">
                             <div style="display: flex; align-items: center; gap: 15px;">
-                                <div style="
-                                    width: 48px; height: 48px; background: rgba(255,255,255,0.2);
-                                    border-radius: 12px; display: flex; align-items: center; justify-content: center;
-                                    font-size: 22px;
-                                ">
+                                <div style="width: 48px; height: 48px; background: rgba(255,255,255,0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px;">
                                     <i class="fas fa-user-edit"></i>
                                 </div>
                                 <div>
-                                    <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700;">
-                                        Editar Aluno AEE
-                                    </h3>
+                                    <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700;">Editar Aluno AEE</h3>
                                     <p style="margin: 4px 0 0; opacity: 0.9; font-size: 0.85rem;">
                                         <i class="fas fa-user"></i> ${this.escapeHtml(aluno.nome)}
                                     </p>
                                 </div>
                             </div>
-                            <button onclick="document.getElementById('aeeModalEditarAluno').remove()" style="
-                                background: rgba(255,255,255,0.2); border: none; color: white;
-                                width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
-                                font-size: 20px; display: flex; align-items: center; justify-content: center;
-                            ">
+                            <button onclick="document.getElementById('aeeModalEditarAluno').remove()" style="background: rgba(255,255,255,0.2); border: none; color: white; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; font-size: 20px;">
                                 <i class="fas fa-times"></i>
                             </button>
                         </div>
 
                         <div class="aee-modal-body" style="padding: 20px 25px; overflow-y: auto; flex: 1;">
-                            <!-- Dados pessoais -->
+                            
                             <div style="margin-bottom: 20px;">
-                                <h4 style="margin: 0 0 12px; font-size: 0.95rem; color: #374151; display: flex; align-items: center; gap: 8px;">
-                                    <i class="fas fa-user" style="color: #f59e0b;"></i>
-                                    Dados Pessoais
-                                </h4>
-
+                                <h4 style="margin: 0 0 12px; font-size: 0.95rem; color: #374151;"><i class="fas fa-user" style="color: #f59e0b;"></i> Dados Pessoais</h4>
                                 <div style="display: grid; gap: 12px;">
                                     <div>
-                                        <label style="display: block; font-size: 12px; font-weight: 600; color: #64748b; margin-bottom: 4px; text-transform: uppercase;">
-                                            Nome Completo *
-                                        </label>
-                                        <input type="text" id="aeeEditNome" value="${this.escapeHtml(aluno.nome || '')}"
-                                            style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+                                        <label style="font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase;">Nome Completo *</label>
+                                        <input type="text" id="aeeEditNome" value="${this.escapeHtml(aluno.nome || '')}" style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 8px;">
                                     </div>
-
                                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                                         <div>
-                                            <label style="display: block; font-size: 12px; font-weight: 600; color: #64748b; margin-bottom: 4px; text-transform: uppercase;">
-                                                Email
-                                            </label>
-                                            <input type="email" id="aeeEditEmail" value="${this.escapeHtml(aluno.email || '')}"
-                                                style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+                                            <label style="font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase;">Email</label>
+                                            <input type="email" id="aeeEditEmail" value="${this.escapeHtml(aluno.email || '')}" style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 8px;">
                                         </div>
                                         <div>
-                                            <label style="display: block; font-size: 12px; font-weight: 600; color: #64748b; margin-bottom: 4px; text-transform: uppercase;">
-                                                Matrícula
-                                            </label>
-                                            <input type="text" id="aeeEditMatricula" value="${this.escapeHtml(aluno.matricula || '')}"
-                                                style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+                                            <label style="font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase;">Matrícula</label>
+                                            <input type="text" id="aeeEditMatricula" value="${this.escapeHtml(aluno.matricula || '')}" style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 8px;">
                                         </div>
                                     </div>
-
                                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                                         <div>
-                                            <label style="display: block; font-size: 12px; font-weight: 600; color: #64748b; margin-bottom: 4px; text-transform: uppercase;">
-                                                Turma
-                                            </label>
-                                            <input type="text" id="aeeEditTurma" value="${this.escapeHtml(aluno.turma || '')}"
-                                                style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+                                            <label style="font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase;">Turma</label>
+                                            <input type="text" id="aeeEditTurma" value="${this.escapeHtml(aluno.turma || '')}" style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 8px;">
                                         </div>
                                         <div>
-                                            <label style="display: block; font-size: 12px; font-weight: 600; color: #64748b; margin-bottom: 4px; text-transform: uppercase;">
-                                                Curso
-                                            </label>
-                                            <input type="text" id="aeeEditCurso" value="${this.escapeHtml(aluno.curso || '')}"
-                                                style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+                                            <label style="font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase;">Curso</label>
+                                            <input type="text" id="aeeEditCurso" value="${this.escapeHtml(aluno.curso || '')}" style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 8px;">
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Acessibilidade -->
                             <div style="margin-bottom: 20px; padding: 15px; background: #fef3c7; border-radius: 12px; border: 1px solid #fde68a;">
-                                <h4 style="margin: 0 0 12px; font-size: 0.95rem; color: #92400e; display: flex; align-items: center; gap: 8px;">
-                                    <i class="fas fa-universal-access"></i>
-                                    Acessibilidade
-                                </h4>
-
-                                <div style="display: grid; gap: 12px;">
-                                    <div>
-                                        <label style="display: block; font-size: 12px; font-weight: 600; color: #92400e; margin-bottom: 4px; text-transform: uppercase;">
-                                            Condição / Tipo de Acessibilidade *
-                                        </label>
-                                        <!-- 🔥 AGORA É UM INPUT DE TEXTO LIVRE -->
-                                        <input type="text" id="aeeEditCondicao" value="${this.escapeHtml(condicaoAtual)}"
-                                            placeholder="Ex: PARALISIA CEREBRAL, COM MONOPLEGIA..."
-                                            style="width: 100%; padding: 10px 12px; border: 2px solid #fde68a; border-radius: 8px; font-size: 14px; background: white; box-sizing: border-box;">
-                                    </div>
-
-                                    <div>
-                                        <label style="display: block; font-size: 12px; font-weight: 600; color: #92400e; margin-bottom: 4px; text-transform: uppercase;">
-                                            Detalhes / Descrição (Opcional)
-                                        </label>
-                                        <textarea id="aeeEditDetalhes" rows="3"
-                                            placeholder="Ex: cadeirante, baixa visão no olho esquerdo..."
-                                            style="width: 100%; padding: 10px 12px; border: 2px solid #fde68a; border-radius: 8px; font-size: 14px; resize: vertical; font-family: inherit; box-sizing: border-box;"
-                                        >${this.escapeHtml(acess.condicao?.detalhes || '')}</textarea>
-                                    </div>
+                                <h4 style="margin: 0 0 12px; font-size: 0.95rem; color: #92400e;"><i class="fas fa-universal-access"></i> Acessibilidade</h4>
+                                <div>
+                                    <label style="display: block; font-size: 12px; font-weight: 600; color: #92400e; margin-bottom: 4px; text-transform: uppercase;">
+                                        Condição / Descrição *
+                                    </label>
+                                    <textarea id="aeeEditCondicao" rows="4"
+                                        placeholder="Digite a condição exata do aluno..."
+                                        style="width: 100%; padding: 10px; border: 2px solid #fde68a; border-radius: 8px; font-size: 14px; font-family: inherit;"
+                                    >${this.escapeHtml(textoCondicao)}</textarea>
                                 </div>
-                            </div>
-
-                            <div style="padding: 12px; background: #eff6ff; border-left: 4px solid #3b82f6; border-radius: 8px;">
-                                <p style="margin: 0; font-size: 0.85rem; color: #1e40af;">
-                                    <i class="fas fa-info-circle"></i>
-                                    Alterações serão registradas no histórico do aluno.
-                                </p>
                             </div>
                         </div>
 
-                        <div class="aee-modal-footer" style="
-                            padding: 15px 25px; border-top: 1px solid #e2e8f0;
-                            display: flex; justify-content: flex-end; gap: 10px;
-                            background: #f8fafc;
-                        ">
-                            <button onclick="document.getElementById('aeeModalEditarAluno').remove()" style="
-                                padding: 10px 20px; background: #6b7280; color: white;
-                                border: none; border-radius: 10px; font-weight: 600;
-                                cursor: pointer; font-size: 0.9rem;
-                            ">
-                                <i class="fas fa-times"></i> Cancelar
+                        <div class="aee-modal-footer" style="padding: 15px 25px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 10px; background: #f8fafc;">
+                            <button onclick="document.getElementById('aeeModalEditarAluno').remove()" style="padding: 10px 20px; background: #6b7280; color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer;">
+                                Cancelar
                             </button>
-                            <button id="aeeBtnSalvarEdicao" onclick="AeeModule.salvarEdicaoAlunoAEE('${alunoId}')" style="
-                                padding: 10px 20px; background: linear-gradient(135deg, #10b981, #059669);
-                                color: white; border: none; border-radius: 10px; font-weight: 600;
-                                cursor: pointer; font-size: 0.9rem;
-                            ">
+                            <button id="aeeBtnSalvarEdicao" onclick="AeeModule.salvarEdicaoAlunoAEE('${alunoId}')" style="padding: 10px 20px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer;">
                                 <i class="fas fa-save"></i> Salvar Alterações
                             </button>
                         </div>
@@ -1051,8 +985,6 @@ window.AeeModule = {
                     });
                 }
             }, 50);
-
-            this.mostrarToast('✅ Dados carregados', 'success');
 
         } catch (error) {
             console.error('❌ Erro ao abrir edição:', error);
@@ -1816,121 +1748,154 @@ window.AeeModule = {
 
             const a = data.aluno;
             
-            // 🔥 CORREÇÃO: Pega a condição exata (texto livre) do banco
-            const condicaoTexto = a.acessibilidade?.condicao?.tipo || 'Não especificada';
-            const detalhesTexto = a.acessibilidade?.condicao?.detalhes || '';
+            // 🔥 Limpa a palavra "outra" do texto principal
+            let condTexto = a.acessibilidade?.condicao?.label || 'Não especificada';
+            if (condTexto.toLowerCase().startsWith('outra - ')) {
+                condTexto = condTexto.substring(8).trim();
+            } else if (condTexto.toLowerCase() === 'outra') {
+                condTexto = a.acessibilidade?.condicao?.detalhes || 'Outra Condição';
+            }
 
             const antigo = this.safeGet('aeeModalDetalhes');
             if (antigo) antigo.remove();
 
             const modalHtml = `
-                <div class="aee-modal-backdrop" id="aeeModalDetalhes">
-                    <div class="aee-modal">
-                        <div class="aee-modal-header" style="background: linear-gradient(135deg, #6366f1, #8b5cf6);">
-                            <div class="aee-modal-header-content">
-                                <div class="aee-modal-avatar">
-                                    <i class="fas fa-user"></i>
+                <div class="aee-modal-backdrop" id="aeeModalDetalhes" style="
+                    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                    background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px); z-index: 10000;
+                    display: flex; align-items: center; justify-content: center;
+                    padding: 20px; box-sizing: border-box;
+                ">
+                    <div class="aee-modal" style="
+                        background: #fff; border-radius: 20px; max-width: 750px; width: 100%;
+                        max-height: 90vh; display: flex; flex-direction: column;
+                        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); overflow: hidden;
+                        animation: aeeSlideIn 0.3s ease;
+                    ">
+                        <!-- CABEÇALHO DO MODAL -->
+                        <div style="
+                            background: linear-gradient(135deg, #6366f1, #8b5cf6); 
+                            padding: 25px 30px; color: white; display: flex; justify-content: space-between; align-items: flex-start;
+                        ">
+                            <div style="display: flex; align-items: center; gap: 20px;">
+                                <div style="
+                                    width: 65px; height: 65px; background: rgba(255,255,255,0.2); 
+                                    border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 28px;
+                                    box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+                                ">
+                                    <i class="fas fa-user-graduate"></i>
                                 </div>
                                 <div>
-                                    <h3>${this.escapeHtml(a.nome)}</h3>
-                                    <!-- 🔥 Exibe o texto real, não o genérico -->
-                                    <p>${this.escapeHtml(condicaoTexto)}</p>
+                                    <h3 style="margin: 0; font-size: 1.4rem; font-weight: 700; letter-spacing: 0.5px;">
+                                        ${this.escapeHtml(a.nome)}
+                                    </h3>
+                                    <p style="margin: 6px 0 0; opacity: 0.9; font-size: 0.9rem; display: flex; align-items: center; gap: 8px;">
+                                        <span style="background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 4px;">
+                                            <i class="fas fa-graduation-cap"></i> Turma: ${this.escapeHtml(a.turma || 'Não informada')}
+                                        </span>
+                                        <span style="background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 4px;">
+                                            <i class="fas fa-heart"></i> ${this.escapeHtml(condTexto)}
+                                        </span>
+                                    </p>
                                 </div>
                             </div>
-                            <button class="aee-modal-close" onclick="AeeModule.fecharModal()">
+                            <button onclick="AeeModule.fecharModal()" style="
+                                background: rgba(255,255,255,0.15); border: none; color: white;
+                                width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
+                                font-size: 18px; transition: 0.2s; display: flex; align-items: center; justify-content: center;
+                            " onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.15)'">
                                 <i class="fas fa-times"></i>
                             </button>
                         </div>
 
-                        <div class="aee-modal-body">
-                            <div class="aee-modal-section">
-                                <h4><i class="fas fa-user"></i> Dados Pessoais</h4>
-                                <div class="aee-info-grid">
-                                    <div class="aee-info-item">
-                                        <span class="aee-info-label">Matrícula</span>
-                                        <span class="aee-info-value">${this.escapeHtml(a.matricula || 'Não informada')}</span>
+                        <!-- CORPO DO MODAL -->
+                        <div style="padding: 25px 30px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 25px;">
+                            
+                            <!-- DADOS PESSOAIS -->
+                            <div>
+                                <h4 style="margin: 0 0 12px; font-size: 0.9rem; color: #64748b; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas fa-id-card" style="color: #6366f1;"></i> Dados Pessoais
+                                </h4>
+                                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; background: #f8fafc; padding: 15px 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                                    <div>
+                                        <span style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Matrícula</span>
+                                        <span style="font-size: 14px; font-weight: 600; color: #1e293b;">${this.escapeHtml(a.matricula || 'Não informada')}</span>
                                     </div>
-                                    <div class="aee-info-item">
-                                        <span class="aee-info-label">Email</span>
-                                        <span class="aee-info-value">${this.escapeHtml(a.email || '-')}</span>
+                                    <div>
+                                        <span style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Email</span>
+                                        <span style="font-size: 14px; font-weight: 500; color: #1e293b;">${this.escapeHtml(a.email || '-')}</span>
                                     </div>
-                                    <div class="aee-info-item">
-                                        <span class="aee-info-label">Turma</span>
-                                        <span class="aee-info-value">${this.escapeHtml(a.turma || '-')}</span>
-                                    </div>
-                                    <div class="aee-info-item">
-                                        <span class="aee-info-label">Curso</span>
-                                        <span class="aee-info-value">${this.escapeHtml(a.curso || '-')}</span>
+                                    <div>
+                                        <span style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Curso</span>
+                                        <span style="font-size: 14px; font-weight: 500; color: #1e293b;">${this.escapeHtml(a.curso || '-')}</span>
                                     </div>
                                 </div>
                             </div>
 
-                            <div class="aee-modal-section">
-                                <h4><i class="fas fa-universal-access"></i> Acessibilidade</h4>
-                                <div class="aee-info-grid">
-                                    <div class="aee-info-item aee-info-full">
-                                        <span class="aee-info-label">Condição</span>
-                                        <span class="aee-info-value"><strong>${this.escapeHtml(condicaoTexto)}</strong></span>
-                                    </div>
-                                    <!-- 🔥 REMOVIDO O BLOCO DE STATUS AQUI -->
-                                    ${detalhesTexto ? `
-                                        <div class="aee-info-item aee-info-full">
-                                            <span class="aee-info-label">Detalhes</span>
-                                            <span class="aee-info-value">${this.escapeHtml(detalhesTexto)}</span>
+                            <!-- ESTATÍSTICAS -->
+                            <div>
+                                <h4 style="margin: 0 0 12px; font-size: 0.9rem; color: #64748b; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas fa-chart-line" style="color: #10b981;"></i> Desempenho Acadêmico
+                                </h4>
+                                ${a.estatisticas ? `
+                                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
+                                        <div style="background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 15px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+                                            <div style="font-size: 24px; font-weight: 800; color: #6366f1;">${a.estatisticas.totalProvas}</div>
+                                            <div style="font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; margin-top: 4px;">Provas</div>
                                         </div>
-                                    ` : ''}
-                                </div>
+                                        <div style="background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 15px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+                                            <div style="font-size: 24px; font-weight: 800; color: #10b981;">${a.estatisticas.media}</div>
+                                            <div style="font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; margin-top: 4px;">Média</div>
+                                        </div>
+                                        <div style="background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 15px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+                                            <div style="font-size: 24px; font-weight: 800; color: #f59e0b;">${a.estatisticas.aprovacoes}</div>
+                                            <div style="font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; margin-top: 4px;">Aprovações</div>
+                                        </div>
+                                        <div style="background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 15px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+                                            <div style="font-size: 24px; font-weight: 800; color: #ef4444;">${a.estatisticas.reprovacoes}</div>
+                                            <div style="font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; margin-top: 4px;">Reprovações</div>
+                                        </div>
+                                    </div>
+                                ` : '<p style="color: #94a3b8; font-size: 14px;">Sem dados estatísticos.</p>'}
                             </div>
 
-                            ${a.estatisticas ? `
-                                <div class="aee-modal-section">
-                                    <h4><i class="fas fa-chart-line"></i> Estatísticas de Desempenho</h4>
-                                    <div class="aee-modal-stats">
-                                        <div class="aee-modal-stat">
-                                            <div class="aee-modal-stat-value">${a.estatisticas.totalProvas}</div>
-                                            <div class="aee-modal-stat-label">Provas</div>
-                                        </div>
-                                        <div class="aee-modal-stat">
-                                            <div class="aee-modal-stat-value" style="color: #10b981;">${a.estatisticas.media}</div>
-                                            <div class="aee-modal-stat-label">Média</div>
-                                        </div>
-                                        <div class="aee-modal-stat">
-                                            <div class="aee-modal-stat-value" style="color: #f59e0b;">${a.estatisticas.aprovacoes}</div>
-                                            <div class="aee-modal-stat-label">Aprovações</div>
-                                        </div>
-                                        <div class="aee-modal-stat">
-                                            <div class="aee-modal-stat-value" style="color: #ef4444;">${a.estatisticas.reprovacoes}</div>
-                                            <div class="aee-modal-stat-label">Reprovações</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            ` : ''}
-
-                            <div class="aee-modal-section">
-                                <h4><i class="fas fa-file-alt"></i> Últimas Provas</h4>
+                            <!-- ÚLTIMAS PROVAS -->
+                            <div>
+                                <h4 style="margin: 0 0 12px; font-size: 0.9rem; color: #64748b; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas fa-file-alt" style="color: #f59e0b;"></i> Últimas Provas
+                                </h4>
                                 ${a.provasRealizadas && a.provasRealizadas.length > 0 ? `
-                                    <div class="aee-provas-list">
+                                    <div style="display: flex; flex-direction: column; gap: 8px;">
                                         ${a.provasRealizadas.map(p => `
-                                            <div class="aee-prova-item">
-                                                <div class="aee-prova-info">
-                                                    <strong>${this.escapeHtml(p.provaTitulo || 'Sem título')}</strong>
-                                                    <span>${p.adaptada ? '🎯 Adaptada' : '📝 Normal'} • ${this.formatarData(p.data)}</span>
+                                            <div style="display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px 15px; border-radius: 10px;">
+                                                <div>
+                                                    <strong style="display: block; font-size: 14px; color: #1e293b;">${this.escapeHtml(p.provaTitulo || 'Sem título')}</strong>
+                                                    <span style="font-size: 12px; color: #64748b;">
+                                                        <i class="fas fa-calendar-alt"></i> ${this.formatarData(p.data)} 
+                                                        • ${p.adaptada ? '🎯 Adaptada' : '📝 Normal'}
+                                                    </span>
                                                 </div>
-                                                <div class="aee-prova-nota ${p.notaLiberada ? (p.nota >= 7 ? 'nota-alta' : 'nota-baixa') : ''}">
-                                                    ${p.notaLiberada && p.nota !== null ? p.nota.toFixed(1) : 'Pendente'}
+                                                <div style="font-size: 16px; font-weight: 700; color: ${p.notaLiberada ? (p.nota >= 7 ? '#10b981' : '#ef4444') : '#94a3b8'};">
+                                                    ${p.notaLiberada && p.nota !== null ? p.nota.toFixed(1) : '—'}
                                                 </div>
                                             </div>
                                         `).join('')}
                                     </div>
-                                ` : '<p class="aee-empty">Nenhuma prova realizada ainda</p>'}
+                                ` : `
+                                    <div style="text-align: center; padding: 20px; background: #f8fafc; border-radius: 12px; border: 1px dashed #cbd5e1;">
+                                        <i class="fas fa-info-circle" style="color: #94a3b8; font-size: 20px; margin-bottom: 8px;"></i>
+                                        <p style="margin: 0; font-size: 13px; color: #64748b;">Nenhuma prova realizada até o momento.</p>
+                                    </div>
+                                `}
                             </div>
                         </div>
 
-                        <div class="aee-modal-footer">
-                            <button class="aee-btn aee-btn-outline" onclick="AeeModule.fecharModal()">
-                                <i class="fas fa-times"></i> Fechar
+                        <!-- RODAPÉ DO MODAL -->
+                        <div style="padding: 15px 30px; border-top: 1px solid #e2e8f0; background: #f8fafc; display: flex; justify-content: flex-end; gap: 10px;">
+                            <button onclick="AeeModule.fecharModal()" style="padding: 10px 20px; background: white; color: #475569; border: 1px solid #cbd5e1; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s;">
+                                Fechar
                             </button>
-                            <button class="aee-btn aee-btn-primary" onclick="AeeModule.verHistoricoCompletoAluno('${a.id}')">
+                            <button onclick="AeeModule.verHistoricoCompletoAluno('${a.id}')" style="padding: 10px 20px; background: #6366f1; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 8px;">
                                 <i class="fas fa-history"></i> Histórico Completo
                             </button>
                         </div>
