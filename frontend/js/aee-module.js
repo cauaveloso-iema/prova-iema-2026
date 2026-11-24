@@ -486,7 +486,6 @@ window.AeeModule = {
 
             const d = data.dashboard;
 
-            // 🔥 Atualiza filtros disponíveis
             if (d.filtrosDisponiveis) {
                 this.filtrosDisponiveis.condicoes = d.filtrosDisponiveis.condicoes || [];
                 this.filtrosDisponiveis.turmas = d.filtrosDisponiveis.turmas || [];
@@ -501,9 +500,6 @@ window.AeeModule = {
                         <div class="aee-stat-label">Alunos AEE</div>
                         <div class="aee-stat-sub">de ${d.totalAlunos} alunos</div>
                     </div>
-                    
-                    <!-- 🔥 Removido o card de "Aprovados" e "Pendentes" -->
-
                     <div class="aee-stat-card" style="background: linear-gradient(135deg, #ec4899, #db2777);">
                         <div class="aee-stat-icon"><i class="fas fa-file-alt"></i></div>
                         <div class="aee-stat-value">${d.totalProvasAdaptadas}</div>
@@ -512,47 +508,16 @@ window.AeeModule = {
                     </div>
                 </div>
 
-                <div class="aee-card">
-                    <div class="aee-card-header">
-                        <h3><i class="fas fa-percentage"></i> Taxa de Acessibilidade</h3>
-                    </div>
-                    <div class="aee-card-body">
-                        <div class="aee-taxa-container">
-                            <div class="aee-taxa-valor">${d.taxaAcessibilidade}%</div>
-                            <div class="aee-taxa-barra">
-                                <div class="aee-taxa-progresso" style="width: ${d.taxaAcessibilidade}%"></div>
-                            </div>
-                            <p class="aee-taxa-desc">
-                                ${d.totalAlunosComAcessibilidade} de ${d.totalAlunos} alunos possuem necessidades educacionais específicas
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="aee-grid-2">
+                <div class="aee-grid-2" style="margin-top: 20px;">
+                    <!-- 🔥 NOVO GRÁFICO DE CONDIÇÕES -->
                     <div class="aee-card">
                         <div class="aee-card-header">
-                            <h3><i class="fas fa-heart"></i> Distribuição por Condição</h3>
+                            <h3><i class="fas fa-heart"></i> Top Condições</h3>
                         </div>
-                        <div class="aee-card-body">
+                        <div class="aee-card-body" style="padding: 15px;">
                             ${d.distribuicaoCondicoes.length > 0 ? `
-                                <div class="aee-chart-container">
+                                <div class="aee-chart-container" style="height: 350px; position: relative;">
                                     <canvas id="aeeChartCondicoes"></canvas>
-                                </div>
-                                <div class="aee-condicoes-list">
-                                    ${d.distribuicaoCondicoes.map(c => `
-                                        <div class="aee-condicao-item">
-                                            <div class="aee-condicao-label">
-                                                <i class="fas fa-heart" style="color: #6366f1;"></i>
-                                                <span>${this.escapeHtml(c.label)}</span>
-                                            </div>
-                                            <div class="aee-condicao-count">
-                                                <span class="aee-count-badge" style="background: #6366f120; color: #6366f1;">
-                                                    ${c.count}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    `).join('')}
                                 </div>
                             ` : '<div class="aee-empty">Nenhum dado disponível</div>'}
                         </div>
@@ -562,9 +527,9 @@ window.AeeModule = {
                         <div class="aee-card-header">
                             <h3><i class="fas fa-school"></i> Top Turmas</h3>
                         </div>
-                        <div class="aee-card-body">
+                        <div class="aee-card-body" style="padding: 15px;">
                             ${d.distribuicaoTurmas.length > 0 ? `
-                                <div class="aee-chart-container">
+                                <div class="aee-chart-container" style="height: 350px; position: relative;">
                                     <canvas id="aeeChartTurmas"></canvas>
                                 </div>
                             ` : '<div class="aee-empty">Nenhum dado disponível</div>'}
@@ -583,16 +548,18 @@ window.AeeModule = {
                         ${d.alunosRecentes.length > 0 ? `
                             <div class="aee-recentes-list">
                                 ${d.alunosRecentes.map(a => `
-                                    <div class="aee-recente-item" onclick="AeeModule.verDetalhesAluno('${a.id}')">
+                                    <div class="aee-recente-item" onclick="AeeModule.verDetalhesAluno('${a.id}')" style="border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 10px;">
                                         <div class="aee-recente-avatar" style="background: #6366f120; color: #6366f1;">
                                             <i class="fas fa-user"></i>
                                         </div>
                                         <div class="aee-recente-info">
-                                            <strong>${this.escapeHtml(a.nome)}</strong>
-                                            <!-- 🔥 Removido o Status e ajustada a label da condição -->
-                                            <span>${this.escapeHtml(a.turma || 'Sem turma')} • ${this.escapeHtml(a.condicaoLabel || 'Acessibilidade')}</span>
+                                            <strong style="color: #1e293b; font-size: 15px;">${this.escapeHtml(a.nome)}</strong>
+                                            <span style="color: #64748b; font-size: 13px; display: block; margin-top: 2px;">
+                                                <i class="fas fa-graduation-cap"></i> ${this.escapeHtml(a.turma || 'Sem turma')} 
+                                                • <i class="fas fa-heart" style="color: #ec4899;"></i> ${this.escapeHtml(a.condicaoLabel || 'Acessibilidade')}
+                                            </span>
                                         </div>
-                                        <i class="fas fa-chevron-right"></i>
+                                        <i class="fas fa-chevron-right" style="color: #cbd5e1;"></i>
                                     </div>
                                 `).join('')}
                             </div>
@@ -622,60 +589,78 @@ window.AeeModule = {
     },
 
     renderizarGraficos(d) {
-        // Gráfico de condições
+        const coresDinamicas = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#ef4444', '#f97316', '#14b8a6', '#a855f7'];
+
+        // 🔥 Gráfico 1: CONDIÇÕES (Barras Horizontais)
         const ctxCond = this.safeGet('aeeChartCondicoes');
         if (ctxCond && d.distribuicaoCondicoes.length > 0) {
             if (this.charts.condicoes) {
                 try { this.charts.condicoes.destroy(); } catch (e) {}
             }
 
-            // 🔥 Paleta de cores para condições dinâmicas (texto livre)
-            const coresDinamicas = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#ef4444', '#f97316', '#14b8a6', '#a855f7'];
+            // Pega as Top 10 condições para não entupir o gráfico
+            const topCondicoes = d.distribuicaoCondicoes.slice(0, 10);
+
+            // Função para cortar textos muito longos no gráfico
+            const truncar = (texto, limite = 35) => {
+                if (!texto) return 'Não especificada';
+                return texto.length > limite ? texto.substring(0, limite) + '...' : texto;
+            };
 
             this.charts.condicoes = new Chart(ctxCond.getContext('2d'), {
-                type: 'doughnut',
+                type: 'bar',
                 data: {
-                    labels: d.distribuicaoCondicoes.map(c => c.label),
+                    labels: topCondicoes.map(c => truncar(c.label)),
                     datasets: [{
-                        data: d.distribuicaoCondicoes.map(c => c.count),
-                        backgroundColor: d.distribuicaoCondicoes.map((_, i) => coresDinamicas[i % coresDinamicas.length]),
-                        borderWidth: 3,
-                        borderColor: '#ffffff'
+                        label: 'Alunos',
+                        data: topCondicoes.map(c => c.count),
+                        backgroundColor: topCondicoes.map((_, i) => coresDinamicas[i % coresDinamicas.length]),
+                        borderRadius: 6,
+                        maxBarThickness: 20
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    cutout: '65%',
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: { padding: 12, usePointStyle: true, pointStyle: 'circle', font: { size: 11 } }
+                    indexAxis: 'y', // 🔥 Deixa as barras deitadas
+                    plugins: { 
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: function(context) {
+                                    // Mostra o texto completo no tooltip ao passar o mouse
+                                    return topCondicoes[context[0].dataIndex].label;
+                                }
+                            }
                         }
+                    },
+                    scales: {
+                        x: { beginAtZero: true, ticks: { stepSize: 1, precision: 0, font: { size: 11 } }, grid: { color: '#f3f4f6', drawBorder: false } },
+                        y: { grid: { display: false }, ticks: { font: { size: 11, weight: '500' }, color: '#475569' } }
                     }
                 }
             });
         }
 
-        // Gráfico de turmas
+        // 🔥 Gráfico 2: TURMAS (Barras Horizontais)
         const ctxTurmas = this.safeGet('aeeChartTurmas');
         if (ctxTurmas && d.distribuicaoTurmas.length > 0) {
             if (this.charts.turmas) {
                 try { this.charts.turmas.destroy(); } catch (e) {}
             }
 
-            const cores = ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#f97316', '#f59e0b', '#10b981', '#06b6d4'];
+            const topTurmas = d.distribuicaoTurmas.slice(0, 10);
 
             this.charts.turmas = new Chart(ctxTurmas.getContext('2d'), {
                 type: 'bar',
                 data: {
-                    labels: d.distribuicaoTurmas.map(t => t.turma),
+                    labels: topTurmas.map(t => t.turma),
                     datasets: [{
                         label: 'Alunos',
-                        data: d.distribuicaoTurmas.map(t => t.count),
-                        backgroundColor: d.distribuicaoTurmas.map((_, i) => cores[i % cores.length]),
+                        data: topTurmas.map(t => t.count),
+                        backgroundColor: topTurmas.map((_, i) => coresDinamicas[i % coresDinamicas.length]),
                         borderRadius: 6,
-                        maxBarThickness: 24
+                        maxBarThickness: 20
                     }]
                 },
                 options: {
@@ -685,7 +670,7 @@ window.AeeModule = {
                     plugins: { legend: { display: false } },
                     scales: {
                         x: { beginAtZero: true, ticks: { stepSize: 1, precision: 0, font: { size: 11 } }, grid: { color: '#f3f4f6', drawBorder: false } },
-                        y: { grid: { display: false }, ticks: { font: { size: 11, weight: '600' }, color: '#374151' } }
+                        y: { grid: { display: false }, ticks: { font: { size: 11, weight: '500' }, color: '#475569' } }
                     }
                 }
             });
@@ -761,6 +746,8 @@ window.AeeModule = {
         const pane = this.safeGet('aeePaneAlunos');
         if (!pane) return;
 
+        const lista = data.alunos || [];
+
         pane.innerHTML = `
             <div class="aee-filtros">
                 <div class="aee-filtros-row">
@@ -797,15 +784,6 @@ window.AeeModule = {
                         </select>
                     </div>
 
-                    <div class="aee-filtro-item">
-                        <label>Status Cadastro</label>
-                        <select id="aeeFiltroStatus">
-                            <option value="todos" ${this.filtros.status === 'todos' ? 'selected' : ''}>Todos</option>
-                            <option value="aprovada" ${this.filtros.status === 'aprovada' ? 'selected' : ''}>✓ Aprovado</option>
-                            <option value="pendente" ${this.filtros.status === 'pendente' ? 'selected' : ''}>⏳ Pendente</option>
-                        </select>
-                    </div>
-
                     <button class="aee-btn aee-btn-outline" onclick="AeeModule.limparFiltros()" title="Limpar filtros">
                         <i class="fas fa-eraser"></i>
                     </button>
@@ -814,51 +792,48 @@ window.AeeModule = {
 
             <div class="aee-contador">
                 <i class="fas fa-users"></i>
-                <strong>${data.total}</strong> aluno(s) encontrado(s)
+                <strong>${data.total || 0}</strong> aluno(s) encontrado(s)
             </div>
 
-            ${data.alunos.length > 0 ? `
+            ${lista.length > 0 ? `
                 <div class="aee-alunos-grid">
-                    ${data.alunos.map(aluno => {
-                        const statusCadastro = aluno.statusCadastro || aluno.status || 'pendente';
-                        const badgeCadastro = statusCadastro === 'aprovada'
-                            ? '<span class="aee-badge-status aprovado"><i class="fas fa-check-circle"></i> Cadastro Aprovado</span>'
-                            : '<span class="aee-badge-status pendente"><i class="fas fa-clock"></i> Cadastro Pendente</span>';
+                    ${lista.map(aluno => {
+                        const condTipo = aluno.condicao?.tipo || aluno.condicao || 'nao_especificada';
+                        const condLabel = aluno.condicao?.label || this.getLabelCondicao(condTipo);
 
+                        // Se não tiver notas, simplesmente não mostra o badge
                         const sn = aluno.statusNotas || { total: 0, liberadas: 0, pendentes: 0, temNotas: false };
                         let badgeNotas = '';
-
-                        if (!sn.temNotas) {
-                            badgeNotas = '<span class="aee-badge-status sem-nota"><i class="fas fa-minus-circle"></i> Sem notas</span>';
-                        } else if (sn.todasLiberadas) {
-                            badgeNotas = `<span class="aee-badge-status notas-liberadas"><i class="fas fa-check-double"></i> ${sn.liberadas} nota(s) liberada(s)</span>`;
-                        } else {
-                            badgeNotas = `<span class="aee-badge-status notas-pendentes"><i class="fas fa-hourglass-half"></i> ${sn.pendentes} nota(s) pendente(s)</span>`;
+                        if (sn.temNotas) {
+                            if (sn.todasLiberadas) {
+                                badgeNotas = `<span class="aee-badge-status notas-liberadas"><i class="fas fa-check-double"></i> ${sn.liberadas} nota(s) liberada(s)</span>`;
+                            } else {
+                                badgeNotas = `<span class="aee-badge-status notas-pendentes"><i class="fas fa-hourglass-half"></i> ${sn.pendentes} nota(s) pendente(s)</span>`;
+                            }
                         }
 
                         return `
                             <div class="aee-aluno-card" data-aluno-id="${aluno.id}">
-                                <div class="aee-aluno-avatar" style="background: ${this.getCorCondicao(aluno.condicao.tipo)}20; color: ${this.getCorCondicao(aluno.condicao.tipo)};" onclick="AeeModule.verDetalhesAluno('${aluno.id}')">
-                                    <i class="fas ${this.getIconeCondicao(aluno.condicao.tipo)}"></i>
+                                <div class="aee-aluno-avatar"
+                                    style="background: ${this.getCorCondicao(condTipo)}20; color: ${this.getCorCondicao(condTipo)};"
+                                    onclick="AeeModule.verDetalhesAluno('${aluno.id}')">
+                                    <i class="fas ${this.getIconeCondicao(condTipo)}"></i>
                                 </div>
                                 <div class="aee-aluno-info" onclick="AeeModule.verDetalhesAluno('${aluno.id}')" style="cursor: pointer;">
-                                    <div class="aee-aluno-nome">${this.escapeHtml(aluno.nome)}</div>
+                                    <div class="aee-aluno-nome">${this.escapeHtml(aluno.nome || 'Sem nome')}</div>
                                     <div class="aee-aluno-detalhes">
-                                        <span><i class="fas fa-id-card"></i> ${this.escapeHtml(aluno.matricula)}</span>
-                                        <span><i class="fas fa-graduation-cap"></i> ${this.escapeHtml(aluno.turma || '-')}</span>
+                                        <span><i class="fas fa-id-card"></i> ${this.escapeHtml(aluno.matricula || '-')}</span>
+                                        <span><i class="fas fa-graduation-cap"></i> ${this.escapeHtml(aluno.turma || aluno.turmaNome || '-')}</span>
                                         ${aluno.curso ? `<span><i class="fas fa-book"></i> ${this.escapeHtml(aluno.curso)}</span>` : ''}
                                     </div>
-                                    <div class="aee-aluno-condicao" style="background: ${this.getCorCondicao(aluno.condicao.tipo)}15; color: ${this.getCorCondicao(aluno.condicao.tipo)};">
-                                        <i class="fas ${this.getIconeCondicao(aluno.condicao.tipo)}"></i>
-                                        ${this.escapeHtml(aluno.condicao.label)}
+                                    <div class="aee-aluno-condicao" style="background: ${this.getCorCondicao(condTipo)}15; color: ${this.getCorCondicao(condTipo)};">
+                                        <i class="fas ${this.getIconeCondicao(condTipo)}"></i>
+                                        ${this.escapeHtml(condLabel)}
                                     </div>
-                                    <div class="aee-aluno-badges">
-                                        ${badgeCadastro}
-                                        ${badgeNotas}
-                                    </div>
+                                    ${badgeNotas ? `<div class="aee-aluno-badges" style="margin-top: 8px;">${badgeNotas}</div>` : ''}
                                 </div>
                                 <div class="aee-aluno-actions">
-                                    <button class="aee-btn-icon aee-btn-edit" onclick="event.stopPropagation(); AeeModule.editarAlunoAEE('${aluno.id}')" title="Editar informações">
+                                    <button class="aee-btn-icon aee-btn-edit" onclick="event.stopPropagation(); AeeModule.editarAlunoAEE('${aluno.id}')" title="Editar">
                                         <i class="fas fa-edit"></i>
                                     </button>
                                     <button class="aee-btn-icon aee-btn-view" onclick="event.stopPropagation(); AeeModule.verDetalhesAluno('${aluno.id}')" title="Ver detalhes">
@@ -874,7 +849,7 @@ window.AeeModule = {
                 <div class="aee-empty-state">
                     <i class="fas fa-user-slash"></i>
                     <h3>Nenhum aluno encontrado</h3>
-                    <p>Tente ajustar os filtros ou verifique se há alunos cadastrados com necessidades de acessibilidade.</p>
+                    <p>Nenhum registro retornado pelo servidor.</p>
                 </div>
             `}
         `;
