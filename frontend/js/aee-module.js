@@ -919,9 +919,6 @@ window.AeeModule = {
         setTimeout(() => this.aplicarEventosFiltros(), 50);
     },
 
-    // ============================================================================
-    // ✏️ EDITAR ALUNO AEE — Modal com todos os campos editáveis
-    // ============================================================================
     async editarAlunoAEE(alunoId) {
         console.log('✏️ AEE - Editar aluno:', alunoId);
 
@@ -944,16 +941,9 @@ window.AeeModule = {
 
             const aluno = data.aluno;
             const acess = aluno.acessibilidade || {};
+            
+            // 🔥 CORREÇÃO: Pega o texto livre que está salvo no banco
             const condicaoAtual = acess.condicao?.tipo || '';
-            const detalhesAtual = acess.condicao?.detalhes || acess.condicao?.descricao || '';
-            const statusAtual = acess.status || 'pendente';
-
-            // Gera opções de condição
-            const opcoesCondicao = Object.entries(this.CONDICOES_LABELS)
-                .filter(([valor]) => valor !== 'nao_especificada')
-                .map(([valor, label]) =>
-                    `<option value="${valor}" ${valor === condicaoAtual ? 'selected' : ''}>${label}</option>`
-                ).join('');
 
             const modalHtml = `
                 <div class="aee-modal-backdrop" id="aeeModalEditarAluno" style="
@@ -1048,19 +1038,6 @@ window.AeeModule = {
                                                 style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
                                         </div>
                                     </div>
-
-                                    <div>
-                                        <label style="display: block; font-size: 12px; font-weight: 600; color: #64748b; margin-bottom: 4px; text-transform: uppercase;">
-                                            Período
-                                        </label>
-                                        <select id="aeeEditPeriodo" style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; background: white; box-sizing: border-box;">
-                                            <option value="">Não informado</option>
-                                            <option value="1" ${aluno.periodo === '1' ? 'selected' : ''}>1º Período</option>
-                                            <option value="2" ${aluno.periodo === '2' ? 'selected' : ''}>2º Período</option>
-                                            <option value="3" ${aluno.periodo === '3' ? 'selected' : ''}>3º Período</option>
-                                            <option value="4" ${aluno.periodo === '4' ? 'selected' : ''}>4º Período</option>
-                                        </select>
-                                    </div>
                                 </div>
                             </div>
 
@@ -1076,30 +1053,20 @@ window.AeeModule = {
                                         <label style="display: block; font-size: 12px; font-weight: 600; color: #92400e; margin-bottom: 4px; text-transform: uppercase;">
                                             Condição / Tipo de Acessibilidade *
                                         </label>
-                                        <select id="aeeEditCondicao" style="width: 100%; padding: 10px 12px; border: 2px solid #fde68a; border-radius: 8px; font-size: 14px; background: white; box-sizing: border-box;">
-                                            <option value="">Selecione...</option>
-                                            ${opcoesCondicao}
-                                        </select>
+                                        <!-- 🔥 AGORA É UM INPUT DE TEXTO LIVRE -->
+                                        <input type="text" id="aeeEditCondicao" value="${this.escapeHtml(condicaoAtual)}"
+                                            placeholder="Ex: PARALISIA CEREBRAL, COM MONOPLEGIA..."
+                                            style="width: 100%; padding: 10px 12px; border: 2px solid #fde68a; border-radius: 8px; font-size: 14px; background: white; box-sizing: border-box;">
                                     </div>
 
                                     <div>
                                         <label style="display: block; font-size: 12px; font-weight: 600; color: #92400e; margin-bottom: 4px; text-transform: uppercase;">
-                                            Detalhes / Descrição
+                                            Detalhes / Descrição (Opcional)
                                         </label>
                                         <textarea id="aeeEditDetalhes" rows="3"
-                                            placeholder="Ex: cadeirante, baixa visão no olho esquerdo, TDAH nível moderado..."
+                                            placeholder="Ex: cadeirante, baixa visão no olho esquerdo..."
                                             style="width: 100%; padding: 10px 12px; border: 2px solid #fde68a; border-radius: 8px; font-size: 14px; resize: vertical; font-family: inherit; box-sizing: border-box;"
-                                        >${this.escapeHtml(detalhesAtual)}</textarea>
-                                    </div>
-
-                                    <div>
-                                        <label style="display: block; font-size: 12px; font-weight: 600; color: #92400e; margin-bottom: 4px; text-transform: uppercase;">
-                                            Status do Cadastro AEE
-                                        </label>
-                                        <select id="aeeEditStatus" style="width: 100%; padding: 10px 12px; border: 2px solid #fde68a; border-radius: 8px; font-size: 14px; background: white; box-sizing: border-box;">
-                                            <option value="pendente" ${statusAtual === 'pendente' ? 'selected' : ''}>⏳ Pendente</option>
-                                            <option value="aprovada" ${statusAtual === 'aprovada' ? 'selected' : ''}>✅ Aprovada</option>
-                                        </select>
+                                        >${this.escapeHtml(acess.condicao?.detalhes || '')}</textarea>
                                     </div>
                                 </div>
                             </div>
@@ -1138,23 +1105,11 @@ window.AeeModule = {
 
             document.body.insertAdjacentHTML('beforeend', modalHtml);
 
-            // Fecha ao clicar no backdrop
             setTimeout(() => {
                 const backdrop = document.getElementById('aeeModalEditarAluno');
                 if (backdrop) {
                     backdrop.addEventListener('click', (e) => {
                         if (e.target === backdrop) backdrop.remove();
-                    });
-                }
-
-                const condicaoSelect = document.getElementById('aeeEditCondicao');
-                if (condicaoSelect) {
-                    condicaoSelect.addEventListener('change', function () {
-                        const detalhesField = document.getElementById('aeeEditDetalhes');
-                        const wrapper = detalhesField?.closest('div');
-                        if (wrapper) {
-                            wrapper.style.opacity = this.value ? '1' : '0.5';
-                        }
                     });
                 }
             }, 50);
@@ -1167,9 +1122,6 @@ window.AeeModule = {
         }
     },
 
-    // ============================================================================
-    // 💾 SALVAR EDIÇÃO DO ALUNO AEE
-    // ============================================================================
     async salvarEdicaoAlunoAEE(alunoId) {
         console.log('💾 AEE - Salvando edição:', alunoId);
 
@@ -1188,10 +1140,8 @@ window.AeeModule = {
                 matricula: document.getElementById('aeeEditMatricula')?.value?.trim(),
                 turma: document.getElementById('aeeEditTurma')?.value?.trim(),
                 curso: document.getElementById('aeeEditCurso')?.value?.trim(),
-                periodo: document.getElementById('aeeEditPeriodo')?.value || null,
-                condicao: document.getElementById('aeeEditCondicao')?.value,
-                detalhes: document.getElementById('aeeEditDetalhes')?.value?.trim() || '',
-                status: document.getElementById('aeeEditStatus')?.value || 'pendente'
+                condicao: document.getElementById('aeeEditCondicao')?.value?.trim(), // Agora pega o texto
+                detalhes: document.getElementById('aeeEditDetalhes')?.value?.trim() || ''
             };
 
             if (!payload.nome) {
@@ -1203,7 +1153,7 @@ window.AeeModule = {
                 return;
             }
             if (!payload.condicao) {
-                this.mostrarToast('⚠️ Selecione a condição de acessibilidade', 'warning');
+                this.mostrarToast('⚠️ Preencha a condição de acessibilidade', 'warning');
                 if (btn) {
                     btn.disabled = false;
                     btn.innerHTML = '<i class="fas fa-save"></i> Salvar Alterações';
@@ -1232,10 +1182,7 @@ window.AeeModule = {
             if (modal) modal.remove();
 
             await this.carregarAlunos();
-            if (this.safeGet('aeeBadgeAlunos')) {
-                this.carregarDashboard();
-            }
-
+            
         } catch (error) {
             console.error('❌ Erro ao salvar:', error);
             this.mostrarToast('❌ ' + error.message, 'error');
