@@ -1253,7 +1253,7 @@ router.get('/relatorio', authenticateTokenLocal, verificarPermissaoAEE, async (r
 });
 
 // ============================================================================
-// PUT /api/aee/alunos/:id (CORRIGIDO - Aceita Texto Livre)
+// PUT /api/aee/alunos/:id (CORRIGIDO - Salva texto livre sem quebrar o Enum)
 // ============================================================================
 router.put('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (req, res) => {
   try {
@@ -1270,7 +1270,7 @@ router.put('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
       turma,
       curso,
       periodo,
-      condicao,
+      condicao, // Aqui vem o texto livre
       detalhes
     } = req.body;
 
@@ -1282,8 +1282,6 @@ router.put('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
       return res.status(400).json({ success: false, error: 'Condição de acessibilidade é obrigatória' });
     }
 
-    // 🔥 Não valida mais contra CONDICOES_VALORES. Aceita o texto que vier.
-    
     const alunoAtual = await User.findById(id).lean();
     if (!alunoAtual || alunoAtual.role !== 'aluno') {
       return res.status(404).json({ success: false, error: 'Aluno não encontrado' });
@@ -1302,11 +1300,14 @@ router.put('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
       }
     }
 
+    // 🔥 CORREÇÃO DO ENUM: 
+    // Em vez de tentar jogar o texto livre no 'condicaoAcessibilidade' (que dá erro de enum),
+    // nós salvamos 'outra' no enum e colocamos o texto completo no campo 'outraCondicao'.
     const updateData = {
       nome: nome.trim().toUpperCase(),
       precisaAcessibilidade: true,
-      condicaoAcessibilidade: condicao,
-      outraCondicao: detalhes || ''
+      condicaoAcessibilidade: 'outra', // Força o enum válido
+      outraCondicao: condicao.trim()   // Salva o texto exato aqui
     };
 
     if (email && email.trim()) updateData.email = email.trim().toLowerCase();
@@ -1314,6 +1315,11 @@ router.put('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
     if (turma !== undefined) updateData.turma = (turma || '').trim();
     if (curso !== undefined) updateData.curso = (curso || '').trim();
     if (periodo !== undefined) updateData.periodo = periodo || null;
+
+    // Se o usuário digitou algo no campo "Detalhes", a gente junta com o texto principal
+    if (detalhes && detalhes.trim()) {
+        updateData.outraCondicao += ` - ${detalhes.trim()}`;
+    }
 
     if (!alunoAtual.dataSolicitacaoAcessibilidade) {
       updateData.dataSolicitacaoAcessibilidade = new Date();
@@ -1332,11 +1338,6 @@ router.put('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
 
     logger.info(`✏️ AEE - Aluno ${alunoAtualizado.nome} editado por ${req.userNome}`);
 
-    let condLabel = alunoAtualizado.condicaoAcessibilidade || 'Não especificada';
-    if (alunoAtualizado.outraCondicao) {
-        condLabel = `${condLabel} - ${alunoAtualizado.outraCondicao}`;
-    }
-
     res.json({
       success: true,
       message: 'Aluno atualizado com sucesso',
@@ -1350,8 +1351,8 @@ router.put('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
         periodo: alunoAtualizado.periodo,
         condicao: {
           tipo: alunoAtualizado.condicaoAcessibilidade,
-          label: condLabel,
-          detalhes: alunoAtualizado.outraCondicao
+          label: alunoAtualizado.outraCondicao || alunoAtualizado.condicaoAcessibilidade,
+          detalhes: null // Já foi mesclado acima
         },
         dataSolicitacao: alunoAtualizado.dataSolicitacaoAcessibilidade
       }
