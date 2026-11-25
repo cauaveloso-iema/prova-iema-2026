@@ -640,60 +640,85 @@ window.AeeModule = {
     },
 
     renderizarGraficos(d) {
-        const coresDinamicas = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#ef4444', '#f97316', '#14b8a6', '#a855f7'];
+        // Paleta de cores harmoniosa baseada no visual do sistema
+        const coresBarras = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#ef4444', '#f97316', '#14b8a6', '#a855f7'];
 
-        // 🔥 Gráfico 1: CONDIÇÕES (Barras Horizontais)
+        // ==========================================
+        // GRÁFICO 1: CONDIÇÕES (Top 5)
+        // ==========================================
         const ctxCond = this.safeGet('aeeChartCondicoes');
         if (ctxCond && d.distribuicaoCondicoes.length > 0) {
             if (this.charts.condicoes) {
                 try { this.charts.condicoes.destroy(); } catch (e) {}
             }
 
-            // Pega as Top 10 condições para não entupir o gráfico
-            const topCondicoes = d.distribuicaoCondicoes.slice(0, 10);
+            // 🔥 LIMITANDO AOS 5 MAIS FREQUENTES
+            const topCondicoes = d.distribuicaoCondicoes.slice(0, 5);
 
-            // Função para cortar textos muito longos no gráfico
-            const truncar = (texto, limite = 35) => {
+            // Função para limpar o texto e cortar se for muito longo
+            const formatarLabel = (texto) => {
                 if (!texto) return 'Não especificada';
-                return texto.length > limite ? texto.substring(0, limite) + '...' : texto;
+                let t = texto;
+                if (t.toLowerCase().startsWith('outra - ')) t = t.substring(8);
+                else if (t.toLowerCase() === 'outra') t = 'Outra Condição';
+                
+                return t.length > 25 ? t.substring(0, 25) + '...' : t;
             };
 
             this.charts.condicoes = new Chart(ctxCond.getContext('2d'), {
                 type: 'bar',
                 data: {
-                    labels: topCondicoes.map(c => truncar(c.label)),
+                    labels: topCondicoes.map(c => formatarLabel(c.label)),
                     datasets: [{
                         label: 'Alunos',
                         data: topCondicoes.map(c => c.count),
-                        backgroundColor: topCondicoes.map((_, i) => coresDinamicas[i % coresDinamicas.length]),
+                        backgroundColor: topCondicoes.map((_, i) => coresBarras[i]),
                         borderRadius: 6,
-                        maxBarThickness: 20
+                        maxBarThickness: 24,
+                        borderSkipped: false
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    indexAxis: 'y', // 🔥 Deixa as barras deitadas
+                    indexAxis: 'y',
                     plugins: { 
                         legend: { display: false },
                         tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            titleFont: { size: 13, family: 'Arial' },
+                            bodyFont: { size: 14, weight: 'bold', family: 'Arial' },
+                            padding: 10,
+                            displayColors: false,
                             callbacks: {
                                 title: function(context) {
-                                    // Mostra o texto completo no tooltip ao passar o mouse
+                                    // Mostra o texto completo no tooltip
                                     return topCondicoes[context[0].dataIndex].label;
+                                },
+                                label: function(context) {
+                                    return `${context.parsed.x} aluno(s)`;
                                 }
                             }
                         }
                     },
                     scales: {
-                        x: { beginAtZero: true, ticks: { stepSize: 1, precision: 0, font: { size: 11 } }, grid: { color: '#f3f4f6', drawBorder: false } },
-                        y: { grid: { display: false }, ticks: { font: { size: 11, weight: '500' }, color: '#475569' } }
+                        x: { 
+                            beginAtZero: true, 
+                            ticks: { stepSize: 1, precision: 0, color: '#94a3b8' }, 
+                            grid: { color: '#f1f5f9', drawBorder: false } 
+                        },
+                        y: { 
+                            grid: { display: false }, 
+                            ticks: { font: { size: 11, weight: '600', family: 'Arial' }, color: '#475569' } 
+                        }
                     }
                 }
             });
         }
 
-        // 🔥 Gráfico 2: TURMAS (Barras Horizontais)
+        // ==========================================
+        // GRÁFICO 2: TURMAS (Top 10)
+        // ==========================================
         const ctxTurmas = this.safeGet('aeeChartTurmas');
         if (ctxTurmas && d.distribuicaoTurmas.length > 0) {
             if (this.charts.turmas) {
@@ -709,19 +734,39 @@ window.AeeModule = {
                     datasets: [{
                         label: 'Alunos',
                         data: topTurmas.map(t => t.count),
-                        backgroundColor: topTurmas.map((_, i) => coresDinamicas[i % coresDinamicas.length]),
+                        backgroundColor: topTurmas.map((_, i) => coresBarras[i % coresBarras.length]),
                         borderRadius: 6,
-                        maxBarThickness: 20
+                        maxBarThickness: 24,
+                        borderSkipped: false
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     indexAxis: 'y',
-                    plugins: { legend: { display: false } },
+                    plugins: { 
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            padding: 10,
+                            displayColors: false,
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.parsed.x} aluno(s)`;
+                                }
+                            }
+                        }
+                    },
                     scales: {
-                        x: { beginAtZero: true, ticks: { stepSize: 1, precision: 0, font: { size: 11 } }, grid: { color: '#f3f4f6', drawBorder: false } },
-                        y: { grid: { display: false }, ticks: { font: { size: 11, weight: '500' }, color: '#475569' } }
+                        x: { 
+                            beginAtZero: true, 
+                            ticks: { stepSize: 1, precision: 0, color: '#94a3b8' }, 
+                            grid: { color: '#f1f5f9', drawBorder: false } 
+                        },
+                        y: { 
+                            grid: { display: false }, 
+                            ticks: { font: { size: 11, weight: '600', family: 'Arial' }, color: '#475569' } 
+                        }
                     }
                 }
             });
