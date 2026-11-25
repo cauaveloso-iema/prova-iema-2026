@@ -46,6 +46,16 @@ let __ultimaCargaRecentes = 0;
 const CACHE_RECENTES_MS = 5000;
 
 // ============================================
+// 🆕 RASCUNHO DE ATENDIMENTO EM ANDAMENTO
+// ============================================
+const RASCUNHO_KEY = 'as_rascunho_atendimento';
+const RASCUNHO_VERSAO = 2;
+const RASCUNHO_INTERVALO_MS = 700;
+
+let __rascunhoTimer = null;
+let __rascunhoRestaurando = false;
+
+// ============================================
 // 🆕 ESTADO DA SESSÃO DE ASSINATURA VIA QR CODE
 // ============================================
 const estadoSessaoAssinatura = {
@@ -468,6 +478,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     setTimeout(() => inicializarAssinatura(), 800);
     configurarFiltrosAndamento();
     configurarFiltrosConcluidos();
+
+    // 🆕 RASCUNHO: vincula auto-save e mostra banner se existir
+    setTimeout(() => {
+        vincularAutoSaveRascunho();
+        const rascunho = obterRascunho();
+        if (rascunho) mostrarBannerRascunho(rascunho);
+    }, 1000);
     
     setTimeout(async () => {
         const permitido = await solicitarPermissaoNotificacao();
@@ -1207,6 +1224,12 @@ function mostrarFormRegistro() {
     const tipoInput = safeGet('tipoTarefaSelecionado');
     if (tipoInput) tipoInput.value = '';
     tipoTarefaSelecionado = null;
+
+    // 🆕 Se estiver restaurando rascunho, NÃO limpa os campos
+    if (__rascunhoRestaurando) {
+        return;
+    }
+
     __tiposSelecionados = [];
     document.querySelectorAll('.tipo-card').forEach(c => c.classList.remove('selected'));
     safeGet('descricao').value = '';
@@ -1435,6 +1458,9 @@ async function registrarOcorrencia() {
         const data = await response.json();
         
         if (data.success) {
+            // 🆕 Rascunho consumido com sucesso → apaga
+            limparRascunho();
+
             const sessaoId = estadoSessaoAssinatura.assistenteSocial?.sessaoId;
             if (sessaoId) {
                 fetch(`/api/sessoes-assinatura/${sessaoId}`, {
@@ -1497,12 +1523,322 @@ function limparTela() {
     if (checkAssinatura) checkAssinatura.checked = false;
     const blocoInfo = safeGet('assistenteSocialBlocoAssinaturaInfo');
     if (blocoInfo) { blocoInfo.style.display = 'none'; blocoInfo.innerHTML = ''; }
+
+    // 🆕 Cancela o rascunho ao sair do formulário
+    limparRascunho();
 }
 
 function reiniciarScannerAutomatico() {
     setTimeout(() => {
         if (!scannerAutoAtivo && !__scannerIniciando && modoAtual === 'automatico') iniciarScannerAutomatico();
     }, 1000);
+}
+
+// ============================================
+// 🆕 RASCUNHO: COLETA / SALVA / RESTAURA / BANNER
+// ============================================
+function coletarDadosRascunho() {
+    const tipos = Array.isArray(__tiposSelecionados) ? [...__tiposSelecionados] : [];
+    const descricao   = safeGet('descricao')?.value || '';
+    const observacoes = safeGet('observacoes')?.value || '';
+    const gravidade   = safeGet('gravidade')?.value || 'media';
+    const prioridade  = safeGet('prioridade')?.value || 'normal';
+    const precisaAssinatura = safeGet('assistenteSocialNecessitaAssinatura')?.checked || false;
+
+    const detalhes = {};
+    document.querySelectorAll('#camposEspecificos [data-detalhe-key]').forEach(el => {
+        const key = el.getAttribute('data-detalhe-key');
+        if (!key) return;
+        if (detalhes[key] !== undefined && detalhes[key] !== '') return;
+        if (el.value) detalhes[key] = el.value;
+    });
+
+    let assinaturaBase64 = null;
+    let assinaturaOrigem = null;
+    const qr = estadoSessaoAssinatura.assistenteSocial?.assinaturaCapturada;
+    if (qr) { assinaturaBase64 = qr; assinaturaOrigem = 'qr'; }
+    else {
+        try {
+            if (assinaturaState?.temAssinatura && assinaturaState.canvas) {
+                assinaturaBase64 = assinaturaState.canvas.toDataURL('image/png');
+                assinaturaOrigem = 'canvas';
+            }
+        } catch (e) {}
+    }
+
+    const aluno = currentAluno ? {
+        id: currentAluno.id || currentAluno._id,
+        nome: currentAluno.nome,
+        matricula: currentAluno.matricula,
+        turma: currentAluno.turma,
+        curso: currentAluno.curso,
+        fotoPerfil: currentAluno.fotoPerfil
+    } : null;
+
+    return {
+        versao: RASCUNHO_VERSAO,
+        salvoEm: Date.now(),
+        aluno, tipos, descricao, observacoes,
+        gravidade, prioridade, precisaAssinatura,
+        detalhes, assinaturaBase64, assinaturaOrigem
+    };
+}
+
+function salvarRascunhoAgora() {
+    if (__rascunhoRestaurando) return;
+    try {
+        const dados = coletarDadosRascunho();
+        const temConteudo = dados.aluno || dados.tipos.length > 0 || dados.descricao.trim() !== '';
+        if (!temConteudo) {
+            localStorage.removeItem(RASCUNHO_KEY);
+            atualizarIndicadorRascunho(false);
+            return;
+        }
+        localStorage.setItem(RASCUNHO_KEY, JSON.stringify(dados));
+        atualizarIndicadorRascunho(true, dados.salvoEm);
+    } catch (e) { console.warn('[RASCUNHO]', e); }
+}
+
+function agendarSalvarRascunho() {
+    if (__rascunhoRestaurando) return;
+    clearTimeout(__rascunhoTimer);
+    __rascunhoTimer = setTimeout(salvarRascunhoAgora, RASCUNHO_INTERVALO_MS);
+}
+
+function limparRascunho() {
+    try { localStorage.removeItem(RASCUNHO_KEY); } catch (e) {}
+    clearTimeout(__rascunhoTimer);
+    atualizarIndicadorRascunho(false);
+    fecharBannerRascunho();
+}
+
+function obterRascunho() {
+    try {
+        const raw = localStorage.getItem(RASCUNHO_KEY);
+        if (!raw) return null;
+        const d = JSON.parse(raw);
+        if (!d || d.versao !== RASCUNHO_VERSAO) return null;
+        return d;
+    } catch (e) { return null; }
+}
+
+function atualizarIndicadorRascunho(ativo, timestamp) {
+    const el = safeGet('indicadorRascunho');
+    if (!el) return;
+    if (ativo && timestamp) {
+        const hora = new Date(timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        el.innerHTML = `<i class="fas fa-save"></i> Rascunho salvo às ${hora}`;
+        el.style.display = 'inline-flex';
+    } else {
+        el.style.display = 'none';
+    }
+}
+
+function vincularAutoSaveRascunho() {
+    // Delegação para inputs/selects/textareas dentro do form
+    const container = safeGet('formRegistro');
+    if (container) {
+        const handler = () => agendarSalvarRascunho();
+        container.addEventListener('input', handler, true);
+        container.addEventListener('change', handler, true);
+    }
+
+    // Cliques nos cards de tipo (não disparam input)
+    document.querySelectorAll('.tipo-card').forEach(card => {
+        card.addEventListener('click', () => agendarSalvarRascunho());
+    });
+
+    // Salva ao sair / trocar de aba
+    window.addEventListener('beforeunload', salvarRascunhoAgora);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') salvarRascunhoAgora();
+    });
+}
+
+// --------------------------------------------
+// BANNER
+// --------------------------------------------
+function mostrarBannerRascunho(dados) {
+    fecharBannerRascunho();
+    if (!dados) return;
+
+    const hora = new Date(dados.salvoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const data = new Date(dados.salvoEm).toLocaleDateString('pt-BR');
+    const nomeAluno = dados.aluno?.nome || 'Aluno não definido';
+    const turma = dados.aluno?.turma ? ` • ${dados.aluno.turma}` : '';
+    const labelTipos = (dados.tipos?.length || 0) > 0
+        ? dados.tipos.map(t => TIPO_LABELS[t] || t).join(' + ')
+        : 'Nenhum tipo selecionado';
+
+    const banner = document.createElement('div');
+    banner.id = 'bannerRascunho';
+    banner.style.cssText = `
+        position: fixed; top: 70px; left: 50%; transform: translateX(-50%);
+        z-index: 99998; max-width: 640px; width: calc(100% - 32px);
+        background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+        color: #fff; border-radius: 14px; padding: 14px 16px;
+        box-shadow: 0 10px 30px rgba(124,58,237,.45);
+        display: flex; align-items: center; gap: 14px;
+        animation: slideDownBanner .35s ease;
+    `;
+    banner.innerHTML = `
+        <div style="font-size:28px;flex-shrink:0;">📝</div>
+        <div style="flex:1;min-width:0;">
+            <div style="font-weight:700;font-size:14px;margin-bottom:2px;">
+                Você tem um atendimento em andamento
+            </div>
+            <div style="font-size:12.5px;opacity:.92;line-height:1.35;
+                        white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                <strong>${escapeHTML(nomeAluno)}</strong>${escapeHTML(turma)} • ${escapeHTML(labelTipos)}
+            </div>
+            <div style="font-size:11px;opacity:.8;margin-top:3px;">
+                Salvo em ${data} às ${hora}
+            </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0;">
+            <button id="btnRestaurarRascunho" style="
+                background:#fff;color:#7c3aed;border:none;border-radius:9px;
+                padding:9px 14px;font-weight:700;font-size:12.5px;cursor:pointer;
+                display:flex;align-items:center;gap:6px;white-space:nowrap;">
+                <i class="fas fa-undo"></i> Restaurar
+            </button>
+            <button id="btnDescartarRascunho" title="Descartar" style="
+                background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:9px;
+                padding:9px 11px;font-size:12.5px;cursor:pointer;">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
+    document.body.appendChild(banner);
+
+    if (!document.getElementById('styleBannerRascunho')) {
+        const st = document.createElement('style');
+        st.id = 'styleBannerRascunho';
+        st.textContent = `@keyframes slideDownBanner{from{opacity:0;transform:translate(-50%,-15px)}to{opacity:1;transform:translate(-50%,0)}}`;
+        document.head.appendChild(st);
+    }
+
+    safeGet('btnRestaurarRascunho')?.addEventListener('click', () => restaurarRascunho());
+    safeGet('btnDescartarRascunho')?.addEventListener('click', async () => {
+        if (await confirm('Descartar este atendimento em andamento? Os dados serão perdidos.')) {
+            limparRascunho();
+            mostrarToastConcluido('Rascunho descartado.', 'info');
+        }
+    });
+}
+
+function fecharBannerRascunho() {
+    safeGet('bannerRascunho')?.remove();
+}
+
+// --------------------------------------------
+// RESTAURAR → LEVA DIRETO ONDE PAROU
+// --------------------------------------------
+async function restaurarRascunho() {
+    const dados = obterRascunho();
+    if (!dados) { fecharBannerRascunho(); return; }
+
+    __rascunhoRestaurando = true;
+    fecharBannerRascunho();
+
+    try {
+        if (!dados.aluno?.id) {
+            mostrarToastConcluido('Rascunho sem aluno definido. Recomece a seleção.', 'warning');
+            __rascunhoRestaurando = false;
+            return;
+        }
+
+        // 1) Garante que a aba "Atendimento" está visível
+        const abaAtendimento = safeGet('atendimento-tab');
+        if (abaAtendimento) {
+            try { new bootstrap.Tab(abaAtendimento).show(); } catch (e) { abaAtendimento.click(); }
+        }
+
+        // 2) Busca o aluno -> exibirAluno -> mostrarFormRegistro
+        //    (mostrarFormRegistro NÃO limpa porque __rascunhoRestaurando = true)
+        await buscarAluno(dados.aluno.id);
+
+        if (!currentAluno) {
+            mostrarToastConcluido('Não foi possível recarregar o aluno do rascunho.', 'error');
+            __rascunhoRestaurando = false;
+            return;
+        }
+
+        // 3) Restaura tipos via selecionarTipo (cada um chama renderizarCamposEspecificosMultiplos)
+        __tiposSelecionados = [];
+        document.querySelectorAll('.tipo-card').forEach(c => c.classList.remove('selected'));
+        (dados.tipos || []).forEach(t => {
+            if (typeof selecionarTipo === 'function') selecionarTipo(t);
+        });
+
+        // 4) Campos simples
+        if (safeGet('descricao'))   safeGet('descricao').value   = dados.descricao || '';
+        if (safeGet('observacoes')) safeGet('observacoes').value = dados.observacoes || '';
+        if (safeGet('gravidade'))   safeGet('gravidade').value   = dados.gravidade || 'media';
+        if (safeGet('prioridade'))  safeGet('prioridade').value  = dados.prioridade || 'normal';
+        if (safeGet('assistenteSocialNecessitaAssinatura'))
+            safeGet('assistenteSocialNecessitaAssinatura').checked = !!dados.precisaAssinatura;
+
+        // 5) Detalhes dinâmicos (depois que renderizarCamposEspecificosMultiplos rodou)
+        if (dados.detalhes && typeof dados.detalhes === 'object') {
+            Object.entries(dados.detalhes).forEach(([key, valor]) => {
+                document.querySelectorAll(`#camposEspecificos [data-detalhe-key="${key}"]`).forEach(el => {
+                    if (el.value) return; // já preenchido por outro bloco
+                    el.value = valor;
+                });
+            });
+        }
+
+        // 6) Assinatura
+        if (dados.assinaturaBase64 && dados.assinaturaOrigem === 'qr') {
+            if (estadoSessaoAssinatura.assistenteSocial) {
+                estadoSessaoAssinatura.assistenteSocial.assinaturaCapturada = dados.assinaturaBase64;
+            }
+            const blocoInfo = safeGet('assistenteSocialBlocoAssinaturaInfo');
+            if (blocoInfo) {
+                blocoInfo.style.display = 'block';
+                blocoInfo.innerHTML = `<div class="alert alert-success" style="border-radius:10px;font-size:13px;">
+                    <i class="fas fa-check-circle"></i> Assinatura do responsável já capturada (QR Code).
+                </div>`;
+            }
+        } else if (dados.assinaturaBase64 && dados.assinaturaOrigem === 'canvas') {
+            const tentarDesenhar = (tent = 0) => {
+                if (assinaturaState?.ctx && assinaturaState.canvas) {
+                    const img = new Image();
+                    img.onload = () => {
+                        try {
+                            const rect = assinaturaState.canvas.getBoundingClientRect();
+                            assinaturaState.ctx.clearRect(0, 0, rect.width, rect.height);
+                            assinaturaState.ctx.drawImage(img, 0, 0, rect.width, rect.height);
+                            assinaturaState.temAssinatura = true;
+                            const ph = safeGet('assinaturaPlaceholder');
+                            if (ph) ph.classList.add('escondido');
+                            salvarAssinaturaBase64();
+                        } catch (e) {}
+                    };
+                    img.src = dados.assinaturaBase64;
+                } else if (tent < 10) {
+                    setTimeout(() => tentarDesenhar(tent + 1), 200);
+                }
+            };
+            tentarDesenhar();
+        }
+
+        atualizarIndicadorRascunho(true, dados.salvoEm);
+        mostrarToastConcluido('📝 Atendimento restaurado! Continue de onde parou.', 'success');
+
+        // 7) Rola até o formulário
+        setTimeout(() => {
+            safeGet('formRegistro')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 350);
+
+    } catch (e) {
+        console.error('[RASCUNHO] Erro ao restaurar:', e);
+        mostrarToastConcluido('Não foi possível restaurar completamente.', 'warning');
+    } finally {
+        __rascunhoRestaurando = false;
+        agendarSalvarRascunho();
+    }
 }
 
 // ============================================

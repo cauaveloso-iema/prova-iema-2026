@@ -56,6 +56,16 @@ let __turmasCache = { dados: null, timestamp: 0 };
 const __TURMAS_CACHE_MS = 60000;
 
 // ============================================
+// 🆕 RASCUNHO DE ATENDIMENTO EM ANDAMENTO
+// ============================================
+const RASCUNHO_KEY = 'enfermaria_rascunho_atendimento';
+const RASCUNHO_VERSAO = 1;
+const RASCUNHO_INTERVALO_MS = 800;
+
+let __rascunhoTimer = null;
+let __rascunhoRestaurando = false;
+
+// ============================================
 // UTILITÁRIOS
 // ============================================
 function safeGet(id) { return document.getElementById(id); }
@@ -243,6 +253,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         setTimeout(() => carregarAtendimentosAtivos(), 1200);
         setTimeout(() => carregarDashboard(), 1500);
     }, 100);
+
+    // 🆕 RASCUNHO: vincula auto-save e mostra banner se existir
+    setTimeout(() => {
+        vincularAutoSaveRascunho();
+        const rascunho = obterRascunho();
+        if (rascunho) mostrarBannerRascunho(rascunho);
+    }, 1000);
     
     setTimeout(() => atualizarContadorAtendimentosAntigos(), 3000);
     setInterval(() => atualizarContadorAtendimentosAntigos(), 60000);
@@ -738,6 +755,12 @@ function exibirAluno(data) {
 function mostrarFormEntrada() {
     safeGet('formEntrada').style.display = 'block';
     safeGet('formSaida').style.display = 'none';
+
+    // 🆕 Se estiver restaurando rascunho, NÃO limpa os campos
+    if (__rascunhoRestaurando) {
+        return;
+    }
+
     safeGet('queixa').value = '';
     safeGet('observacoesEntrada').value = '';
     const agora = new Date();
@@ -748,6 +771,12 @@ function mostrarFormEntrada() {
 function mostrarFormSaida() {
     safeGet('formEntrada').style.display = 'none';
     safeGet('formSaida').style.display = 'block';
+
+    // 🆕 Se estiver restaurando rascunho, NÃO limpa os campos
+    if (__rascunhoRestaurando) {
+        return;
+    }
+
     safeGet('desfecho').value = '';
     safeGet('coordenadorPatioNome').value = '';
     safeGet('outrosTexto').value = '';
@@ -776,7 +805,12 @@ async function registrarEntrada() {
             body: JSON.stringify({ alunoId: currentAluno.id, queixa, observacoes: safeGet('observacoesEntrada').value, dataEntrada: dataEntrada.toISOString() })
         });
         const data = await response.json();
-        if (data.success) { if(typeof window.mostrarToast === 'function') window.mostrarToast(`✅ ${data.message}`); finalizarAposSucesso(); }
+        if (data.success) {
+            // 🆕 Rascunho consumido com sucesso → apaga
+            limparRascunho();
+            if(typeof window.mostrarToast === 'function') window.mostrarToast(`✅ ${data.message}`);
+            finalizarAposSucesso();
+        }
         else { if(typeof window.mostrarToast === 'function') window.mostrarToast('❌ ' + data.error); if (modoAtual === 'automatico') reiniciarScannerAutomatico(); }
     } catch (error) { if(typeof window.mostrarToast === 'function') window.mostrarToast('Erro ao registrar'); if (modoAtual === 'automatico') reiniciarScannerAutomatico(); }
     finally { if (btn) btn.disabled = false; }
@@ -803,7 +837,12 @@ async function registrarSaida() {
             body: JSON.stringify({ alunoId: currentAluno.id, desfecho, desfechoOutrosTexto: safeGet('outrosTexto').value, coordenadorPatioNome: safeGet('coordenadorPatioNome').value, observacoes: safeGet('observacoesSaida').value, dataSaida: dataSaida.toISOString() })
         });
         const data = await response.json();
-        if (data.success) { if(typeof window.mostrarToast === 'function') window.mostrarToast(`✅ ${data.message}`); finalizarAposSucesso(); }
+        if (data.success) {
+            // 🆕 Rascunho consumido com sucesso → apaga
+            limparRascunho();
+            if(typeof window.mostrarToast === 'function') window.mostrarToast(`✅ ${data.message}`);
+            finalizarAposSucesso();
+        }
         else { if(typeof window.mostrarToast === 'function') window.mostrarToast('❌ ' + data.error); if (modoAtual === 'automatico') reiniciarScannerAutomatico(); }
     } catch (error) { if(typeof window.mostrarToast === 'function') window.mostrarToast('Erro ao registrar'); if (modoAtual === 'automatico') reiniciarScannerAutomatico(); }
     finally { if (btn) btn.disabled = false; }
@@ -829,6 +868,298 @@ function limparTela() {
     safeGet('formSaida').style.display = 'none';
     currentAluno = null;
     currentAtendimento = null;
+
+    // 🆕 Cancela o rascunho ao sair do formulário
+    limparRascunho();
+}
+
+// ============================================
+// 🆕 RASCUNHO: COLETA / SALVA / RESTAURA / BANNER
+// ============================================
+function coletarDadosRascunho() {
+    // Detecta qual formulário está visível
+    const formEntradaVisivel = safeGet('formEntrada')?.style.display !== 'none';
+    const formSaidaVisivel   = safeGet('formSaida')?.style.display !== 'none';
+
+    let tipo = null; // 'entrada' ou 'saida'
+    if (formSaidaVisivel) tipo = 'saida';
+    else if (formEntradaVisivel) tipo = 'entrada';
+
+    const dados = {
+        versao: RASCUNHO_VERSAO,
+        salvoEm: Date.now(),
+        tipo,
+        aluno: currentAluno ? {
+            id: currentAluno.id || currentAluno._id,
+            nome: currentAluno.nome,
+            matricula: currentAluno.matricula,
+            turma: currentAluno.turma,
+            curso: currentAluno.curso,
+            fotoPerfil: currentAluno.fotoPerfil
+        } : null,
+        atendimentoAtivo: currentAtendimento ? {
+            id: currentAtendimento.id || currentAtendimento._id,
+            dataHoraEntrada: currentAtendimento.dataHoraEntrada
+        } : null,
+        // Campos de ENTRADA
+        queixa: safeGet('queixa')?.value || '',
+        observacoesEntrada: safeGet('observacoesEntrada')?.value || '',
+        dataEntrada: safeGet('dataEntrada')?.value || '',
+        // Campos de SAÍDA
+        desfecho: safeGet('desfecho')?.value || '',
+        coordenadorPatioNome: safeGet('coordenadorPatioNome')?.value || '',
+        outrosTexto: safeGet('outrosTexto')?.value || '',
+        observacoesSaida: safeGet('observacoesSaida')?.value || '',
+        dataSaida: safeGet('dataSaida')?.value || ''
+    };
+
+    return dados;
+}
+
+function salvarRascunhoAgora() {
+    if (__rascunhoRestaurando) return;
+    try {
+        const dados = coletarDadosRascunho();
+        const temConteudo = dados.aluno && (
+            (dados.tipo === 'entrada' && (dados.queixa.trim() !== '' || dados.observacoesEntrada.trim() !== '')) ||
+            (dados.tipo === 'saida' && (dados.desfecho || dados.observacoesSaida.trim() !== '' || dados.outrosTexto.trim() !== ''))
+        );
+        if (!temConteudo) {
+            localStorage.removeItem(RASCUNHO_KEY);
+            atualizarIndicadorRascunho(false);
+            return;
+        }
+        localStorage.setItem(RASCUNHO_KEY, JSON.stringify(dados));
+        atualizarIndicadorRascunho(true, dados.salvoEm);
+    } catch (e) { console.warn('[RASCUNHO ENFERMARIA]', e); }
+}
+
+function agendarSalvarRascunho() {
+    if (__rascunhoRestaurando) return;
+    clearTimeout(__rascunhoTimer);
+    __rascunhoTimer = setTimeout(salvarRascunhoAgora, RASCUNHO_INTERVALO_MS);
+}
+
+function limparRascunho() {
+    try { localStorage.removeItem(RASCUNHO_KEY); } catch (e) {}
+    clearTimeout(__rascunhoTimer);
+    atualizarIndicadorRascunho(false);
+    fecharBannerRascunho();
+}
+
+function obterRascunho() {
+    try {
+        const raw = localStorage.getItem(RASCUNHO_KEY);
+        if (!raw) return null;
+        const d = JSON.parse(raw);
+        if (!d || d.versao !== RASCUNHO_VERSAO) return null;
+        return d;
+    } catch (e) { return null; }
+}
+
+function atualizarIndicadorRascunho(ativo, timestamp) {
+    const el = safeGet('indicadorRascunho');
+    if (!el) return;
+    if (ativo && timestamp) {
+        const hora = new Date(timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        el.innerHTML = `<i class="fas fa-save"></i> Rascunho salvo às ${hora}`;
+        el.style.display = 'inline-flex';
+    } else {
+        el.style.display = 'none';
+    }
+}
+
+function vincularAutoSaveRascunho() {
+    // Vincula para os dois formulários (entrada e saída)
+    ['formEntrada', 'formSaida'].forEach(id => {
+        const container = safeGet(id);
+        if (container) {
+            const handler = () => agendarSalvarRascunho();
+            container.addEventListener('input', handler, true);
+            container.addEventListener('change', handler, true);
+        }
+    });
+
+    // Salva ao sair / esconder aba
+    window.addEventListener('beforeunload', salvarRascunhoAgora);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') salvarRascunhoAgora();
+    });
+}
+
+// --------------------------------------------
+// BANNER
+// --------------------------------------------
+function mostrarBannerRascunho(dados) {
+    fecharBannerRascunho();
+    if (!dados) return;
+
+    const hora = new Date(dados.salvoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const data = new Date(dados.salvoEm).toLocaleDateString('pt-BR');
+    const nomeAluno = dados.aluno?.nome || 'Aluno não definido';
+    const turma = dados.aluno?.turma ? ` • ${dados.aluno.turma}` : '';
+    const tipoLabel = dados.tipo === 'entrada' ? '📥 Entrada' : '📤 Saída';
+
+    // resumo do conteúdo
+    let resumo = '';
+    if (dados.tipo === 'entrada' && dados.queixa) {
+        resumo = dados.queixa.substring(0, 80) + (dados.queixa.length > 80 ? '...' : '');
+    } else if (dados.tipo === 'saida' && dados.desfecho) {
+        const labels = {
+            retornou_sala: 'Retornou para Sala',
+            encaminhado_gestao: 'Encaminhado para Gestão',
+            liberado_responsavel: 'Liberado com Responsável',
+            liberado_coordenador: 'Liberado com Coordenador',
+            outros: 'Outros'
+        };
+        resumo = labels[dados.desfecho] || dados.desfecho;
+    }
+
+    const banner = document.createElement('div');
+    banner.id = 'bannerRascunho';
+    banner.style.cssText = `
+        position: fixed; top: 70px; left: 50%; transform: translateX(-50%);
+        z-index: 99998; max-width: 640px; width: calc(100% - 32px);
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: #fff; border-radius: 14px; padding: 14px 16px;
+        box-shadow: 0 10px 30px rgba(5,150,105,.45);
+        display: flex; align-items: center; gap: 14px;
+        animation: slideDownBanner .35s ease;
+    `;
+    banner.innerHTML = `
+        <div style="font-size:28px;flex-shrink:0;">📝</div>
+        <div style="flex:1;min-width:0;">
+            <div style="font-weight:700;font-size:14px;margin-bottom:2px;">
+                Você tem um rascunho de ${tipoLabel} em andamento
+            </div>
+            <div style="font-size:12.5px;opacity:.92;line-height:1.35;
+                        white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                <strong>${escapeHTML(nomeAluno)}</strong>${escapeHTML(turma)}${resumo ? ' • ' + escapeHTML(resumo) : ''}
+            </div>
+            <div style="font-size:11px;opacity:.8;margin-top:3px;">
+                Salvo em ${data} às ${hora}
+            </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0;">
+            <button id="btnRestaurarRascunho" style="
+                background:#fff;color:#059669;border:none;border-radius:9px;
+                padding:9px 14px;font-weight:700;font-size:12.5px;cursor:pointer;
+                display:flex;align-items:center;gap:6px;white-space:nowrap;">
+                <i class="fas fa-undo"></i> Restaurar
+            </button>
+            <button id="btnDescartarRascunho" title="Descartar" style="
+                background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:9px;
+                padding:9px 11px;font-size:12.5px;cursor:pointer;">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
+    document.body.appendChild(banner);
+
+    if (!document.getElementById('styleBannerRascunho')) {
+        const st = document.createElement('style');
+        st.id = 'styleBannerRascunho';
+        st.textContent = `@keyframes slideDownBanner{from{opacity:0;transform:translate(-50%,-15px)}to{opacity:1;transform:translate(-50%,0)}}`;
+        document.head.appendChild(st);
+    }
+
+    safeGet('btnRestaurarRascunho')?.addEventListener('click', () => restaurarRascunho());
+    safeGet('btnDescartarRascunho')?.addEventListener('click', () => {
+        if (confirm('Descartar este rascunho? Os dados serão perdidos.')) {
+            limparRascunho();
+            if(typeof window.mostrarToast === 'function') window.mostrarToast('Rascunho descartado.');
+        }
+    });
+}
+
+function fecharBannerRascunho() {
+    safeGet('bannerRascunho')?.remove();
+}
+
+// --------------------------------------------
+// RESTAURAR → LEVA DIRETO ONDE PAROU
+// --------------------------------------------
+async function restaurarRascunho() {
+    const dados = obterRascunho();
+    if (!dados) { fecharBannerRascunho(); return; }
+
+    __rascunhoRestaurando = true;
+    fecharBannerRascunho();
+
+    try {
+        if (!dados.aluno?.id) {
+            if(typeof window.mostrarToast === 'function') window.mostrarToast('Rascunho sem aluno definido. Recomece a seleção.');
+            __rascunhoRestaurando = false;
+            return;
+        }
+
+        // 1) Vai para a aba "Atendimento"
+        const abaAtendimento = safeGet('atendimento-tab');
+        if (abaAtendimento) {
+            try { new bootstrap.Tab(abaAtendimento).show(); } catch (e) { abaAtendimento.click(); }
+        }
+
+        // 2) Busca o aluno (isso vai chamar exibirAluno e mostrarFormEntrada/Saida)
+        //    mostrarFormEntrada/Saida NÃO limpam porque __rascunhoRestaurando = true
+        await buscarAluno(dados.aluno.id);
+
+        if (!currentAluno) {
+            if(typeof window.mostrarToast === 'function') window.mostrarToast('Não foi possível recarregar o aluno do rascunho.');
+            __rascunhoRestaurando = false;
+            return;
+        }
+
+        // 3) Garante que o formulário correto está visível
+        if (dados.tipo === 'saida') {
+            // Se o backend disse que não está em atendimento, força o formulário de saída
+            if (!currentAtendimento || safeGet('formSaida').style.display === 'none') {
+                // reconstrói o currentAtendimento a partir do rascunho
+                if (dados.atendimentoAtivo) {
+                    currentAtendimento = dados.atendimentoAtivo;
+                }
+                safeGet('formEntrada').style.display = 'none';
+                safeGet('formSaida').style.display = 'block';
+            }
+        } else if (dados.tipo === 'entrada') {
+            safeGet('formSaida').style.display = 'none';
+            safeGet('formEntrada').style.display = 'block';
+        }
+
+        // 4) Restaura campos de ENTRADA
+        if (dados.tipo === 'entrada' || dados.queixa || dados.observacoesEntrada) {
+            if (safeGet('queixa'))              safeGet('queixa').value = dados.queixa || '';
+            if (safeGet('observacoesEntrada'))  safeGet('observacoesEntrada').value = dados.observacoesEntrada || '';
+            if (safeGet('dataEntrada') && dados.dataEntrada) safeGet('dataEntrada').value = dados.dataEntrada;
+        }
+
+        // 5) Restaura campos de SAÍDA
+        if (dados.tipo === 'saida' || dados.desfecho) {
+            if (safeGet('desfecho'))             safeGet('desfecho').value = dados.desfecho || '';
+            if (safeGet('coordenadorPatioNome')) safeGet('coordenadorPatioNome').value = dados.coordenadorPatioNome || '';
+            if (safeGet('outrosTexto'))          safeGet('outrosTexto').value = dados.outrosTexto || '';
+            if (safeGet('observacoesSaida'))     safeGet('observacoesSaida').value = dados.observacoesSaida || '';
+            if (safeGet('dataSaida') && dados.dataSaida) safeGet('dataSaida').value = dados.dataSaida;
+
+            // Atualiza visibilidade dos campos condicionais
+            try { toggleOutrosCampos(); } catch (e) {}
+        }
+
+        atualizarIndicadorRascunho(true, dados.salvoEm);
+        if(typeof window.mostrarToast === 'function') window.mostrarToast('📝 Rascunho restaurado! Continue de onde parou.');
+
+        // 6) Rola até o formulário correspondente
+        setTimeout(() => {
+            const alvo = dados.tipo === 'saida' ? safeGet('formSaida') : safeGet('formEntrada');
+            alvo?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 350);
+
+    } catch (e) {
+        console.error('[RASCUNHO ENFERMARIA] Erro ao restaurar:', e);
+        if(typeof window.mostrarToast === 'function') window.mostrarToast('Não foi possível restaurar completamente.');
+    } finally {
+        __rascunhoRestaurando = false;
+        agendarSalvarRascunho();
+    }
 }
 
 function reiniciarScannerAutomatico() {

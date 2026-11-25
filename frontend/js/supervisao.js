@@ -115,6 +115,16 @@ const TIPO_LABELS = {
 };
 
 // ============================================
+// 🆕 RASCUNHO DE ATENDIMENTO EM ANDAMENTO
+// ============================================
+const RASCUNHO_KEY = 'supervisao_rascunho_atendimento';
+const RASCUNHO_VERSAO = 3;
+const RASCUNHO_INTERVALO_MS = 800;
+
+let __rascunhoTimer = null;
+let __rascunhoRestaurando = false;
+
+// ============================================
 // UTILITÁRIOS
 // ============================================
 function safeGet(id) { return document.getElementById(id); }
@@ -542,9 +552,6 @@ function atualizarBadgeComUrgencia() {
 // ============================================
 document.addEventListener('DOMContentLoaded', async () => {
 
-    // ============================================
-    // 🆕 MODO ASSINATURA (via URL ?assinatura=UUID)
-    // ============================================
     const modoAssinatura = new URLSearchParams(window.location.search).get('assinatura');
     if (modoAssinatura) {
         await mostrarTelaAssinatura(modoAssinatura);
@@ -570,16 +577,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     safeSetText('dataAtual', new Date().toLocaleDateString('pt-BR'));
     atualizarStatusNotificacao();
 
-    // ============================================
-    // 🚀 PRIORIDADE 1: INICIA A CÂMERA PRIMEIRO
-    // (não espera nenhum fetch do banco — abre em ~200ms)
-    // ============================================
     await iniciarScannerAutomatico();
 
-    // ============================================
-    // 🚀 PRIORIDADE 2: CARREGA O RESTO EM BACKGROUND (cascata)
-    // Não bloqueia, não concorre com a câmera.
-    // ============================================
     setTimeout(async () => {
         try { await carregarFotoPerfil(); } catch (e) {}
         setTimeout(() => carregarLembretes(), 300);
@@ -592,6 +591,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     configurarFiltrosAndamento();
     configurarFiltrosConcluidos();
 
+    // 🆕 RASCUNHO: vincula auto-save e mostra banner se existir
+    setTimeout(() => {
+        vincularAutoSaveRascunho();
+        const rascunho = obterRascunho();
+        if (rascunho) mostrarBannerRascunho(rascunho);
+    }, 1000);
+
     setTimeout(async () => {
         const permitido = await solicitarPermissaoNotificacao();
         if (permitido) setTimeout(() => verificarLembretesNotificar(), 2000);
@@ -599,12 +605,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     setTimeout(() => atualizarContadorAtendimentosAntigos(), 5000);
 
-    // ============================================
-    // 🆕 POLLING INTELIGENTE (só abas visíveis)
-    // ============================================
     iniciarPollingInteligente();
 
-    // Atualização do badge de urgência a cada 60s (leve, sem fetch)
     setInterval(() => {
         if (__lembretesAtuais && __lembretesAtuais.length > 0) {
             atualizarBadgeComUrgencia();
@@ -621,7 +623,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }, 2500);
     }
 
-    // ============ EVENTOS DAS ABAS ============
     safeGet('dashboard-tab')?.addEventListener('shown.bs.tab', () => {
         carregarDashboard();
         carregarAtendimentosConcluidos(1);
@@ -636,7 +637,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     safeGet('modoAutomaticoBtn')?.addEventListener('click', () => setModo('automatico'));
     safeGet('modoManualBtn')?.addEventListener('click', () => setModo('manual'));
 
-    // 🆕 Debounce no filtro de busca manual
     safeGet('filtroTurmaManual')?.addEventListener('change', () => carregarAlunosPorTurma());
     safeGet('filtroBuscaManual')?.addEventListener('input', () => filtrarAlunosManual());
 
@@ -2453,6 +2453,12 @@ function mostrarFormRegistro() {
     safeGet('formRegistro').style.display = 'block';
     const tipoInput = safeGet('tipoTarefaSelecionado');
     if (tipoInput) tipoInput.value = '';
+
+    // 🆕 Se estiver restaurando rascunho, NÃO limpa nada
+    if (__rascunhoRestaurando) {
+        return;
+    }
+
     __tiposSelecionados = [];
     tipoTarefaSelecionado = null;
     document.querySelectorAll('.tipo-card').forEach(c => c.classList.remove('selected'));
@@ -2545,6 +2551,9 @@ async function registrarOcorrencia() {
         const data = await response.json();
 
         if (data.success) {
+            // 🆕 Rascunho consumido com sucesso → apaga
+            limparRascunho();
+
             if (assinaturaBase64 && data.atendimento?.id) {
                 try {
                     await fetch('/api/supervisao/aplicar-assinatura', {
@@ -2653,6 +2662,403 @@ function limparTela() {
     const subtituloManual = safeGet('subtituloModoManual');
     if (tituloManual) tituloManual.innerHTML = '<i class="fas fa-users me-2"></i> Selecionar Aluno por Turma';
     if (subtituloManual) subtituloManual.innerHTML = '<i class="fas fa-info-circle"></i> Selecione uma turma e clique no aluno para atendê-lo diretamente.';
+
+    // 🆕 Cancela o rascunho ao sair do formulário
+    limparRascunho();
+}
+
+// ============================================
+// 🆕 RASCUNHO: COLETA / SALVA / RESTAURA / BANNER
+// ============================================
+function coletarDadosRascunho() {
+    const tipos = Array.isArray(__tiposSelecionados) ? [...__tiposSelecionados] : [];
+    const descricao   = safeGet('descricao')?.value || '';
+    const observacoes = safeGet('observacoes')?.value || '';
+    const gravidade   = safeGet('gravidade')?.value || 'media';
+    const prioridade  = safeGet('prioridade')?.value || 'normal';
+    const precisaAssinatura = safeGet('supervisaoNecessitaAssinatura')?.checked || false;
+    const isColetivo = safeGet('supervisaoAtendimentoColetivo')?.checked || false;
+
+    // Detalhes dinâmicos (data-detalhe-key)
+    const detalhes = {};
+    document.querySelectorAll('#camposEspecificos [data-detalhe-key]').forEach(el => {
+        const key = el.getAttribute('data-detalhe-key');
+        if (!key) return;
+        if (detalhes[key] !== undefined && detalhes[key] !== '') return;
+        if (el.value) detalhes[key] = el.value;
+    });
+
+    // Campos extras (sem data-detalhe-key no HTML)
+    const prov = safeGet('detalheProvidencias');
+    if (prov && prov.value.trim()) detalhes.providenciasTomadas = prov.value.trim();
+    const prox = safeGet('detalheProximosPassos');
+    if (prox && prox.value.trim()) detalhes.proximosPassos = prox.value.trim();
+
+    // Assinatura do responsável via QR
+    let assinaturaBase64 = null;
+    const qr = estadoSessaoAssinatura.supervisao?.assinaturaCapturada;
+    if (qr) assinaturaBase64 = qr;
+
+    // Participantes (COM assinatura capturada e sem sessão ativa - só os dados)
+    const participantes = __participantesAtendimento.map(p => ({
+        usuarioId: p.usuarioId,
+        usuarioNome: p.usuarioNome,
+        usuarioMatricula: p.usuarioMatricula,
+        usuarioTurma: p.usuarioTurma,
+        usuarioEixo: p.usuarioEixo,
+        usuarioCurso: p.usuarioCurso,
+        usuarioFoto: p.usuarioFoto,
+        tipo: p.tipo,
+        tipoLabel: p.tipoLabel,
+        filtroValor: p.filtroValor,
+        precisaAssinatura: p.precisaAssinatura,
+        assinaturaCapturada: p.assinaturaCapturada || null
+        // ⚠️ NÃO salvamos sessaoId/monitoramentoInterval (são recriados ao restaurar)
+    }));
+
+    // Alunos coletivos
+    const alunosColetivo = Array.isArray(__alunosColetivo) ? __alunosColetivo.map(a => ({
+        id: a.id, nome: a.nome, matricula: a.matricula, turma: a.turma, fotoPerfil: a.fotoPerfil
+    })) : [];
+
+    // Aluno (para atendimento individual)
+    const aluno = currentAluno ? {
+        id: currentAluno.id || currentAluno._id,
+        nome: currentAluno.nome,
+        matricula: currentAluno.matricula,
+        turma: currentAluno.turma,
+        curso: currentAluno.curso,
+        fotoPerfil: currentAluno.fotoPerfil
+    } : null;
+
+    // Modo atual (automatico/manual) para reabrir do jeito certo
+    const modo = modoAtual;
+
+    return {
+        versao: RASCUNHO_VERSAO,
+        salvoEm: Date.now(),
+        modo,
+        aluno,
+        tipos, descricao, observacoes,
+        gravidade, prioridade, precisaAssinatura,
+        isColetivo,
+        detalhes,
+        assinaturaBase64,
+        participantes,
+        alunosColetivo
+    };
+}
+
+function salvarRascunhoAgora() {
+    if (__rascunhoRestaurando) return;
+    try {
+        const dados = coletarDadosRascunho();
+        const temConteudo = dados.aluno || dados.tipos.length > 0 || dados.descricao.trim() !== ''
+                            || dados.participantes.length > 0 || dados.alunosColetivo.length > 0;
+        if (!temConteudo) {
+            localStorage.removeItem(RASCUNHO_KEY);
+            atualizarIndicadorRascunho(false);
+            return;
+        }
+        localStorage.setItem(RASCUNHO_KEY, JSON.stringify(dados));
+        atualizarIndicadorRascunho(true, dados.salvoEm);
+    } catch (e) { console.warn('[RASCUNHO SUPERVISAO]', e); }
+}
+
+function agendarSalvarRascunho() {
+    if (__rascunhoRestaurando) return;
+    clearTimeout(__rascunhoTimer);
+    __rascunhoTimer = setTimeout(salvarRascunhoAgora, RASCUNHO_INTERVALO_MS);
+}
+
+function limparRascunho() {
+    try { localStorage.removeItem(RASCUNHO_KEY); } catch (e) {}
+    clearTimeout(__rascunhoTimer);
+    atualizarIndicadorRascunho(false);
+    fecharBannerRascunho();
+}
+
+function obterRascunho() {
+    try {
+        const raw = localStorage.getItem(RASCUNHO_KEY);
+        if (!raw) return null;
+        const d = JSON.parse(raw);
+        if (!d || d.versao !== RASCUNHO_VERSAO) return null;
+        return d;
+    } catch (e) { return null; }
+}
+
+function atualizarIndicadorRascunho(ativo, timestamp) {
+    const el = safeGet('indicadorRascunho');
+    if (!el) return;
+    if (ativo && timestamp) {
+        const hora = new Date(timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        el.innerHTML = `<i class="fas fa-save"></i> Rascunho salvo às ${hora}`;
+        el.style.display = 'inline-flex';
+    } else {
+        el.style.display = 'none';
+    }
+}
+
+function vincularAutoSaveRascunho() {
+    const container = safeGet('formRegistro');
+    if (container) {
+        const handler = () => agendarSalvarRascunho();
+        container.addEventListener('input', handler, true);
+        container.addEventListener('change', handler, true);
+    }
+
+    document.querySelectorAll('.tipo-card').forEach(card => {
+        card.addEventListener('click', () => agendarSalvarRascunho());
+    });
+
+    window.addEventListener('beforeunload', salvarRascunhoAgora);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') salvarRascunhoAgora();
+    });
+}
+
+// --------------------------------------------
+// BANNER
+// --------------------------------------------
+function mostrarBannerRascunho(dados) {
+    fecharBannerRascunho();
+    if (!dados) return;
+
+    const hora = new Date(dados.salvoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const data = new Date(dados.salvoEm).toLocaleDateString('pt-BR');
+
+    let descricaoCurta = '';
+    if (dados.isColetivo && dados.alunosColetivo.length > 0) {
+        descricaoCurta = `Coletivo • ${dados.alunosColetivo.length} aluno(s)`;
+    } else if (dados.aluno?.nome) {
+        descricaoCurta = dados.aluno.nome + (dados.aluno.turma ? ` • ${dados.aluno.turma}` : '');
+    } else {
+        descricaoCurta = 'Aluno não definido';
+    }
+
+    const labelTipos = (dados.tipos?.length || 0) > 0
+        ? dados.tipos.map(t => TIPO_LABELS[t] || t).join(' + ')
+        : 'Nenhum tipo selecionado';
+
+    const extras = [];
+    if (dados.participantes?.length > 0) extras.push(`${dados.participantes.length} participante(s)`);
+    if (dados.alunosColetivo?.length > 0) extras.push(`${dados.alunosColetivo.length} aluno(s) coletivo`);
+
+    const banner = document.createElement('div');
+    banner.id = 'bannerRascunho';
+    banner.style.cssText = `
+        position: fixed; top: 70px; left: 50%; transform: translateX(-50%);
+        z-index: 99998; max-width: 660px; width: calc(100% - 32px);
+        background: linear-gradient(135deg, #0ea5e9, #0284c7);
+        color: #fff; border-radius: 14px; padding: 14px 16px;
+        box-shadow: 0 10px 30px rgba(2,132,199,.45);
+        display: flex; align-items: center; gap: 14px;
+        animation: slideDownBanner .35s ease;
+    `;
+    banner.innerHTML = `
+        <div style="font-size:28px;flex-shrink:0;">📝</div>
+        <div style="flex:1;min-width:0;">
+            <div style="font-weight:700;font-size:14px;margin-bottom:2px;">
+                Você tem um atendimento em andamento
+            </div>
+            <div style="font-size:12.5px;opacity:.92;line-height:1.35;
+                        white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                <strong>${escapeHTML(descricaoCurta)}</strong> • ${escapeHTML(labelTipos)}
+            </div>
+            <div style="font-size:11px;opacity:.8;margin-top:3px;">
+                Salvo em ${data} às ${hora}${extras.length > 0 ? ' • ' + extras.join(' • ') : ''}
+            </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0;">
+            <button id="btnRestaurarRascunho" style="
+                background:#fff;color:#0284c7;border:none;border-radius:9px;
+                padding:9px 14px;font-weight:700;font-size:12.5px;cursor:pointer;
+                display:flex;align-items:center;gap:6px;white-space:nowrap;">
+                <i class="fas fa-undo"></i> Restaurar
+            </button>
+            <button id="btnDescartarRascunho" title="Descartar" style="
+                background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:9px;
+                padding:9px 11px;font-size:12.5px;cursor:pointer;">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
+    document.body.appendChild(banner);
+
+    if (!document.getElementById('styleBannerRascunho')) {
+        const st = document.createElement('style');
+        st.id = 'styleBannerRascunho';
+        st.textContent = `@keyframes slideDownBanner{from{opacity:0;transform:translate(-50%,-15px)}to{opacity:1;transform:translate(-50%,0)}}`;
+        document.head.appendChild(st);
+    }
+
+    safeGet('btnRestaurarRascunho')?.addEventListener('click', () => restaurarRascunho());
+    safeGet('btnDescartarRascunho')?.addEventListener('click', async () => {
+        if (await confirm('Descartar este atendimento em andamento? Os dados serão perdidos.')) {
+            limparRascunho();
+            mostrarToastConcluido('Rascunho descartado.', 'info');
+        }
+    });
+}
+
+function fecharBannerRascunho() {
+    safeGet('bannerRascunho')?.remove();
+}
+
+// --------------------------------------------
+// RESTAURAR → LEVA DIRETO ONDE PAROU
+// --------------------------------------------
+async function restaurarRascunho() {
+    const dados = obterRascunho();
+    if (!dados) { fecharBannerRascunho(); return; }
+
+    __rascunhoRestaurando = true;
+    fecharBannerRascunho();
+
+    try {
+        // 1) Se NÃO é coletivo, precisa do aluno
+        if (!dados.isColetivo && !dados.aluno?.id) {
+            mostrarToastConcluido('Rascunho sem aluno definido. Recomece a seleção.', 'warning');
+            __rascunhoRestaurando = false;
+            return;
+        }
+
+        // 2) Vai para a aba "Atendimento"
+        const abaAtendimento = safeGet('atendimento-tab');
+        if (abaAtendimento) {
+            try { new bootstrap.Tab(abaAtendimento).show(); } catch (e) { abaAtendimento.click(); }
+        }
+
+        // 3) Restaura modo (automático/manual) se necessário
+        if (dados.modo && dados.modo !== modoAtual) {
+            try { await setModo(dados.modo); } catch (e) {}
+        }
+
+        // 4) Se é COLETIVO: restaura alunos e marca checkbox
+        if (dados.isColetivo) {
+            const checkColetivo = safeGet('supervisaoAtendimentoColetivo');
+            if (checkColetivo) {
+                checkColetivo.checked = true;
+                toggleAtendimentoColetivo();
+            }
+            __alunosColetivo = Array.isArray(dados.alunosColetivo) ? [...dados.alunosColetivo] : [];
+            renderizarAlunosColetivo();
+            // Concluir captura para mostrar o form
+            if (__alunosColetivo.length > 0) {
+                try { concluirCapturaColetivo(); } catch (e) {}
+            }
+        } else {
+            // 5) Se é INDIVIDUAL: busca o aluno
+            //    (mostrarFormRegistro NÃO limpa porque __rascunhoRestaurando = true)
+            await buscarAluno(dados.aluno.id);
+
+            if (!currentAluno) {
+                mostrarToastConcluido('Não foi possível recarregar o aluno do rascunho.', 'error');
+                __rascunhoRestaurando = false;
+                return;
+            }
+        }
+
+        // 6) Restaura tipos via toggleTipoTarefa
+        __tiposSelecionados = [];
+        document.querySelectorAll('.tipo-card').forEach(c => c.classList.remove('selected'));
+        (dados.tipos || []).forEach(t => {
+            if (typeof toggleTipoTarefa === 'function') toggleTipoTarefa(t);
+        });
+
+        // 7) Campos simples
+        if (safeGet('descricao'))   safeGet('descricao').value   = dados.descricao || '';
+        if (safeGet('observacoes')) safeGet('observacoes').value = dados.observacoes || '';
+        if (safeGet('gravidade'))   safeGet('gravidade').value   = dados.gravidade || 'media';
+        if (safeGet('prioridade'))  safeGet('prioridade').value  = dados.prioridade || 'normal';
+        if (safeGet('supervisaoNecessitaAssinatura'))
+            safeGet('supervisaoNecessitaAssinatura').checked = !!dados.precisaAssinatura;
+
+        // 8) Detalhes dinâmicos
+        if (dados.detalhes && typeof dados.detalhes === 'object') {
+            Object.entries(dados.detalhes).forEach(([key, valor]) => {
+                // Campos com data-detalhe-key
+                document.querySelectorAll(`#camposEspecificos [data-detalhe-key="${key}"]`).forEach(el => {
+                    if (el.value) return;
+                    el.value = valor;
+                });
+            });
+            // Campos sem data-detalhe-key
+            if (dados.detalhes.providenciasTomadas) {
+                const prov = safeGet('detalheProvidencias');
+                if (prov) prov.value = dados.detalhes.providenciasTomadas;
+            }
+            if (dados.detalhes.proximosPassos) {
+                const prox = safeGet('detalheProximosPassos');
+                if (prox) prox.value = dados.detalhes.proximosPassos;
+            }
+        }
+
+        // 9) Assinatura do responsável (via QR - restaura o estado visual)
+        if (dados.assinaturaBase64) {
+            if (estadoSessaoAssinatura.supervisao) {
+                estadoSessaoAssinatura.supervisao.assinaturaCapturada = dados.assinaturaBase64;
+            }
+            const blocoInfo = safeGet('supervisaoBlocoAssinaturaInfo');
+            if (blocoInfo) {
+                blocoInfo.style.display = 'block';
+                blocoInfo.innerHTML = `<div class="alert alert-success" style="border-radius:10px;font-size:13px;">
+                    <i class="fas fa-check-circle"></i> Assinatura do responsável já capturada (QR Code).
+                </div>`;
+            }
+        }
+
+        // 10) Participantes
+        if (Array.isArray(dados.participantes) && dados.participantes.length > 0) {
+            const check = safeGet('supervisaoMaisParticipantes');
+            if (check && !check.checked) {
+                check.checked = true;
+                try { toggleMaisParticipantes(); } catch (e) {}
+            }
+
+            __participantesAtendimento = [];
+            __contadorParticipanteId = 0;
+
+            for (const p of dados.participantes) {
+                const participanteId = `part_${++__contadorParticipanteId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+                __participantesAtendimento.push({
+                    id: participanteId,
+                    tipo: p.tipo,
+                    tipoLabel: p.tipoLabel,
+                    usuarioId: p.usuarioId,
+                    usuarioNome: p.usuarioNome,
+                    usuarioMatricula: p.usuarioMatricula || '',
+                    usuarioTurma: p.usuarioTurma || '',
+                    usuarioEixo: p.usuarioEixo || '',
+                    usuarioCurso: p.usuarioCurso || '',
+                    usuarioFoto: p.usuarioFoto || '',
+                    filtroValor: p.filtroValor || '',
+                    precisaAssinatura: !!p.precisaAssinatura,
+                    sessaoId: null,
+                    assinaturaCapturada: p.assinaturaCapturada || null,
+                    qrCodeDataUrl: null,
+                    monitoramentoInterval: null
+                });
+            }
+            renderizarParticipantesAdicionados();
+        }
+
+        atualizarIndicadorRascunho(true, dados.salvoEm);
+        mostrarToastConcluido('📝 Atendimento restaurado! Continue de onde parou.', 'success');
+
+        // 11) Rola até o formulário
+        setTimeout(() => {
+            safeGet('formRegistro')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 400);
+
+    } catch (e) {
+        console.error('[RASCUNHO SUPERVISAO] Erro ao restaurar:', e);
+        mostrarToastConcluido('Não foi possível restaurar completamente.', 'warning');
+    } finally {
+        __rascunhoRestaurando = false;
+        agendarSalvarRascunho();
+    }
 }
 
 function reiniciarScannerAutomatico() {
@@ -2848,6 +3254,7 @@ async function registrarOcorrenciaColetivo() {
         });
         const data = await response.json();
         if (data.success) {
+            limparRascunho();
             mostrarToastConcluido(`✅ ${data.total} atendimento(s) registrado(s)`, 'success');
             limparTela();
             carregarAtendimentosAtivos();

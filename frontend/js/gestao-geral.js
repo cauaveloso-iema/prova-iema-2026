@@ -3634,20 +3634,46 @@ function atualizarAvisoIntegracao(modulo) {
 function selecionarMotivoModulo(modulo, motivo) {
     const P = getPrefixo(modulo);
     const I = getPrefixoInput(modulo);
+
     estados[modulo].motivoSelecionado = motivo;
-    
+
     const el = safeGet(`${I}MotivoSelecionado`);
     if (el) el.value = motivo;
-    
-    document.querySelectorAll(`#form${P} .tipo-card`).forEach(c => c.classList.remove('selected'));
-    const card = document.querySelector(`#form${P} .tipo-card[data-tipo="${motivo}"]`);
-    if (card) card.classList.add('selected');
-    
+
+    // Remove a seleção somente dos cards de motivo
+    const form = safeGet(`form${P}`);
+
+    if (form) {
+        form.querySelectorAll('.tipo-card[data-tipo]').forEach(c => {
+            c.classList.remove('selected');
+        });
+
+        // Seleciona somente o motivo escolhido
+        const card = form.querySelector(
+            `.tipo-card[data-tipo="${motivo}"]`
+        );
+
+        if (card) {
+            card.classList.add('selected');
+        }
+    }
+
+    // Campo "Outros"
     const campoOutros = safeGet(`campo${P}Outros`);
-    if (campoOutros) campoOutros.style.display = motivo === 'outros' ? 'block' : 'none';
+
+    if (campoOutros) {
+        campoOutros.style.display =
+            motivo === 'outros' ? 'block' : 'none';
+    }
+
+    // Campo ausência e retorno
     const campoAusencia = safeGet(`campo${P}AusenciaRetorno`);
-    if (campoAusencia) campoAusencia.style.display = motivo === 'necessita_ausentar_retornar' ? 'block' : 'none';
-    
+
+    if (campoAusencia) {
+        campoAusencia.style.display =
+            motivo === 'necessita_ausentar_retornar' ? 'block' : 'none';
+    }
+
     atualizarAvisoIntegracao(modulo);
 }
 

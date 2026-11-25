@@ -3460,3 +3460,17 @@ window.exportarCSVAtendimento = exportarCSVAtendimento;
 window.exportarPDFAtendimento = exportarPDFAtendimento;
 window.aplicarFiltrosListaAtendimento = aplicarFiltrosListaAtendimento;
 window.selecionarAlunoAutocompleteAtendimento = selecionarAlunoAutocompleteAtendimento;
+
+// ============================================
+// EXPOSIÇÃO PARA O AUTOSAVE (v17)
+// ============================================
+window.atendimentoState = atendimentoState;
+window.selecionarMotivoAtendimento = selecionarMotivoAtendimento;
+window.selecionarProvidenciaAtendimento = selecionarProvidenciaAtendimento;
+window.exibirAlunoAtendimento = exibirAlunoAtendimento;
+window.mostrarFormAtendimento = mostrarFormAtendimento;
+window.atualizarUIPorTipoAtendimento = atualizarUIPorTipoAtendimento;
+window.iniciarMonitoramentoResponsavelAtendimento = iniciarMonitoramentoResponsavelAtendimento;
+window.iniciarMonitoramentoAlunoAtendimento = iniciarMonitoramentoAlunoAtendimento;
+window.atualizarStatusAssinadoResponsavelAtendimento = atualizarStatusAssinadoResponsavelAtendimento;
+window.mostrarBlocoCompactoResponsavelAtendimento = mostrarBlocoCompactoResponsavelAtendimento;

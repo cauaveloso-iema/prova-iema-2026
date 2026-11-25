@@ -299,6 +299,84 @@
                             </div>
                         </div>
 
+                        <!-- 🆕 INDICADOR DE RASCUNHO (visível para Entrada e Saída) -->
+                        <span id="indicadorRascunho" style="display:none;align-items:center;gap:6px;font-size:12px;color:#059669;background:#d1fae5;padding:4px 10px;border-radius:999px;margin-bottom:12px;">
+                            <i class="fas fa-save"></i> Rascunho salvo
+                        </span>
+
+                        <div id="formEntrada" class="form-container" style="display: none;">
+                            <h5><i class="fas fa-notes-medical"></i> Registrar Atendimento</h5>
+
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    <i class="fas fa-calendar-alt me-1"></i> Data/Hora do Atendimento <span class="text-danger">*</span>
+                                </label>
+                                <input type="datetime-local" id="dataEntrada" class="form-control" required>
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle"></i> 
+                                    Você pode alterar a data caso esteja registrando um atendimento retroativo.
+                                </small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Queixa / Motivo <span class="text-danger">*</span></label>
+                                <textarea id="queixa" class="form-control" rows="3" placeholder="Descreva o que o aluno está sentindo..."></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Observações adicionais</label>
+                                <textarea id="observacoesEntrada" class="form-control" rows="2" placeholder="Sinais vitais, medicamentos administrados, etc..."></textarea>
+                            </div>
+                            <button class="btn-primary-custom" onclick="registrarEntrada()">
+                                <i class="fas fa-check-circle me-2"></i> Registrar Entrada
+                            </button>
+                        </div>
+
+                        <div id="formSaida" class="form-container" style="display: none;">
+                            <h5><i class="fas fa-clipboard-list"></i> Finalizar Atendimento</h5>
+
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    <i class="fas fa-calendar-alt me-1"></i> Data/Hora da Saída <span class="text-danger">*</span>
+                                </label>
+                                <input type="datetime-local" id="dataSaida" class="form-control" required>
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle"></i> 
+                                    Informe a data e hora em que o atendimento foi finalizado.
+                                </small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Desfecho <span class="text-danger">*</span></label>
+                                <select id="desfecho" class="form-select" onchange="toggleOutrosCampos()">
+                                    <option value="">Selecione...</option>
+                                    <option value="retornou_sala">Retornou para Sala de Aula</option>
+                                    <option value="encaminhado_gestao">Encaminhado para Gestão Geral</option>
+                                    <option value="liberado_responsavel">Liberado com o Responsável</option>
+                                    <option value="liberado_coordenador">Liberado com o Coordenador de Pátio</option>
+                                    <option value="outros">Outros</option>
+                                </select>
+                            </div>
+                            <div id="campoCoordenador" style="display: none;">
+                                <div class="mb-3">
+                                    <label class="form-label">Nome do Coordenador de Pátio</label>
+                                    <input type="text" id="coordenadorPatioNome" class="form-control" placeholder="Nome do coordenador que liberou o aluno">
+                                </div>
+                            </div>
+                            <div id="campoOutros" style="display: none;">
+                                <div class="mb-3">
+                                    <label class="form-label">Descreva o desfecho</label>
+                                    <textarea id="outrosTexto" class="form-control" rows="2" placeholder="Descreva o que aconteceu..."></textarea>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Observações finais</label>
+                                <textarea id="observacoesSaida" class="form-control" rows="2" placeholder="Informações adicionais sobre o desfecho..."></textarea>
+                            </div>
+                            <button class="btn-primary-custom" onclick="registrarSaida()">
+                                <i class="fas fa-check-double me-2"></i> Finalizar Atendimento
+                            </button>
+                        </div>
+
                         <div id="formEntrada" class="form-container" style="display: none;">
                             <h5><i class="fas fa-notes-medical"></i> Registrar Atendimento</h5>
 
