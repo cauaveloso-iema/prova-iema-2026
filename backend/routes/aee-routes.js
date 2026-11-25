@@ -1,8 +1,9 @@
 // ============================================================================
 // AEE - ATENDIMENTO EDUCACIONAL ESPECIALIZADO - EducaPleno
 // ============================================================================
-// VERSÃO 2.7 - Correções Finais:
-//   - Suporte a leitura de texto livre salvo pelo Admin (ex: "TEA + TDAH")
+// VERSÃO 2.8 - Correções Finais e Blindagem Total:
+//   - Tratamento de maiúsculas/minúsculas (ex: "TEA" vira "tea" no dicionário)
+//   - Suporte total a texto livre salvo pelo Admin (ex: "TEA + TDAH")
 //   - Limpeza da palavra "outra" no Dashboard, Lista e Relatórios
 //   - Rota PUT blindada contra duplicidade de matrícula e erros de Enum
 // ============================================================================
@@ -43,6 +44,30 @@ const {
 } = require('../constants/acessibilidade');
 
 const ENUMS_VALIDOS = ['visual', 'baixa_visao', 'cegueira', 'auditiva', 'deficiencia_auditiva', 'motora', 'deficiencia_fisica', 'intelectual', 'dislexia', 'discalculia', 'tdah', 'tea', 'altas_habilidades', 'deficiencia_multipla', 'surdocegueira', 'outra', 'nao_especificada'];
+
+// 🔥 FUNÇÃO DE BLINDAGEM TOTAL CONTRA ERROS DE EXIBIÇÃO
+function obterLabelSeguro(tipoOriginal, outraCondicao) {
+    if (!tipoOriginal) return 'Não especificada';
+    
+    const tipoLower = tipoOriginal.toLowerCase().trim();
+
+    // 1. Se o banco tiver a palavra exata 'outra'
+    if (tipoLower === 'outra') {
+        return outraCondicao || 'Outra Condição';
+    }
+
+    // 2. Se NÃO for uma palavra do dicionário (ex: "TEA + TDAH + TOC" salvo pelo Admin)
+    if (!ENUMS_VALIDOS.includes(tipoLower)) {
+        return tipoOriginal; // Retorna o texto bruto exatamente como está
+    }
+
+    // 3. Se for do dicionário, traduz para o nome bonito (ex: "TEA" -> "Transtorno do Espectro Autista (TEA)")
+    let label = obterLabelCondicao(tipoLower);
+    if (outraCondicao) {
+        label += ` - ${outraCondicao}`;
+    }
+    return label;
+}
 
 function escaparRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -200,7 +225,7 @@ router.get('/health', (req, res) => {
   res.json({
     success: true,
     status: 'online',
-    service: 'AEE v2.7',
+    service: 'AEE v2.8',
     models: { Prova: !!Prova, Turma: !!Turma, Resultado: !!Resultado, ProvaRealizada: !!ProvaRealizada }
   });
 });
@@ -315,25 +340,13 @@ router.get('/dashboard', authenticateTokenLocal, verificarPermissaoAEE, async (r
           count: t.count
         })),
         alunosRecentes: alunosRecentes.map(a => {
-          // 🔥 BLINDAGEM DASHBOARD
-          let condLabel = 'Acessibilidade';
-          const tipo = a.condicaoAcessibilidade || '';
-
-          if (tipo && !ENUMS_VALIDOS.includes(tipo.toLowerCase())) {
-              condLabel = tipo; 
-          } else if (tipo.toLowerCase() === 'outra') {
-              condLabel = a.outraCondicao || 'Outra Condição';
-          } else if (tipo) {
-              condLabel = a.outraCondicao || obterLabelCondicao(tipo);
-          }
-
           return {
             id: a._id,
             nome: a.nome,
             matricula: a.matricula,
             turma: a.turma,
             condicao: a.condicaoAcessibilidade || 'nao_especificada',
-            condicaoLabel: condLabel,
+            condicaoLabel: obterLabelSeguro(a.condicaoAcessibilidade, a.outraCondicao),
             dataSolicitacao: a.dataSolicitacaoAcessibilidade
           };
         }),
@@ -460,19 +473,6 @@ router.get('/alunos', authenticateTokenLocal, verificarPermissaoAEE, async (req,
     const alunosFormatados = alunos.map(aluno => {
       const stats = notasPorAluno.get(aluno._id.toString()) || { total: 0, liberadas: 0, pendentes: 0 };
       
-      // 🔥 BLINDAGEM LISTA DE ALUNOS
-      let condLabel = 'Não especificada';
-      const tipo = aluno.condicaoAcessibilidade || '';
-
-      if (tipo && !ENUMS_VALIDOS.includes(tipo.toLowerCase())) {
-          condLabel = tipo; // É texto livre salvo pelo Admin
-      } else if (tipo.toLowerCase() === 'outra') {
-          condLabel = aluno.outraCondicao || 'Outra Condição';
-      } else if (tipo) {
-          condLabel = obterLabelCondicao(tipo);
-          if (aluno.outraCondicao) condLabel += ` - ${aluno.outraCondicao}`;
-      }
-
       return {
         id: aluno._id,
         nome: aluno.nome,
@@ -482,8 +482,8 @@ router.get('/alunos', authenticateTokenLocal, verificarPermissaoAEE, async (req,
         curso: aluno.curso,
         periodo: aluno.periodo,
         condicao: {
-          tipo: tipo,
-          label: condLabel,
+          tipo: aluno.condicaoAcessibilidade,
+          label: obterLabelSeguro(aluno.condicaoAcessibilidade, aluno.outraCondicao),
           descricao: aluno.outraCondicao || null
         },
         dataSolicitacao: aluno.dataSolicitacaoAcessibilidade,
@@ -601,19 +601,6 @@ router.get('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
         : '0.0'
     };
 
-    // 🔥 BLINDAGEM DETALHES DO ALUNO (MODAL)
-    let condLabel = 'Não especificada';
-    const tipo = aluno.condicaoAcessibilidade || '';
-
-    if (tipo && !ENUMS_VALIDOS.includes(tipo.toLowerCase())) {
-        condLabel = tipo; 
-    } else if (tipo.toLowerCase() === 'outra') {
-        condLabel = aluno.outraCondicao || 'Outra Condição';
-    } else if (tipo) {
-        condLabel = obterLabelCondicao(tipo);
-        if (aluno.outraCondicao) condLabel += ` - ${aluno.outraCondicao}`;
-    }
-
     res.json({
       success: true,
       aluno: {
@@ -627,8 +614,8 @@ router.get('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
         acessibilidade: {
           precisa: true,
           condicao: {
-            tipo: tipo,
-            label: condLabel,
+            tipo: aluno.condicaoAcessibilidade,
+            label: obterLabelSeguro(aluno.condicaoAcessibilidade, aluno.outraCondicao),
             detalhes: aluno.outraCondicao
           },
           dataSolicitacao: aluno.dataSolicitacaoAcessibilidade
@@ -1075,28 +1062,16 @@ router.get('/relatorio', authenticateTokenLocal, verificarPermissaoAEE, async (r
       const t = aluno.turma || 'Sem turma';
       if (!porTurma[t]) porTurma[t] = [];
       
-      let condTexto = 'Não especificada';
-      const tipo = aluno.condicaoAcessibilidade || '';
-
-      if (tipo && !ENUMS_VALIDOS.includes(tipo.toLowerCase())) condTexto = tipo;
-      else if (tipo.toLowerCase() === 'outra') condTexto = aluno.outraCondicao || 'Outra Condição';
-      else if (tipo) { condTexto = obterLabelCondicao(tipo); if (aluno.outraCondicao) condTexto += ` - ${aluno.outraCondicao}`; }
-
       porTurma[t].push({
         id: aluno._id, nome: aluno.nome, matricula: aluno.matricula, curso: aluno.curso,
-        condicao: condTexto, condicaoTipo: aluno.condicaoAcessibilidade, detalhes: aluno.outraCondicao
+        condicao: obterLabelSeguro(aluno.condicaoAcessibilidade, aluno.outraCondicao),
+        condicaoTipo: aluno.condicaoAcessibilidade, detalhes: aluno.outraCondicao
       });
     });
 
     const porCondicao = {};
     alunos.forEach(a => {
-      let condTexto = 'Não especificada';
-      const tipo = a.condicaoAcessibilidade || '';
-
-      if (tipo && !ENUMS_VALIDOS.includes(tipo.toLowerCase())) condTexto = tipo;
-      else if (tipo.toLowerCase() === 'outra') condTexto = a.outraCondicao || 'Outra Condição';
-      else if (tipo) { condTexto = obterLabelCondicao(tipo); if (a.outraCondicao) condTexto += ` - ${a.outraCondicao}`; }
-
+      const condTexto = obterLabelSeguro(a.condicaoAcessibilidade, a.outraCondicao);
       porCondicao[condTexto] = (porCondicao[condTexto] || 0) + 1;
     });
 
@@ -1187,7 +1162,7 @@ router.put('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
           periodo: alunoAtualizado.periodo,
           condicao: {
             tipo: alunoAtualizado.condicaoAcessibilidade,
-            label: alunoAtualizado.outraCondicao || alunoAtualizado.condicaoAcessibilidade,
+            label: obterLabelSeguro(alunoAtualizado.condicaoAcessibilidade, alunoAtualizado.outraCondicao),
             detalhes: null
           },
           dataSolicitacao: alunoAtualizado.dataSolicitacaoAcessibilidade
