@@ -1,11 +1,11 @@
 // ============================================================================
 // AEE - ATENDIMENTO EDUCACIONAL ESPECIALIZADO - EducaPleno
 // ============================================================================
-// VERSÃO 2.5 - Correções:
-//   - Retorna a condição EXATA salva no banco (texto livre)
-//   - Removido controle de "status pendente/aprovado"
+// VERSÃO 2.6 - Correções finais:
+//   - Limpeza da palavra "outra" no Dashboard, Lista e Relatórios
 //   - Dashboard sem métricas de aprovação de cadastro
-//   - Rota PUT aceita texto livre para a condição
+//   - Rota PUT blindada contra duplicidade de matrícula
+//   - Retorna o texto exato digitado pelo usuário
 // ============================================================================
 
 const express = require('express');
@@ -199,7 +199,7 @@ router.get('/health', (req, res) => {
   res.json({
     success: true,
     status: 'online',
-    service: 'AEE v2.5',
+    service: 'AEE v2.6',
     models: { Prova: !!Prova, Turma: !!Turma, Resultado: !!Resultado, ProvaRealizada: !!ProvaRealizada }
   });
 });
@@ -235,7 +235,6 @@ router.get('/dashboard', authenticateTokenLocal, verificarPermissaoAEE, async (r
       ? ((totalAlunosComAcessibilidade / totalAlunos) * 100).toFixed(1)
       : 0;
 
-    // 🔥 Agrupa pela condição exata do banco
     const distribuicaoCondicoes = await User.aggregate([
       { $match: { role: 'aluno', precisaAcessibilidade: true, ativo: true } },
       { $group: { _id: '$condicaoAcessibilidade', count: { $sum: 1 } } },
@@ -307,7 +306,6 @@ router.get('/dashboard', authenticateTokenLocal, verificarPermissaoAEE, async (r
         taxaAprovacao,
         distribuicaoCondicoes: distribuicaoCondicoes.map(c => ({
           condicao: c._id || 'nao_especificada',
-          // 🔥 Retorna o texto EXATO salvo no banco
           label: c._id || 'Não especificada',
           count: c.count
         })),
@@ -315,18 +313,30 @@ router.get('/dashboard', authenticateTokenLocal, verificarPermissaoAEE, async (r
           turma: t._id || 'Sem turma',
           count: t.count
         })),
-        alunosRecentes: alunosRecentes.map(a => ({
-          id: a._id,
-          nome: a.nome,
-          matricula: a.matricula,
-          turma: a.turma,
-          condicao: a.condicaoAcessibilidade || 'nao_especificada',
-          // 🔥 Se tiver detalhes (texto livre extra), junta com o tipo. Se não, mostra o tipo.
-          condicaoLabel: a.outraCondicaao 
-            ? `${a.condicaoAcessibilidade} - ${a.outraCondicao}` 
-            : (a.condicaoAcessibilidade || 'Acessibilidade'),
-          dataSolicitacao: a.dataSolicitacaoAcessibilidade
-        })),
+        alunosRecentes: alunosRecentes.map(a => {
+          // 🔥 LIMPEZA DO TEXTO NO DASHBOARD
+          let condLabel = 'Acessibilidade';
+          if (a.condicaoAcessibilidade) {
+              if (a.condicaoAcessibilidade.toLowerCase() === 'outra') {
+                  condLabel = a.outraCondicao || 'Outra Condição';
+              } else {
+                  condLabel = a.condicaoAcessibilidade;
+                  if (a.outraCondicao) {
+                      condLabel += ` - ${a.outraCondicao}`;
+                  }
+              }
+          }
+
+          return {
+            id: a._id,
+            nome: a.nome,
+            matricula: a.matricula,
+            turma: a.turma,
+            condicao: a.condicaoAcessibilidade || 'nao_especificada',
+            condicaoLabel: condLabel,
+            dataSolicitacao: a.dataSolicitacaoAcessibilidade
+          };
+        }),
         filtrosDisponiveis: {
           condicoes: CONDICOES_LISTA,
           turmas: turmasDisponiveis.filter(t => t).sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true })),
@@ -385,7 +395,6 @@ router.get('/alunos', authenticateTokenLocal, verificarPermissaoAEE, async (req,
       curso: { $ne: null, $exists: true, $nin: ['', null] }
     });
 
-    // Conta notas liberadas por aluno
     const alunosIds = alunos.map(a => a._id);
     const notasPorAluno = new Map();
 
@@ -411,7 +420,6 @@ router.get('/alunos', authenticateTokenLocal, verificarPermissaoAEE, async (req,
       }
 
       const [resultadosPack, provasPack] = await Promise.all(promises);
-
       const provasContadas = new Set();
 
       if (resultadosPack) {
@@ -429,7 +437,6 @@ router.get('/alunos', authenticateTokenLocal, verificarPermissaoAEE, async (req,
           if (!notasPorAluno.has(alunoId)) {
             notasPorAluno.set(alunoId, { total: 0, liberadas: 0, pendentes: 0 });
           }
-
           const stats = notasPorAluno.get(alunoId);
           stats.total++;
           if (notaLiberada) stats.liberadas++;
@@ -452,7 +459,6 @@ router.get('/alunos', authenticateTokenLocal, verificarPermissaoAEE, async (req,
           if (!notasPorAluno.has(alunoId)) {
             notasPorAluno.set(alunoId, { total: 0, liberadas: 0, pendentes: 0 });
           }
-
           const stats = notasPorAluno.get(alunoId);
           stats.total++;
           if (notaLiberada) stats.liberadas++;
@@ -464,10 +470,17 @@ router.get('/alunos', authenticateTokenLocal, verificarPermissaoAEE, async (req,
     const alunosFormatados = alunos.map(aluno => {
       const stats = notasPorAluno.get(aluno._id.toString()) || { total: 0, liberadas: 0, pendentes: 0 };
       
-      // 🔥 Monta o texto exato da condição
-      let condLabel = aluno.condicaoAcessibilidade || 'Não especificada';
-      if (aluno.outraCondicao) {
-          condLabel = `${condLabel} - ${aluno.outraCondicao}`;
+      // 🔥 LIMPEZA DO TEXTO NA LISTA DE ALUNOS
+      let condLabel = 'Não especificada';
+      if (aluno.condicaoAcessibilidade) {
+          if (aluno.condicaoAcessibilidade.toLowerCase() === 'outra') {
+              condLabel = aluno.outraCondicao || 'Outra Condição';
+          } else {
+              condLabel = obterLabelCondicao(aluno.condicaoAcessibilidade);
+              if (aluno.outraCondicao) {
+                  condLabel += ` - ${aluno.outraCondicao}`;
+              }
+          }
       }
 
       return {
@@ -545,7 +558,6 @@ router.get('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
       provasRealizadas = resultados.map(r => {
         const nota = extrairNota(r);
         const notaLiberada = extrairNotaLiberada(r);
-
         return {
           provaId: r.provaId?._id,
           provaTitulo: r.provaId?.titulo,
@@ -569,7 +581,6 @@ router.get('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
       const prFormatadas = prs.map(p => {
         const nota = extrairNota(p);
         const notaLiberada = extrairNotaLiberada(p);
-
         return {
           provaId: p.provaId?._id,
           provaTitulo: p.provaId?.titulo,
@@ -600,14 +611,12 @@ router.get('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
         : '0.0'
     };
 
-    // 🔥 CORREÇÃO DO TEXTO AQUI
+    // 🔥 LIMPEZA DO TEXTO NO DETALHES
     let condLabel = 'Não especificada';
     if (aluno.condicaoAcessibilidade) {
         if (aluno.condicaoAcessibilidade.toLowerCase() === 'outra') {
-            // Se o enum for 'outra', mostra apenas o texto salvo em 'outraCondicao'
             condLabel = aluno.outraCondicao || 'Outra Condição';
         } else {
-            // Se for um enum normal (ex: 'visual'), mostra a label bonita
             condLabel = obterLabelCondicao(aluno.condicaoAcessibilidade);
             if (aluno.outraCondicao) {
                 condLabel += ` - ${aluno.outraCondicao}`;
@@ -629,7 +638,7 @@ router.get('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
           precisa: true,
           condicao: {
             tipo: aluno.condicaoAcessibilidade,
-            label: condLabel, // 🔥 Retorna o texto limpo
+            label: condLabel,
             detalhes: aluno.outraCondicao
           },
           dataSolicitacao: aluno.dataSolicitacaoAcessibilidade
@@ -1198,9 +1207,6 @@ router.get('/provas/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
 // ============================================================================
 // GET /api/aee/relatorio
 // ============================================================================
-// ============================================================================
-// GET /api/aee/relatorio
-// ============================================================================
 router.get('/relatorio', authenticateTokenLocal, verificarPermissaoAEE, async (req, res) => {
   try {
     const { turma, curso, condicao, periodo } = req.query;
@@ -1221,10 +1227,17 @@ router.get('/relatorio', authenticateTokenLocal, verificarPermissaoAEE, async (r
       const t = aluno.turma || 'Sem turma';
       if (!porTurma[t]) porTurma[t] = [];
       
-      // 🔥 AQUI ESTAVA O ERRO: Pega o texto exato do banco
-      let condTexto = aluno.condicaoAcessibilidade || 'Acessibilidade';
-      if (aluno.outraCondicao) {
-          condTexto = `${condTexto} - ${aluno.outraCondicao}`;
+      // 🔥 LIMPEZA DO TEXTO NO RELATÓRIO
+      let condLabel = 'Acessibilidade';
+      if (aluno.condicaoAcessibilidade) {
+          if (aluno.condicaoAcessibilidade.toLowerCase() === 'outra') {
+              condLabel = aluno.outraCondicao || 'Outra Condição';
+          } else {
+              condLabel = aluno.condicaoAcessibilidade;
+              if (aluno.outraCondicao) {
+                  condLabel += ` - ${aluno.outraCondicao}`;
+              }
+          }
       }
 
       porTurma[t].push({
@@ -1232,7 +1245,7 @@ router.get('/relatorio', authenticateTokenLocal, verificarPermissaoAEE, async (r
         nome: aluno.nome,
         matricula: aluno.matricula,
         curso: aluno.curso,
-        condicao: condTexto, // Retorna o texto exato
+        condicao: condLabel,
         condicaoTipo: aluno.condicaoAcessibilidade,
         detalhes: aluno.outraCondicao
       });
@@ -1240,11 +1253,18 @@ router.get('/relatorio', authenticateTokenLocal, verificarPermissaoAEE, async (r
 
     const porCondicao = {};
     alunos.forEach(a => {
-      let condTexto = a.condicaoAcessibilidade || 'Não especificada';
-      if (a.outraCondicao) {
-        condTexto = `${condTexto} - ${a.outraCondicao}`;
+      let condLabel = 'Não especificada';
+      if (a.condicaoAcessibilidade) {
+          if (a.condicaoAcessibilidade.toLowerCase() === 'outra') {
+              condLabel = a.outraCondicao || 'Outra Condição';
+          } else {
+              condLabel = obterLabelCondicao(a.condicaoAcessibilidade);
+              if (a.outraCondicao) {
+                  condLabel += ` - ${a.outraCondicao}`;
+              }
+          }
       }
-      porCondicao[condTexto] = (porCondicao[condTexto] || 0) + 1;
+      porCondicao[condLabel] = (porCondicao[condLabel] || 0) + 1;
     });
 
     res.json({
@@ -1294,17 +1314,21 @@ router.put('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
       if (emailEmUso) return res.status(400).json({ success: false, error: 'Este email já está em uso.' });
     }
 
+    // 🔥 LIMPEZA DO TEXTO ANTES DE SALVAR NO BANCO
+    let textoLimpo = condicao.trim();
+    if (textoLimpo.toLowerCase().startsWith('outra - ')) {
+        textoLimpo = textoLimpo.substring(8).trim();
+    }
+
     const updateData = {
       nome: nome.trim().toUpperCase(),
       precisaAcessibilidade: true,
       condicaoAcessibilidade: 'outra', 
-      outraCondicao: condicao.trim()   
+      outraCondicao: textoLimpo
     };
 
     if (email && email.trim()) updateData.email = email.trim().toLowerCase();
 
-    // 🔥 BLINDAGEM DA MATRÍCULA
-    // Só mexe na matrícula se ela vier de fato preenchida e não for a palavra 'undefined'
     if (matricula && typeof matricula === 'string' && matricula.trim() !== '' && matricula !== 'undefined') {
       const matLimpa = matricula.trim();
       const matriculaEmUso = await User.findOne({ matricula: matLimpa, _id: { $ne: id } }).lean();
@@ -1357,7 +1381,6 @@ router.put('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
       });
 
     } catch (dbError) {
-      // Se por algum motivo bizarro o erro 11000 ainda acontecer, tratamos
       if (dbError.code === 11000) {
         return res.status(400).json({ 
           success: false, 
