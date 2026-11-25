@@ -492,6 +492,17 @@ window.AeeModule = {
                 this.filtrosDisponiveis.cursos = d.filtrosDisponiveis.cursos || [];
             }
 
+            // Limpa a lista de distribuição para exibição correta
+            const listaCondicoes = d.distribuicaoCondicoes.map(c => {
+                let labelLimpa = c.label || 'Não especificada';
+                if (labelLimpa.toLowerCase().startsWith('outra - ')) {
+                    labelLimpa = labelLimpa.substring(8).trim();
+                } else if (labelLimpa.toLowerCase() === 'outra') {
+                    labelLimpa = 'Outra Condição';
+                }
+                return { ...c, labelLimpa };
+            });
+
             pane.innerHTML = `
                 <div class="aee-stats-grid">
                     <div class="aee-stat-card" style="background: linear-gradient(135deg, #6366f1, #8b5cf6);">
@@ -526,39 +537,32 @@ window.AeeModule = {
                 </div>
 
                 <div class="aee-grid-2">
-                    <div class="aee-card">
+                    <!-- 🔥 CARD DE DISTRIBUIÇÃO COM SCROLL INTERNO -->
+                    <div class="aee-card" style="display: flex; flex-direction: column; max-height: 480px;">
                         <div class="aee-card-header">
                             <h3><i class="fas fa-heart"></i> Distribuição por Condição</h3>
                         </div>
-                        <div class="aee-card-body">
+                        <div class="aee-card-body" style="padding: 15px; flex: 1; display: flex; flex-direction: column; overflow: hidden;">
                             ${d.distribuicaoCondicoes.length > 0 ? `
-                                <div class="aee-chart-container">
+                                <div class="aee-chart-container" style="height: 220px; flex-shrink: 0; margin-bottom: 15px;">
                                     <canvas id="aeeChartCondicoes"></canvas>
                                 </div>
-                                <div class="aee-condicoes-list">
-                                    ${d.distribuicaoCondicoes.map(c => {
-                                        // 🔥 CORREÇÃO AQUI: Limpa o "outra" do gráfico de distribuição
-                                        let labelLimpa = c.label || 'Não especificada';
-                                        if (labelLimpa.toLowerCase().startsWith('outra - ')) {
-                                            labelLimpa = labelLimpa.substring(8).trim();
-                                        } else if (labelLimpa.toLowerCase() === 'outra') {
-                                            labelLimpa = 'Outra Condição';
-                                        }
-
-                                        return `
-                                        <div class="aee-condicao-item">
-                                            <div class="aee-condicao-label">
-                                                <i class="fas fa-heart" style="color: #6366f1;"></i>
-                                                <span>${this.escapeHtml(labelLimpa)}</span>
-                                            </div>
-                                            <div class="aee-condicao-count">
-                                                <span class="aee-count-badge" style="background: #6366f120; color: #6366f1;">
-                                                    ${c.count}
+                                
+                                <!-- LISTA COM SCROLL FINO -->
+                                <div style="flex: 1; overflow-y: auto; padding-right: 5px; scrollbar-width: thin; scrollbar-color: #cbd5e1 #f1f5f9;">
+                                    ${listaCondicoes.map(c => `
+                                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid #f1f5f9;">
+                                            <div style="display: flex; align-items: center; gap: 8px; max-width: 80%;">
+                                                <i class="fas fa-heart" style="color: #6366f1; font-size: 12px;"></i>
+                                                <span style="font-size: 13px; color: #475569; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${this.escapeHtml(c.labelLimpa)}">
+                                                    ${this.escapeHtml(c.labelLimpa)}
                                                 </span>
                                             </div>
+                                            <span style="background: #e0e7ff; color: #4338ca; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 700;">
+                                                ${c.count}
+                                            </span>
                                         </div>
-                                        `;
-                                    }).join('')}
+                                    `).join('')}
                                 </div>
                             ` : '<div class="aee-empty">Nenhum dado disponível</div>'}
                         </div>
@@ -570,7 +574,7 @@ window.AeeModule = {
                         </div>
                         <div class="aee-card-body">
                             ${d.distribuicaoTurmas.length > 0 ? `
-                                <div class="aee-chart-container">
+                                <div class="aee-chart-container" style="height: 300px;">
                                     <canvas id="aeeChartTurmas"></canvas>
                                 </div>
                             ` : '<div class="aee-empty">Nenhum dado disponível</div>'}
@@ -578,7 +582,7 @@ window.AeeModule = {
                     </div>
                 </div>
 
-                <div class="aee-card">
+                <div class="aee-card" style="margin-top: 20px;">
                     <div class="aee-card-header">
                         <h3><i class="fas fa-user-plus"></i> Alunos Recentes</h3>
                         <button class="aee-btn aee-btn-outline" onclick="AeeModule.trocarTab('alunos')">
@@ -589,14 +593,12 @@ window.AeeModule = {
                         ${d.alunosRecentes.length > 0 ? `
                             <div class="aee-recentes-list">
                                 ${d.alunosRecentes.map(a => {
-                                    // 🔥 CORREÇÃO AQUI: Limpa o "outra" dos Alunos Recentes
                                     let condLabel = a.condicaoLabel || a.condicao || 'Acessibilidade';
                                     if (condLabel.toLowerCase().startsWith('outra - ')) {
                                         condLabel = condLabel.substring(8).trim();
                                     } else if (condLabel.toLowerCase() === 'outra') {
                                         condLabel = 'Outra Condição';
                                     }
-
                                     return `
                                     <div class="aee-recente-item" onclick="AeeModule.verDetalhesAluno('${a.id}')" style="border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 10px; cursor: pointer;">
                                         <div class="aee-recente-avatar" style="background: #6366f120; color: #6366f1;">
@@ -640,85 +642,60 @@ window.AeeModule = {
     },
 
     renderizarGraficos(d) {
-        // Paleta de cores harmoniosa baseada no visual do sistema
-        const coresBarras = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#ef4444', '#f97316', '#14b8a6', '#a855f7'];
+        const coresDinamicas = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#ef4444', '#f97316', '#14b8a6', '#a855f7'];
 
-        // ==========================================
-        // GRÁFICO 1: CONDIÇÕES (Top 5)
-        // ==========================================
+        // 🔥 Gráfico 1: CONDIÇÕES (Barras Horizontais)
         const ctxCond = this.safeGet('aeeChartCondicoes');
         if (ctxCond && d.distribuicaoCondicoes.length > 0) {
             if (this.charts.condicoes) {
                 try { this.charts.condicoes.destroy(); } catch (e) {}
             }
 
-            // 🔥 LIMITANDO AOS 5 MAIS FREQUENTES
-            const topCondicoes = d.distribuicaoCondicoes.slice(0, 5);
+            // Pega as Top 10 condições para não entupir o gráfico
+            const topCondicoes = d.distribuicaoCondicoes.slice(0, 10);
 
-            // Função para limpar o texto e cortar se for muito longo
-            const formatarLabel = (texto) => {
+            // Função para cortar textos muito longos no gráfico
+            const truncar = (texto, limite = 35) => {
                 if (!texto) return 'Não especificada';
-                let t = texto;
-                if (t.toLowerCase().startsWith('outra - ')) t = t.substring(8);
-                else if (t.toLowerCase() === 'outra') t = 'Outra Condição';
-                
-                return t.length > 25 ? t.substring(0, 25) + '...' : t;
+                return texto.length > limite ? texto.substring(0, limite) + '...' : texto;
             };
 
             this.charts.condicoes = new Chart(ctxCond.getContext('2d'), {
                 type: 'bar',
                 data: {
-                    labels: topCondicoes.map(c => formatarLabel(c.label)),
+                    labels: topCondicoes.map(c => truncar(c.label)),
                     datasets: [{
                         label: 'Alunos',
                         data: topCondicoes.map(c => c.count),
-                        backgroundColor: topCondicoes.map((_, i) => coresBarras[i]),
+                        backgroundColor: topCondicoes.map((_, i) => coresDinamicas[i % coresDinamicas.length]),
                         borderRadius: 6,
-                        maxBarThickness: 24,
-                        borderSkipped: false
+                        maxBarThickness: 20
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    indexAxis: 'y',
+                    indexAxis: 'y', // 🔥 Deixa as barras deitadas
                     plugins: { 
                         legend: { display: false },
                         tooltip: {
-                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                            titleFont: { size: 13, family: 'Arial' },
-                            bodyFont: { size: 14, weight: 'bold', family: 'Arial' },
-                            padding: 10,
-                            displayColors: false,
                             callbacks: {
                                 title: function(context) {
-                                    // Mostra o texto completo no tooltip
+                                    // Mostra o texto completo no tooltip ao passar o mouse
                                     return topCondicoes[context[0].dataIndex].label;
-                                },
-                                label: function(context) {
-                                    return `${context.parsed.x} aluno(s)`;
                                 }
                             }
                         }
                     },
                     scales: {
-                        x: { 
-                            beginAtZero: true, 
-                            ticks: { stepSize: 1, precision: 0, color: '#94a3b8' }, 
-                            grid: { color: '#f1f5f9', drawBorder: false } 
-                        },
-                        y: { 
-                            grid: { display: false }, 
-                            ticks: { font: { size: 11, weight: '600', family: 'Arial' }, color: '#475569' } 
-                        }
+                        x: { beginAtZero: true, ticks: { stepSize: 1, precision: 0, font: { size: 11 } }, grid: { color: '#f3f4f6', drawBorder: false } },
+                        y: { grid: { display: false }, ticks: { font: { size: 11, weight: '500' }, color: '#475569' } }
                     }
                 }
             });
         }
 
-        // ==========================================
-        // GRÁFICO 2: TURMAS (Top 10)
-        // ==========================================
+        // 🔥 Gráfico 2: TURMAS (Barras Horizontais)
         const ctxTurmas = this.safeGet('aeeChartTurmas');
         if (ctxTurmas && d.distribuicaoTurmas.length > 0) {
             if (this.charts.turmas) {
@@ -734,39 +711,19 @@ window.AeeModule = {
                     datasets: [{
                         label: 'Alunos',
                         data: topTurmas.map(t => t.count),
-                        backgroundColor: topTurmas.map((_, i) => coresBarras[i % coresBarras.length]),
+                        backgroundColor: topTurmas.map((_, i) => coresDinamicas[i % coresDinamicas.length]),
                         borderRadius: 6,
-                        maxBarThickness: 24,
-                        borderSkipped: false
+                        maxBarThickness: 20
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     indexAxis: 'y',
-                    plugins: { 
-                        legend: { display: false },
-                        tooltip: {
-                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                            padding: 10,
-                            displayColors: false,
-                            callbacks: {
-                                label: function(context) {
-                                    return `${context.parsed.x} aluno(s)`;
-                                }
-                            }
-                        }
-                    },
+                    plugins: { legend: { display: false } },
                     scales: {
-                        x: { 
-                            beginAtZero: true, 
-                            ticks: { stepSize: 1, precision: 0, color: '#94a3b8' }, 
-                            grid: { color: '#f1f5f9', drawBorder: false } 
-                        },
-                        y: { 
-                            grid: { display: false }, 
-                            ticks: { font: { size: 11, weight: '600', family: 'Arial' }, color: '#475569' } 
-                        }
+                        x: { beginAtZero: true, ticks: { stepSize: 1, precision: 0, font: { size: 11 } }, grid: { color: '#f3f4f6', drawBorder: false } },
+                        y: { grid: { display: false }, ticks: { font: { size: 11, weight: '500' }, color: '#475569' } }
                     }
                 }
             });
