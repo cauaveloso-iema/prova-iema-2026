@@ -1223,21 +1223,27 @@ router.get('/usuarios/:id', authenticateTokenLocal, isSuperAdmin, async (req, re
     logger.info(`🔍 Admin ${req.userId} buscando usuário ${id}`);
 
     const user = await User.findById(id)
-      .select('nome email cpf telefone matricula role eixo curso turma periodo departamento titulacao ativo forcePasswordChange precisaAcessibilidade condicaoAcessibilidade dataSolicitacaoAcessibilidade acessibilidadeAprovadaPor twoFactorEnabled twoFactorBackupCodesShown telefoneVerificado lastLogin loginAttempts lockUntil onesignalPlayerId createdAt updatedAt fotoPerfil fotoPerfilTipo bio endereco numero complemento bairro cidade estado cep dataNascimento genero instagram linkedin website interesses ultimaAtualizacaoPerfil qrCodeUsuario qrCodeUsuarioGeradoEm qrCodeUsuarioTipo')
+      .select('nome email cpf telefone matricula role eixo curso turma periodo departamento titulacao ativo forcePasswordChange precisaAcessibilidade condicaoAcessibilidade outraCondicao dataSolicitacaoAcessibilidade acessibilidadeAprovadaPor twoFactorEnabled twoFactorBackupCodesShown telefoneVerificado lastLogin loginAttempts lockUntil onesignalPlayerId createdAt updatedAt fotoPerfil fotoPerfilTipo bio endereco numero complemento bairro cidade estado cep dataNascimento genero instagram linkedin website interesses ultimaAtualizacaoPerfil qrCodeUsuario qrCodeUsuarioGeradoEm qrCodeUsuarioTipo')
       .lean();
 
     if (!user) {
       return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
     }
 
+    // 🔥 SINCRONIZAÇÃO COM O AEE: Se for 'outra', mostra o texto real
+    let condicaoParaAdmin = user.condicaoAcessibilidade || null;
+    
+    if (condicaoParaAdmin && condicaoParaAdmin.toLowerCase() === 'outra') {
+        condicaoParaAdmin = user.outraCondicao || 'Outra Condição';
+    } else if (condicaoParaAdmin && user.outraCondicao) {
+        condicaoParaAdmin += ` - ${user.outraCondicao}`;
+    }
+
     logger.info('📦 Dados do usuário retornados:', {
       nome: user.nome,
       email: user.email,
-      fotoPerfil: user.fotoPerfil ? '✅ EXISTE' : '❌ NÃO',
-      endereco: user.endereco || '—',
-      cidade: user.cidade || '—',
-      temQRCode: !!user.qrCodeUsuario,
-      qrCodeLength: user.qrCodeUsuario ? user.qrCodeUsuario.length : 0
+      condicaoExibida: condicaoParaAdmin,
+      temQRCode: !!user.qrCodeUsuario
     });
 
     res.json({
@@ -1260,7 +1266,7 @@ router.get('/usuarios/:id', authenticateTokenLocal, isSuperAdmin, async (req, re
         ativo: user.ativo !== false,
         forcePasswordChange: user.forcePasswordChange || false,
         precisaAcessibilidade: user.precisaAcessibilidade || false,
-        condicaoAcessibilidade: user.condicaoAcessibilidade || null,
+        condicaoAcessibilidade: condicaoParaAdmin, // 🔥 Vai o texto limpo
         dataSolicitacaoAcessibilidade: user.dataSolicitacaoAcessibilidade || null,
         twoFactorEnabled: user.twoFactorEnabled || false,
         twoFactorBackupCodesShown: user.twoFactorBackupCodesShown || false,
@@ -1349,6 +1355,18 @@ router.put('/usuarios/:id', authenticateTokenLocal, isSuperAdmin, verificarPermi
       updates.telefone = updates.telefone.replace(/\D/g, '');
     }
 
+    // 🔥 CONSENSO DE SALVAMENTO: Protege o Enum e salva o texto no lugar certo
+    if (updates.condicaoAcessibilidade) {
+        const textoDigitado = updates.condicaoAcessibilidade.trim();
+        const categoriasValidas = ['visual', 'baixa_visao', 'cegueira', 'auditiva', 'deficiencia_auditiva', 'motora', 'deficiencia_fisica', 'intelectual', 'dislexia', 'discalculia', 'tdah', 'tea', 'altas_habilidades', 'deficiencia_multipla', 'surdocegueira', 'outra', 'nao_especificada'];
+        
+        // Se o texto digitado NÃO for uma palavra exata da lista (ex: "TEA + TDAH + TOC")
+        if (!categoriasValidas.includes(textoDigitado.toLowerCase())) {
+            updates.outraCondicao = textoDigitado; // Salva o texto aqui
+            updates.condicaoAcessibilidade = 'outra'; // Engana o banco com o Enum válido
+        }
+    }
+
     // 🔥 GUARDAR VALORES ANTES DE ATUALIZAR
     const turmaAntiga = (existingUser.turma || '').toString().trim();
     const turmaNova = updates.turma !== undefined ? (updates.turma || '').toString().trim() : turmaAntiga;
@@ -1365,7 +1383,6 @@ router.put('/usuarios/:id', authenticateTokenLocal, isSuperAdmin, verificarPermi
         await sincronizarTurmaDoAluno(existingUser._id, turmaAntiga, turmaNova);
       } catch (syncError) {
         logger.error('❌ Erro ao sincronizar turma.alunos:', syncError);
-        // Não falha a requisição — o aluno.turma já foi salvo
       }
     }
 

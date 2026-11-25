@@ -1,11 +1,10 @@
 // ============================================================================
 // AEE - ATENDIMENTO EDUCACIONAL ESPECIALIZADO - EducaPleno
 // ============================================================================
-// VERSÃO 2.6 - Correções finais:
+// VERSÃO 2.7 - Correções Finais:
+//   - Suporte a leitura de texto livre salvo pelo Admin (ex: "TEA + TDAH")
 //   - Limpeza da palavra "outra" no Dashboard, Lista e Relatórios
-//   - Dashboard sem métricas de aprovação de cadastro
-//   - Rota PUT blindada contra duplicidade de matrícula
-//   - Retorna o texto exato digitado pelo usuário
+//   - Rota PUT blindada contra duplicidade de matrícula e erros de Enum
 // ============================================================================
 
 const express = require('express');
@@ -42,6 +41,8 @@ const {
   CONDICOES_LABELS,
   obterLabelCondicao
 } = require('../constants/acessibilidade');
+
+const ENUMS_VALIDOS = ['visual', 'baixa_visao', 'cegueira', 'auditiva', 'deficiencia_auditiva', 'motora', 'deficiencia_fisica', 'intelectual', 'dislexia', 'discalculia', 'tdah', 'tea', 'altas_habilidades', 'deficiencia_multipla', 'surdocegueira', 'outra', 'nao_especificada'];
 
 function escaparRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -199,7 +200,7 @@ router.get('/health', (req, res) => {
   res.json({
     success: true,
     status: 'online',
-    service: 'AEE v2.6',
+    service: 'AEE v2.7',
     models: { Prova: !!Prova, Turma: !!Turma, Resultado: !!Resultado, ProvaRealizada: !!ProvaRealizada }
   });
 });
@@ -304,27 +305,26 @@ router.get('/dashboard', authenticateTokenLocal, verificarPermissaoAEE, async (r
         totalProvasRealizadas,
         mediaGeral,
         taxaAprovacao,
-        distribuicaoCondicoes: distribuicaoCondicoes.map(c => ({
-          condicao: c._id || 'nao_especificada',
-          label: c._id || 'Não especificada',
-          count: c.count
-        })),
+        distribuicaoCondicoes: distribuicaoCondicoes.map(c => {
+          let label = c._id || 'Não especificada';
+          if (label.toLowerCase() === 'outra') label = 'Outra Condição';
+          return { condicao: c._id || 'nao_especificada', label, count: c.count };
+        }),
         distribuicaoTurmas: distribuicaoTurmas.map(t => ({
           turma: t._id || 'Sem turma',
           count: t.count
         })),
         alunosRecentes: alunosRecentes.map(a => {
-          // 🔥 LIMPEZA DO TEXTO NO DASHBOARD
+          // 🔥 BLINDAGEM DASHBOARD
           let condLabel = 'Acessibilidade';
-          if (a.condicaoAcessibilidade) {
-              if (a.condicaoAcessibilidade.toLowerCase() === 'outra') {
-                  condLabel = a.outraCondicao || 'Outra Condição';
-              } else {
-                  condLabel = a.condicaoAcessibilidade;
-                  if (a.outraCondicao) {
-                      condLabel += ` - ${a.outraCondicao}`;
-                  }
-              }
+          const tipo = a.condicaoAcessibilidade || '';
+
+          if (tipo && !ENUMS_VALIDOS.includes(tipo.toLowerCase())) {
+              condLabel = tipo; 
+          } else if (tipo.toLowerCase() === 'outra') {
+              condLabel = a.outraCondicao || 'Outra Condição';
+          } else if (tipo) {
+              condLabel = a.outraCondicao || obterLabelCondicao(tipo);
           }
 
           return {
@@ -427,16 +427,11 @@ router.get('/alunos', authenticateTokenLocal, verificarPermissaoAEE, async (req,
           const alunoId = r.userId?.toString();
           const provaId = r.provaId?.toString();
           if (!alunoId) return;
-
           const chave = `${alunoId}_${provaId}`;
           if (provasContadas.has(chave)) return;
           provasContadas.add(chave);
-
           const notaLiberada = r.notaLiberada === true || r.notaManualLiberada === true;
-
-          if (!notasPorAluno.has(alunoId)) {
-            notasPorAluno.set(alunoId, { total: 0, liberadas: 0, pendentes: 0 });
-          }
+          if (!notasPorAluno.has(alunoId)) notasPorAluno.set(alunoId, { total: 0, liberadas: 0, pendentes: 0 });
           const stats = notasPorAluno.get(alunoId);
           stats.total++;
           if (notaLiberada) stats.liberadas++;
@@ -449,16 +444,11 @@ router.get('/alunos', authenticateTokenLocal, verificarPermissaoAEE, async (req,
           const alunoId = p.alunoId?.toString();
           const provaId = p.provaId?.toString();
           if (!alunoId) return;
-
           const chave = `${alunoId}_${provaId}`;
           if (provasContadas.has(chave)) return;
           provasContadas.add(chave);
-
           const notaLiberada = p.notaLiberada === true || p.notaManualLiberada === true;
-
-          if (!notasPorAluno.has(alunoId)) {
-            notasPorAluno.set(alunoId, { total: 0, liberadas: 0, pendentes: 0 });
-          }
+          if (!notasPorAluno.has(alunoId)) notasPorAluno.set(alunoId, { total: 0, liberadas: 0, pendentes: 0 });
           const stats = notasPorAluno.get(alunoId);
           stats.total++;
           if (notaLiberada) stats.liberadas++;
@@ -470,17 +460,17 @@ router.get('/alunos', authenticateTokenLocal, verificarPermissaoAEE, async (req,
     const alunosFormatados = alunos.map(aluno => {
       const stats = notasPorAluno.get(aluno._id.toString()) || { total: 0, liberadas: 0, pendentes: 0 };
       
-      // 🔥 LIMPEZA DO TEXTO NA LISTA DE ALUNOS
+      // 🔥 BLINDAGEM LISTA DE ALUNOS
       let condLabel = 'Não especificada';
-      if (aluno.condicaoAcessibilidade) {
-          if (aluno.condicaoAcessibilidade.toLowerCase() === 'outra') {
-              condLabel = aluno.outraCondicao || 'Outra Condição';
-          } else {
-              condLabel = obterLabelCondicao(aluno.condicaoAcessibilidade);
-              if (aluno.outraCondicao) {
-                  condLabel += ` - ${aluno.outraCondicao}`;
-              }
-          }
+      const tipo = aluno.condicaoAcessibilidade || '';
+
+      if (tipo && !ENUMS_VALIDOS.includes(tipo.toLowerCase())) {
+          condLabel = tipo; // É texto livre salvo pelo Admin
+      } else if (tipo.toLowerCase() === 'outra') {
+          condLabel = aluno.outraCondicao || 'Outra Condição';
+      } else if (tipo) {
+          condLabel = obterLabelCondicao(tipo);
+          if (aluno.outraCondicao) condLabel += ` - ${aluno.outraCondicao}`;
       }
 
       return {
@@ -492,7 +482,7 @@ router.get('/alunos', authenticateTokenLocal, verificarPermissaoAEE, async (req,
         curso: aluno.curso,
         periodo: aluno.periodo,
         condicao: {
-          tipo: aluno.condicaoAcessibilidade,
+          tipo: tipo,
           label: condLabel,
           descricao: aluno.outraCondicao || null
         },
@@ -611,17 +601,17 @@ router.get('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
         : '0.0'
     };
 
-    // 🔥 LIMPEZA DO TEXTO NO DETALHES
+    // 🔥 BLINDAGEM DETALHES DO ALUNO (MODAL)
     let condLabel = 'Não especificada';
-    if (aluno.condicaoAcessibilidade) {
-        if (aluno.condicaoAcessibilidade.toLowerCase() === 'outra') {
-            condLabel = aluno.outraCondicao || 'Outra Condição';
-        } else {
-            condLabel = obterLabelCondicao(aluno.condicaoAcessibilidade);
-            if (aluno.outraCondicao) {
-                condLabel += ` - ${aluno.outraCondicao}`;
-            }
-        }
+    const tipo = aluno.condicaoAcessibilidade || '';
+
+    if (tipo && !ENUMS_VALIDOS.includes(tipo.toLowerCase())) {
+        condLabel = tipo; 
+    } else if (tipo.toLowerCase() === 'outra') {
+        condLabel = aluno.outraCondicao || 'Outra Condição';
+    } else if (tipo) {
+        condLabel = obterLabelCondicao(tipo);
+        if (aluno.outraCondicao) condLabel += ` - ${aluno.outraCondicao}`;
     }
 
     res.json({
@@ -637,7 +627,7 @@ router.get('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
         acessibilidade: {
           precisa: true,
           condicao: {
-            tipo: aluno.condicaoAcessibilidade,
+            tipo: tipo,
             label: condLabel,
             detalhes: aluno.outraCondicao
           },
@@ -672,17 +662,13 @@ router.get('/respostas/:provaId/:alunoId', authenticateTokenLocal, verificarPerm
       .populate('turmaId', 'nome disciplina')
       .lean();
 
-    if (!prova) {
-      return res.status(404).json({ success: false, error: 'Prova não encontrada' });
-    }
+    if (!prova) return res.status(404).json({ success: false, error: 'Prova não encontrada' });
 
     const aluno = await User.findById(alunoId)
       .select('nome matricula turma curso')
       .lean();
 
-    if (!aluno) {
-      return res.status(404).json({ success: false, error: 'Aluno não encontrado' });
-    }
+    if (!aluno) return res.status(404).json({ success: false, error: 'Aluno não encontrado' });
 
     let doc = null;
     let origem = null;
@@ -698,10 +684,7 @@ router.get('/respostas/:provaId/:alunoId', authenticateTokenLocal, verificarPerm
     }
 
     if (!doc) {
-      return res.status(404).json({
-        success: false,
-        error: 'Este aluno ainda não realizou esta prova'
-      });
+      return res.status(404).json({ success: false, error: 'Este aluno ainda não realizou esta prova' });
     }
 
     const questoes = (prova.questoes || []).map((q, index) => {
@@ -823,9 +806,7 @@ router.get('/notas', authenticateTokenLocal, verificarPermissaoAEE, async (req, 
 
     if (alunosIds.length === 0) {
       return res.json({
-        success: true,
-        notas: [],
-        total: 0,
+        success: true, notas: [], total: 0,
         paginacao: { page: 1, limit, pages: 0 },
         estatisticas: { total: 0, aprovados: 0, reprovados: 0, pendentes: 0, media: '0.0' },
         filtros: { turmas: [], cursos: [] }
@@ -833,12 +814,8 @@ router.get('/notas', authenticateTokenLocal, verificarPermissaoAEE, async (req, 
     }
 
     const [resultados, provasRealizadas] = await Promise.all([
-      Resultado ? Resultado.find({ userId: { $in: alunosIds } })
-        .populate('provaId', 'titulo tipoProva adaptada')
-        .lean() : [],
-      ProvaRealizada ? ProvaRealizada.find({ alunoId: { $in: alunosIds } })
-        .populate('provaId', 'titulo tipoProva adaptada')
-        .lean() : []
+      Resultado ? Resultado.find({ userId: { $in: alunosIds } }).populate('provaId', 'titulo tipoProva adaptada').lean() : [],
+      ProvaRealizada ? ProvaRealizada.find({ alunoId: { $in: alunosIds } }).populate('provaId', 'titulo tipoProva adaptada').lean() : []
     ]);
 
     const todasNotas = [];
@@ -846,32 +823,17 @@ router.get('/notas', authenticateTokenLocal, verificarPermissaoAEE, async (req, 
     resultados.forEach(r => {
       const aluno = alunosMap.get(r.userId?.toString());
       if (!aluno) return;
-
       const nota = extrairNota(r);
       const notaLiberada = extrairNotaLiberada(r);
-
       todasNotas.push({
-        id: `resultado_${r._id}`,
-        _id: r._id,
-        origem: 'resultado',
-        alunoId: r.userId,
-        alunoNome: aluno.nome,
-        alunoMatricula: aluno.matricula,
-        alunoTurma: aluno.turma,
-        alunoCurso: aluno.curso,
-        alunoPeriodo: aluno.periodo,
-        provaId: r.provaId?._id,
-        provaTitulo: r.provaId?.titulo || 'Prova',
+        id: `resultado_${r._id}`, _id: r._id, origem: 'resultado',
+        alunoId: r.userId, alunoNome: aluno.nome, alunoMatricula: aluno.matricula,
+        alunoTurma: aluno.turma, alunoCurso: aluno.curso, alunoPeriodo: aluno.periodo,
+        provaId: r.provaId?._id, provaTitulo: r.provaId?.titulo || 'Prova',
         adaptada: r.provaId?.adaptada || r.provaId?.tipoProva === 'adaptada',
-        nota,
-        notaLiberada,
-        tipoNota: r.tipoNota || (r.notaManual !== null ? 'manual' : 'automatica'),
-        acertos: r.acertos || 0,
-        total: r.total || 0,
-        tempoGasto: r.tempoGasto || 0,
-        data: r.createdAt,
-        cancelada: r.cancelada || false,
-        observacoes: r.observacoes || '',
+        nota, notaLiberada, tipoNota: r.tipoNota || (r.notaManual !== null ? 'manual' : 'automatica'),
+        acertos: r.acertos || 0, total: r.total || 0, tempoGasto: r.tempoGasto || 0,
+        data: r.createdAt, cancelada: r.cancelada || false, observacoes: r.observacoes || '',
         status: calcularStatus(nota, notaLiberada, r.cancelada)
       });
     });
@@ -879,39 +841,19 @@ router.get('/notas', authenticateTokenLocal, verificarPermissaoAEE, async (req, 
     provasRealizadas.forEach(p => {
       const aluno = alunosMap.get(p.alunoId?.toString());
       if (!aluno) return;
-
-      const jaTem = todasNotas.some(n =>
-        n.origem === 'resultado' &&
-        n.alunoId?.toString() === p.alunoId?.toString() &&
-        n.provaId?.toString() === p.provaId?._id?.toString()
-      );
+      const jaTem = todasNotas.some(n => n.origem === 'resultado' && n.alunoId?.toString() === p.alunoId?.toString() && n.provaId?.toString() === p.provaId?._id?.toString());
       if (jaTem) return;
-
       const nota = extrairNota(p);
       const notaLiberada = extrairNotaLiberada(p);
-
       todasNotas.push({
-        id: `pr_${p._id}`,
-        _id: p._id,
-        origem: 'prova_realizada',
-        alunoId: p.alunoId,
-        alunoNome: aluno.nome,
-        alunoMatricula: aluno.matricula,
-        alunoTurma: aluno.turma,
-        alunoCurso: aluno.curso,
-        alunoPeriodo: aluno.periodo,
-        provaId: p.provaId?._id,
-        provaTitulo: p.provaId?.titulo || 'Prova',
+        id: `pr_${p._id}`, _id: p._id, origem: 'prova_realizada',
+        alunoId: p.alunoId, alunoNome: aluno.nome, alunoMatricula: aluno.matricula,
+        alunoTurma: aluno.turma, alunoCurso: aluno.curso, alunoPeriodo: aluno.periodo,
+        provaId: p.provaId?._id, provaTitulo: p.provaId?.titulo || 'Prova',
         adaptada: p.provaId?.adaptada || p.provaId?.tipoProva === 'adaptada',
-        nota,
-        notaLiberada,
-        tipoNota: p.tipoNota || (p.notaManual !== null ? 'manual' : 'automatica'),
-        acertos: p.acertos || 0,
-        total: p.total || 0,
-        tempoGasto: p.tempoGasto || 0,
-        data: p.dataRealizacao || p.createdAt,
-        cancelada: p.cancelada || false,
-        observacoes: p.observacoes || '',
+        nota, notaLiberada, tipoNota: p.tipoNota || (p.notaManual !== null ? 'manual' : 'automatica'),
+        acertos: p.acertos || 0, total: p.total || 0, tempoGasto: p.tempoGasto || 0,
+        data: p.dataRealizacao || p.createdAt, cancelada: p.cancelada || false, observacoes: p.observacoes || '',
         status: calcularStatus(nota, notaLiberada, p.cancelada)
       });
     });
@@ -920,13 +862,8 @@ router.get('/notas', authenticateTokenLocal, verificarPermissaoAEE, async (req, 
 
     if (busca) {
       const buscaLower = busca.toLowerCase();
-      filtradas = filtradas.filter(n =>
-        (n.alunoNome || '').toLowerCase().includes(buscaLower) ||
-        (n.provaTitulo || '').toLowerCase().includes(buscaLower) ||
-        (n.alunoMatricula || '').toLowerCase().includes(buscaLower)
-      );
+      filtradas = filtradas.filter(n => (n.alunoNome || '').toLowerCase().includes(buscaLower) || (n.provaTitulo || '').toLowerCase().includes(buscaLower) || (n.alunoMatricula || '').toLowerCase().includes(buscaLower));
     }
-
     if (turma && turma !== 'todas') filtradas = filtradas.filter(n => n.alunoTurma === turma);
     if (curso && curso !== 'todos') filtradas = filtradas.filter(n => n.alunoCurso === curso);
     if (periodo && periodo !== 'todos') filtradas = filtradas.filter(n => String(n.alunoPeriodo) === String(periodo));
@@ -949,9 +886,7 @@ router.get('/notas', authenticateTokenLocal, verificarPermissaoAEE, async (req, 
       aprovados: notasLiberadas.filter(n => n.nota >= 7).length,
       reprovados: notasLiberadas.filter(n => n.nota < 7 && n.nota >= 0).length,
       pendentes: filtradas.filter(n => !n.notaLiberada).length,
-      media: notasLiberadas.length > 0
-        ? (notasLiberadas.reduce((a, b) => a + b.nota, 0) / notasLiberadas.length).toFixed(1)
-        : '0.0'
+      media: notasLiberadas.length > 0 ? (notasLiberadas.reduce((a, b) => a + b.nota, 0) / notasLiberadas.length).toFixed(1) : '0.0'
     };
 
     const total = filtradas.length;
@@ -962,15 +897,8 @@ router.get('/notas', authenticateTokenLocal, verificarPermissaoAEE, async (req, 
     const cursos = [...new Set(alunosAEE.map(a => a.curso).filter(Boolean))].sort();
 
     res.json({
-      success: true,
-      notas: paginadas,
-      total,
-      estatisticas,
-      paginacao: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        pages: Math.ceil(total / parseInt(limit))
-      },
+      success: true, notas: paginadas, total, estatisticas,
+      paginacao: { page: parseInt(page), limit: parseInt(limit), pages: Math.ceil(total / parseInt(limit)) },
       filtros: { turmas, cursos }
     });
 
@@ -988,9 +916,7 @@ router.get('/notas/:id', authenticateTokenLocal, verificarPermissaoAEE, async (r
     const { id } = req.params;
     const idLimpo = id.replace(/^(resultado_|pr_)/, '');
 
-    if (!idLimpo.match(/^[0-9a-fA-F]{24}$/)) {
-      return res.status(400).json({ success: false, error: 'ID inválido' });
-    }
+    if (!idLimpo.match(/^[0-9a-fA-F]{24}$/)) return res.status(400).json({ success: false, error: 'ID inválido' });
 
     let doc = null;
     let origem = null;
@@ -999,7 +925,6 @@ router.get('/notas/:id', authenticateTokenLocal, verificarPermissaoAEE, async (r
       doc = await Resultado.findById(idLimpo).populate('provaId', 'titulo tipoProva adaptada').populate('userId', 'nome matricula turma curso').lean();
       if (doc) origem = 'resultado';
     }
-
     if (!doc && ProvaRealizada) {
       doc = await ProvaRealizada.findById(idLimpo).populate('provaId', 'titulo tipoProva adaptada').populate('alunoId', 'nome matricula turma curso').lean();
       if (doc) origem = 'prova_realizada';
@@ -1008,30 +933,18 @@ router.get('/notas/:id', authenticateTokenLocal, verificarPermissaoAEE, async (r
     if (!doc) return res.status(404).json({ success: false, error: 'Nota não encontrada' });
 
     const aluno = origem === 'resultado' ? doc.userId : doc.alunoId;
-
     const nota = extrairNota(doc);
     const notaLiberada = extrairNotaLiberada(doc);
 
     res.json({
       success: true,
       nota: {
-        id: doc._id,
-        alunoId: aluno?._id,
-        alunoNome: aluno?.nome || 'Aluno',
-        alunoMatricula: aluno?.matricula,
-        alunoTurma: aluno?.turma,
-        alunoCurso: aluno?.curso,
-        provaTitulo: doc.provaId?.titulo,
-        adaptada: doc.provaId?.adaptada || doc.provaId?.tipoProva === 'adaptada',
-        nota,
-        notaLiberada,
-        tipoNota: doc.tipoNota || (doc.notaManual !== null ? 'manual' : 'automatica'),
-        acertos: doc.acertos || 0,
-        total: doc.total || 0,
-        tempoGasto: doc.tempoGasto || 0,
-        data: doc.createdAt || doc.dataRealizacao,
-        cancelada: doc.cancelada || false,
-        observacoes: doc.observacoes || '',
+        id: doc._id, alunoId: aluno?._id, alunoNome: aluno?.nome || 'Aluno',
+        alunoMatricula: aluno?.matricula, alunoTurma: aluno?.turma, alunoCurso: aluno?.curso,
+        provaTitulo: doc.provaId?.titulo, adaptada: doc.provaId?.adaptada || doc.provaId?.tipoProva === 'adaptada',
+        nota, notaLiberada, tipoNota: doc.tipoNota || (doc.notaManual !== null ? 'manual' : 'automatica'),
+        acertos: doc.acertos || 0, total: doc.total || 0, tempoGasto: doc.tempoGasto || 0,
+        data: doc.createdAt || doc.dataRealizacao, cancelada: doc.cancelada || false, observacoes: doc.observacoes || '',
         status: calcularStatus(nota, notaLiberada, doc.cancelada)
       }
     });
@@ -1043,39 +956,23 @@ router.get('/notas/:id', authenticateTokenLocal, verificarPermissaoAEE, async (r
 });
 
 // ============================================================================
-// GET /api/aee/provas — SOMENTE provas adaptadas de turmas com alunos AEE
+// GET /api/aee/provas
 // ============================================================================
 router.get('/provas', authenticateTokenLocal, verificarPermissaoAEE, async (req, res) => {
   try {
     if (!Prova) return res.status(503).json({ success: false, error: 'Módulo de provas indisponível' });
 
     const { busca, turma, periodo, page = 1, limit = 20 } = req.query;
-
     const { turmaIds } = await obterTurmasComAlunosAEE();
 
     if (turmaIds.length === 0) {
-      return res.json({
-        success: true,
-        provas: [],
-        total: 0,
-        paginacao: { page: 1, limit: parseInt(limit), pages: 0 },
-        filtros: { turmas: [] },
-        aviso: 'Nenhuma turma possui alunos AEE ativos no momento'
-      });
+      return res.json({ success: true, provas: [], total: 0, paginacao: { page: 1, limit: parseInt(limit), pages: 0 }, filtros: { turmas: [] }, aviso: 'Nenhuma turma possui alunos AEE ativos no momento' });
     }
 
-    const condicoes = [
-      { publicada: true },
-      { turmaId: { $in: turmaIds } },
-      filtroProvaAdaptada()
-    ];
+    const condicoes = [{ publicada: true }, { turmaId: { $in: turmaIds } }, filtroProvaAdaptada()];
 
-    if (turma && turma !== 'todas' && mongoose.Types.ObjectId.isValid(turma)) {
-      condicoes.push({ turmaId: new mongoose.Types.ObjectId(turma) });
-    }
-    if (periodo && periodo !== 'todos') {
-      condicoes.push({ periodo });
-    }
+    if (turma && turma !== 'todas' && mongoose.Types.ObjectId.isValid(turma)) condicoes.push({ turmaId: new mongoose.Types.ObjectId(turma) });
+    if (periodo && periodo !== 'todos') condicoes.push({ periodo });
     if (busca) {
       const r = new RegExp(escaparRegex(busca), 'i');
       condicoes.push({ $or: [{ titulo: r }, { codigo: r }, { conteudo: r }, { disciplina: r }] });
@@ -1085,52 +982,30 @@ router.get('/provas', authenticateTokenLocal, verificarPermissaoAEE, async (req,
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const [provas, total] = await Promise.all([
-      Prova.find(query)
-        .populate('turmaId', 'nome disciplina codigo')
-        .populate('userId', 'nome')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit))
-        .lean(),
+      Prova.find(query).populate('turmaId', 'nome disciplina codigo').populate('userId', 'nome').sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit)).lean(),
       Prova.countDocuments(query)
     ]);
 
-    const turmas = Turma
-      ? await Turma.find({ _id: { $in: turmaIds }, ativa: true })
-          .select('nome disciplina')
-          .lean()
-      : [];
+    const turmas = Turma ? await Turma.find({ _id: { $in: turmaIds }, ativa: true }).select('nome disciplina').lean() : [];
 
     const provasFormatadas = provas.map(prova => {
       const isAdaptada = prova.tipoProva === 'adaptada' || prova.adaptada === true || prova.alternativas === 3;
       return {
-        id: prova._id,
-        titulo: prova.titulo,
-        codigo: prova.codigo,
+        id: prova._id, titulo: prova.titulo, codigo: prova.codigo,
         tipo: isAdaptada ? 'adaptada' : (prova.tipoProva || 'normal'),
         alternativas: isAdaptada ? 3 : (prova.alternativas || 5),
         quantidadeQuestoes: prova.questoes?.length || 0,
         disciplina: prova.disciplina || prova.turmaId?.disciplina || null,
-        turma: prova.turmaId ? {
-          id: prova.turmaId._id,
-          nome: prova.turmaId.nome,
-          disciplina: prova.turmaId.disciplina
-        } : null,
+        turma: prova.turmaId ? { id: prova.turmaId._id, nome: prova.turmaId.nome, disciplina: prova.turmaId.disciplina } : null,
         professor: prova.userId?.nome || 'Professor',
-        dataCriacao: prova.createdAt,
-        dataLimite: prova.dataLimite,
-        publicada: prova.publicada
+        dataCriacao: prova.createdAt, dataLimite: prova.dataLimite, publicada: prova.publicada
       };
     });
 
     res.json({
-      success: true,
-      provas: provasFormatadas,
-      total,
+      success: true, provas: provasFormatadas, total,
       paginacao: { page: parseInt(page), limit: parseInt(limit), pages: Math.ceil(total / parseInt(limit)) },
-      filtros: {
-        turmas: turmas.map(t => ({ id: t._id, nome: t.nome, disciplina: t.disciplina }))
-      }
+      filtros: { turmas: turmas.map(t => ({ id: t._id, nome: t.nome, disciplina: t.disciplina })) }
     });
 
   } catch (error) {
@@ -1140,60 +1015,36 @@ router.get('/provas', authenticateTokenLocal, verificarPermissaoAEE, async (req,
 });
 
 // ============================================================================
-// GET /api/aee/provas/:id — bloqueia provas não adaptadas / sem AEE
+// GET /api/aee/provas/:id
 // ============================================================================
 router.get('/provas/:id', authenticateTokenLocal, verificarPermissaoAEE, async (req, res) => {
   try {
     if (!Prova) return res.status(503).json({ success: false, error: 'Módulo de provas indisponível' });
 
-    const prova = await Prova.findById(req.params.id)
-      .populate('turmaId', 'nome disciplina codigo')
-      .populate('userId', 'nome email')
-      .lean();
-
+    const prova = await Prova.findById(req.params.id).populate('turmaId', 'nome disciplina codigo').populate('userId', 'nome email').lean();
     if (!prova) return res.status(404).json({ success: false, error: 'Prova não encontrada' });
 
     const isAdaptada = prova.tipoProva === 'adaptada' || prova.adaptada === true || prova.alternativas === 3;
-
     const { turmaIds } = await obterTurmasComAlunosAEE();
     const turmaDaProva = prova.turmaId?._id?.toString();
     const pertenceTurmaAEE = turmaDaProva && turmaIds.some(id => id.toString() === turmaDaProva);
 
     if (!isAdaptada || !pertenceTurmaAEE) {
-      return res.status(403).json({
-        success: false,
-        error: 'Esta prova não é adaptada ou não pertence a uma turma com alunos AEE'
-      });
+      return res.status(403).json({ success: false, error: 'Esta prova não é adaptada ou não pertence a uma turma com alunos AEE' });
     }
 
     const questoes = (prova.questoes || []).map((q, index) => ({
-      numero: index + 1,
-      pergunta: q.pergunta,
-      opcoes: q.opcoes,
-      explicacao: q.explicacao,
-      dificuldade: q.dificuldade || 'media'
+      numero: index + 1, pergunta: q.pergunta, opcoes: q.opcoes, explicacao: q.explicacao, dificuldade: q.dificuldade || 'media'
     }));
 
     res.json({
       success: true,
       prova: {
-        id: prova._id,
-        titulo: prova.titulo,
-        codigo: prova.codigo,
-        conteudo: prova.conteudo,
-        periodo: prova.periodo,
-        tipo: 'adaptada',
-        alternativas: isAdaptada ? 3 : (prova.alternativas || 5),
-        quantidadeQuestoes: questoes.length,
-        turma: prova.turmaId ? {
-          nome: prova.turmaId.nome,
-          disciplina: prova.turmaId.disciplina,
-          codigo: prova.turmaId.codigo
-        } : null,
+        id: prova._id, titulo: prova.titulo, codigo: prova.codigo, conteudo: prova.conteudo, periodo: prova.periodo, tipo: 'adaptada',
+        alternativas: isAdaptada ? 3 : (prova.alternativas || 5), quantidadeQuestoes: questoes.length,
+        turma: prova.turmaId ? { nome: prova.turmaId.nome, disciplina: prova.turmaId.disciplina, codigo: prova.turmaId.codigo } : null,
         professor: prova.userId?.nome || 'Professor',
-        dataCriacao: prova.createdAt,
-        dataLimite: prova.dataLimite,
-        duracaoMinutos: prova.duracaoMinutos,
+        dataCriacao: prova.createdAt, dataLimite: prova.dataLimite, duracaoMinutos: prova.duracaoMinutos,
         questoes
       }
     });
@@ -1217,61 +1068,42 @@ router.get('/relatorio', authenticateTokenLocal, verificarPermissaoAEE, async (r
     if (curso && curso !== 'todos') query.curso = curso;
     if (periodo && periodo !== 'todos') query.periodo = periodo;
 
-    const alunos = await User.find(query)
-      .select('nome email matricula turma curso periodo condicaoAcessibilidade outraCondicao dataSolicitacaoAcessibilidade')
-      .sort({ turma: 1, nome: 1 })
-      .lean();
+    const alunos = await User.find(query).select('nome email matricula turma curso periodo condicaoAcessibilidade outraCondicao dataSolicitacaoAcessibilidade').sort({ turma: 1, nome: 1 }).lean();
 
     const porTurma = {};
     alunos.forEach(aluno => {
       const t = aluno.turma || 'Sem turma';
       if (!porTurma[t]) porTurma[t] = [];
       
-      // 🔥 LIMPEZA DO TEXTO NO RELATÓRIO
-      let condLabel = 'Acessibilidade';
-      if (aluno.condicaoAcessibilidade) {
-          if (aluno.condicaoAcessibilidade.toLowerCase() === 'outra') {
-              condLabel = aluno.outraCondicao || 'Outra Condição';
-          } else {
-              condLabel = aluno.condicaoAcessibilidade;
-              if (aluno.outraCondicao) {
-                  condLabel += ` - ${aluno.outraCondicao}`;
-              }
-          }
-      }
+      let condTexto = 'Não especificada';
+      const tipo = aluno.condicaoAcessibilidade || '';
+
+      if (tipo && !ENUMS_VALIDOS.includes(tipo.toLowerCase())) condTexto = tipo;
+      else if (tipo.toLowerCase() === 'outra') condTexto = aluno.outraCondicao || 'Outra Condição';
+      else if (tipo) { condTexto = obterLabelCondicao(tipo); if (aluno.outraCondicao) condTexto += ` - ${aluno.outraCondicao}`; }
 
       porTurma[t].push({
-        id: aluno._id,
-        nome: aluno.nome,
-        matricula: aluno.matricula,
-        curso: aluno.curso,
-        condicao: condLabel,
-        condicaoTipo: aluno.condicaoAcessibilidade,
-        detalhes: aluno.outraCondicao
+        id: aluno._id, nome: aluno.nome, matricula: aluno.matricula, curso: aluno.curso,
+        condicao: condTexto, condicaoTipo: aluno.condicaoAcessibilidade, detalhes: aluno.outraCondicao
       });
     });
 
     const porCondicao = {};
     alunos.forEach(a => {
-      let condLabel = 'Não especificada';
-      if (a.condicaoAcessibilidade) {
-          if (a.condicaoAcessibilidade.toLowerCase() === 'outra') {
-              condLabel = a.outraCondicao || 'Outra Condição';
-          } else {
-              condLabel = obterLabelCondicao(a.condicaoAcessibilidade);
-              if (a.outraCondicao) {
-                  condLabel += ` - ${a.outraCondicao}`;
-              }
-          }
-      }
-      porCondicao[condLabel] = (porCondicao[condLabel] || 0) + 1;
+      let condTexto = 'Não especificada';
+      const tipo = a.condicaoAcessibilidade || '';
+
+      if (tipo && !ENUMS_VALIDOS.includes(tipo.toLowerCase())) condTexto = tipo;
+      else if (tipo.toLowerCase() === 'outra') condTexto = a.outraCondicao || 'Outra Condição';
+      else if (tipo) { condTexto = obterLabelCondicao(tipo); if (a.outraCondicao) condTexto += ` - ${a.outraCondicao}`; }
+
+      porCondicao[condTexto] = (porCondicao[condTexto] || 0) + 1;
     });
 
     res.json({
       success: true,
       relatorio: {
-        dataGeracao: new Date(),
-        totalAlunos: alunos.length,
+        dataGeracao: new Date(), totalAlunos: alunos.length,
         porCondicao: Object.entries(porCondicao).map(([cond, count]) => ({ condicao: cond, total: count })),
         porTurma: Object.entries(porTurma).map(([t, lista]) => ({ turma: t, total: lista.length, alunos: lista }))
       }
@@ -1284,7 +1116,7 @@ router.get('/relatorio', authenticateTokenLocal, verificarPermissaoAEE, async (r
 });
 
 // ============================================================================
-// PUT /api/aee/alunos/:id (BLINDADO CONTRA ERRO DE MATRÍCULA DUPLICADA)
+// PUT /api/aee/alunos/:id
 // ============================================================================
 router.put('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (req, res) => {
   try {
@@ -1314,11 +1146,8 @@ router.put('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
       if (emailEmUso) return res.status(400).json({ success: false, error: 'Este email já está em uso.' });
     }
 
-    // 🔥 LIMPEZA DO TEXTO ANTES DE SALVAR NO BANCO
     let textoLimpo = condicao.trim();
-    if (textoLimpo.toLowerCase().startsWith('outra - ')) {
-        textoLimpo = textoLimpo.substring(8).trim();
-    }
+    if (textoLimpo.toLowerCase().startsWith('outra - ')) textoLimpo = textoLimpo.substring(8).trim();
 
     const updateData = {
       nome: nome.trim().toUpperCase(),
@@ -1332,44 +1161,29 @@ router.put('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
     if (matricula && typeof matricula === 'string' && matricula.trim() !== '' && matricula !== 'undefined') {
       const matLimpa = matricula.trim();
       const matriculaEmUso = await User.findOne({ matricula: matLimpa, _id: { $ne: id } }).lean();
-      
-      if (!matriculaEmUso) {
-        updateData.matricula = matLimpa; 
-      } else {
-        console.warn(`⚠️ Matrícula ${matLimpa} já existe no banco. Ignorando alteração.`);
-      }
+      if (!matriculaEmUso) updateData.matricula = matLimpa; 
+      else console.warn(`⚠️ Matrícula ${matLimpa} já existe no banco. Ignorando alteração.`);
     }
 
     if (turma !== undefined) updateData.turma = (turma || '').trim();
     if (curso !== undefined) updateData.curso = (curso || '').trim();
     if (periodo !== undefined) updateData.periodo = periodo || null;
 
-    if (!alunoAtual.dataSolicitacaoAcessibilidade) {
-      updateData.dataSolicitacaoAcessibilidade = new Date();
-    }
+    if (!alunoAtual.dataSolicitacaoAcessibilidade) updateData.dataSolicitacaoAcessibilidade = new Date();
 
     try {
-      const alunoAtualizado = await User.findByIdAndUpdate(id, updateData, {
-        new: true,
-        runValidators: true
-      })
+      const alunoAtualizado = await User.findByIdAndUpdate(id, updateData, { new: true, runValidators: true })
         .select('nome email matricula turma curso periodo condicaoAcessibilidade outraCondicao dataSolicitacaoAcessibilidade')
         .lean();
 
-      if (!alunoAtualizado) {
-        return res.status(404).json({ success: false, error: 'Aluno não encontrado após atualização' });
-      }
+      if (!alunoAtualizado) return res.status(404).json({ success: false, error: 'Aluno não encontrado após atualização' });
 
       res.json({
         success: true,
         message: 'Aluno atualizado com sucesso',
         aluno: {
-          id: alunoAtualizado._id,
-          nome: alunoAtualizado.nome,
-          email: alunoAtualizado.email,
-          matricula: alunoAtualizado.matricula,
-          turma: alunoAtualizado.turma,
-          curso: alunoAtualizado.curso,
+          id: alunoAtualizado._id, nome: alunoAtualizado.nome, email: alunoAtualizado.email,
+          matricula: alunoAtualizado.matricula, turma: alunoAtualizado.turma, curso: alunoAtualizado.curso,
           periodo: alunoAtualizado.periodo,
           condicao: {
             tipo: alunoAtualizado.condicaoAcessibilidade,
@@ -1381,12 +1195,7 @@ router.put('/alunos/:id', authenticateTokenLocal, verificarPermissaoAEE, async (
       });
 
     } catch (dbError) {
-      if (dbError.code === 11000) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Erro no banco de dados: A matrícula informada já está em uso. Deixe-a em branco.' 
-        });
-      }
+      if (dbError.code === 11000) return res.status(400).json({ success: false, error: 'A matrícula informada já está em uso. Deixe-a em branco.' });
       throw dbError;
     }
 
