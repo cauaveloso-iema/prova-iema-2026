@@ -25,7 +25,13 @@ class AdminPanel {
                 page: 1, 
                 limit: 10 
             },
-            provas: { status: 'todos', dificuldade: 'todas', periodo: 'todos', search: '', page: 1, limit: 10 }
+            provas: {
+                status: 'todos', dificuldade: 'todas', periodo: 'todos', tipo: 'todos',
+                search: '', professor: '', turma: '',
+                questoesMin: '', questoesMax: '',
+                dataInicio: '', dataFim: '',
+                page: 1, limit: 10
+            }
         };
         
         // ===== VARIÁVEIS PARA CRIAÇÃO DE PROVAS =====
@@ -17273,184 +17279,195 @@ class AdminPanel {
 
     // ============ PROVAS ============
 
-    // ============ PROVAS - VERSÃO FINAL COMPLETA ============
-    async loadProvas() {
-        const contentArea = document.getElementById('contentArea');
-        
+    // ============ PROVAS - VERSÃO FINAL COMPLETA (SELECTS DE PROFESSOR E TURMA) ============
+
+    // ============ CARREGAR OPÇÕES DOS SELECTS (PROFESSORES E TURMAS) ============
+    async carregarOpcoesFiltrosProvas(force = false) {
+        if (this._provasOpcoes && !force) return this._provasOpcoes;
+
         try {
-            // Pegar filtros atuais
-            const { status, dificuldade, periodo, search, page, limit } = this.filtros.provas;
-            
-            // MOSTRAR LOADING
-            contentArea.innerHTML = `
-                <div style="text-align: center; padding: 60px; background: white; border-radius: 12px;">
-                    <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #1e3a8a; border-radius: 50%; margin: 0 auto 20px; animation: spin 1s linear infinite;"></div>
-                    <p style="color: #6b7280;">Carregando provas...</p>
-                </div>
-                <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
-            `;
-
-            // BUSCAR DADOS DO BACKEND
-            console.log('📡 Buscando provas com filtros:', { status, dificuldade, periodo, search, page, limit });
-            
             const token = localStorage.getItem('auth_token');
-            
-            // CONSTRUIR URL COM PARÂMETROS BÁSICOS (SEM PERÍODO)
-            let url = `${this.apiBase}/provas?page=${page}&limit=${limit}`;
-            
-            if (search && search.trim() !== '') {
-                url += `&search=${encodeURIComponent(search.trim())}`;
-            }
-            
-            if (status && status !== 'todos') {
-                url += `&status=${status}`;
-            }
-            
-            if (dificuldade && dificuldade !== 'todas') {
-                url += `&dificuldade=${dificuldade}`;
-            }
-            
-            console.log('🔗 URL final:', url);
-            
-            const response = await fetch(url, {
-                headers: { 
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            if (!response.ok) {
-                throw new Error(`Erro HTTP: ${response.status}`);
-            }
-            
-            const data = await response.json();
-            console.log('📦 Dados recebidos do backend:', data);
+            const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-            if (!data.success) throw new Error(data.error || 'Erro ao carregar provas');
+            const [rProf, rTurma] = await Promise.all([
+                fetch(`${this.apiBase}/professores-lista`, { headers }),
+                fetch(`${this.apiBase}/turmas`, { headers })
+            ]);
 
-            // ARMAZENAR DADOS ORIGINAIS
-            this.provas = data.provas || [];
-            
-            // ===== APLICAR FILTROS NO FRONTEND =====
-            let provasFiltradas = [...this.provas];
-            
-            // 1. FILTRO POR BUSCA
-            if (search && search.trim() !== '') {
-                const termo = search.toLowerCase().trim();
-                provasFiltradas = provasFiltradas.filter(p => {
-                    const titulo = (p.titulo || '').toLowerCase();
-                    const conteudo = (p.conteudo || '').toLowerCase();
-                    const professorNome = p.professor?.nome?.toLowerCase() || p.professorNome?.toLowerCase() || '';
-                    
-                    return titulo.includes(termo) || 
-                        conteudo.includes(termo) || 
-                        professorNome.includes(termo);
-                });
-                console.log(`🔍 Filtro de busca "${termo}": ${provasFiltradas.length} provas`);
-            }
-            
-            // 2. FILTRO POR STATUS
-            if (status && status !== 'todos') {
-                provasFiltradas = provasFiltradas.filter(p => {
-                    if (p.cancelada === true) return status === 'cancelada';
-                    if (p.publicada !== true) return status === 'rascunho';
-                    
-                    const agora = new Date();
-                    const dataLimite = p.dataLimite ? new Date(p.dataLimite) : null;
-                    
-                    if (dataLimite && dataLimite < agora) return status === 'concluida';
-                    return status === 'ativa';
-                });
-                console.log(`🏷️ Filtro de status "${status}": ${provasFiltradas.length} provas`);
-            }
-            
-            // 3. FILTRO POR DIFICULDADE
-            if (dificuldade && dificuldade !== 'todas') {
-                provasFiltradas = provasFiltradas.filter(p => p.dificuldade === dificuldade);
-                console.log(`📊 Filtro de dificuldade "${dificuldade}": ${provasFiltradas.length} provas`);
-            }
-            
-            // 4. FILTRO POR PERÍODO
-            if (periodo && periodo !== 'todos' && ['1','2','3','4'].includes(periodo)) {
-                const periodoNum = parseInt(periodo);
-                provasFiltradas = provasFiltradas.filter(p => {
-                    if (!p.periodo) return false;
-                    const pPeriodo = parseInt(p.periodo);
-                    return pPeriodo === periodoNum;
-                });
-                console.log(`📅 Filtro de período ${periodo}: ${provasFiltradas.length} provas`);
-            }
-            
-            // ORDENAR POR DATA (mais recentes primeiro)
-            provasFiltradas.sort((a, b) => {
-                const dataA = a.createdAt ? new Date(a.createdAt) : new Date(0);
-                const dataB = b.createdAt ? new Date(b.createdAt) : new Date(0);
-                return dataB - dataA;
-            });
-            
-            console.log(`✅ Total após todos os filtros: ${provasFiltradas.length} provas`);
-            
-            // RENDERIZAR HTML COM AS PROVAS FILTRADAS
-            contentArea.innerHTML = this.renderProvasProfissional({
-                search, 
-                status, 
-                dificuldade, 
-                periodo, 
-                page, 
-                limit,
-                provas: provasFiltradas,
-                pagination: data.pagination,
-                total: provasFiltradas.length
-            });
+            const dProf = rProf.ok ? await rProf.json() : {};
+            const dTurma = rTurma.ok ? await rTurma.json() : {};
 
-            // CONFIGURAR EVENTOS DOS FILTROS
-            this.configurarEventosFiltrosProvas();
+            const professores = (dProf.professores || [])
+                .sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
 
-            console.log('✅ Provas carregadas:', provasFiltradas.length);
+            const turmas = (dTurma.turmas || [])
+                .sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+
+            this._provasOpcoes = { professores, turmas };
+            return this._provasOpcoes;
 
         } catch (error) {
-            console.error('❌ Erro ao carregar provas:', error);
-            contentArea.innerHTML = this.renderErroProvas(error.message);
+            console.error('❌ Erro ao carregar opções de filtros:', error);
+            return { professores: [], turmas: [] }; // sem cache: tenta de novo na próxima vez
         }
     }
 
-    // ============ RENDERIZAR PROVAS (VERSÃO PROFISSIONAL) ============
-    renderProvasProfissional({ search, status, dificuldade, periodo, page, limit, provas, pagination, total }) {
-        // Calcular estatísticas
-        const totalProvas = provas.length;
-        const agora = new Date();
-        
-        const provasAtivas = provas.filter(p => 
-            p.publicada === true && 
-            !p.cancelada && 
-            (!p.dataLimite || new Date(p.dataLimite) >= agora)
-        ).length;
-        
-        const provasRascunho = provas.filter(p => p.publicada === false).length;
-        
-        const provasConcluidas = provas.filter(p => 
-            p.publicada === true && 
-            p.dataLimite && 
-            new Date(p.dataLimite) < agora && 
-            !p.cancelada
-        ).length;
-        
-        const provasCanceladas = provas.filter(p => p.cancelada === true).length;
-        
+    // ============ CARREGAR PROVAS (COM ATUALIZAÇÃO SILENCIOSA) ============
+    async loadProvas(silent = false) {
+        const contentArea = document.getElementById('contentArea');
+        const jaRenderizado = !!document.getElementById('tabelaProvasBody');
+        const modoSilencioso = silent && jaRenderizado;
+
+        // Cancela requisição anterior (evita resposta antiga sobrescrever a nova)
+        if (this._provasAbort) this._provasAbort.abort();
+        const controller = new AbortController();
+        this._provasAbort = controller;
+
+        try {
+            const f = this.filtros.provas;
+
+            if (modoSilencioso) {
+                // Só um indicador leve — NÃO mexe nos inputs
+                const tbody = document.getElementById('tabelaProvasBody');
+                if (tbody) tbody.style.opacity = '0.5';
+                const badge = document.getElementById('resultadosBadge');
+                if (badge) badge.textContent = 'Buscando...';
+            } else {
+                contentArea.innerHTML = `
+                    <div style="text-align: center; padding: 60px; background: white; border-radius: 12px;">
+                        <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #1e3a8a; border-radius: 50%; margin: 0 auto 20px; animation: spin 1s linear infinite;"></div>
+                        <p style="color: #6b7280;">Carregando provas...</p>
+                    </div>
+                    <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+                `;
+            }
+
+            // Monta a query com todos os filtros (o banco faz o trabalho)
+            const params = new URLSearchParams();
+            params.set('page', f.page);
+            params.set('limit', f.limit);
+
+            const add = (chave, valor, ignorar = []) => {
+                const v = (valor ?? '').toString().trim();
+                if (v !== '' && !ignorar.includes(v)) params.set(chave, v);
+            };
+
+            add('search', f.search);
+            add('professor', f.professor);   // ID do professor (vem do select)
+            add('turma', f.turma);           // ID da turma (vem do select)
+            add('status', f.status, ['todos']);
+            add('dificuldade', f.dificuldade, ['todas']);
+            add('periodo', f.periodo, ['todos']);
+            add('tipo', f.tipo, ['todos']);
+            add('questoesMin', f.questoesMin);
+            add('questoesMax', f.questoesMax);
+            add('dataInicio', f.dataInicio);
+            add('dataFim', f.dataFim);
+
+            const url = `${this.apiBase}/provas?${params.toString()}`;
+            const token = localStorage.getItem('auth_token');
+
+            // Busca provas e (na primeira vez) as opções dos selects em paralelo
+            const [response, opcoes] = await Promise.all([
+                fetch(url, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    signal: controller.signal
+                }),
+                this.carregarOpcoesFiltrosProvas()
+            ]);
+
+            if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
+
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || 'Erro ao carregar provas');
+
+            this.provas = data.provas || [];
+
+            const dadosTela = {
+                filtros: f,
+                opcoes,
+                provas: this.provas,
+                pagination: data.pagination,
+                stats: data.stats || {},
+                total: data.pagination?.total ?? this.provas.length
+            };
+
+            if (modoSilencioso) {
+                this.atualizarResultadosProvas(dadosTela);
+            } else {
+                contentArea.innerHTML = this.renderProvasProfissional(dadosTela);
+                this.configurarEventosFiltrosProvas();
+            }
+
+        } catch (error) {
+            if (error.name === 'AbortError') return; // substituída por uma requisição mais nova
+
+            console.error('❌ Erro ao carregar provas:', error);
+
+            if (modoSilencioso) {
+                // Não destrói a tela (nem os filtros) por causa de um erro
+                const tbody = document.getElementById('tabelaProvasBody');
+                if (tbody) tbody.style.opacity = '1';
+                this.showToast('❌ Erro ao buscar provas: ' + error.message, 'error');
+            } else {
+                contentArea.innerHTML = this.renderErroProvas(error.message);
+            }
+        }
+    }
+
+    // ============ ATUALIZA SÓ A PARTE DE RESULTADOS (SEM RECRIAR OS FILTROS) ============
+    atualizarResultadosProvas({ provas, pagination, stats, total }) {
+        const set = (id, valor) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = valor;
+        };
+
+        const tbody = document.getElementById('tabelaProvasBody');
+        if (tbody) {
+            tbody.innerHTML = this.gerarLinhasProvas(provas);
+            tbody.style.opacity = '1';
+        }
+
+        set('totalProvasCard', stats.total ?? 0);
+        set('ativasCard', stats.ativas ?? 0);
+        set('rascunhosCard', stats.rascunhos ?? 0);
+        set('concluidasCard', stats.concluidas ?? 0);
+        set('canceladasCard', stats.canceladas ?? 0);
+
+        set('resultadosBadge', `${total} ${total === 1 ? 'prova' : 'provas'}`);
+        set('itemsCounter', `${provas.length} ${provas.length === 1 ? 'registro' : 'registros'}`);
+
+        const pag = document.getElementById('paginacaoProvas');
+        if (pag) {
+            pag.innerHTML = (pagination && pagination.pages > 1)
+                ? this.gerarPaginacaoProfissional(pagination, 'provas')
+                : '';
+        }
+    }
+
+    // ============ RENDERIZAR PROVAS (VERSÃO PROFISSIONAL + NOVOS FILTROS) ============
+    renderProvasProfissional({ filtros, opcoes, provas, pagination, stats, total }) {
+        const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        const sel = (a, b) => (a === b ? 'selected' : '');
+
+        const { search, professor, turma, status, dificuldade, periodo, tipo,
+                questoesMin, questoesMax, dataInicio, dataFim } = filtros;
+
         return `
             <div class="provas-container">
                 <!-- HEADER PROFISSIONAL -->
                 <div class="provas-header">
                     <div class="header-left">
-                        <div class="header-icon">
-                            <i class="fas fa-file-alt"></i>
-                        </div>
+                        <div class="header-icon"><i class="fas fa-file-alt"></i></div>
                         <div class="header-text">
                             <h1>Gerenciar Provas</h1>
                             <p>Gerencie todas as provas do sistema</p>
                         </div>
                     </div>
-                    <div class="header-actions">
+                    <div class="header-actions" style="display:flex; gap:10px; flex-wrap:wrap;">
                         <button class="btn-header btn-refresh" onclick="admin.atualizarProvas()" title="Atualizar">
                             <i class="fas fa-sync-alt"></i>
                         </button>
@@ -17458,8 +17475,7 @@ class AdminPanel {
                             <i class="fas fa-magic"></i>
                             <span>Nova Prova com IA</span>
                         </button>
-                        <!-- 🔥 NOVO BOTÃO: Upload para Adaptar Documento -->
-                        <button class="btn-header" style="background: #8b5cf6; color: white; border: none;" 
+                        <button class="btn-header" style="background: #8b5cf6; color: white; border: none;"
                                 onclick="admin.abrirModalUploadAdaptarDocumento()" title="Adaptar documento para acessibilidade">
                             <i class="fas fa-universal-access"></i>
                             <span>📤 Upload para Adaptar</span>
@@ -17467,59 +17483,45 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- CARDS DE ESTATÍSTICAS -->
+                <!-- CARDS DE ESTATÍSTICAS (vêm do banco) -->
                 <div class="stats-grid">
                     <div class="stat-card primary" onclick="admin.filtrarPorStatus('todos')">
-                        <div class="stat-icon">
-                            <i class="fas fa-file-alt"></i>
-                        </div>
+                        <div class="stat-icon"><i class="fas fa-file-alt"></i></div>
                         <div class="stat-content">
                             <span class="stat-label">Total de Provas</span>
-                            <span class="stat-value" id="totalProvasCard">${totalProvas}</span>
+                            <span class="stat-value" id="totalProvasCard">${stats.total ?? 0}</span>
                             <span class="stat-detail">Clique para ver todas</span>
                         </div>
                     </div>
-
                     <div class="stat-card success" onclick="admin.filtrarPorStatus('ativa')">
-                        <div class="stat-icon">
-                            <i class="fas fa-check-circle"></i>
-                        </div>
+                        <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
                         <div class="stat-content">
                             <span class="stat-label">Ativas</span>
-                            <span class="stat-value" id="ativasCard">${provasAtivas}</span>
+                            <span class="stat-value" id="ativasCard">${stats.ativas ?? 0}</span>
                             <span class="stat-detail">Disponíveis</span>
                         </div>
                     </div>
-
                     <div class="stat-card warning" onclick="admin.filtrarPorStatus('rascunho')">
-                        <div class="stat-icon">
-                            <i class="fas fa-clock"></i>
-                        </div>
+                        <div class="stat-icon"><i class="fas fa-clock"></i></div>
                         <div class="stat-content">
                             <span class="stat-label">Rascunhos</span>
-                            <span class="stat-value" id="rascunhosCard">${provasRascunho}</span>
+                            <span class="stat-value" id="rascunhosCard">${stats.rascunhos ?? 0}</span>
                             <span class="stat-detail">Aguardando</span>
                         </div>
                     </div>
-
                     <div class="stat-card info" onclick="admin.filtrarPorStatus('concluida')">
-                        <div class="stat-icon">
-                            <i class="fas fa-check-double"></i>
-                        </div>
+                        <div class="stat-icon"><i class="fas fa-check-double"></i></div>
                         <div class="stat-content">
                             <span class="stat-label">Concluídas</span>
-                            <span class="stat-value" id="concluidasCard">${provasConcluidas}</span>
+                            <span class="stat-value" id="concluidasCard">${stats.concluidas ?? 0}</span>
                             <span class="stat-detail">Encerradas</span>
                         </div>
                     </div>
-
                     <div class="stat-card danger" onclick="admin.filtrarPorStatus('cancelada')">
-                        <div class="stat-icon">
-                            <i class="fas fa-ban"></i>
-                        </div>
+                        <div class="stat-icon"><i class="fas fa-ban"></i></div>
                         <div class="stat-content">
                             <span class="stat-label">Canceladas</span>
-                            <span class="stat-value" id="canceladasCard">${provasCanceladas}</span>
+                            <span class="stat-value" id="canceladasCard">${stats.canceladas ?? 0}</span>
                             <span class="stat-detail">Com violações</span>
                         </div>
                     </div>
@@ -17534,66 +17536,111 @@ class AdminPanel {
                         </div>
                         <span class="filters-badge" id="resultadosBadge">${total} ${total === 1 ? 'prova' : 'provas'}</span>
                     </div>
-                    
+
                     <div class="filters-grid">
-                        <!-- Busca -->
-                        <div class="filter-group">
+                        <!-- Busca geral -->
+                        <div class="filter-group span-2">
                             <label><i class="fas fa-search"></i> Buscar</label>
                             <div class="input-wrapper">
-                                <input type="text" id="searchProvas" 
-                                    placeholder="Título, conteúdo ou professor..." 
-                                    value="${search || ''}">
+                                <input type="text" id="searchProvas" autocomplete="off"
+                                    placeholder="Título, conteúdo, professor ou turma..."
+                                    value="${esc(search)}">
                                 <i class="fas fa-search input-icon"></i>
-                                ${search ? `
-                                    <button class="input-clear" onclick="document.getElementById('searchProvas').value=''; admin.aplicarFiltrosProvas()">
-                                        <i class="fas fa-times"></i>
-                                    </button>
-                                ` : ''}
                             </div>
                         </div>
-                        
+
+                        <!-- Professor (select) -->
+                        <div class="filter-group">
+                            <label><i class="fas fa-chalkboard-teacher"></i> Professor</label>
+                            <select id="filterProfessor" class="filter-select">
+                                <option value="">Todos os professores</option>
+                                ${(opcoes?.professores || []).map(p => `
+                                    <option value="${esc(p.id)}" ${sel(professor, String(p.id))}>${esc(p.nome)}</option>
+                                `).join('')}
+                            </select>
+                        </div>
+
+                        <!-- Turma (select) -->
+                        <div class="filter-group">
+                            <label><i class="fas fa-users"></i> Turma</label>
+                            <select id="filterTurma" class="filter-select">
+                                <option value="">Todas as turmas</option>
+                                ${(opcoes?.turmas || []).map(t => `
+                                    <option value="${esc(t.id)}" ${sel(turma, String(t.id))}>${esc(t.nome)}${t.disciplina ? ' — ' + esc(t.disciplina) : ''}</option>
+                                `).join('')}
+                            </select>
+                        </div>
+
                         <!-- Status -->
                         <div class="filter-group">
                             <label><i class="fas fa-circle"></i> Status</label>
                             <select id="filterStatus" class="filter-select">
-                                <option value="todos" ${status === 'todos' ? 'selected' : ''}>Todos</option>
-                                <option value="ativa" ${status === 'ativa' ? 'selected' : ''}>✅ Ativas</option>
-                                <option value="rascunho" ${status === 'rascunho' ? 'selected' : ''}>📝 Rascunhos</option>
-                                <option value="concluida" ${status === 'concluida' ? 'selected' : ''}>🏁 Concluídas</option>
-                                <option value="cancelada" ${status === 'cancelada' ? 'selected' : ''}>🚫 Canceladas</option>
+                                <option value="todos" ${sel(status, 'todos')}>Todos</option>
+                                <option value="ativa" ${sel(status, 'ativa')}>✅ Ativas</option>
+                                <option value="rascunho" ${sel(status, 'rascunho')}>📝 Rascunhos</option>
+                                <option value="concluida" ${sel(status, 'concluida')}>🏁 Concluídas</option>
+                                <option value="cancelada" ${sel(status, 'cancelada')}>🚫 Canceladas</option>
                             </select>
                         </div>
-                        
+
+                        <!-- Tipo de prova -->
+                        <div class="filter-group">
+                            <label><i class="fas fa-layer-group"></i> Tipo de prova</label>
+                            <select id="filterTipo" class="filter-select">
+                                <option value="todos" ${sel(tipo, 'todos')}>Todos</option>
+                                <option value="simples" ${sel(tipo, 'simples')}>📄 Simples</option>
+                                <option value="enem" ${sel(tipo, 'enem')}>🎓 ENEM</option>
+                                <option value="adaptada" ${sel(tipo, 'adaptada')}>♿ Adaptada</option>
+                            </select>
+                        </div>
+
                         <!-- Dificuldade -->
                         <div class="filter-group">
                             <label><i class="fas fa-chart-line"></i> Dificuldade</label>
                             <select id="filterDificuldade" class="filter-select">
-                                <option value="todas" ${dificuldade === 'todas' ? 'selected' : ''}>Todas</option>
-                                <option value="facil" ${dificuldade === 'facil' ? 'selected' : ''}>🟢 Fácil</option>
-                                <option value="media" ${dificuldade === 'media' ? 'selected' : ''}>🟡 Médio</option>
-                                <option value="dificil" ${dificuldade === 'dificil' ? 'selected' : ''}>🔴 Difícil</option>
+                                <option value="todas" ${sel(dificuldade, 'todas')}>Todas</option>
+                                <option value="facil" ${sel(dificuldade, 'facil')}>🟢 Fácil</option>
+                                <option value="media" ${sel(dificuldade, 'media')}>🟡 Médio</option>
+                                <option value="dificil" ${sel(dificuldade, 'dificil')}>🔴 Difícil</option>
                             </select>
                         </div>
-                        
+
                         <!-- Período -->
                         <div class="filter-group">
                             <label><i class="fas fa-calendar-week"></i> Período</label>
                             <select id="filterPeriodo" class="filter-select">
-                                <option value="todos" ${periodo === 'todos' ? 'selected' : ''}>Todos</option>
-                                <option value="1" ${periodo === '1' ? 'selected' : ''}>1º Período</option>
-                                <option value="2" ${periodo === '2' ? 'selected' : ''}>2º Período</option>
-                                <option value="3" ${periodo === '3' ? 'selected' : ''}>3º Período</option>
-                                <option value="4" ${periodo === '4' ? 'selected' : ''}>4º Período</option>
+                                <option value="todos" ${sel(periodo, 'todos')}>Todos</option>
+                                <option value="1" ${sel(periodo, '1')}>1º Período</option>
+                                <option value="2" ${sel(periodo, '2')}>2º Período</option>
+                                <option value="3" ${sel(periodo, '3')}>3º Período</option>
+                                <option value="4" ${sel(periodo, '4')}>4º Período</option>
                             </select>
                         </div>
-                        
+
+                        <!-- Questões (mín / máx) -->
+                        <div class="filter-group">
+                            <label><i class="fas fa-list-ol"></i> Questões (mín – máx)</label>
+                            <div style="display:flex; gap:8px;">
+                                <input type="number" min="0" id="filterQuestoesMin" class="filter-select"
+                                    placeholder="Mín" value="${esc(questoesMin)}">
+                                <input type="number" min="0" id="filterQuestoesMax" class="filter-select"
+                                    placeholder="Máx" value="${esc(questoesMax)}">
+                            </div>
+                        </div>
+
+                        <!-- Data de criação -->
+                        <div class="filter-group span-2">
+                            <label><i class="fas fa-calendar-alt"></i> Data de criação (de – até)</label>
+                            <div style="display:flex; gap:8px;">
+                                <input type="date" id="filterDataInicio" class="filter-select" value="${esc(dataInicio)}">
+                                <input type="date" id="filterDataFim" class="filter-select" value="${esc(dataFim)}">
+                            </div>
+                        </div>
+
                         <!-- Botões -->
-                        <div class="filter-actions">
-                            <button class="btn-filter" onclick="admin.aplicarFiltrosProvas()">
-                                <i class="fas fa-filter"></i> Filtrar
-                            </button>
+                        <div class="filter-actions span-all">
                             <button class="btn-filter btn-clear" onclick="admin.limparFiltrosProvas()">
-                                <i class="fas fa-eraser"></i> Limpar
+                                <i class="fas fa-eraser"></i> Limpar filtros
                             </button>
                         </div>
                     </div>
@@ -17610,373 +17657,134 @@ class AdminPanel {
                             <span class="items-counter" id="itemsCounter">${provas.length} ${provas.length === 1 ? 'registro' : 'registros'}</span>
                         </div>
                     </div>
-                    
+
                     <div class="table-responsive">
                         <table class="data-table">
                             <thead>
                                 <tr>
-                                    <th onclick="admin.ordenarProvasPor('titulo')" class="sortable">
-                                        Título <i class="fas fa-sort" id="sort-titulo"></i>
-                                    </th>
-                                    <th onclick="admin.ordenarProvasPor('professor')" class="sortable">
-                                        Professor <i class="fas fa-sort" id="sort-professor"></i>
-                                    </th>
-                                    <th onclick="admin.ordenarProvasPor('turma')" class="sortable">
-                                        Turma <i class="fas fa-sort" id="sort-turma"></i>
-                                    </th>
+                                    <th>Título</th>
+                                    <th>Professor</th>
+                                    <th>Turma</th>
                                     <th>Período</th>
                                     <th>Tipo</th>
-                                    <th onclick="admin.ordenarProvasPor('questoes')" class="sortable">
-                                        Questões <i class="fas fa-sort" id="sort-questoes"></i>
-                                    </th>
-                                    <th onclick="admin.ordenarProvasPor('status')" class="sortable">
-                                        Status <i class="fas fa-sort" id="sort-status"></i>
-                                    </th>
-                                    <th onclick="admin.ordenarProvasPor('data')" class="sortable">
-                                        Data <i class="fas fa-sort" id="sort-data"></i>
-                                    </th>
+                                    <th>Questões</th>
+                                    <th>Status</th>
+                                    <th>Data</th>
                                     <th>Ações</th>
                                 </tr>
                             </thead>
-                            <tbody id="tabelaProvasBody">
+                            <tbody id="tabelaProvasBody" style="transition: opacity .15s;">
                                 ${this.gerarLinhasProvas(provas)}
                             </tbody>
                         </table>
                     </div>
 
                     <!-- Paginação -->
-                    ${pagination && pagination.pages > 1 ? this.gerarPaginacaoProfissional(pagination, 'provas') : ''}
+                    <div id="paginacaoProvas">
+                        ${pagination && pagination.pages > 1 ? this.gerarPaginacaoProfissional(pagination, 'provas') : ''}
+                    </div>
                 </div>
             </div>
 
             <style>
                 .provas-container { padding: 24px; max-width: 1400px; margin: 0 auto; }
-                
-                /* Header com azul royal */
-                .provas-header {
-                    background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
-                    border-radius: 20px;
-                    padding: 30px;
-                    margin-bottom: 30px;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    flex-wrap: wrap;
-                    gap: 20px;
-                    box-shadow: 0 10px 30px rgba(30, 58, 138, 0.3);
-                    position: relative;
-                    overflow: hidden;
-                }
-                
-                .provas-header::before {
-                    content: '';
-                    position: absolute;
-                    top: -50px;
-                    right: -50px;
-                    width: 200px;
-                    height: 200px;
-                    background: rgba(255,255,255,0.1);
-                    border-radius: 50%;
-                }
-                
+                .provas-header { background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%); border-radius: 20px; padding: 30px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px; box-shadow: 0 10px 30px rgba(30,58,138,.3); position: relative; overflow: hidden; }
+                .provas-header::before { content: ''; position: absolute; top: -50px; right: -50px; width: 200px; height: 200px; background: rgba(255,255,255,.1); border-radius: 50%; }
                 .header-left { display: flex; align-items: center; gap: 20px; position: relative; z-index: 2; }
-                .header-icon {
-                    width: 70px; height: 70px;
-                    background: rgba(255,255,255,0.15);
-                    border-radius: 20px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 32px;
-                    color: white;
-                    backdrop-filter: blur(10px);
-                    border: 1px solid rgba(255,255,255,0.2);
-                }
+                .header-icon { width: 70px; height: 70px; background: rgba(255,255,255,.15); border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 32px; color: white; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,.2); }
                 .header-text h1 { color: white; font-size: 28px; font-weight: 600; margin: 0 0 5px; }
-                .header-text p { color: rgba(255,255,255,0.9); font-size: 14px; margin: 0; }
-                
-                .btn-header {
-                    padding: 12px 24px;
-                    border-radius: 40px;
-                    font-size: 14px;
-                    font-weight: 600;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    transition: all 0.3s;
-                    border: none;
-                    position: relative;
-                    z-index: 2;
-                }
-                .btn-header.btn-primary {
-                    background: white;
-                    color: #1e3a8a;
-                    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-                }
-                .btn-header.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(0,0,0,0.15); }
-                .btn-header.btn-refresh {
-                    background: rgba(255,255,255,0.15);
-                    color: white;
-                    border: 1px solid rgba(255,255,255,0.3);
-                    backdrop-filter: blur(5px);
-                    padding: 12px;
-                }
-                .btn-header.btn-refresh:hover { background: rgba(255,255,255,0.25); transform: rotate(180deg); }
-                
-                /* Stats cards */
-                .stats-grid {
-                    display: grid;
-                    grid-template-columns: repeat(5, 1fr);
-                    gap: 20px;
-                    margin-bottom: 30px;
-                }
-                .stat-card {
-                    background: white;
-                    border-radius: 16px;
-                    padding: 20px;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-                    display: flex;
-                    align-items: center;
-                    gap: 20px;
-                    transition: all 0.3s;
-                    border: 1px solid rgba(0,0,0,0.05);
-                    cursor: pointer;
-                }
-                .stat-card:hover { transform: translateY(-4px); box-shadow: 0 8px 16px rgba(0,0,0,0.1); }
+                .header-text p { color: rgba(255,255,255,.9); font-size: 14px; margin: 0; }
+                .btn-header { padding: 12px 24px; border-radius: 40px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all .3s; border: none; position: relative; z-index: 2; }
+                .btn-header.btn-primary { background: white; color: #1e3a8a; box-shadow: 0 4px 10px rgba(0,0,0,.1); }
+                .btn-header.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(0,0,0,.15); }
+                .btn-header.btn-refresh { background: rgba(255,255,255,.15); color: white; border: 1px solid rgba(255,255,255,.3); backdrop-filter: blur(5px); padding: 12px; }
+                .btn-header.btn-refresh:hover { background: rgba(255,255,255,.25); transform: rotate(180deg); }
+
+                .stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; margin-bottom: 30px; }
+                .stat-card { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,.05); display: flex; align-items: center; gap: 20px; transition: all .3s; border: 1px solid rgba(0,0,0,.05); cursor: pointer; }
+                .stat-card:hover { transform: translateY(-4px); box-shadow: 0 8px 16px rgba(0,0,0,.1); }
                 .stat-card.primary .stat-icon { background: linear-gradient(135deg, #1e3a8a, #1e40af); }
                 .stat-card.success .stat-icon { background: linear-gradient(135deg, #10b981, #059669); }
                 .stat-card.warning .stat-icon { background: linear-gradient(135deg, #f59e0b, #d97706); }
                 .stat-card.info .stat-icon { background: linear-gradient(135deg, #3b82f6, #2563eb); }
                 .stat-card.danger .stat-icon { background: linear-gradient(135deg, #ef4444, #dc2626); }
-                .stat-icon {
-                    width: 60px; height: 60px;
-                    border-radius: 16px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 24px;
-                    color: white;
-                }
+                .stat-icon { width: 60px; height: 60px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; }
                 .stat-content { flex: 1; }
                 .stat-label { display: block; font-size: 12px; color: #6b7280; margin-bottom: 4px; }
                 .stat-value { display: block; font-size: 28px; font-weight: 700; color: #1f2937; line-height: 1.2; }
                 .stat-detail { font-size: 11px; color: #9ca3af; }
-                
-                /* Filtros */
-                .filters-card {
-                    background: white;
-                    border-radius: 16px;
-                    padding: 20px;
-                    margin-bottom: 30px;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-                    border: 1px solid rgba(0,0,0,0.05);
-                }
-                .filters-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 20px;
-                    padding-bottom: 15px;
-                    border-bottom: 2px solid #f0f0f0;
-                }
+
+                .filters-card { background: white; border-radius: 16px; padding: 20px; margin-bottom: 30px; box-shadow: 0 2px 8px rgba(0,0,0,.05); border: 1px solid rgba(0,0,0,.05); }
+                .filters-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #f0f0f0; }
                 .filters-title { display: flex; align-items: center; gap: 10px; }
                 .filters-title i { font-size: 18px; color: #1e3a8a; background: #e0e7ff; padding: 8px; border-radius: 10px; }
                 .filters-title h3 { margin: 0; font-size: 16px; color: #374151; }
                 .filters-badge { background: #1e3a8a; color: white; padding: 4px 12px; border-radius: 30px; font-size: 12px; font-weight: 600; }
-                
-                .filters-grid {
-                    display: grid;
-                    grid-template-columns: 2fr 1fr 1fr 1fr auto;
-                    gap: 15px;
-                }
-                .filter-group { display: flex; flex-direction: column; gap: 5px; }
+
+                .filters-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
+                .filters-grid .span-2 { grid-column: span 2; }
+                .filters-grid .span-all { grid-column: 1 / -1; }
+                .filter-group { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
                 .filter-group label { font-size: 12px; font-weight: 600; color: #4b5563; display: flex; align-items: center; gap: 5px; }
-                
+
                 .input-wrapper { position: relative; }
-                .input-wrapper input {
-                    width: 100%;
-                    padding: 10px 35px 10px 40px;
-                    border: 2px solid #e5e7eb;
-                    border-radius: 12px;
-                    font-size: 14px;
-                    transition: all 0.3s;
-                }
-                .input-wrapper input:focus {
-                    outline: none;
-                    border-color: #1e3a8a;
-                    box-shadow: 0 0 0 4px rgba(30, 58, 138, 0.1);
-                }
-                .input-icon {
-                    position: absolute;
-                    left: 15px;
-                    top: 50%;
-                    transform: translateY(-50%);
-                    color: #9ca3af;
-                    font-size: 14px;
-                }
-                .input-clear {
-                    position: absolute;
-                    right: 10px;
-                    top: 50%;
-                    transform: translateY(-50%);
-                    background: none;
-                    border: none;
-                    color: #9ca3af;
-                    cursor: pointer;
-                    width: 24px;
-                    height: 24px;
-                    border-radius: 50%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                }
-                .input-clear:hover { background: #f3f4f6; color: #4b5563; }
-                
-                .filter-select {
-                    width: 100%;
-                    padding: 10px 15px;
-                    border: 2px solid #e5e7eb;
-                    border-radius: 12px;
-                    font-size: 14px;
-                    background: white;
-                    cursor: pointer;
-                }
-                
-                .filter-actions { display: flex; gap: 10px; align-items: flex-end; }
-                .btn-filter {
-                    padding: 10px 20px;
-                    border: none;
-                    border-radius: 12px;
-                    font-size: 13px;
-                    font-weight: 600;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    transition: all 0.3s;
-                    white-space: nowrap;
-                }
-                .btn-filter { background: #1e3a8a; color: white; }
+                .input-wrapper input { width: 100%; padding: 10px 35px 10px 40px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 14px; transition: all .3s; box-sizing: border-box; }
+                .input-wrapper input:focus { outline: none; border-color: #1e3a8a; box-shadow: 0 0 0 4px rgba(30,58,138,.1); }
+                .input-icon { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 14px; }
+
+                .filter-select { width: 100%; padding: 10px 15px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 14px; background: white; cursor: pointer; box-sizing: border-box; min-width: 0; }
+                .filter-select:focus { outline: none; border-color: #1e3a8a; box-shadow: 0 0 0 4px rgba(30,58,138,.1); }
+
+                .filter-actions { display: flex; gap: 10px; align-items: flex-end; justify-content: flex-end; }
+                .btn-filter { padding: 10px 20px; border: none; border-radius: 12px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all .3s; white-space: nowrap; background: #1e3a8a; color: white; }
                 .btn-filter:hover { background: #1e40af; transform: translateY(-2px); }
                 .btn-filter.btn-clear { background: #6b7280; }
                 .btn-filter.btn-clear:hover { background: #4b5563; }
-                
-                /* Tabela profissional */
-                .table-professional {
-                    background: white;
-                    border-radius: 16px;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-                    overflow: hidden;
-                    border: 1px solid rgba(0,0,0,0.05);
-                }
-                .table-header {
-                    padding: 16px 20px;
-                    background: #f9fafb;
-                    border-bottom: 1px solid #e5e7eb;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                }
+
+                .table-professional { background: white; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.05); overflow: hidden; border: 1px solid rgba(0,0,0,.05); }
+                .table-header { padding: 16px 20px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; }
                 .table-title { display: flex; align-items: center; gap: 10px; }
                 .table-title i { color: #1e3a8a; font-size: 16px; }
                 .table-title h3 { margin: 0; font-size: 15px; color: #374151; }
                 .table-info { font-size: 13px; color: #6b7280; font-weight: 500; }
-                
-                .data-table {
-                    width: 100%;
-                    border-collapse: collapse;
-                }
-                .data-table th {
-                    padding: 15px 20px;
-                    text-align: left;
-                    font-size: 13px;
-                    font-weight: 600;
-                    color: #4b5563;
-                    background: #f9fafb;
-                    border-bottom: 2px solid #e5e7eb;
-                }
-                .data-table th.sortable { cursor: pointer; transition: background 0.2s; }
-                .data-table th.sortable:hover { background: #f3f4f6; }
-                .data-table td {
-                    padding: 15px 20px;
-                    border-bottom: 1px solid #e5e7eb;
-                    font-size: 14px;
-                    color: #1f2937;
-                }
+                .data-table { width: 100%; border-collapse: collapse; }
+                .data-table th { padding: 15px 20px; text-align: left; font-size: 13px; font-weight: 600; color: #4b5563; background: #f9fafb; border-bottom: 2px solid #e5e7eb; }
+                .data-table td { padding: 15px 20px; border-bottom: 1px solid #e5e7eb; font-size: 14px; color: #1f2937; }
                 .data-table tr:hover td { background: #f9fafb; }
-                
-                /* Status badges */
-                .status-badge {
-                    display: inline-block;
-                    padding: 4px 10px;
-                    border-radius: 30px;
-                    font-size: 11px;
-                    font-weight: 600;
-                }
+
+                .status-badge { display: inline-block; padding: 4px 10px; border-radius: 30px; font-size: 11px; font-weight: 600; }
                 .status-badge.ativa { background: #d1fae5; color: #065f46; }
                 .status-badge.rascunho { background: #fef3c7; color: #92400e; }
                 .status-badge.concluida { background: #e5e7eb; color: #374151; }
                 .status-badge.cancelada { background: #fee2e2; color: #991b1b; }
-                
-                /* Action buttons */
+
                 .action-buttons { display: flex; gap: 5px; }
-                .btn-icon {
-                    width: 32px; height: 32px;
-                    border: none;
-                    border-radius: 6px;
-                    background: transparent;
-                    color: #6c757d;
-                    cursor: pointer;
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    transition: all 0.2s;
-                }
+                .btn-icon { width: 32px; height: 32px; border: none; border-radius: 6px; background: transparent; color: #6c757d; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: all .2s; }
                 .btn-icon:hover { background: #e9ecef; color: #1e3a8a; }
                 .btn-icon.danger:hover { color: #dc3545; }
-                
-                /* Paginação */
-                .pagination-professional {
-                    padding: 16px 20px;
-                    border-top: 1px solid #e5e7eb;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    flex-wrap: wrap;
-                    gap: 15px;
-                }
+
+                .pagination-professional { padding: 16px 20px; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
                 .pagination-info { font-size: 13px; color: #6b7280; }
                 .pagination-controls { display: flex; gap: 8px; align-items: center; }
-                .btn-page {
-                    min-width: 38px; height: 38px;
-                    border: 1px solid #e5e7eb;
-                    background: white;
-                    border-radius: 10px;
-                    cursor: pointer;
-                    font-size: 13px;
-                    font-weight: 500;
-                    color: #4b5563;
-                    transition: all 0.2s;
-                }
+                .btn-page { min-width: 38px; height: 38px; border: 1px solid #e5e7eb; background: white; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 500; color: #4b5563; transition: all .2s; }
                 .btn-page:hover { background: #f3f4f6; border-color: #1e3a8a; color: #1e3a8a; }
                 .btn-page.active { background: #1e3a8a; border-color: #1e3a8a; color: white; }
-                
+
                 @media (max-width: 1024px) {
                     .stats-grid { grid-template-columns: repeat(3, 1fr); }
-                    .filters-grid { grid-template-columns: 1fr; }
+                    .filters-grid { grid-template-columns: repeat(2, 1fr); }
                 }
                 @media (max-width: 768px) {
                     .stats-grid { grid-template-columns: repeat(2, 1fr); }
+                    .filters-grid { grid-template-columns: 1fr; }
+                    .filters-grid .span-2 { grid-column: auto; }
                     .provas-header { flex-direction: column; align-items: flex-start; }
-                    .header-actions { width: 100%; }
                     .btn-header { flex: 1; }
                 }
             </style>
         `;
     }
 
-    // ============ GERAR LINHAS DA TABELA DE PROVAS ============
     // ============ GERAR LINHAS DA TABELA DE PROVAS (COM BOTÃO ADIAR) ============
     gerarLinhasProvas(provas) {
         if (!provas || provas.length === 0) {
@@ -17990,17 +17798,18 @@ class AdminPanel {
             `;
         }
 
+        const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
         return provas.map(prova => {
-            const tipo = prova.tipoProva === 'enem' ? 'ENEM' : 
+            const tipo = prova.tipoProva === 'enem' ? 'ENEM' :
                         (prova.adaptada ? 'Adaptada' : 'Simples');
-            
+
             // Calcular status
             const agora = new Date();
             const dataLimite = prova.dataLimite ? new Date(prova.dataLimite) : null;
 
             let statusClass = '';
             let statusText = '';
-            let podeAdiar = false;
 
             if (prova.cancelada === true) {
                 statusClass = 'cancelada';
@@ -18016,12 +17825,12 @@ class AdminPanel {
                 statusText = 'Ativa';
             }
 
-            // CORREÇÃO: Calcular podeAdiar de forma explícita
-            podeAdiar = 
-                prova.publicada === true &&           // Está publicada
-                prova.cancelada !== true &&           // Não está cancelada
-                dataLimite &&                         // Tem data limite
-                dataLimite > agora;                    // Data no futuro
+            // Só pode adiar se: publicada, não cancelada e com data limite no futuro
+            const podeAdiar =
+                prova.publicada === true &&
+                prova.cancelada !== true &&
+                !!dataLimite &&
+                dataLimite > agora;
 
             // Nome do professor
             let nomeProfessor = 'Desconhecido';
@@ -18036,26 +17845,28 @@ class AdminPanel {
             }
 
             // Turma
-            const turmaNome = prova.turma?.nome || prova.turma || 'N/A';
-            
+            const turmaNome = (prova.turma && typeof prova.turma === 'object')
+                ? (prova.turma.nome || 'N/A')
+                : (prova.turma || 'N/A');
+
             // Data
-            const dataCriacao = prova.createdAt ? 
-                new Date(prova.createdAt).toLocaleDateString('pt-BR') : 
+            const dataCriacao = prova.createdAt ?
+                new Date(prova.createdAt).toLocaleDateString('pt-BR') :
                 (prova.dataCriacao ? new Date(prova.dataCriacao).toLocaleDateString('pt-BR') : 'N/A');
 
             return `
                 <tr>
                     <td>
-                        <strong>${prova.titulo || 'Sem título'}</strong>
+                        <strong>${esc(prova.titulo || 'Sem título')}</strong>
                         ${prova.adaptada ? '<span class="badge-acessibilidade" title="Adaptada"><i class="fas fa-universal-access"></i></span>' : ''}
                     </td>
                     <td>
                         <span style="display: flex; align-items: center; gap: 5px;">
                             <i class="fas fa-chalkboard-teacher" style="color: #1e3a8a;"></i>
-                            ${nomeProfessor}
+                            ${esc(nomeProfessor)}
                         </span>
                     </td>
-                    <td>${turmaNome}</td>
+                    <td>${esc(turmaNome)}</td>
                     <td>${prova.periodo || '1'}º</td>
                     <td>${tipo}</td>
                     <td>${prova.quantidadeQuestoes || prova.questoes?.length || 0}</td>
@@ -18071,34 +17882,34 @@ class AdminPanel {
                             <button class="btn-icon" onclick="admin.verProva('${prova.id}')" title="Ver detalhes">
                                 <i class="fas fa-eye"></i>
                             </button>
-                            
+
                             <!-- Editar -->
                             <button class="btn-icon edit" onclick="admin.editarProva('${prova.id}')" title="Editar prova">
                                 <i class="fas fa-edit"></i>
                             </button>
 
-                            <!-- 🔥 NOVO BOTÃO: LIBERAR NOTA (INDIVIDUAL OU EM CONJUNTO) -->
-                            <button class="btn-icon" onclick="admin.abrirModalLiberarNotas('${prova.id}', '${(prova.titulo || '').replace(/'/g, "\\'")}')" title="Liberar notas dos alunos" style="color: #10b981;">
+                            <!-- Liberar notas -->
+                            <button class="btn-icon" onclick="admin.abrirModalLiberarNotas('${prova.id}', '${(prova.titulo || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;')}')" title="Liberar notas dos alunos" style="color: #10b981;">
                                 <i class="fas fa-check-double"></i>
                             </button>
 
-                            <!-- 🔥 NOVO BOTÃO: CORRIGIR PROVA (QR CODE) -->
+                            <!-- Corrigir prova (QR Code) -->
                             <button class="btn-icon" onclick="admin.corrigirProvaComQRCode('${prova.id}')" title="Corrigir prova (QR Code)">
                                 <i class="fas fa-qrcode"></i>
                             </button>
-                            
-                            <!-- 🔥 BOTÃO ADIAR (só para provas ativas) -->
+
+                            <!-- Adiar (só para provas ativas) -->
                             ${podeAdiar ? `
                             <button class="btn-icon" onclick="admin.adiarProva('${prova.id}')" title="Adiar data limite">
                                 <i class="fas fa-calendar-plus" style="color: #e67e22;"></i>
                             </button>
                             ` : ''}
-                            
-                            <!-- Baixar Imprimir -->
+
+                            <!-- Baixar / Imprimir -->
                             <button class="btn-icon success" onclick="admin.baixarImprimirProva('${prova.id}')" title="Baixar/Imprimir prova">
                                 <i class="fas fa-print"></i>
                             </button>
-                            
+
                             <!-- Excluir -->
                             <button class="btn-icon danger" onclick="admin.excluirProva('${prova.id}')" title="Excluir">
                                 <i class="fas fa-trash"></i>
@@ -18112,85 +17923,115 @@ class AdminPanel {
 
     // ============ CONFIGURAR EVENTOS DOS FILTROS ============
     configurarEventosFiltrosProvas() {
-        // Busca com debounce
-        const searchInput = document.getElementById('searchProvas');
-        if (searchInput) {
-            const novoSearch = searchInput.cloneNode(true);
-            searchInput.parentNode.replaceChild(novoSearch, searchInput);
-            
-            let timeout;
-            novoSearch.addEventListener('keyup', () => {
-                clearTimeout(timeout);
-                timeout = setTimeout(() => {
-                    this.aplicarFiltrosProvas();
-                }, 500);
+        // Campos de texto/número: busca enquanto digita (debounce), sem recarregar a tela
+        ['searchProvas', 'filterQuestoesMin', 'filterQuestoesMax'].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+
+            el.addEventListener('input', () => {
+                clearTimeout(this._provasTimer);
+                this._provasTimer = setTimeout(() => this.aplicarFiltrosProvas(true), 400);
             });
-        }
-        
-        // Configurar selects
-        ['filterStatus', 'filterDificuldade', 'filterPeriodo'].forEach(id => {
-            const select = document.getElementById(id);
-            if (select) {
-                const novoSelect = select.cloneNode(true);
-                select.parentNode.replaceChild(novoSelect, select);
-                
-                novoSelect.addEventListener('change', () => {
-                    this.aplicarFiltrosProvas();
-                });
-            }
+
+            el.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    clearTimeout(this._provasTimer);
+                    this.aplicarFiltrosProvas(true);
+                }
+            });
+        });
+
+        // Selects e datas: aplica na hora
+        ['filterProfessor', 'filterTurma', 'filterStatus', 'filterTipo', 'filterDificuldade',
+         'filterPeriodo', 'filterDataInicio', 'filterDataFim'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('change', () => this.aplicarFiltrosProvas(true));
         });
     }
 
     // ============ APLICAR FILTROS ============
-    aplicarFiltrosProvas() {
-        this.filtros.provas.search = document.getElementById('searchProvas')?.value || '';
-        this.filtros.provas.status = document.getElementById('filterStatus')?.value || 'todos';
-        this.filtros.provas.dificuldade = document.getElementById('filterDificuldade')?.value || 'todas';
-        this.filtros.provas.periodo = document.getElementById('filterPeriodo')?.value || 'todos';
-        this.filtros.provas.page = 1;
-        this.loadProvas();
+    aplicarFiltrosProvas(silent = true) {
+        const val = (id, padrao = '') => document.getElementById(id)?.value ?? padrao;
+
+        this.filtros.provas = {
+            ...this.filtros.provas,
+            search: val('searchProvas').trim(),
+            professor: val('filterProfessor'),
+            turma: val('filterTurma'),
+            status: val('filterStatus', 'todos'),
+            tipo: val('filterTipo', 'todos'),
+            dificuldade: val('filterDificuldade', 'todas'),
+            periodo: val('filterPeriodo', 'todos'),
+            questoesMin: val('filterQuestoesMin'),
+            questoesMax: val('filterQuestoesMax'),
+            dataInicio: val('filterDataInicio'),
+            dataFim: val('filterDataFim'),
+            page: 1
+        };
+
+        this.loadProvas(silent);
     }
 
     // ============ LIMPAR FILTROS ============
     limparFiltrosProvas() {
-        this.filtros.provas = { status: 'todos', dificuldade: 'todas', periodo: 'todos', search: '', page: 1, limit: 10 };
-        
-        const searchInput = document.getElementById('searchProvas');
-        const statusSelect = document.getElementById('filterStatus');
-        const dificuldadeSelect = document.getElementById('filterDificuldade');
-        const periodoSelect = document.getElementById('filterPeriodo');
-        
-        if (searchInput) searchInput.value = '';
-        if (statusSelect) statusSelect.value = 'todos';
-        if (dificuldadeSelect) dificuldadeSelect.value = 'todas';
-        if (periodoSelect) periodoSelect.value = 'todos';
-        
-        this.loadProvas();
+        clearTimeout(this._provasTimer);
+
+        this.filtros.provas = {
+            status: 'todos', dificuldade: 'todas', periodo: 'todos', tipo: 'todos',
+            search: '', professor: '', turma: '',
+            questoesMin: '', questoesMax: '',
+            dataInicio: '', dataFim: '',
+            page: 1, limit: this.filtros.provas?.limit || 10
+        };
+
+        const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+        set('searchProvas', '');
+        set('filterProfessor', '');
+        set('filterTurma', '');
+        set('filterStatus', 'todos');
+        set('filterTipo', 'todos');
+        set('filterDificuldade', 'todas');
+        set('filterPeriodo', 'todos');
+        set('filterQuestoesMin', '');
+        set('filterQuestoesMax', '');
+        set('filterDataInicio', '');
+        set('filterDataFim', '');
+
+        this.loadProvas(true);
     }
 
     // ============ FILTRAR POR STATUS (CLICANDO NOS CARDS) ============
+    filtrarPorStatus(status) {
+        this.filtros.provas.status = status;
+        this.filtros.provas.page = 1;
 
-    // ============ ATUALIZAR PROVAS ============
+        const select = document.getElementById('filterStatus');
+        if (select) select.value = status;
+
+        this.loadProvas(true);
+    }
+
+    // ============ ATUALIZAR PROVAS (BOTÃO DO HEADER) ============
     async atualizarProvas() {
         const refreshBtn = document.querySelector('.provas-header .btn-refresh i');
-        
+
         try {
-            if (refreshBtn) {
-                refreshBtn.className = 'fas fa-spinner fa-spin';
-            }
-            
+            if (refreshBtn) refreshBtn.className = 'fas fa-spinner fa-spin';
+
             this.showToast('🔄 Atualizando provas...', 'info');
-            await this.loadProvas();
+
+            // Recarrega também as listas de professores e turmas (caso tenha cadastrado novos)
+            this._provasOpcoes = null;
+            await this.loadProvas(true);
+
             this.showToast('✅ Provas atualizadas!', 'success');
-            
+
         } catch (error) {
             console.error('Erro:', error);
             this.showToast('❌ Erro ao atualizar', 'error');
         } finally {
             if (refreshBtn) {
-                setTimeout(() => {
-                    refreshBtn.className = 'fas fa-sync-alt';
-                }, 500);
+                setTimeout(() => { refreshBtn.className = 'fas fa-sync-alt'; }, 500);
             }
         }
     }

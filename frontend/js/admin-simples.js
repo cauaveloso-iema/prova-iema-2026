@@ -6032,14 +6032,75 @@ class AdminSimples {
         }
     }
 
-        // ============================================================================
+    // ============================================================================
     // PROVAS
     // ============================================================================
-    async carregarProvas() {
+    // ============ PROVAS (adminSimples) - FILTROS NO BANCO + ATUALIZAÇÃO SILENCIOSA ============
+
+    // Estado dos filtros (criado sob demanda, então não precisa mexer no constructor)
+    obterFiltrosProvas() {
+        if (!this.filtrosProvas) {
+            this.filtrosProvas = {
+                search: '', professor: '', turma: '',
+                status: 'todas', tipo: 'todas',
+                questoesMin: '', questoesMax: '',
+                dataInicio: '', dataFim: '',
+                page: 1, limit: 20
+            };
+        }
+        return this.filtrosProvas;
+    }
+
+    // ============ OPÇÕES DOS SELECTS (PROFESSORES E TURMAS) ============
+    async carregarOpcoesFiltrosProvas(force = false) {
+        if (this._provasOpcoes && !force) return this._provasOpcoes;
+
+        try {
+            const token = localStorage.getItem('auth_token');
+            const headers = { 'Authorization': `Bearer ${token}` };
+
+            const [rProf, rTurma] = await Promise.all([
+                fetch('/api/admin/professores-lista', { headers }),
+                fetch('/api/admin/turmas', { headers })
+            ]);
+
+            const dProf = rProf.ok ? await rProf.json() : {};
+            const dTurma = rTurma.ok ? await rTurma.json() : {};
+
+            const professores = (dProf.professores || [])
+                .sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+
+            const turmas = (dTurma.turmas || [])
+                .sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+
+            this._provasOpcoes = { professores, turmas };
+            return this._provasOpcoes;
+
+        } catch (error) {
+            console.error('❌ Erro ao carregar opções de filtros:', error);
+            return { professores: [], turmas: [] };
+        }
+    }
+
+    // ============ CARREGAR PROVAS ============
+    async carregarProvas(silent = false) {
         console.log('📚 CARREGANDO PROVAS...');
         const contentArea = document.getElementById('contentArea');
+        const jaRenderizado = !!document.getElementById('tabelaProvas');
+        const modoSilencioso = silent && jaRenderizado;
 
-        if (contentArea && this.abaAtual === 'provas') {
+        // Cancela requisição anterior (evita resposta antiga sobrescrever a nova)
+        if (this._provasAbort) this._provasAbort.abort();
+        const controller = new AbortController();
+        this._provasAbort = controller;
+
+        if (modoSilencioso) {
+            // Indicador leve: NÃO recria a tela nem os filtros
+            const tbody = document.getElementById('tabelaProvas');
+            if (tbody) tbody.style.opacity = '0.5';
+            const badge = document.getElementById('resultadosBadge');
+            if (badge) badge.textContent = 'Buscando...';
+        } else if (contentArea && this.abaAtual === 'provas') {
             contentArea.innerHTML = `
                 <div style="text-align:center;padding:60px;background:white;border-radius:12px;">
                     <div style="width:50px;height:50px;border:5px solid #f3f3f3;border-top:5px solid #1e3a8a;
@@ -6050,24 +6111,80 @@ class AdminSimples {
         }
 
         try {
+            const f = this.obterFiltrosProvas();
+            const params = new URLSearchParams();
+            params.set('page', f.page);
+            params.set('limit', f.limit);
+
+            const add = (chave, valor, ignorar = []) => {
+                const v = (valor ?? '').toString().trim();
+                if (v !== '' && !ignorar.includes(v)) params.set(chave, v);
+            };
+
+            add('search', f.search);
+            add('professor', f.professor);   // ID (vem do select)
+            add('turma', f.turma);           // ID (vem do select)
+            add('tipo', f.tipo, ['todas']);
+            add('questoesMin', f.questoesMin);
+            add('questoesMax', f.questoesMax);
+            add('dataInicio', f.dataInicio);
+            add('dataFim', f.dataFim);
+
+            // No backend, "expirada" se chama "concluida"
+            if (f.status && f.status !== 'todas') {
+                params.set('status', f.status === 'expirada' ? 'concluida' : f.status);
+            }
+
             const token = localStorage.getItem('auth_token');
-            const response = await fetch('/api/admin/provas?limit=100', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+
+            const [response, opcoes] = await Promise.all([
+                fetch(`/api/admin/provas?${params.toString()}`, {
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    signal: controller.signal
+                }),
+                this.carregarOpcoesFiltrosProvas()
+            ]);
 
             if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
 
             const data = await response.json();
-            this.provas = data.success ? (data.provas || []) : [];
-            this.professoresLista = this.extrairProfessores(this.provas);
+            if (!data.success) throw new Error(data.error || 'Erro ao carregar provas');
+
+            this.provas = data.provas || [];
+            this.professoresLista = opcoes.professores || [];
 
             console.log(`✅ ${this.provas.length} provas carregadas`);
 
-            if (this.abaAtual === 'provas' && contentArea) {
-                this.renderizarPaginaProvas();
+            const dadosTela = {
+                filtros: f,
+                opcoes,
+                provas: this.provas,
+                pagination: data.pagination || { total: this.provas.length, page: 1, pages: 1, limit: f.limit },
+                stats: data.stats || {},
+                total: data.pagination?.total ?? this.provas.length
+            };
+
+            if (this.abaAtual !== 'provas' || !contentArea) return;
+
+            if (modoSilencioso) {
+                this.atualizarResultadosProvas(dadosTela);
+            } else {
+                this.renderizarPaginaProvas(dadosTela);
+                this.configurarEventosFiltrosProvas();
             }
+
         } catch (error) {
+            if (error.name === 'AbortError') return; // substituída por uma requisição mais nova
+
             console.error('❌ Erro ao carregar provas:', error);
+
+            if (modoSilencioso) {
+                const tbody = document.getElementById('tabelaProvas');
+                if (tbody) tbody.style.opacity = '1';
+                this.showToast('❌ Erro ao buscar provas: ' + error.message, 'error');
+                return;
+            }
+
             this.provas = [];
 
             if (this.abaAtual === 'provas' && contentArea) {
@@ -6086,15 +6203,51 @@ class AdminSimples {
         }
     }
 
-    renderizarPaginaProvas() {
+    // ============ ATUALIZA SÓ OS RESULTADOS (SEM RECRIAR OS FILTROS) ============
+    atualizarResultadosProvas({ provas, pagination, stats, total }) {
+        const set = (id, valor) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = valor;
+        };
+
+        const tbody = document.getElementById('tabelaProvas');
+        if (tbody) {
+            tbody.innerHTML = this.gerarLinhasProvas(provas);
+            tbody.style.opacity = '1';
+        }
+
+        set('totalProvasCard', stats.total ?? 0);
+        set('ativasCard', stats.ativas ?? 0);
+        set('rascunhosCard', stats.rascunhos ?? 0);
+        set('canceladasCard', stats.canceladas ?? 0);
+
+        set('resultadosBadge', `${total} ${total === 1 ? 'prova' : 'provas'}`);
+        set('itemsCounter', `${total} registros`);
+
+        const pag = document.getElementById('paginacaoProvas');
+        if (pag) pag.innerHTML = this.gerarPaginacaoProvas(pagination);
+    }
+
+    // ============ RENDERIZAR PÁGINA ============
+    renderizarPaginaProvas(dados) {
         const contentArea = document.getElementById('contentArea');
         if (!contentArea) return;
 
-        const provasAtivas = this.provas.filter(p =>
-            p.publicada && !p.cancelada && (!p.dataLimite || new Date(p.dataLimite) > new Date())
-        ).length;
-        const rascunhos = this.provas.filter(p => !p.publicada && !p.cancelada).length;
-        const canceladas = this.provas.filter(p => p.cancelada).length;
+        // Permite chamar sem argumentos (ex.: por outro trecho do código)
+        if (!dados) {
+            dados = {
+                filtros: this.obterFiltrosProvas(),
+                opcoes: this._provasOpcoes || { professores: [], turmas: [] },
+                provas: this.provas || [],
+                pagination: { total: (this.provas || []).length, page: 1, pages: 1, limit: 20 },
+                stats: {},
+                total: (this.provas || []).length
+            };
+        }
+
+        const { filtros, opcoes, provas, pagination, stats, total } = dados;
+        const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        const sel = (a, b) => (a === b ? 'selected' : '');
 
         contentArea.innerHTML = `
             <div class="provas-container">
@@ -6128,6 +6281,7 @@ class AdminSimples {
                     </div>
                 </div>
 
+                <!-- CARDS (vêm do banco e respeitam os filtros) -->
                 <div class="stats-grid">
                     <div class="stat-card primary" onclick="adminSimples.filtrarProvasPorStatus('todas')">
                         <div class="stat-icon" style="background:linear-gradient(135deg,#1e3a8a,#1e40af);">
@@ -6135,7 +6289,7 @@ class AdminSimples {
                         </div>
                         <div class="stat-content">
                             <span class="stat-label">Total de Provas</span>
-                            <span class="stat-value">${this.provas.length}</span>
+                            <span class="stat-value" id="totalProvasCard">${stats.total ?? 0}</span>
                         </div>
                     </div>
                     <div class="stat-card success" onclick="adminSimples.filtrarProvasPorStatus('ativa')">
@@ -6144,7 +6298,7 @@ class AdminSimples {
                         </div>
                         <div class="stat-content">
                             <span class="stat-label">Ativas</span>
-                            <span class="stat-value">${provasAtivas}</span>
+                            <span class="stat-value" id="ativasCard">${stats.ativas ?? 0}</span>
                         </div>
                     </div>
                     <div class="stat-card warning" onclick="adminSimples.filtrarProvasPorStatus('rascunho')">
@@ -6153,7 +6307,7 @@ class AdminSimples {
                         </div>
                         <div class="stat-content">
                             <span class="stat-label">Rascunhos</span>
-                            <span class="stat-value">${rascunhos}</span>
+                            <span class="stat-value" id="rascunhosCard">${stats.rascunhos ?? 0}</span>
                         </div>
                     </div>
                     <div class="stat-card danger" onclick="adminSimples.filtrarProvasPorStatus('cancelada')">
@@ -6162,56 +6316,93 @@ class AdminSimples {
                         </div>
                         <div class="stat-content">
                             <span class="stat-label">Canceladas</span>
-                            <span class="stat-value">${canceladas}</span>
+                            <span class="stat-value" id="canceladasCard">${stats.canceladas ?? 0}</span>
                         </div>
                     </div>
                 </div>
 
+                <!-- FILTROS -->
                 <div class="filters-card">
                     <div class="filters-header">
                         <div class="filters-title">
                             <i class="fas fa-sliders-h"></i><h3>Filtros</h3>
                         </div>
                         <span class="filters-badge" id="resultadosBadge">
-                            ${this.provas.length} ${this.provas.length === 1 ? 'prova' : 'provas'}
+                            ${total} ${total === 1 ? 'prova' : 'provas'}
                         </span>
                     </div>
                     <div class="filters-grid">
-                        <div class="filter-group">
+                        <div class="filter-group span-2">
                             <label><i class="fas fa-search"></i> Buscar</label>
-                            <input type="text" id="searchProvas" placeholder="Título, conteúdo ou professor..."
-                                value="" onkeyup="adminSimples.filtrarProvasLista()"
-                                style="width:100%;padding:10px 15px;border:2px solid #e5e7eb;
-                                       border-radius:12px;font-size:14px;">
+                            <input type="text" id="searchProvas" class="fp-input" autocomplete="off"
+                                placeholder="Título, conteúdo, professor ou turma..."
+                                value="${esc(filtros.search)}">
                         </div>
+
+                        <div class="filter-group">
+                            <label><i class="fas fa-chalkboard-teacher"></i> Professor</label>
+                            <select id="filtroProfessorProva" class="fp-input">
+                                <option value="">Todos os professores</option>
+                                ${(opcoes?.professores || []).map(p => `
+                                    <option value="${esc(p.id)}" ${sel(filtros.professor, String(p.id))}>${esc(p.nome)}</option>
+                                `).join('')}
+                            </select>
+                        </div>
+
+                        <div class="filter-group">
+                            <label><i class="fas fa-users"></i> Turma</label>
+                            <select id="filtroTurmaProva" class="fp-input">
+                                <option value="">Todas as turmas</option>
+                                ${(opcoes?.turmas || []).map(t => `
+                                    <option value="${esc(t.id)}" ${sel(filtros.turma, String(t.id))}>${esc(t.nome)}${t.disciplina ? ' — ' + esc(t.disciplina) : ''}</option>
+                                `).join('')}
+                            </select>
+                        </div>
+
                         <div class="filter-group">
                             <label><i class="fas fa-circle"></i> Status</label>
-                            <select id="filtroStatusProva" onchange="adminSimples.filtrarProvasLista()"
-                                style="width:100%;padding:10px 15px;border:2px solid #e5e7eb;
-                                       border-radius:12px;font-size:14px;background:white;">
-                                <option value="todas">Todas</option>
-                                <option value="rascunho">📝 Rascunhos</option>
-                                <option value="ativa">✅ Ativas</option>
-                                <option value="expirada">⏰ Expiradas</option>
-                                <option value="cancelada">🚫 Canceladas</option>
+                            <select id="filtroStatusProva" class="fp-input">
+                                <option value="todas" ${sel(filtros.status, 'todas')}>Todas</option>
+                                <option value="rascunho" ${sel(filtros.status, 'rascunho')}>📝 Rascunhos</option>
+                                <option value="ativa" ${sel(filtros.status, 'ativa')}>✅ Ativas</option>
+                                <option value="expirada" ${sel(filtros.status, 'expirada')}>⏰ Expiradas</option>
+                                <option value="cancelada" ${sel(filtros.status, 'cancelada')}>🚫 Canceladas</option>
                             </select>
                         </div>
+
                         <div class="filter-group">
-                            <label><i class="fas fa-tag"></i> Tipo</label>
-                            <select id="filtroTipoProva" onchange="adminSimples.filtrarProvasLista()"
-                                style="width:100%;padding:10px 15px;border:2px solid #e5e7eb;
-                                       border-radius:12px;font-size:14px;background:white;">
-                                <option value="todas">Todos</option>
-                                <option value="simples">📄 Simples</option>
-                                <option value="enem">🎯 ENEM</option>
-                                <option value="adaptada">♿ Adaptada</option>
+                            <label><i class="fas fa-tag"></i> Tipo de prova</label>
+                            <select id="filtroTipoProva" class="fp-input">
+                                <option value="todas" ${sel(filtros.tipo, 'todas')}>Todos</option>
+                                <option value="simples" ${sel(filtros.tipo, 'simples')}>📄 Simples</option>
+                                <option value="enem" ${sel(filtros.tipo, 'enem')}>🎯 ENEM</option>
+                                <option value="adaptada" ${sel(filtros.tipo, 'adaptada')}>♿ Adaptada</option>
                             </select>
                         </div>
-                        <div class="filter-actions">
+
+                        <div class="filter-group">
+                            <label><i class="fas fa-list-ol"></i> Questões (mín – máx)</label>
+                            <div style="display:flex;gap:8px;">
+                                <input type="number" min="0" id="filtroQuestoesMin" class="fp-input"
+                                    placeholder="Mín" value="${esc(filtros.questoesMin)}">
+                                <input type="number" min="0" id="filtroQuestoesMax" class="fp-input"
+                                    placeholder="Máx" value="${esc(filtros.questoesMax)}">
+                            </div>
+                        </div>
+
+                        <div class="filter-group span-2">
+                            <label><i class="fas fa-calendar-alt"></i> Data de criação (de – até)</label>
+                            <div style="display:flex;gap:8px;">
+                                <input type="date" id="filtroDataInicioProva" class="fp-input" value="${esc(filtros.dataInicio)}">
+                                <input type="date" id="filtroDataFimProva" class="fp-input" value="${esc(filtros.dataFim)}">
+                            </div>
+                        </div>
+
+                        <div class="filter-actions span-all">
                             <button onclick="adminSimples.limparFiltrosProvas()"
                                 style="padding:10px 20px;border:none;border-radius:12px;font-size:13px;
                                        font-weight:600;cursor:pointer;background:#6b7280;color:white;">
-                                <i class="fas fa-eraser"></i> Limpar
+                                <i class="fas fa-eraser"></i> Limpar filtros
                             </button>
                         </div>
                     </div>
@@ -6225,7 +6416,7 @@ class AdminSimples {
                             <i class="fas fa-list"></i><h3>Lista de Provas</h3>
                         </div>
                         <div class="table-info">
-                            <span id="itemsCounter">${this.provas.length} registros</span>
+                            <span id="itemsCounter">${total} registros</span>
                         </div>
                     </div>
                     <div style="overflow-x:auto;">
@@ -6241,11 +6432,12 @@ class AdminSimples {
                                     <th style="padding:15px 20px;text-align:left;font-size:13px;font-weight:600;color:#4b5563;border-bottom:2px solid #e5e7eb;">Ações</th>
                                 </tr>
                             </thead>
-                            <tbody id="tabelaProvas">
-                                ${this.gerarLinhasProvas(this.provas)}
+                            <tbody id="tabelaProvas" style="transition:opacity .15s;">
+                                ${this.gerarLinhasProvas(provas)}
                             </tbody>
                         </table>
                     </div>
+                    <div id="paginacaoProvas">${this.gerarPaginacaoProvas(pagination)}</div>
                 </div>
             </div>
 
@@ -6282,11 +6474,16 @@ class AdminSimples {
                 .filters-title h3 { margin:0; font-size:16px; color:#374151; }
                 .filters-badge { background:#1e3a8a; color:white; padding:4px 12px;
                     border-radius:30px; font-size:12px; font-weight:600; }
-                .filters-grid { display:grid; grid-template-columns:2fr 1fr 1fr auto; gap:15px; }
-                .filter-group { display:flex; flex-direction:column; gap:5px; }
+                .filters-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:15px; }
+                .filters-grid .span-2 { grid-column:span 2; }
+                .filters-grid .span-all { grid-column:1 / -1; }
+                .filter-group { display:flex; flex-direction:column; gap:5px; min-width:0; }
                 .filter-group label { font-size:12px; font-weight:600; color:#4b5563;
                     display:flex; align-items:center; gap:5px; }
-                .filter-actions { display:flex; gap:10px; align-items:flex-end; }
+                .fp-input { width:100%; padding:10px 15px; border:2px solid #e5e7eb; border-radius:12px;
+                    font-size:14px; background:white; box-sizing:border-box; min-width:0; }
+                .fp-input:focus { outline:none; border-color:#1e3a8a; box-shadow:0 0 0 4px rgba(30,58,138,0.1); }
+                .filter-actions { display:flex; gap:10px; align-items:flex-end; justify-content:flex-end; }
                 .table-professional { background:white; border-radius:16px;
                     box-shadow:0 2px 8px rgba(0,0,0,0.05); overflow:hidden;
                     border:1px solid rgba(0,0,0,0.05); }
@@ -6310,104 +6507,159 @@ class AdminSimples {
                     cursor:pointer; display:inline-flex; align-items:center;
                     justify-content:center; color:white; margin:0 2px; transition:all 0.2s; }
                 .btn-icon:hover { transform:scale(1.1); }
+                .pag-provas { padding:16px 20px; border-top:1px solid #e5e7eb; display:flex;
+                    justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; }
+                .pag-provas-info { font-size:13px; color:#6b7280; }
+                .pag-provas-btns { display:flex; gap:6px; align-items:center; }
+                .pag-provas-btns button { min-width:36px; height:36px; border:1px solid #e5e7eb;
+                    background:white; border-radius:10px; cursor:pointer; font-size:13px; color:#4b5563; }
+                .pag-provas-btns button:hover:not(:disabled) { border-color:#1e3a8a; color:#1e3a8a; }
+                .pag-provas-btns button.active { background:#1e3a8a; border-color:#1e3a8a; color:white; }
+                .pag-provas-btns button:disabled { cursor:default; opacity:.6; }
                 @media (max-width:1024px) {
                     .stats-grid { grid-template-columns:repeat(2,1fr); }
-                    .filters-grid { grid-template-columns:1fr; }
+                    .filters-grid { grid-template-columns:repeat(2,1fr); }
                 }
                 @media (max-width:768px) {
                     .stats-grid { grid-template-columns:1fr; }
+                    .filters-grid { grid-template-columns:1fr; }
+                    .filters-grid .span-2 { grid-column:auto; }
                     .provas-header { flex-direction:column; align-items:flex-start; }
                 }
             </style>`;
     }
 
-    filtrarProvasPorStatus(status) {
-        const select = document.getElementById('filtroStatusProva');
-        if (select) {
-            select.value = status;
-            this.filtrarProvasLista();
+    // ============ PAGINAÇÃO ============
+    gerarPaginacaoProvas(pagination) {
+        if (!pagination || !pagination.pages || pagination.pages <= 1) return '';
+
+        const { page, pages, total, limit } = pagination;
+        const inicio = ((page - 1) * limit) + 1;
+        const fim = Math.min(page * limit, total);
+
+        const maxBotoes = 5;
+        let ini = Math.max(1, page - Math.floor(maxBotoes / 2));
+        let end = Math.min(pages, ini + maxBotoes - 1);
+        ini = Math.max(1, end - maxBotoes + 1);
+
+        let botoes = '';
+        if (page > 1) {
+            botoes += `<button onclick="adminSimples.mudarPaginaProvas(${page - 1})" title="Anterior"><i class="fas fa-chevron-left"></i></button>`;
         }
+        for (let i = ini; i <= end; i++) {
+            botoes += `<button class="${i === page ? 'active' : ''}" ${i === page ? 'disabled' : ''}
+                        onclick="adminSimples.mudarPaginaProvas(${i})">${i}</button>`;
+        }
+        if (page < pages) {
+            botoes += `<button onclick="adminSimples.mudarPaginaProvas(${page + 1})" title="Próxima"><i class="fas fa-chevron-right"></i></button>`;
+        }
+
+        return `
+            <div class="pag-provas">
+                <div class="pag-provas-info">Mostrando <strong>${inicio}</strong> a <strong>${fim}</strong> de <strong>${total}</strong></div>
+                <div class="pag-provas-btns">${botoes}</div>
+            </div>`;
     }
 
-    filtrarProvasLista() {
-        const busca = document.getElementById('searchProvas')?.value.toLowerCase() || '';
-        const status = document.getElementById('filtroStatusProva')?.value || 'todas';
-        const tipo = document.getElementById('filtroTipoProva')?.value || 'todas';
-        const agora = new Date();
+    mudarPaginaProvas(pagina) {
+        this.obterFiltrosProvas().page = pagina;
+        this.carregarProvas(true);
+        document.querySelector('.table-professional')
+            ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 
-        const filtradas = this.provas.filter(p => {
-            let nomeProfessor = '';
-            if (p.professor) {
-                nomeProfessor = typeof p.professor === 'object'
-                    ? (p.professor.nome || '')
-                    : p.professor;
-            }
+    // ============ EVENTOS DOS FILTROS ============
+    configurarEventosFiltrosProvas() {
+        // Texto/número: busca enquanto digita (debounce), sem recarregar a tela
+        ['searchProvas', 'filtroQuestoesMin', 'filtroQuestoesMax'].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
 
-            let nomeTurma = '';
-            if (p.turma) {
-                nomeTurma = typeof p.turma === 'object' ? (p.turma.nome || '') : p.turma;
-            }
+            el.addEventListener('input', () => {
+                clearTimeout(this._provasTimer);
+                this._provasTimer = setTimeout(() => this.aplicarFiltrosProvas(true), 400);
+            });
 
-            const matchBusca = busca === '' ||
-                (p.titulo && p.titulo.toLowerCase().includes(busca)) ||
-                (nomeProfessor && nomeProfessor.toLowerCase().includes(busca)) ||
-                (nomeTurma && nomeTurma.toLowerCase().includes(busca));
-
-            let matchStatus = true;
-            if (status === 'rascunho') {
-                matchStatus = (p.publicada === false || p.publicada === 'false') && p.cancelada !== true;
-            } else if (status === 'ativa') {
-                const dataLimite = p.dataLimite ? new Date(p.dataLimite) : null;
-                matchStatus = (p.publicada === true || p.publicada === 'true') &&
-                    p.cancelada !== true && (!dataLimite || dataLimite > agora);
-            } else if (status === 'expirada') {
-                const dataLimite = p.dataLimite ? new Date(p.dataLimite) : null;
-                matchStatus = (p.publicada === true || p.publicada === 'true') &&
-                    p.cancelada !== true && dataLimite && dataLimite < agora;
-            } else if (status === 'cancelada') {
-                matchStatus = p.cancelada === true;
-            }
-
-            let matchTipo = true;
-            if (tipo === 'simples') {
-                matchTipo = (p.tipoProva === 'simples' || !p.tipoProva) && p.adaptada !== true;
-            } else if (tipo === 'enem') {
-                matchTipo = p.tipoProva === 'enem';
-            } else if (tipo === 'adaptada') {
-                matchTipo = p.adaptada === true;
-            }
-
-            return matchBusca && matchStatus && matchTipo;
+            el.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    clearTimeout(this._provasTimer);
+                    this.aplicarFiltrosProvas(true);
+                }
+            });
         });
 
-        const tabela = document.getElementById('tabelaProvas');
-        if (tabela) tabela.innerHTML = this.gerarLinhasProvas(filtradas);
+        // Selects e datas: aplica na hora
+        ['filtroProfessorProva', 'filtroTurmaProva', 'filtroStatusProva', 'filtroTipoProva',
+         'filtroDataInicioProva', 'filtroDataFimProva'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('change', () => this.aplicarFiltrosProvas(true));
+        });
+    }
 
-        const resultadosBadge = document.getElementById('resultadosBadge');
-        if (resultadosBadge) {
-            resultadosBadge.textContent = `${filtradas.length} ${filtradas.length === 1 ? 'prova' : 'provas'}`;
-        }
+    aplicarFiltrosProvas(silent = true) {
+        const val = (id, padrao = '') => document.getElementById(id)?.value ?? padrao;
 
-        const itemsCounter = document.getElementById('itemsCounter');
-        if (itemsCounter) itemsCounter.textContent = `${filtradas.length} registros`;
+        this.filtrosProvas = {
+            ...this.obterFiltrosProvas(),
+            search: val('searchProvas').trim(),
+            professor: val('filtroProfessorProva'),
+            turma: val('filtroTurmaProva'),
+            status: val('filtroStatusProva', 'todas'),
+            tipo: val('filtroTipoProva', 'todas'),
+            questoesMin: val('filtroQuestoesMin'),
+            questoesMax: val('filtroQuestoesMax'),
+            dataInicio: val('filtroDataInicioProva'),
+            dataFim: val('filtroDataFimProva'),
+            page: 1
+        };
+
+        this.carregarProvas(silent);
+    }
+
+    // Compatibilidade: se algum outro trecho ainda chamar o nome antigo
+    filtrarProvasLista() {
+        this.aplicarFiltrosProvas(true);
+    }
+
+    filtrarProvasPorStatus(status) {
+        const select = document.getElementById('filtroStatusProva');
+        if (select) select.value = status;
+        this.aplicarFiltrosProvas(true);
     }
 
     limparFiltrosProvas() {
-        const searchInput = document.getElementById('searchProvas');
-        if (searchInput) searchInput.value = '';
-        const statusSelect = document.getElementById('filtroStatusProva');
-        if (statusSelect) statusSelect.value = 'todas';
-        const tipoSelect = document.getElementById('filtroTipoProva');
-        if (tipoSelect) tipoSelect.value = 'todas';
-        this.filtrarProvasLista();
+        clearTimeout(this._provasTimer);
+
+        this.filtrosProvas = {
+            search: '', professor: '', turma: '',
+            status: 'todas', tipo: 'todas',
+            questoesMin: '', questoesMax: '',
+            dataInicio: '', dataFim: '',
+            page: 1, limit: this.obterFiltrosProvas().limit || 20
+        };
+
+        const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+        set('searchProvas', '');
+        set('filtroProfessorProva', '');
+        set('filtroTurmaProva', '');
+        set('filtroStatusProva', 'todas');
+        set('filtroTipoProva', 'todas');
+        set('filtroQuestoesMin', '');
+        set('filtroQuestoesMax', '');
+        set('filtroDataInicioProva', '');
+        set('filtroDataFimProva', '');
+
+        this.carregarProvas(true);
     }
 
     async atualizarProvas() {
         this.showToast('🔄 Atualizando provas...', 'info');
-        await this.carregarProvas();
+        this._provasOpcoes = null; // recarrega também professores e turmas
+        await this.carregarProvas(true);
         this.showToast('✅ Provas atualizadas!', 'success');
     }
 
+    // Mantida por compatibilidade (agora a lista vem pronta do banco)
     extrairProfessores(provas) {
         const professores = new Map();
         (provas || []).forEach(p => {
@@ -6419,10 +6671,6 @@ class AdminSimples {
                 } else if (typeof p.professor === 'string' && p.professor !== '-') {
                     professores.set(p.professor, { id: p.professor, nome: p.professor });
                 }
-            }
-            if (p.professorId && !professores.has(p.professorId) && this.usuarios) {
-                const prof = this.usuarios.find(u => u._id === p.professorId || u.id === p.professorId);
-                if (prof) professores.set(p.professorId, { id: p.professorId, nome: prof.nome });
             }
         });
         return Array.from(professores.values());
@@ -6438,10 +6686,13 @@ class AdminSimples {
         return 'Não informado';
     }
 
+    // ============ LINHAS DA TABELA ============
     gerarLinhasProvas(provas) {
         if (!provas || provas.length === 0) {
-            return '<tr><td colspan="9" class="empty-state">Nenhuma prova encontrada</td></tr>';
+            return '<tr><td colspan="7" class="empty-state"><i class="fas fa-file-alt"></i>Nenhuma prova encontrada</td></tr>';
         }
+
+        const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
         return provas.map(p => {
             let statusClass = '';
@@ -6463,18 +6714,19 @@ class AdminSimples {
             else if (p.adaptada === true) { tipoClass = 'warning'; tipo = 'Adaptada'; }
 
             const provaId = p.id || p._id;
+            const nomeTurma = (p.turma && typeof p.turma === 'object') ? (p.turma.nome || '-') : (p.turma || '-');
 
             return `
                 <tr>
                     <td style="padding:12px 16px;border-bottom:1px solid #e9ecef;font-size:13px;">
-                        <strong>${p.titulo || 'Sem título'}</strong>
-                        <br><small style="color:#666;">${(p.conteudo || '').substring(0, 50)}</small>
+                        <strong>${esc(p.titulo || 'Sem título')}</strong>
+                        <br><small style="color:#666;">${esc((p.conteudo || '').substring(0, 50))}</small>
                     </td>
                     <td style="padding:12px 16px;border-bottom:1px solid #e9ecef;font-size:13px;">
-                        ${this.obterNomeProfessor(p)}
+                        ${esc(this.obterNomeProfessor(p))}
                     </td>
                     <td style="padding:12px 16px;border-bottom:1px solid #e9ecef;font-size:13px;">
-                        ${p.turma?.nome || p.turma || '-'}
+                        ${esc(nomeTurma)}
                     </td>
                     <td style="padding:12px 16px;border-bottom:1px solid #e9ecef;font-size:13px;">
                         <span class="status-badge ${tipoClass}">${tipo}</span>

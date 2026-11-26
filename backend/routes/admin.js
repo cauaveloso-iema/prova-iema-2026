@@ -57,6 +57,13 @@ function fimDoDiaBrasil(dataStr) {
 }
 
 // ============================================================================
+// HELPER: escapar texto digitado para uso seguro em regex
+// ============================================================================
+function escapeRegex(str) {
+  return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// ============================================================================
 // IMPORTAÇÃO DE MODELOS
 // ============================================================================
 
@@ -2236,73 +2243,181 @@ router.delete('/turmas/:id', authenticateTokenLocal, isSuperAdmin, async (req, r
 // PROVAS
 // ============================================================================
 
-router.get('/provas/:provaId/resultados', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
+// ============================================================================
+// PROVAS — LISTAGEM COM FILTROS COMPLETOS (TUDO NO BANCO)
+// Professor e Turma chegam como ID (vindos dos selects do frontend)
+// ============================================================================
+router.get('/provas', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
-    const provaId = req.params.provaId;
+    const {
+      status, dificuldade, periodo, tipo,
+      search, professor, turma,
+      questoesMin, questoesMax,
+      dataInicio, dataFim
+    } = req.query;
 
-    const prova = await Prova.findById(provaId);
-    if (!prova) return res.status(404).json({ success: false, error: 'Prova não encontrada' });
+    const pageNum = Math.max(parseInt(req.query.page) || 1, 1);
+    const limitNum = Math.min(Math.max(parseInt(req.query.limit) || 20, 1), 100);
+    const agora = new Date();
 
-    const resultados = await Resultado.find({ provaId }).populate('userId', 'nome email matricula').lean();
-    const provasRealizadas = await ProvaRealizada.find({ provaId }).populate('alunoId', 'nome email matricula').lean();
+    // Filtros "base" (todos, EXCETO status — usado também para os cards de estatística)
+    const base = [];
 
-    const resultadosCompletos = [];
+    // DIFICULDADE
+    if (dificuldade && dificuldade !== 'todas') {
+      base.push({ dificuldade });
+    }
 
-    resultados.forEach(r => {
-      resultadosCompletos.push({
-        id: r._id,
-        alunoId: r.userId?._id,
-        alunoNome: r.userId?.nome || r.alunoNome || 'Aluno',
-        alunoEmail: r.userId?.email || '',
-        alunoMatricula: r.userId?.matricula || '',
-        dataRealizacao: r.createdAt,
-        nota: r.nota,
-        acertos: r.acertos,
-        total: r.total,
-        tempoGasto: r.tempoGasto,
-        notaLiberada: r.notaLiberada,
-        cancelada: r.cancelada || false,
-        resultadoDetalhado: r.resultadoDetalhado
-      });
-    });
+    // PERÍODO (aceita string ou número salvo no banco)
+    if (periodo && periodo !== 'todos') {
+      const n = parseInt(periodo);
+      base.push({ periodo: { $in: isNaN(n) ? [String(periodo)] : [String(periodo), n] } });
+    }
 
-    provasRealizadas.forEach(pr => {
-      const jaExiste = resultadosCompletos.some(r =>
-        r.alunoId?.toString() === pr.alunoId?._id?.toString()
-      );
-
-      if (!jaExiste) {
-        resultadosCompletos.push({
-          id: pr._id,
-          alunoId: pr.alunoId?._id,
-          alunoNome: pr.alunoId?.nome || 'Aluno',
-          alunoEmail: pr.alunoId?.email || '',
-          alunoMatricula: pr.alunoId?.matricula || '',
-          dataRealizacao: pr.dataRealizacao,
-          nota: pr.nota,
-          acertos: pr.acertos,
-          total: pr.total,
-          tempoGasto: pr.tempoGasto,
-          notaLiberada: pr.notaLiberada,
-          cancelada: pr.cancelada || false,
-          resultadoDetalhado: pr.resultadoDetalhado
-        });
+    // TIPO DE PROVA
+    if (tipo && tipo !== 'todos') {
+      if (tipo === 'enem') {
+        base.push({ tipoProva: 'enem' });
+      } else if (tipo === 'adaptada') {
+        base.push({ tipoProva: { $ne: 'enem' }, adaptada: true });
+      } else if (tipo === 'simples') {
+        base.push({ tipoProva: { $ne: 'enem' }, adaptada: { $ne: true } });
       }
-    });
+    }
+
+    // QUANTIDADE DE QUESTÕES (mín / máx)
+    const qMin = parseInt(questoesMin);
+    const qMax = parseInt(questoesMax);
+    if (!isNaN(qMin) || !isNaN(qMax)) {
+      const size = { $size: { $ifNull: ['$questoes', []] } };
+      const exprs = [];
+      if (!isNaN(qMin)) exprs.push({ $gte: [size, qMin] });
+      if (!isNaN(qMax)) exprs.push({ $lte: [size, qMax] });
+      base.push({ $expr: exprs.length === 1 ? exprs[0] : { $and: exprs } });
+    }
+
+    // DATA DE CRIAÇÃO (fuso Brasília)
+    if (dataInicio || dataFim) {
+      const rangeData = {};
+      if (dataInicio) rangeData.$gte = inicioDoDiaBrasil(dataInicio);
+      if (dataFim) rangeData.$lte = fimDoDiaBrasil(dataFim);
+      base.push({ createdAt: rangeData });
+    }
+
+    // PROFESSOR (por ID, vindo do select)
+    if (professor && mongoose.Types.ObjectId.isValid(professor)) {
+      base.push({ userId: new mongoose.Types.ObjectId(professor) });
+    }
+
+    // TURMA (por ID, vindo do select)
+    if (turma && mongoose.Types.ObjectId.isValid(turma)) {
+      base.push({ turmaId: new mongoose.Types.ObjectId(turma) });
+    }
+
+    // BUSCA GERAL (título, conteúdo, nome do professor, nome da turma)
+    if (search && search.trim()) {
+      const rx = new RegExp(escapeRegex(search.trim()), 'i');
+      const [idsProf, idsTurma] = await Promise.all([
+        User.distinct('_id', { nome: rx }),
+        Turma.distinct('_id', { nome: rx })
+      ]);
+      base.push({
+        $or: [
+          { titulo: rx },
+          { conteudo: rx },
+          { userId: { $in: idsProf } },
+          { turmaId: { $in: idsTurma } }
+        ]
+      });
+    }
+
+    // STATUS (mesma regra usada no frontend)
+    const condicaoStatus = {
+      ativa: [
+        { publicada: true },
+        { cancelada: { $ne: true } },
+        { $or: [{ dataLimite: null }, { dataLimite: { $exists: false } }, { dataLimite: { $gte: agora } }] }
+      ],
+      rascunho: [{ cancelada: { $ne: true } }, { publicada: { $ne: true } }],
+      concluida: [{ publicada: true }, { cancelada: { $ne: true } }, { dataLimite: { $lt: agora } }],
+      cancelada: [{ cancelada: true }]
+    };
+
+    const montar = (conds) => (conds.length ? { $and: conds } : {});
+
+    const queryLista = montar([
+      ...base,
+      ...((status && status !== 'todos' && condicaoStatus[status]) ? condicaoStatus[status] : [])
+    ]);
+
+    const skip = (pageNum - 1) * limitNum;
+
+    const [provas, total, sTotal, sAtivas, sRascunho, sConcluidas, sCanceladas] = await Promise.all([
+      Prova.find(queryLista)
+        .populate('userId', 'nome email')
+        .populate('turmaId', 'nome disciplina')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Prova.countDocuments(queryLista),
+      Prova.countDocuments(montar(base)),
+      Prova.countDocuments(montar([...base, ...condicaoStatus.ativa])),
+      Prova.countDocuments(montar([...base, ...condicaoStatus.rascunho])),
+      Prova.countDocuments(montar([...base, ...condicaoStatus.concluida])),
+      Prova.countDocuments(montar([...base, ...condicaoStatus.cancelada]))
+    ]);
+
+    const provasComInfo = await Promise.all(provas.map(async (prova) => {
+      const [resultados, provasRealizadas] = await Promise.all([
+        Resultado.countDocuments({ provaId: prova._id }),
+        ProvaRealizada.countDocuments({ provaId: prova._id })
+      ]);
+
+      return {
+        id: prova._id,
+        titulo: prova.titulo,
+        conteudo: prova.conteudo,
+        tipoProva: prova.tipoProva,
+        adaptada: prova.adaptada,
+        periodo: prova.periodo,
+        quantidadeQuestoes: prova.questoes?.length || 0,
+        dificuldade: prova.dificuldade,
+        createdAt: prova.createdAt,
+        dataCriacao: prova.createdAt,
+        dataLimite: prova.dataLimite,
+        publicada: prova.publicada,
+        cancelada: prova.cancelada,
+        status: prova.status,
+        codigo: prova.codigo,
+        professor: prova.userId ? { id: prova.userId._id, nome: prova.userId.nome } : null,
+        turma: prova.turmaId ? { id: prova.turmaId._id, nome: prova.turmaId.nome } : null,
+        totalParticipantes: resultados + provasRealizadas,
+        alunosRealizaram: resultados + provasRealizadas,
+        mediaNotas: 0
+      };
+    }));
 
     res.json({
       success: true,
-      resultados: resultadosCompletos,
-      total: resultadosCompletos.length,
-      prova: {
-        id: prova._id,
-        titulo: prova.titulo,
-        quantidadeQuestoes: prova.questoes.length
+      provas: provasComInfo,
+      stats: {
+        total: sTotal,
+        ativas: sAtivas,
+        rascunhos: sRascunho,
+        concluidas: sConcluidas,
+        canceladas: sCanceladas
+      },
+      pagination: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        pages: Math.ceil(total / limitNum)
       }
     });
 
   } catch (error) {
-    logger.error('❌ Erro:', error);
+    logger.error('❌ Erro ao listar provas (admin):', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
