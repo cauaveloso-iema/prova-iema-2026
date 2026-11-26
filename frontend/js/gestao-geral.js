@@ -1650,84 +1650,133 @@ function reiniciarScannerAutomatico() {
     }, 1000);
 }
 
+function renderizarReincidentesAtrasos(lista) {
+    const reinc = safeGet('alunosReincidentes');
+    if (!reinc) return;
+
+    if (!Array.isArray(lista) || lista.length === 0) {
+        reinc.innerHTML = `
+            <p class="text-muted text-center py-3">
+                <i class="fas fa-check-circle text-success"></i>
+                Nenhum aluno com 3+ atrasos nos últimos 30 dias
+            </p>`;
+        return;
+    }
+
+    reinc.innerHTML = `
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead><tr><th>Aluno</th><th>Turma</th><th>Atrasos (30 dias)</th></tr></thead>
+                <tbody>${lista.map(a => `
+                    <tr>
+                        <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
+                        <td>${escapeHTML(a.alunoTurma || '-')}</td>
+                        <td><span class="badge bg-danger">${a.count || 0}</span></td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>
+        </div>`;
+}
+
 async function carregarDashboardAtrasos() {
+    let data;
     try {
         const response = await fetch('/api/gestao-geral/atraso/dashboard', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json();
-        if (!data.success) return;
-        
+        data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Resposta sem sucesso');
+    } catch (error) {
+        console.error('Erro no dashboard:', error);
+        const reinc = safeGet('alunosReincidentes');
+        if (reinc) reinc.innerHTML = `<p class="text-danger text-center py-3">Erro ao carregar o dashboard.</p>`;
+        return;
+    }
+
+    // 1) Métricas
+    try {
         safeSetText('totalHoje', data.metricas?.hoje || 0);
         safeSetText('totalSemana', data.metricas?.semana || 0);
         safeSetText('totalMes', data.metricas?.mes || 0);
         safeSetText('totalGeral', data.metricas?.total || 0);
-        
-        const ctxMotivos = safeGet('chartMotivos');
-        if (ctxMotivos && data.porMotivo) {
-            if (dashboardCharts.motivos) try { dashboardCharts.motivos.destroy(); } catch(e){}
-            dashboardCharts.motivos = new Chart(ctxMotivos.getContext('2d'), {
-                type: 'doughnut',
-                data: {
-                    labels: data.porMotivo.map(m => m.label),
-                    datasets: [{ data: data.porMotivo.map(m => m.count),
-                        backgroundColor: ['#1e3c72', '#2a5298', '#3b82f6', '#60a5fa', '#93c5fd'] }]
-                },
-                options: { responsive: true, maintainAspectRatio: true }
-            });
-        }
-        
-        const ctxAtrasos = safeGet('chartAtrasos');
-        if (ctxAtrasos && data.tendencias?.ultimos7Dias) {
-            if (dashboardCharts.atrasos) try { dashboardCharts.atrasos.destroy(); } catch(e){}
-            dashboardCharts.atrasos = new Chart(ctxAtrasos.getContext('2d'), {
-                type: 'line',
-                data: {
-                    labels: data.tendencias.ultimos7Dias.map(d => d.dia),
-                    datasets: [{ label: 'Atrasos', data: data.tendencias.ultimos7Dias.map(d => d.atrasos),
-                        borderColor: '#1e3c72', backgroundColor: 'rgba(30, 60, 114, 0.1)', fill: true, tension: 0.4 }]
-                },
-                options: { responsive: true, maintainAspectRatio: true }
-            });
-        }
-        
-        const ctxTurmas = safeGet('chartTurmas');
-        if (ctxTurmas && data.tendencias?.porTurma) {
-            if (dashboardCharts.turmas) try { dashboardCharts.turmas.destroy(); } catch(e){}
-            dashboardCharts.turmas = new Chart(ctxTurmas.getContext('2d'), {
-                type: 'bar',
-                data: {
-                    labels: data.tendencias.porTurma.map(t => t.turma),
-                    datasets: [{ label: 'Atrasos', data: data.tendencias.porTurma.map(t => t.count),
-                        backgroundColor: '#2a5298', borderRadius: 8 }]
-                },
-                options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } }
-            });
-        }
-        
-        const reinc = safeGet('alunosReincidentes');
-        if (reinc) {
-            const lista = data.tendencias?.alunosReincidentes || [];
-            if (lista.length > 0) {
-                reinc.innerHTML = `
-                    <div class="table-responsive">
-                        <table class="table table-sm">
-                            <thead><tr><th>Aluno</th><th>Turma</th><th>Atrasos</th></tr></thead>
-                            <tbody>${lista.map(a => `
-                                <tr>
-                                    <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
-                                    <td>${escapeHTML(a.alunoTurma || '-')}</td>
-                                    <td><span class="badge bg-danger">${a.count || 0}</span></td>
-                                </tr>`).join('')}
-                            </tbody>
-                        </table>
-                    </div>`;
-            } else {
-                reinc.innerHTML = `<p class="text-muted text-center py-3"><i class="fas fa-check-circle text-success"></i> Nenhum aluno reincidente</p>`;
+    } catch (e) { console.error('Erro nas métricas:', e); }
+
+    // 2) Reincidentes (antes dos gráficos, para não depender deles)
+    try {
+        renderizarReincidentesAtrasos(data.tendencias?.alunosReincidentes || []);
+    } catch (e) { console.error('Erro nos reincidentes:', e); }
+
+    // 3) Gráficos, cada um isolado
+    const criarGrafico = (chave, canvasId, config) => {
+        try {
+            const canvas = safeGet(canvasId);
+            if (!canvas || typeof Chart === 'undefined') return;
+            if (dashboardCharts[chave]) {
+                try { dashboardCharts[chave].destroy(); } catch (e) {}
             }
+            dashboardCharts[chave] = new Chart(canvas.getContext('2d'), config);
+        } catch (e) {
+            console.error(`Erro no gráfico ${chave}:`, e);
         }
-    } catch (error) { console.error('Erro no dashboard:', error); }
+    };
+
+    if (data.porMotivo) {
+        criarGrafico('motivos', 'chartMotivos', {
+            type: 'doughnut',
+            data: {
+                labels: data.porMotivo.map(m => m.label),
+                datasets: [{
+                    data: data.porMotivo.map(m => m.count),
+                    backgroundColor: ['#1e3c72', '#2a5298', '#3b82f6', '#60a5fa', '#93c5fd']
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: true }
+        });
+    }
+
+    if (data.tendencias?.ultimos7Dias) {
+        criarGrafico('atrasos', 'chartAtrasos', {
+            type: 'line',
+            data: {
+                labels: data.tendencias.ultimos7Dias.map(d => d.dia),
+                datasets: [{
+                    label: 'Atrasos',
+                    data: data.tendencias.ultimos7Dias.map(d => d.atrasos),
+                    borderColor: '#1e3c72',
+                    backgroundColor: 'rgba(30, 60, 114, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: true }
+        });
+    }
+
+    if (data.tendencias?.porTurma) {
+        criarGrafico('turmas', 'chartTurmas', {
+            type: 'bar',
+            data: {
+                labels: data.tendencias.porTurma.map(t => t.turma),
+                datasets: [{
+                    label: 'Atrasos',
+                    data: data.tendencias.porTurma.map(t => t.count),
+                    backgroundColor: '#2a5298',
+                    borderRadius: 8
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } }
+        });
+    }
+}
+
+// Carrega o dashboard sempre que a aba for aberta (chame uma vez na inicialização do módulo)
+function configurarAbaDashboardAtrasos() {
+    const aba = safeGet('atraso-dashboard-tab');
+    if (aba && !aba.dataset.listenerAttached) {
+        aba.dataset.listenerAttached = 'true';
+        aba.addEventListener('shown.bs.tab', () => carregarDashboardAtrasos());
+    }
 }
 
 // ============================================

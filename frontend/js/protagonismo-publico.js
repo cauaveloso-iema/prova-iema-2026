@@ -80,13 +80,22 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ============================================
 async function carregarStatus() {
     try {
-        const response = await fetch('/api/protagonismo-publico/status');
-        const data = await response.json();
+        // Busca status geral E status do acolhimento ao mesmo tempo
+        const [resGeral, resAcolhimento] = await Promise.all([
+            fetch('/api/protagonismo-publico/status').then(r => r.json()),
+            fetch('/api/acolhimento/status-publico').then(r => r.json())
+        ]);
         
-        if (data.success) {
-            statusSistema = data.status;
-            atualizarStatusUI();
+        if (resGeral.success) {
+            statusSistema = resGeral.status;
         }
+        
+        // Salva o status do acolhimento no objeto global
+        if (resAcolhimento.success) {
+            statusSistema.acolhimentoAberto = resAcolhimento.acolhimentoAberto;
+        }
+        
+        atualizarStatusUI();
     } catch (error) {
         console.error('Erro ao carregar status:', error);
     }
@@ -96,6 +105,7 @@ function atualizarStatusUI() {
     // Status das pílulas
     const pillInscricoes = safeGet('statusInscricoes');
     const pillEleicao = safeGet('statusEleicao');
+    const pillAcolhimento = safeGet('statusAcolhimentoHome'); // 🆕 Nova pílula
     
     if (pillInscricoes) {
         if (statusSistema.inscricoesClubesAbertas) {
@@ -116,15 +126,31 @@ function atualizarStatusUI() {
             pillEleicao.innerHTML = '<i class="fas fa-circle"></i> Eleição Fechada';
         }
     }
+
+    // 🆕 Atualiza a pílula do Acolhimento
+    if (pillAcolhimento) {
+        if (statusSistema.acolhimentoAberto) {
+            pillAcolhimento.className = 'status-pill active';
+            pillAcolhimento.innerHTML = '<i class="fas fa-circle"></i> Acolhimento Aberto';
+        } else {
+            pillAcolhimento.className = 'status-pill inactive';
+            pillAcolhimento.innerHTML = '<i class="fas fa-circle"></i> Acolhimento Fechado';
+        }
+    }
     
     // Habilita/desabilita cards
     const cardInscricao = safeGet('cardInscricao');
     const cardEleicao = safeGet('cardEleicao');
     const cardTutores = safeGet('cardTutores');
+    const cardAcolhimento = safeGet('cardAcolhimento'); // 🆕 Card do acolhimento
     
     if (cardInscricao) cardInscricao.disabled = !statusSistema.inscricoesClubesAbertas;
     if (cardEleicao) cardEleicao.disabled = !statusSistema.eleicaoLiderAberta;
     if (cardTutores) cardTutores.disabled = !statusSistema.tutoriaVisivel;
+    
+    // 🆕 Desabilita o card de acolhimento se estiver fechado (opcional)
+    // Se quiser que o aluno clique e veja a mensagem de fechado, deixe comentado:
+    // if (cardAcolhimento) cardAcolhimento.disabled = !statusSistema.acolhimentoAberto;
     
     // Aviso público
     if (statusSistema.avisoPublico) {
@@ -176,6 +202,7 @@ function mostrarSecao(secao) {
 }
 
 function voltarHome() {
+    document.body.classList.remove('modo-acolhimento');
     document.querySelectorAll('.section-content').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.action-grid')[0].style.display = 'grid';
     document.querySelector('.hero-section').style.display = 'block';
@@ -731,61 +758,126 @@ async function carregarTutores() {
 // VERIFICAR INSCRIÇÃO
 // ============================================
 async function verificarInscricao() {
-    const nome = safeGet('verificarNome').value.trim();
-    const dataNasc = safeGet('verificarDataNasc').value;
-    
+    const nomeEl = document.getElementById('verificarNome');
+    const dataEl = document.getElementById('verificarDataNasc');
+    const resultadoDiv = document.getElementById('resultadoVerificacao');
+
+    if (!nomeEl || !dataEl || !resultadoDiv) return;
+
+    const nome = nomeEl.value.trim();
+    const dataNasc = dataEl.value;
+
     if (!nome || !dataNasc) {
-        mostrarErro('Atenção', 'Preencha todos os campos.');
+        if (typeof mostrarErro === 'function') {
+            mostrarErro('Atenção', 'Preencha nome e data de nascimento.');
+        } else {
+            alert('Preencha nome e data de nascimento.');
+        }
         return;
     }
-    
-    const resultadoDiv = safeGet('resultadoVerificacao');
+
     resultadoDiv.style.display = 'block';
     resultadoDiv.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Consultando...</p></div>';
-    
-    try {
-        const response = await fetch('/api/protagonismo-publico/verificar-inscricao', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nomeCompleto: nome, dataNascimento: dataNasc })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success && data.inscrito) {
-            resultadoDiv.innerHTML = `
-                <div class="form-public" style="border-left: 5px solid var(--accent-green);">
-                    <div style="text-align: center;">
-                        <div class="modal-icon sucesso" style="width: 70px; height: 70px; font-size: 32px;">
-                            <i class="fas fa-check-circle"></i>
-                        </div>
-                        <h3 style="color: #065f46; margin-bottom: 8px;">Inscrição Confirmada!</h3>
-                        <p class="text-muted">Você está inscrito no clube:</p>
-                        <h2 style="color: var(--primary); margin: 16px 0;">${escapeHTML(data.inscricao.clubeNome)}</h2>
-                        <div style="text-align: left; max-width: 400px; margin: 20px auto; padding: 16px; background: #f9fafb; border-radius: 12px;">
-                            <div class="modal-detalhes-item"><span>Turma:</span><span>${escapeHTML(data.inscricao.turma)}</span></div>
-                            <div class="modal-detalhes-item"><span>Data:</span><span>${new Date(data.inscricao.criadoEm).toLocaleDateString('pt-BR')}</span></div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        } else {
-            resultadoDiv.innerHTML = `
-                <div class="form-public" style="border-left: 5px solid var(--accent-yellow);">
-                    <div style="text-align: center;">
-                        <div class="modal-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706); width: 70px; height: 70px; font-size: 32px;">
-                            <i class="fas fa-info-circle"></i>
-                        </div>
-                        <h3 style="color: #92400e; margin-bottom: 8px;">Nenhuma Inscrição Encontrada</h3>
-                        <p class="text-muted">Você ainda não se inscreveu em nenhum clube.</p>
-                    </div>
-                </div>
-            `;
+
+    let inscricaoClube = null;
+    let inscricaoAcolhedor = null;
+
+    // Função auxiliar para fazer fetch seguro (não quebra se der 404)
+    async function fetchSeguro(url, body) {
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            
+            // Se o servidor retornar HTML em vez de JSON (ex: 404), isso evita o erro de syntax
+            const text = await response.text();
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                return { success: false, error: `Falha ao ler resposta (Status: ${response.status})` };
+            }
+        } catch (e) {
+            return { success: false, error: 'Erro de conexão.' };
         }
-    } catch (error) {
-        console.error('Erro:', error);
-        resultadoDiv.innerHTML = '<div class="empty-state"><p>Erro ao verificar. Tente novamente.</p></div>';
     }
+
+    // 1️⃣ Tenta consultar CLUBE
+    const resClube = await fetchSeguro('/api/protagonismo/verificar-inscricao', { 
+        nomeCompleto: nome, 
+        dataNascimento: dataNasc 
+    });
+    
+    if (resClube.success && resClube.inscrito) {
+        inscricaoClube = resClube.inscricao;
+    }
+
+    // 2️⃣ Tenta consultar ACOLHEDOR
+    const resAcolhedor = await fetchSeguro('/api/acolhimento/publico/consultar', { 
+        nomeCompleto: nome, 
+        dataNascimento: dataNasc 
+    });
+
+    if (resAcolhedor.success && resAcolhedor.inscrito) {
+        inscricaoAcolhedor = resAcolhedor.acolhedor;
+    }
+
+    // 3️⃣ Monta o HTML baseado no que encontrou
+    let htmlResultado = '';
+
+    if (inscricaoClube) {
+        htmlResultado += `
+            <div class="alert-success-box" style="background: #ecfdf5; border: 1px solid #10b981; padding: 20px; border-radius: 12px; margin-bottom: 15px;">
+                <h4 style="color: #047857; margin-bottom: 10px;"><i class="fas fa-users"></i> Inscrição em Clube</h4>
+                <p><strong>Clube:</strong> ${inscricaoClube.clubeNome}</p>
+                <p><strong>Turma:</strong> ${inscricaoClube.turma}</p>
+                <p><strong>Data:</strong> ${new Date(inscricaoClube.criadoEm).toLocaleDateString('pt-BR')}</p>
+            </div>
+        `;
+    }
+
+    if (inscricaoAcolhedor) {
+        let corStatus = '#f59e0b'; // pendente
+        let iconeStatus = 'fa-clock';
+        
+        if (inscricaoAcolhedor.status === 'aprovado') {
+            corStatus = '#10b981';
+            iconeStatus = 'fa-check-circle';
+        } else if (inscricaoAcolhedor.status === 'rejeitado') {
+            corStatus = '#ef4444';
+            iconeStatus = 'fa-times-circle';
+        }
+
+        htmlResultado += `
+            <div style="background: #fff; border: 2px solid ${corStatus}; padding: 20px; border-radius: 12px; margin-bottom: 15px;">
+                <h4 style="color: ${corStatus}; margin-bottom: 10px;">
+                    <i class="fas ${iconeStatus}"></i> Inscrição de Acolhedor
+                </h4>
+                <p><strong>Nome:</strong> ${inscricaoAcolhedor.nomeCompleto}</p>
+                <p><strong>Turma:</strong> ${inscricaoAcolhedor.turma} • ${inscricaoAcolhedor.curso}</p>
+                <p><strong>Data da Inscrição:</strong> ${new Date(inscricaoAcolhedor.createdAt).toLocaleDateString('pt-BR')}</p>
+                <p style="font-size: 1.1rem; margin-top: 15px;">
+                    <strong>Status:</strong> 
+                    <span style="color: ${corStatus}; font-weight: bold; text-transform: uppercase;">
+                        ${inscricaoAcolhedor.statusLabel}
+                    </span>
+                </p>
+                ${inscricaoAcolhedor.motivoRejeicao ? `<p style="color: #ef4444; font-size: 0.9rem;"><strong>Motivo da Rejeição:</strong> ${inscricaoAcolhedor.motivoRejeicao}</p>` : ''}
+            </div>
+        `;
+    }
+
+    if (htmlResultado === '') {
+        htmlResultado = `
+            <div class="alert-warning-box" style="background: #fffbeb; border: 1px solid #f59e0b; padding: 20px; border-radius: 12px;">
+                <h4 style="color: #b45309; margin-bottom: 10px;"><i class="fas fa-info-circle"></i> Nenhuma inscrição encontrada</h4>
+                <p>Não encontramos nenhuma inscrição em clubes ou como acolhedor com esses dados.</p>
+            </div>
+        `;
+    }
+
+    resultadoDiv.innerHTML = htmlResultado;
 }
 
 // ============================================
@@ -940,6 +1032,592 @@ function enviarAjudaWhatsApp() {
         }
     }
 }
+
+/* ============================================
+   ACOLHIMENTO (ACOLHEDORES) — PÁGINA PÚBLICA
+   Versão robusta: wrap de mostrarSecao + window.*
+   ============================================ */
+(function () {
+  'use strict';
+
+  // Estado do módulo
+  let acolhedorAlunoSelecionado = null;
+  let acolhedorCanvasAluno = null;
+  let acolhedorCanvasResp = null;
+  let acolhedorInitAssinaturas = false;
+  let acolhedorAbertoCache = null;
+  let acolhedorBindFeito = false;
+
+  const $ = (id) => document.getElementById(id);
+
+  // --------------------------------------------
+  // 1) WRAP DE mostrarSecao — roda depois do original
+  // --------------------------------------------
+  function instalarWrapMostrarSecao() {
+    const original = window.mostrarSecao;
+
+    // Evita duplicar
+    if (original && original.__wrapAcolhimento) return;
+
+    const wrapped = function (secao) {
+      // Remove o modo acolhimento por padrão
+      document.body.classList.remove('modo-acolhimento');
+
+      if (secao === 'acolhimento') {
+        // Adiciona classe para esconder o hero
+        document.body.classList.add('modo-acolhimento');
+
+        // Fecha todas as seções
+        document.querySelectorAll('.section-content').forEach(s => {
+          s.classList.remove('ativa');
+          s.style.display = 'none';
+        });
+
+        const sec = $('secaoAcolhimento');
+        if (!sec) {
+          console.error('[acolhimento] #secaoAcolhimento não encontrada');
+          return;
+        }
+
+        sec.classList.add('ativa');
+        sec.style.display = 'block';
+
+        // Esconde o grid de cards (home)
+        const grid = document.querySelector('.action-grid');
+        if (grid) grid.style.display = 'none';
+
+        // Garante conteúdo interno
+        const conteudo = $('acolhimentoConteudo');
+        if (conteudo) conteudo.style.display = 'block';
+
+        // Carrega dados
+        carregarAcolhimento();
+        setTimeout(initAssinaturasAcolhimento, 150);
+
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
+      // Delega para o original, se existir
+      if (typeof original === 'function') {
+        return original.apply(this, arguments);
+      }
+    };
+
+    wrapped.__wrapAcolhimento = true;
+    window.mostrarSecao = wrapped;
+    console.log('[acolhimento] ✅ wrap de mostrarSecao instalado');
+  }
+
+  // --------------------------------------------
+  // 2) Carregamento status + turmas/cursos
+  // --------------------------------------------
+  async function carregarAcolhimento() {
+    try {
+      const [statusRes, optsRes] = await Promise.all([
+        fetch('/api/acolhimento/status-publico').then(r => r.json()),
+        fetch('/api/acolhimento/publico/turmas-cursos').then(r => r.json())
+      ]);
+
+      const fechado = $('acolhimentoFechado');
+      const conteudo = $('acolhimentoConteudo');
+      const bannerPrazo = $('acolhimentoPrazoBanner');
+      const textoPrazo = $('textoPrazoAcolhimento');
+
+      if (statusRes.success && !statusRes.acolhimentoAberto) {
+        acolhedorAbertoCache = false;
+        if (fechado) fechado.style.display = 'flex';
+        if (conteudo) conteudo.style.display = 'none';
+        if (bannerPrazo) bannerPrazo.style.display = 'none';
+        const aviso = $('avisoAcolhimentoTexto');
+        if (aviso) aviso.textContent = statusRes.avisoAcolhimento || 'Acolhimento fechado no momento.';
+        return;
+      }
+
+      acolhedorAbertoCache = true;
+      if (fechado) fechado.style.display = 'none';
+      if (conteudo) conteudo.style.display = 'block';
+
+      // 🆕 MONTA O BANNER DE PRAZO
+      if (bannerPrazo && textoPrazo) {
+        let texto = '';
+        if (statusRes.dataFechamento) {
+          const dataFim = new Date(statusRes.dataFechamento);
+          const formatada = dataFim.toLocaleString('pt-BR', { 
+            day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+          });
+          texto = `Atenção: As inscrições estão abertas até <strong>${formatada}</strong>.`;
+        } else if (statusRes.dataAbertura) {
+          const dataIni = new Date(statusRes.dataAbertura);
+          const formatada = dataIni.toLocaleString('pt-BR', { 
+            day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+          });
+          texto = `Atenção: As inscrições abrirão em <strong>${formatada}</strong>.`;
+        }
+
+        if (texto) {
+          textoPrazo.innerHTML = texto;
+          bannerPrazo.style.display = 'flex';
+        } else {
+          bannerPrazo.style.display = 'none';
+        }
+      }
+
+      if (optsRes.success) {
+        const selTurma = $('acolhimentoTurma');
+        const selCurso = $('acolhimentoCurso');
+
+        if (selTurma && selTurma.options.length <= 1) {
+          (optsRes.turmas || []).forEach(t => {
+            const o = document.createElement('option');
+            o.value = t; o.textContent = t;
+            selTurma.appendChild(o);
+          });
+        }
+        if (selCurso && selCurso.options.length <= 1) {
+          (optsRes.cursos || []).forEach(c => {
+            const o = document.createElement('option');
+            o.value = c; o.textContent = c;
+            selCurso.appendChild(o);
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[acolhimento] erro ao carregar:', e);
+    }
+  }
+
+  // --------------------------------------------
+  // 3) Busca de alunos
+  // --------------------------------------------
+  async function buscarAlunosAcolhimento() {
+    if (acolhedorAbertoCache === false) return;
+
+    const turma = ($('acolhimentoTurma')?.value || '').trim();
+    const curso = ($('acolhimentoCurso')?.value || '').trim();
+    const busca = ($('acolhimentoBusca')?.value || '').trim();
+
+    if (!turma && !curso && busca.length < 3) {
+      if (typeof window.mostrarErro === 'function') {
+        window.mostrarErro('Atenção', 'Informe a turma, o curso ou pelo menos 3 letras do seu nome.');
+      } else {
+        alert('Informe a turma, o curso ou pelo menos 3 letras do seu nome.');
+      }
+      return;
+    }
+
+    const lista = $('acolhimentoListaAlunos');
+    if (!lista) return;
+    lista.innerHTML = '<div class="loading-state" style="grid-column:1/-1"><div class="spinner"></div><p>Buscando...</p></div>';
+
+    try {
+      const params = new URLSearchParams();
+      if (turma) params.append('turma', turma);
+      if (curso) params.append('curso', curso);
+      if (busca) params.append('busca', busca);
+
+      const res = await fetch(`/api/acolhimento/publico/alunos?${params.toString()}`).then(r => r.json());
+
+      if (!res.success || !res.alunos || res.alunos.length === 0) {
+        lista.innerHTML = '<div class="alert-warning-box" style="grid-column:1/-1"><i class="fas fa-info-circle"></i><span>Nenhum aluno encontrado. Confira os filtros.</span></div>';
+        return;
+      }
+
+      lista.innerHTML = '';
+      res.alunos.forEach(a => {
+        const card = document.createElement('div');
+        card.className = 'aluno-card-acolhimento';
+        const inicial = (a.nome || '?').charAt(0).toUpperCase();
+        const avatar = a.fotoPerfil
+          ? `<img src="${a.fotoPerfil}" alt="">`
+          : `<div class="avatar-fallback">${inicial}</div>`;
+        card.innerHTML = `
+          ${avatar}
+          <div class="info">
+            <h6>${a.nome}</h6>
+            <small>${a.turma || '-'} • ${a.curso || '-'}</small>
+          </div>
+        `;
+        card.addEventListener('click', () => selecionarAlunoAcolhimento(a));
+        lista.appendChild(card);
+      });
+    } catch (e) {
+      console.warn('[acolhimento] erro na busca:', e);
+      lista.innerHTML = '<div class="alert-warning-box" style="grid-column:1/-1"><i class="fas fa-exclamation-triangle"></i><span>Erro ao buscar alunos.</span></div>';
+    }
+  }
+
+  // --------------------------------------------
+  // 4) Seleção de aluno
+  // --------------------------------------------
+  function selecionarAlunoAcolhimento(aluno) {
+    console.log('👉 [Acolhimento] Aluno selecionado:', aluno);
+    acolhedorAlunoSelecionado = aluno;
+
+    const e1 = document.getElementById('acolhimentoEtapa1');
+    const e2 = document.getElementById('acolhimentoEtapa2');
+    const e3 = document.getElementById('acolhimentoEtapa3');
+    
+    if (e1) e1.style.display = 'none';
+    if (e2) e2.style.display = 'block';
+    if (e3) e3.style.display = 'none';
+
+    const info = document.getElementById('acolhimentoAlunoSelecionado');
+    if (info) {
+      info.innerHTML = `<i class="fas fa-user-check"></i> Selecionado: <strong>${aluno.nome}</strong> — ${aluno.turma || '-'} • ${aluno.curso || '-'}`;
+    }
+
+    const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+    setVal('acNome', aluno.nome);
+    setVal('acMatricula', aluno.matricula);
+    setVal('acTurma', aluno.turma);
+    setVal('acCurso', aluno.curso);
+
+    setTimeout(() => {
+      initAssinaturasAcolhimento();
+      if (e2) e2.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  }
+
+  // --------------------------------------------
+  // 5) Canvas de assinatura
+  // --------------------------------------------
+  function initAssinaturasAcolhimento() {
+    if (acolhedorInitAssinaturas) return;
+    acolhedorInitAssinaturas = true;
+
+    acolhedorCanvasAluno = $('canvasAssinaturaAluno');
+    acolhedorCanvasResp = $('canvasAssinaturaResp');
+
+    if (acolhedorCanvasAluno) initCanvasSignature(acolhedorCanvasAluno);
+    if (acolhedorCanvasResp) initCanvasSignature(acolhedorCanvasResp);
+  }
+
+  function initCanvasSignature(canvas) {
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = '#111827';
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    let desenhando = false;
+    let ultimoPonto = null;
+
+    function getPos(evt) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
+      const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
+      return {
+        x: (clientX - rect.left) * scaleX,
+        y: (clientY - rect.top) * scaleY
+      };
+    }
+    function inicio(evt) { evt.preventDefault(); desenhando = true; ultimoPonto = getPos(evt); }
+    function mover(evt) {
+      if (!desenhando) return;
+      evt.preventDefault();
+      const p = getPos(evt);
+      ctx.beginPath();
+      ctx.moveTo(ultimoPonto.x, ultimoPonto.y);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+      ultimoPonto = p;
+      canvas.dataset.vazia = 'false';
+    }
+    function fim(evt) { if (evt) evt.preventDefault(); desenhando = false; ultimoPonto = null; }
+
+    canvas.addEventListener('mousedown', inicio);
+    canvas.addEventListener('mousemove', mover);
+    canvas.addEventListener('mouseup', fim);
+    canvas.addEventListener('mouseleave', fim);
+    canvas.addEventListener('touchstart', inicio, { passive: false });
+    canvas.addEventListener('touchmove', mover, { passive: false });
+    canvas.addEventListener('touchend', fim, { passive: false });
+
+    canvas.dataset.vazia = 'true';
+  }
+
+  function limparAssinatura(quem) {
+    const canvas = quem === 'aluno' ? acolhedorCanvasAluno : acolhedorCanvasResp;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    canvas.dataset.vazia = 'true';
+  }
+
+  function getAssinatura(canvas) {
+    if (!canvas) return '';
+    if (canvas.dataset.vazia === 'true') return '';
+    return canvas.toDataURL('image/png');
+  }
+
+  // --------------------------------------------
+  // 6) Reset
+  // --------------------------------------------
+  function resetarAcolhimento() {
+    acolhedorAlunoSelecionado = null;
+
+    const e1 = $('acolhimentoEtapa1');
+    const e2 = $('acolhimentoEtapa2');
+    const e3 = $('acolhimentoEtapa3');
+    if (e1) e1.style.display = 'block';
+    if (e2) e2.style.display = 'none';
+    if (e3) e3.style.display = 'none';
+
+    const form = $('formAcolhedor');
+    if (form) form.reset();
+
+    const msg = $('acolhedorMsg');
+    if (msg) msg.innerHTML = '';
+
+    limparAssinatura('aluno');
+    limparAssinatura('resp');
+
+    const respBox = $('acResponsavelBox');
+    const sigRespBox = $('assinaturaRespBox');
+    if (respBox) respBox.style.display = 'none';
+    if (sigRespBox) sigRespBox.style.display = 'none';
+  }
+
+    // --------------------------------------------
+  // 6.1) Voltar para a HOME (após sucesso)
+  // --------------------------------------------
+  function voltarHomeAcolhimento() {
+    // Remove a classe que esconde o hero
+    document.body.classList.remove('modo-acolhimento');
+    
+    // Esconde a seção de acolhimento
+    const secao = document.getElementById('secaoAcolhimento');
+    if (secao) {
+      secao.classList.remove('ativa');
+      secao.style.display = 'none';
+    }
+
+    // Mostra os cards da home novamente
+    const grid = document.querySelector('.action-grid');
+    if (grid) grid.style.display = 'grid'; // ou 'flex', dependendo do seu CSS original
+
+    // Reseta o formulário internamente para a próxima vez
+    acolhedorAlunoSelecionado = null;
+    const form = document.getElementById('formAcolhedor');
+    if (form) form.reset();
+    
+    const msg = document.getElementById('acolhedorMsg');
+    if (msg) msg.innerHTML = '';
+    
+    limparAssinatura('aluno');
+    limparAssinatura('resp');
+    
+    const e1 = document.getElementById('acolhimentoEtapa1');
+    const e2 = document.getElementById('acolhimentoEtapa2');
+    const e3 = document.getElementById('acolhimentoEtapa3');
+    if (e1) e1.style.display = 'block';
+    if (e2) e2.style.display = 'none';
+    if (e3) e3.style.display = 'none';
+
+    const respBox = document.getElementById('acResponsavelBox');
+    const sigRespBox = document.getElementById('assinaturaRespBox');
+    if (respBox) respBox.style.display = 'none';
+    if (sigRespBox) sigRespBox.style.display = 'none';
+
+    // Rola para o topo suavemente
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // --------------------------------------------
+  // 7) Envio
+  // --------------------------------------------
+  async function enviarInscricaoAcolhedor(evt) {
+    evt.preventDefault();
+
+    const nome = ($('acNome')?.value || '').trim();
+    const dataNasc = $('acDataNasc')?.value || '';
+    const turma = ($('acTurma')?.value || '').trim();
+    const curso = ($('acCurso')?.value || '').trim();
+
+    if (!nome || !dataNasc || !turma || !curso) {
+      return mostrarMsgAcolhedor('Preencha nome, data, turma e curso.', 'erro');
+    }
+    if (!$('acAceitaTermos')?.checked || !$('acAceitaLgpd')?.checked) {
+      return mostrarMsgAcolhedor('Você precisa aceitar os termos e a LGPD.', 'erro');
+    }
+
+    const assinaturaAluno = getAssinatura(acolhedorCanvasAluno);
+    if (!assinaturaAluno) {
+      return mostrarMsgAcolhedor('Assine no campo de assinatura do aluno.', 'erro');
+    }
+
+    const menor = $('acMenor')?.checked || false;
+    let assinaturaResp = '';
+    if (menor) {
+      if (!($('acRespNome')?.value || '').trim() || !($('acRespTelefone')?.value || '').trim()) {
+        return mostrarMsgAcolhedor('Informe os dados do responsável.', 'erro');
+      }
+      assinaturaResp = getAssinatura(acolhedorCanvasResp);
+      if (!assinaturaResp) {
+        return mostrarMsgAcolhedor('Assinatura do responsável é obrigatória.', 'erro');
+      }
+    }
+
+    const disponibilidade = [];
+    ['dispManha','dispTarde','dispNoite','dispIntegral'].forEach(id => {
+      const el = $(id);
+      if (el && el.checked) disponibilidade.push(el.value);
+    });
+
+    const payload = {
+      alunoId: acolhedorAlunoSelecionado?.id || null,
+      nomeCompleto: nome,
+      dataNascimento: dataNasc,
+      matricula: ($('acMatricula')?.value || '').trim(),
+      turma, curso,
+      fotoPerfil: acolhedorAlunoSelecionado?.fotoPerfil || '',
+      email: ($('acEmail')?.value || '').trim(),
+      telefone: ($('acTelefone')?.value || '').trim(),
+      whatsapp: ($('acWhatsapp')?.value || '').trim(),
+      menorDeIdade: menor,
+      responsavelNome: ($('acRespNome')?.value || '').trim(),
+      responsavelTelefone: ($('acRespTelefone')?.value || '').trim(),
+      responsavelParentesco: ($('acRespParentesco')?.value || '').trim(),
+      porqueSerAcolhedor: ($('acPorque')?.value || '').trim(),
+      disponibilidade,
+      aceitaTermos: true,
+      aceitaLgpd: true,
+      assinaturaAluno,
+      assinaturaResponsavel: assinaturaResp
+    };
+
+    const btn = $('btnEnviarAcolhedor');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+    }
+
+    try {
+      const res = await fetch('/api/acolhimento/publico/inscrever', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(r => r.json());
+
+      if (!res.success) {
+        mostrarMsgAcolhedor(res.error || 'Erro ao enviar.', 'erro');
+        return;
+      }
+
+      const e2 = $('acolhimentoEtapa2');
+      const e3 = $('acolhimentoEtapa3');
+      if (e2) e2.style.display = 'none';
+      if (e3) e3.style.display = 'block';
+
+      const resumo = $('acolhedorResumo');
+      if (resumo) {
+        resumo.innerHTML = `
+          <strong>${res.acolhedor.nomeCompleto}</strong><br>
+          ${res.acolhedor.turma} • ${res.acolhedor.curso}<br>
+          <small>Status: <strong>Pendente de aprovação</strong></small>
+        `;
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (e) {
+      console.warn('[acolhimento] erro envio:', e);
+      mostrarMsgAcolhedor('Erro de conexão. Tente novamente.', 'erro');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar inscrição';
+      }
+    }
+  }
+
+  function mostrarMsgAcolhedor(msg, tipo) {
+    const el = $('acolhedorMsg');
+    if (!el) return;
+    const icone = tipo === 'erro' ? 'fa-exclamation-triangle' : 'fa-check-circle';
+    el.innerHTML = `<div class="alert-warning-box"><i class="fas ${icone}"></i><span>${msg}</span></div>`;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  // --------------------------------------------
+  // 8) Bind de eventos
+  // --------------------------------------------
+  function bindAcolhimento() {
+    if (acolhedorBindFeito) return;
+    acolhedorBindFeito = true;
+
+    const btnBusca = $('btnBuscarAlunos');
+    if (btnBusca) btnBusca.addEventListener('click', buscarAlunosAcolhimento);
+
+    const inputBusca = $('acolhimentoBusca');
+    if (inputBusca) {
+      inputBusca.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); buscarAlunosAcolhimento(); }
+      });
+    }
+
+    const menor = $('acMenor');
+    if (menor) {
+      menor.addEventListener('change', () => {
+        const box = $('acResponsavelBox');
+        const sigBox = $('assinaturaRespBox');
+        const isMenor = menor.checked;
+        if (box) box.style.display = isMenor ? 'block' : 'none';
+        if (sigBox) sigBox.style.display = isMenor ? 'block' : 'none';
+        if (isMenor) setTimeout(initAssinaturasAcolhimento, 50);
+      });
+    }
+
+    const form = $('formAcolhedor');
+    if (form) form.addEventListener('submit', enviarInscricaoAcolhedor);
+
+    const btnVoltar = $('btnVoltarAcolhimento');
+    if (btnVoltar) btnVoltar.addEventListener('click', resetarAcolhimento);
+
+    const btnVoltarHome = $('btnVoltarHomeAcolhimento');
+    if (btnVoltarHome) {
+    }
+
+    document.querySelectorAll('[data-limpar]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const quem = btn.getAttribute('data-limpar');
+        limparAssinatura(quem);
+      });
+    });
+  }
+
+  // --------------------------------------------
+  // 9) EXPOR EM window (para os onclick inline)
+  // --------------------------------------------
+  window.carregarAcolhimento = carregarAcolhimento;
+  window.buscarAlunosAcolhimento = buscarAlunosAcolhimento;
+  window.selecionarAlunoAcolhimento = selecionarAlunoAcolhimento;
+  window.enviarInscricaoAcolhedor = enviarInscricaoAcolhedor;
+  window.resetarAcolhimento = resetarAcolhimento;
+  window.limparAssinatura = limparAssinatura;
+  window.voltarHomeAcolhimento = voltarHomeAcolhimento;
+
+  // --------------------------------------------
+  // 10) Boot: instala o wrap DEPOIS do DOMContentLoaded
+  //     (garante que o protagonismo-publico.js já definiu mostrarSecao)
+  // --------------------------------------------
+  function boot() {
+    instalarWrapMostrarSecao();
+    bindAcolhimento();
+    console.log('[acolhimento] ✅ módulo pronto. Funções expostas em window.');
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    // Se o arquivo for carregado depois, ainda roda no próximo tick
+    setTimeout(boot, 0);
+  }
+})();
 
 // ============================================
 // EXPORTAR FUNÇÕES GLOBAIS

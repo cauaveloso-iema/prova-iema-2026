@@ -848,6 +848,167 @@ async function abrirConfigAniversarios() {
 }
 window.abrirConfigAniversarios = abrirConfigAniversarios;
 
+// ============================================
+// CONFIGURAÇÕES INLINE (aba Configurações)
+// ============================================
+async function renderizarConfigAniversariosInline() {
+    const container = document.getElementById('configAniversariosInline');
+    if (!container) return;
+
+    // Evita re-renderizar se já foi montado
+    if (container.dataset.renderizado === 'true') return;
+
+    container.innerHTML = `
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="inlineAnivAvisarNoDia">
+                    <label class="form-check-label" for="inlineAnivAvisarNoDia">
+                        <strong>Avisar no dia do aniversário</strong>
+                    </label>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Horário de envio no dia</label>
+                <input type="time" id="inlineAnivHorario" class="form-control">
+            </div>
+
+            <div class="col-md-6">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="inlineAnivAvisarAntecedencia">
+                    <label class="form-check-label" for="inlineAnivAvisarAntecedencia">
+                        <strong>Avisar com antecedência</strong>
+                    </label>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Minutos antes</label>
+                <input type="number" id="inlineAnivMinutos" class="form-control" min="5" max="10080" value="60">
+            </div>
+
+            <div class="col-12">
+                <hr>
+                <label class="form-label"><i class="fas fa-users me-1"></i> Quem notificar</label>
+                <div class="d-flex flex-wrap gap-4">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="inlineAnivNotifAniversariante">
+                        <label class="form-check-label" for="inlineAnivNotifAniversariante">Aniversariante</label>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="inlineAnivNotifProtagonistas">
+                        <label class="form-check-label" for="inlineAnivNotifProtagonistas">Protagonistas</label>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="inlineAnivNotifAdmins">
+                        <label class="form-check-label" for="inlineAnivNotifAdmins">Admins</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="inlineAnivEnviarEmail">
+                    <label class="form-check-label" for="inlineAnivEnviarEmail">Enviar também por e-mail</label>
+                </div>
+            </div>
+
+            <div class="col-12">
+                <label class="form-label"><i class="fas fa-comment-alt me-1"></i> Mensagem padrão</label>
+                <textarea id="inlineAnivMensagem" class="form-control" rows="3"
+                          placeholder="Use {nome} para o nome do aniversariante"></textarea>
+            </div>
+
+            <div class="col-12">
+                <button class="btn btn-primary" onclick="salvarConfigAniversariosInline()">
+                    <i class="fas fa-save me-1"></i> Salvar Configurações de Aniversários
+                </button>
+            </div>
+        </div>
+    `;
+
+    // Carrega os valores atuais do backend
+    try {
+        const resp = await fetch(`${API_ANIV}/aniversarios/configuracao`, { headers: headersAniv() });
+        const data = await resp.json();
+
+        if (data.success) {
+            const cfg = data.aniversarios || {};
+            document.getElementById('inlineAnivAvisarNoDia').checked = cfg.avisarNoDia !== false;
+            document.getElementById('inlineAnivHorario').value = cfg.horarioEnvioNoDia || '08:00';
+            document.getElementById('inlineAnivAvisarAntecedencia').checked = cfg.avisarAntecedencia === true;
+            document.getElementById('inlineAnivMinutos').value = cfg.minutosAntecedencia || 60;
+            document.getElementById('inlineAnivNotifAniversariante').checked = cfg.notificarAniversariante !== false;
+            document.getElementById('inlineAnivNotifProtagonistas').checked = cfg.notificarProtagonistas !== false;
+            document.getElementById('inlineAnivNotifAdmins').checked = cfg.notificarAdmins === true;
+            document.getElementById('inlineAnivEnviarEmail').checked = cfg.enviarEmail === true;
+            document.getElementById('inlineAnivMensagem').value = cfg.mensagemPadrao
+                || '🎉 Feliz aniversário, {nome}! Que seu dia seja especial e cheio de alegrias!';
+        } else {
+            container.innerHTML = `<p class="text-danger">Erro ao carregar configurações de aniversários.</p>`;
+            return;
+        }
+    } catch (err) {
+        console.error('Erro ao carregar config de aniversários (inline):', err);
+        container.innerHTML = `<p class="text-danger">Erro ao carregar configurações de aniversários.</p>`;
+        return;
+    }
+
+    container.dataset.renderizado = 'true';
+}
+window.renderizarConfigAniversariosInline = renderizarConfigAniversariosInline;
+
+async function salvarConfigAniversariosInline() {
+    const body = {
+        avisarNoDia: document.getElementById('inlineAnivAvisarNoDia').checked,
+        horarioEnvioNoDia: document.getElementById('inlineAnivHorario').value || '08:00',
+        avisarAntecedencia: document.getElementById('inlineAnivAvisarAntecedencia').checked,
+        minutosAntecedencia: parseInt(document.getElementById('inlineAnivMinutos').value) || 60,
+        notificarAniversariante: document.getElementById('inlineAnivNotifAniversariante').checked,
+        notificarProtagonistas: document.getElementById('inlineAnivNotifProtagonistas').checked,
+        notificarAdmins: document.getElementById('inlineAnivNotifAdmins').checked,
+        enviarEmail: document.getElementById('inlineAnivEnviarEmail').checked,
+        mensagemPadrao: document.getElementById('inlineAnivMensagem').value.trim()
+    };
+
+    try {
+        const resp = await fetch(`${API_ANIV}/aniversarios/configuracao`, {
+            method: 'PUT',
+            headers: headersAniv(),
+            body: JSON.stringify(body)
+        });
+        const data = await resp.json();
+
+        if (data.success) {
+            mostrarAlertaAniv('Configurações de aniversários salvas!', 'success');
+        } else {
+            mostrarAlertaAniv('Erro: ' + data.error, 'error');
+        }
+    } catch (err) {
+        console.error(err);
+        mostrarAlertaAniv('Erro ao salvar configurações.', 'error');
+    }
+}
+window.salvarConfigAniversariosInline = salvarConfigAniversariosInline;
+
+// ============================================
+// DISPARO: quando a aba Configurações for exibida
+// ============================================
+document.addEventListener('shown.bs.tab', function (event) {
+    if (event.target && event.target.id === 'aba-config') {
+        renderizarConfigAniversariosInline();
+    }
+});
+
+// Fallback: se a aba já estiver ativa no load
+window.addEventListener('load', function () {
+    setTimeout(function () {
+        const pane = document.getElementById('tab-config');
+        if (pane && pane.classList.contains('active')) {
+            renderizarConfigAniversariosInline();
+        }
+    }, 500);
+});
+
 async function salvarConfigAniversarios() {
     const body = {
         avisarNoDia: document.getElementById('cfgAnivAvisarNoDia').checked,

@@ -1639,3 +1639,134 @@ body {
         to { opacity: 1; }
     }
 }
+
+/* ============================================
+   ACOLHIMENTO — PAINEL (estilos)
+   ============================================ */
+
+#tab-acolhimento .card {
+    border-radius: 14px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 2px 8px rgba(0,0,0,.04);
+}
+
+#tab-acolhimento .card-header {
+    border-radius: 14px 14px 0 0 !important;
+    border-bottom: 1px solid #f3f4f6;
+    font-weight: 600;
+}
+
+#tab-acolhimento .stat-card,
+#tab-acolhimento .card.text-center {
+    padding: 18px;
+}
+
+#tab-acolhimento h2 {
+    font-weight: 800;
+    margin: 0;
+}
+
+#tab-acolhimento .table th {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: #6b7280;
+    font-weight: 700;
+    border-bottom: 2px solid #f3f4f6;
+}
+
+#tab-acolhimento .table td {
+    vertical-align: middle;
+    font-size: 0.9rem;
+}
+
+#tab-acolhimento .badge {
+    font-weight: 600;
+    padding: 6px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+}
+
+#tab-acolhimento .btn-sm {
+    padding: 5px 10px;
+    font-size: 0.8rem;
+    border-radius: 8px;
+}
+
+#tab-acolhimento .btn-sm i {
+    font-size: 0.8rem;
+}
+
+/* Badge de pendentes na aba */
+#aba-acolhimento .badge {
+    background-color: #fef3c7 !important;
+    color: #92400e !important;
+    font-weight: 700;
+    font-size: 0.7rem;
+    padding: 3px 7px;
+    border-radius: 10px;
+}
+
+/* Detalhes do acolhedor no modal */
+#modalDetalhesAcolhedorConteudo p {
+    margin-bottom: 8px;
+    font-size: 0.92rem;
+}
+
+#modalDetalhesAcolhedorConteudo strong {
+    color: #374151;
+}
+
+#modalDetalhesAcolhedorConteudo hr {
+    margin: 16px 0;
+    border-color: #f3f4f6;
+}
+
+#modalDetalhesAcolhedorConteudo img {
+    max-width: 100%;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    background: #fff;
+    padding: 6px;
+    margin-top: 6px;
+}
+
+/* Filtros */
+#tab-acolhimento select,
+#tab-acolhimento input[type="text"] {
+    border-radius: 10px;
+    border: 1px solid #e5e7eb;
+    padding: 8px 12px;
+}
+
+#tab-acolhimento select:focus,
+#tab-acolhimento input[type="text"]:focus {
+    border-color: #f97316;
+    box-shadow: 0 0 0 3px rgba(249,115,22,.15);
+}
+
+/* Status badge no dashboard (reutilizado) */
+#statusAcolhimento.status-badge.active {
+    background: #dcfce7;
+    color: #166534;
+}
+#statusAcolhimento.status-badge.inactive {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+/* Responsivo */
+@media (max-width: 768px) {
+    #tab-acolhimento .table-responsive {
+        font-size: 0.85rem;
+    }
+    #tab-acolhimento .card-header {
+        flex-direction: column;
+        align-items: stretch !important;
+        gap: 10px;
+    }
+    #tab-acolhimento .card-header select,
+    #tab-acolhimento .card-header input {
+        width: 100% !important;
+    }
+}

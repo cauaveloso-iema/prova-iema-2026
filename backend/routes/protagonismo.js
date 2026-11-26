@@ -11,6 +11,7 @@ const Voto = require('../models/Voto');
 const ConfiguracaoProtagonismo = require('../models/ConfiguracaoProtagonismo');
 const Aniversario = require('../models/Aniversario');
 const Notificacao = require('../models/Notificacao');
+const Acolhedor = require('../models/Acolhedor');
 
 // ============================================
 // MIDDLEWARES
@@ -135,7 +136,11 @@ router.put('/configuracao', authenticateToken, verificarProtagonismo, async (req
       dataFechamentoInscricoes,
       dataAberturaEleicao,
       dataFechamentoEleicao,
-      avisoPublico
+      avisoPublico,
+      acolhimentoAberto,
+      avisoAcolhimento,
+      dataAberturaAcolhimento,   // 🆕
+      dataFechamentoAcolhimento  // 🆕
     } = req.body;
 
     const config = await ConfiguracaoProtagonismo.getConfig();
@@ -154,12 +159,18 @@ router.put('/configuracao', authenticateToken, verificarProtagonismo, async (req
       config.dataAberturaEleicao = dataAberturaEleicao ? new Date(dataAberturaEleicao) : null;
     if (dataFechamentoEleicao !== undefined)
       config.dataFechamentoEleicao = dataFechamentoEleicao ? new Date(dataFechamentoEleicao) : null;
-    if (avisoPublico !== undefined)
-      config.avisoPublico = avisoPublico;
+    if (avisoPublico !== undefined) config.avisoPublico = avisoPublico;
+
+    // 🆕 ACOLHIMENTO
+    if (typeof acolhimentoAberto === 'boolean') config.acolhimentoAberto = acolhimentoAberto;
+    if (avisoAcolhimento !== undefined) config.avisoAcolhimento = avisoAcolhimento;
+    if (dataAberturaAcolhimento !== undefined)
+      config.dataAberturaAcolhimento = dataAberturaAcolhimento ? new Date(dataAberturaAcolhimento) : null;
+    if (dataFechamentoAcolhimento !== undefined)
+      config.dataFechamentoAcolhimento = dataFechamentoAcolhimento ? new Date(dataFechamentoAcolhimento) : null;
 
     config.atualizadoPor = req.userId;
     config.updatedAt = new Date();
-
     await config.save();
 
     res.json({ success: true, message: 'Configuração atualizada', configuracao: config });
@@ -1052,13 +1063,20 @@ router.post('/aniversarios/testar', authenticateToken, verificarProtagonismo, as
 // ============================================
 router.get('/estatisticas', authenticateToken, verificarProtagonismo, async (req, res) => {
   try {
-    const [totalClubes, totalTutores, totalCandidatos, totalInscricoes, totalVotos, totalAniversarios] = await Promise.all([
+    const [
+      totalClubes, totalTutores, totalCandidatos,
+      totalInscricoes, totalVotos, totalAniversarios,
+      totalAcolhedores, acolhedoresPendentes, acolhedoresAprovados
+    ] = await Promise.all([
       Clube.countDocuments({ ativo: true }),
       Tutor.countDocuments({ ativo: true }),
       Candidato.countDocuments({ ativo: true }),
       InscricaoClube.countDocuments({ status: 'ativa' }),
       Voto.countDocuments(),
-      Aniversario.countDocuments({ ativo: true })
+      Aniversario.countDocuments({ ativo: true }),
+      Acolhedor.countDocuments(),
+      Acolhedor.countDocuments({ status: 'pendente' }),
+      Acolhedor.countDocuments({ status: 'aprovado' })
     ]);
 
     const config = await ConfiguracaoProtagonismo.getConfig();
@@ -1073,14 +1091,13 @@ router.get('/estatisticas', authenticateToken, verificarProtagonismo, async (req
     res.json({
       success: true,
       estatisticas: {
-        totalClubes,
-        totalTutores,
-        totalCandidatos,
-        totalInscricoes,
-        totalVotos,
-        totalAniversarios,
+        totalClubes, totalTutores, totalCandidatos,
+        totalInscricoes, totalVotos, totalAniversarios,
+        totalAcolhedores, acolhedoresPendentes, acolhedoresAprovados,
         inscricoesAbertas: config.inscricoesClubesAbertas,
-        eleicaoLiderAberta: config.eleicaoLiderAberta
+        eleicaoLiderAberta: config.eleicaoLiderAberta,
+        tutoriaVisivel: config.tutoriaVisivel !== false,
+        acolhimentoAberto: config.acolhimentoAberto === true
       },
       topClubes
     });

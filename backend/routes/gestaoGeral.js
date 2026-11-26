@@ -787,7 +787,7 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
 // ============================================
 router.get('/atraso/dashboard', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
-    // 🆕 Datas em BRT
+    // Datas em BRT
     const hojeStr = getDataHojeBR();
     const inicioSemanaStr = getInicioSemanaBR();
     const inicioMesStr = getInicioMesBR();
@@ -799,7 +799,10 @@ router.get('/atraso/dashboard', authenticateToken, verificarGestaoGeral, async (
 
     const ultimos30Dias = new Date();
     ultimos30Dias.setDate(ultimos30Dias.getDate() - 30);
-    
+
+    // Mínimo de atrasos para ser considerado reincidente (padrão 3, mínimo 2)
+    const minReincidencia = Math.max(2, parseInt(req.query.minAtrasos) || 3);
+
     const [atrasosHoje, atrasosSemana, atrasosMes, total] = await Promise.all([
       Atraso.countDocuments({
         dataHora: { $gte: inicioHojeDate, $lte: fimHojeDate }
@@ -808,7 +811,7 @@ router.get('/atraso/dashboard', authenticateToken, verificarGestaoGeral, async (
       Atraso.countDocuments({ dataHora: { $gte: inicioMesDate } }),
       Atraso.countDocuments()
     ]);
-    
+
     // Agrupa pelo array de motivos (cada motivo conta 1x)
     const porMotivo = await Atraso.aggregate([
       { $match: { dataHora: { $gte: ultimos30Dias } } },
@@ -825,8 +828,8 @@ router.get('/atraso/dashboard', authenticateToken, verificarGestaoGeral, async (
       { $group: { _id: '$motivosEfetivos', count: { $sum: 1 } } },
       { $sort: { count: -1 } }
     ]);
-    
-    // 🆕 Últimos 7 dias em BRT
+
+    // Últimos 7 dias em BRT
     const ultimos7Dias = [];
     for (let i = 6; i >= 0; i--) {
       const dataStr = getDataNDiasBR(i);
@@ -836,42 +839,50 @@ router.get('/atraso/dashboard', authenticateToken, verificarGestaoGeral, async (
           $lte: fimDoDiaBrasil(dataStr)
         }
       });
-      
+
       const dataObj = new Date(dataStr + 'T12:00:00.000-03:00');
       ultimos7Dias.push({
         data: dataStr,
-        dia: dataObj.toLocaleDateString('pt-BR', { 
+        dia: dataObj.toLocaleDateString('pt-BR', {
           weekday: 'short',
           timeZone: 'America/Sao_Paulo'
         }),
         atrasos: count
       });
     }
-    
+
     const porTurma = await Atraso.aggregate([
       { $match: { dataHora: { $gte: ultimos30Dias } } },
       { $group: { _id: '$alunoTurma', count: { $sum: 1 } } },
-      { $sort: { count: -1 } }, { $limit: 8 }
+      { $sort: { count: -1 } },
+      { $limit: 8 }
     ]);
-    
+
+    // Alunos reincidentes (últimos 30 dias)
     const alunosReincidentes = await Atraso.aggregate([
-      { $match: { dataHora: { $gte: ultimos30Dias } } },
-      { $group: {
-        _id: '$alunoId',
-        alunoNome: { $first: '$alunoNome' },
-        alunoTurma: { $first: '$alunoTurma' },
-        count: { $sum: 1 }
+      { $match: {
+          dataHora: { $gte: ultimos30Dias },
+          alunoId: { $exists: true, $ne: null }
       }},
-      { $match: { count: { $gte: 3 } } },
-      { $sort: { count: -1 } }, { $limit: 10 }
+      { $sort: { dataHora: -1 } },
+      { $group: {
+          _id: '$alunoId',
+          alunoNome: { $first: '$alunoNome' },
+          alunoTurma: { $first: '$alunoTurma' },
+          count: { $sum: 1 }
+      }},
+      { $match: { count: { $gte: minReincidencia } } },
+      { $sort: { count: -1, alunoNome: 1 } },
+      { $limit: 10 }
     ]);
-    
+
     res.json({
       success: true,
       _debug: {
         hojeBR: hojeStr,
         inicioSemanaBR: inicioSemanaStr,
         inicioMesBR: inicioMesStr,
+        minReincidencia,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
       },
       metricas: { hoje: atrasosHoje, semana: atrasosSemana, mes: atrasosMes, total },

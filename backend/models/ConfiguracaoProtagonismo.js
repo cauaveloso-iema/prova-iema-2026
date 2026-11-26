@@ -19,6 +19,16 @@ const ConfiguracaoProtagonismoSchema = new mongoose.Schema({
 
   avisoPublico: { type: String, default: '' },
 
+  // ============================================
+  // ACOLHIMENTO (ACOLHEDORES)
+  // ============================================
+  acolhimentoAberto: { type: Boolean, default: false },
+  avisoAcolhimento: { type: String, default: '' },
+  
+  // 🆕 Prazos do Acolhimento
+  dataAberturaAcolhimento: { type: Date, default: null },
+  dataFechamentoAcolhimento: { type: Date, default: null },
+
   aniversarios: {
     avisarNoDia: { type: Boolean, default: true },
     avisarAntecedencia: { type: Boolean, default: false },

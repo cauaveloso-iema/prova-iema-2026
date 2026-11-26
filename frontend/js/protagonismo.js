@@ -553,11 +553,14 @@ async function carregarEstatisticas() {
             safeSetText('totalTutores', e.totalTutores || 0);
             safeSetText('totalCandidatos', e.totalCandidatos || 0);
             safeSetText('totalVotos', e.totalVotos || 0);
-            
+            safeSetText('totalAniversarios', e.totalAniversarios || 0);
+            safeSetText('totalAcolhedores', e.totalAcolhedores || 0); // 🆕
+
             atualizarBadgeStatus('statusInscricoes', e.inscricoesAbertas);
-            atualizarBadgeStatus('statusEleicao', e.eleicaoAberta);
+            atualizarBadgeStatus('statusEleicao', e.eleicaoLiderAberta);
             atualizarBadgeStatus('statusTutoria', e.tutoriaVisivel !== false);
-            
+            atualizarBadgeStatus('statusAcolhimento', e.acolhimentoAberto === true); // 🆕
+
             renderizarGraficoTopClubes(data.topClubes || []);
         }
     } catch (error) {
@@ -620,6 +623,9 @@ function renderizarGraficoTopClubes(topClubes) {
 // ============================================
 // CONFIGURAÇÃO
 // ============================================
+// ============================================
+// CONFIGURAÇÃO (Atualizado com Acolhimento e Datas)
+// ============================================
 async function carregarConfiguracao() {
     try {
         const response = await fetch('/api/protagonismo/configuracao', {
@@ -629,10 +635,48 @@ async function carregarConfiguracao() {
         
         if (data.success) {
             const c = data.configuracao;
-            safeGet('configInscricoes').checked = c.inscricoesClubesAbertas || false;
-            safeGet('configEleicao').checked = c.eleicaoLiderAberta || false;
-            safeGet('configTutoria').checked = c.tutoriaVisivel || false;
-            safeGet('configAviso').value = c.avisoPublico || '';
+            
+            // Configurações Gerais
+            if (safeGet('configInscricoes')) safeGet('configInscricoes').checked = c.inscricoesClubesAbertas || false;
+            if (safeGet('configEleicao')) safeGet('configEleicao').checked = c.eleicaoLiderAberta || false;
+            if (safeGet('configTutoria')) safeGet('configTutoria').checked = c.tutoriaVisivel || false;
+            if (safeGet('configAviso')) safeGet('configAviso').value = c.avisoPublico || '';
+
+            // ACOLHIMENTO (Aba Acolhimento)
+            if (safeGet('configAcolhimento')) safeGet('configAcolhimento').checked = c.acolhimentoAberto === true;
+            if (safeGet('configAvisoAcolhimento')) safeGet('configAvisoAcolhimento').value = c.avisoAcolhimento || '';
+            
+            // 🆕 CORREÇÃO DAS DATAS (Abertura e Fechamento)
+            if (safeGet('configDataAberturaAcolhimento')) {
+                safeGet('configDataAberturaAcolhimento').value = c.dataAberturaAcolhimento 
+                    ? new Date(c.dataAberturaAcolhimento).toISOString().slice(0, 16) 
+                    : '';
+            }
+            if (safeGet('configDataFechamentoAcolhimento')) {
+                safeGet('configDataFechamentoAcolhimento').value = c.dataFechamentoAcolhimento 
+                    ? new Date(c.dataFechamentoAcolhimento).toISOString().slice(0, 16) 
+                    : '';
+            }
+
+            // ACOLHIMENTO (Aba Configurações - caso tenha duplicado)
+            if (safeGet('configAcolhimentoTab')) safeGet('configAcolhimentoTab').checked = c.acolhimentoAberto === true;
+            if (safeGet('configAvisoAcolhimentoTab')) safeGet('configAvisoAcolhimentoTab').value = c.avisoAcolhimento || '';
+            if (safeGet('configDataAberturaAcolhimentoTab')) {
+                safeGet('configDataAberturaAcolhimentoTab').value = c.dataAberturaAcolhimento 
+                    ? new Date(c.dataAberturaAcolhimento).toISOString().slice(0, 16) : '';
+            }
+            if (safeGet('configDataFechamentoAcolhimentoTab')) {
+                safeGet('configDataFechamentoAcolhimentoTab').value = c.dataFechamentoAcolhimento 
+                    ? new Date(c.dataFechamentoAcolhimento).toISOString().slice(0, 16) : '';
+            }
+
+            // Atualiza os badges visuais
+            atualizarBadgeStatus('statusInscricoes', c.inscricoesClubesAbertas);
+            atualizarBadgeStatus('statusEleicao', c.eleicaoLiderAberta);
+            atualizarBadgeStatus('statusTutoria', c.tutoriaVisivel !== false);
+            if (typeof atualizarBadgeStatus === 'function') {
+                atualizarBadgeStatus('statusAcolhimento', c.acolhimentoAberto === true);
+            }
         }
     } catch (error) {
         console.error('Erro ao carregar configuração:', error);
@@ -641,13 +685,28 @@ async function carregarConfiguracao() {
 
 async function atualizarConfiguracao() {
     try {
+        // Pega os valores das datas de forma segura
+        const valAbertura = safeGet('configDataAberturaAcolhimento')?.value || safeGet('configDataAberturaAcolhimentoTab')?.value;
+        const valFechamento = safeGet('configDataFechamentoAcolhimento')?.value || safeGet('configDataFechamentoAcolhimentoTab')?.value;
+
         const dados = {
-            inscricoesClubesAbertas: safeGet('configInscricoes').checked,
-            eleicaoLiderAberta: safeGet('configEleicao').checked,
-            tutoriaVisivel: safeGet('configTutoria').checked,
-            avisoPublico: safeGet('configAviso').value
+            // Configurações Gerais
+            inscricoesClubesAbertas: safeGet('configInscricoes')?.checked || false,
+            eleicaoLiderAberta: safeGet('configEleicao')?.checked || false,
+            tutoriaVisivel: safeGet('configTutoria')?.checked || false,
+            avisoPublico: safeGet('configAviso')?.value || '',
+            
+            // 🆕 ACOLHIMENTO
+            acolhimentoAberto: safeGet('configAcolhimentoTab')?.checked ?? safeGet('configAcolhimento')?.checked ?? false,
+            avisoAcolhimento: safeGet('configAvisoAcolhimentoTab')?.value || safeGet('configAvisoAcolhimento')?.value || '',
+            
+            // 🆕 A MÁGICA DAS DATAS: Se for vazio ou a string "false", envia null. Senão, envia a data.
+            dataAberturaAcolhimento: (valAbertura && valAbertura !== 'false') ? valAbertura : null,
+            dataFechamentoAcolhimento: (valFechamento && valFechamento !== 'false') ? valFechamento : null
         };
         
+        console.log('📤 Enviando configurações para o servidor:', dados);
+
         const response = await fetch('/api/protagonismo/configuracao', {
             method: 'PUT',
             headers: {
@@ -660,15 +719,20 @@ async function atualizarConfiguracao() {
         const data = await response.json();
         
         if (data.success) {
-            mostrarToast('Configuração atualizada!', 'success');
+            mostrarToast('Configuração atualizada com sucesso!', 'success');
+            
+            // Atualiza os status visuais
             atualizarBadgeStatus('statusInscricoes', dados.inscricoesClubesAbertas);
             atualizarBadgeStatus('statusEleicao', dados.eleicaoLiderAberta);
             atualizarBadgeStatus('statusTutoria', dados.tutoriaVisivel);
+            if (typeof atualizarBadgeStatus === 'function') {
+                atualizarBadgeStatus('statusAcolhimento', dados.acolhimentoAberto);
+            }
         } else {
             mostrarToast('Erro: ' + data.error, 'error');
         }
     } catch (error) {
-        console.error('Erro:', error);
+        console.error('Erro ao atualizar configuração:', error);
         mostrarToast('Erro ao atualizar', 'error');
     }
 }

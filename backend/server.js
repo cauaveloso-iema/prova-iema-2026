@@ -1111,6 +1111,9 @@ app.use('/api/psicologia', require('./routes/psicologia'));
 app.use('/api/assistente-social', require('./routes/assistente-social'));
 app.use('/api/protagonismo', require('./routes/protagonismo'));
 app.use('/api/protagonismo-publico', require('./routes/protagonismo-publico'));
+const acolhimentoRoutes = require('./routes/acolhimento');
+app.use('/api/acolhimento', acolhimentoRoutes);
+app.use('/api/atendimento-protagonismo', require('./routes/atendimento-protagonismo'));
 
 // ── Rotas de Visitas e Autorizações ──
 app.use('/api/setor-pedagogico/visitas', require('./routes/visitas'));

@@ -37,7 +37,9 @@ const verificarGestaoGeral = (req, res, next) => {
     const allowedRoles = [
         'gestao_geral', 'gestao-geral', 'super_admin', 'super-admin', 'admin',
         'setor_pedagogico', 'setor-pedagogico', 'psicologia', 'psicologo', 'psicologa',
-        'assistente_social', 'assistente-social', 'supervisao', 'supervisão', 'biblioteca'
+        'assistente_social', 'assistente-social', 'supervisao', 'supervisão', 'biblioteca',
+        'protagonismo',
+        'professor'
     ];
     
     if (!allowedRoles.includes(req.userRole)) {
@@ -55,10 +57,11 @@ const verificarGestaoGeral = (req, res, next) => {
 const TIPOS_VALIDOS = [
     'autorizacao', 'justificativa', 'segunda_chamada', 'atraso', 'atraso_aluno',
     'uniforme', 'atendimento', 'atendimento_aluno',
-    'psicologia', 
+    'atendimento_protagonismo',
+    'psicologia',
     'psicologia_participante',
-    'assistente_social', 
-    'supervisao', 'supervisao_participante', 
+    'assistente_social',
+    'supervisao', 'supervisao_participante',
     'biblioteca',
     'tablet',
     'protocolo_prova'
@@ -72,7 +75,7 @@ router.get('/health', (req, res) => {
         success: true, 
         status: 'online', 
         service: 'Sessões de Assinatura (QR Code)',
-        versao: '2.4-protocolo',
+        versao: '2.5-atendimento-protagonismo',
         tiposSuportados: TIPOS_VALIDOS,
         timestamp: new Date().toISOString()
     });
@@ -284,7 +287,6 @@ router.put('/:sessaoId/assinar', async (req, res) => {
         
         console.log(`✍️ Sessão ${sessao.sessaoId} (${sessao.tipo}) assinada por ${sessao.assinadaPorNome}`);
         
-        // 🆕 SE FOR TABLET, ATUALIZA O TABLET AUTOMATICAMENTE
         if (sessao.tipo === 'tablet' && sessao.dadosAtendimento?.tabletId) {
             try {
                 const Tablet = require('../models/Tablet');
@@ -314,7 +316,6 @@ router.put('/:sessaoId/assinar', async (req, res) => {
                 }
             } catch (tabletErr) {
                 console.error('⚠️ Erro ao atualizar tablet:', tabletErr.message);
-                // Não falha a resposta — assinatura já foi salva
             }
         }
         

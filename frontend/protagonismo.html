@@ -4,6 +4,7 @@
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#f97316">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Protagonismo - EducaPleno">
 
@@ -130,7 +131,6 @@
                             <div class="item-text">Cardápio</div>
                         </a>
 
-                        <!-- Item que ABRE O SINO -->
                         <div class="dropdown-item" onclick="abrirMenuNotificacoesSeguro(event)"
                              title="Notificações e Lembretes">
                             <div class="icon-box bg-blue"><i class="fas fa-bell"></i></div>
@@ -138,7 +138,6 @@
                             <span class="badge-count" id="menuNotifBadge" style="display: none;">0</span>
                         </div>
 
-                        <!-- NOVO: Aniversários -->
                         <div class="dropdown-item" onclick="irParaAniversarios(event)" title="Aniversários">
                             <div class="icon-box" style="background:#ec4899;"><i class="fas fa-birthday-cake"></i></div>
                             <div class="item-text">Aniversários</div>
@@ -238,6 +237,19 @@
                             <i class="fas fa-birthday-cake"></i> Aniversários
                         </button>
                     </li>
+                    <!-- ABA ACOLHIMENTO -->
+                    <li class="nav-item">
+                        <button class="nav-link" id="aba-acolhimento" data-bs-toggle="tab" data-bs-target="#tab-acolhimento" type="button">
+                            <i class="fas fa-hand-holding-heart"></i> Acolhimento
+                            <span class="badge bg-warning text-dark ms-1" id="badgeAcolhedoresPendentes" style="display:none;">0</span>
+                        </button>
+                    </li>
+                    <!-- ✅ CORRIGIDO: Aba Atendimento volta a usar data-bs-toggle como as outras -->
+                    <li class="nav-item">
+                        <button class="nav-link" id="aba-atendimento" data-bs-toggle="tab" data-bs-target="#tab-atendimento" type="button">
+                            <i class="fas fa-headset"></i> Atendimento
+                        </button>
+                    </li>
                     <li class="nav-item">
                         <button class="nav-link" id="aba-config" data-bs-toggle="tab" data-bs-target="#tab-config" type="button">
                             <i class="fas fa-cog"></i> Configurações
@@ -274,6 +286,11 @@
                                 <i class="fas fa-birthday-cake fa-2x"></i>
                                 <div class="stat-number" id="totalAniversarios">0</div>
                                 <div class="stat-label">Aniversários</div>
+                            </div>
+                            <div class="stat-card">
+                                <i class="fas fa-hand-holding-heart fa-2x"></i>
+                                <div class="stat-number" id="totalAcolhedores">0</div>
+                                <div class="stat-label">Acolhedores</div>
                             </div>
                         </div>
 
@@ -312,6 +329,10 @@
                                         <div class="status-item">
                                             <span>Tutoria Visível ao Público</span>
                                             <span id="statusTutoria" class="status-badge inactive">Oculta</span>
+                                        </div>
+                                        <div class="status-item">
+                                            <span>Acolhimento de Alunos</span>
+                                            <span id="statusAcolhimento" class="status-badge inactive">Fechado</span>
                                         </div>
                                         <hr>
                                         <div class="alert alert-info mt-3">
@@ -505,7 +526,6 @@
                             </div>
                         </div>
 
-                        <!-- Próximos aniversários -->
                         <div class="card mb-4" id="cardProximosAniversarios">
                             <div class="card-header" style="background: linear-gradient(135deg, #ec4899, #be185d); color: white;">
                                 <i class="fas fa-hourglass-half me-2"></i> Próximos Aniversários (60 dias)
@@ -515,7 +535,6 @@
                             </div>
                         </div>
 
-                        <!-- Filtros -->
                         <div class="row g-3 mb-4">
                             <div class="col-md-6">
                                 <label class="form-label">Buscar por nome</label>
@@ -542,9 +561,119 @@
                             </div>
                         </div>
 
-                        <!-- Lista por mês -->
                         <div id="listaAniversariosPorMes">
                             <p class="text-muted text-center">Carregando aniversários...</p>
+                        </div>
+                    </div>
+
+                    <!-- ACOLHIMENTO -->
+                    <div class="tab-pane fade" id="tab-acolhimento">
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-3">
+                                <div class="card text-center">
+                                    <div class="card-body">
+                                        <h6 class="text-muted">Total</h6>
+                                        <h2 id="acTotal">0</h2>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card text-center border-warning">
+                                    <div class="card-body">
+                                        <h6 class="text-warning">Pendentes</h6>
+                                        <h2 id="acPendentes" class="text-warning">0</h2>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card text-center border-success">
+                                    <div class="card-body">
+                                        <h6 class="text-success">Aprovados</h6>
+                                        <h2 id="acAprovados" class="text-success">0</h2>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card text-center border-danger">
+                                    <div class="card-body">
+                                        <h6 class="text-danger">Rejeitados</h6>
+                                        <h2 id="acRejeitados" class="text-danger">0</h2>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card mb-4">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0"><i class="fas fa-cog me-2"></i>Configuração do Acolhimento</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-check form-switch mb-3">
+                                    <input class="form-check-input" type="checkbox" id="configAcolhimento">
+                                    <label class="form-check-label" for="configAcolhimento">
+                                        <strong>Acolhimento aberto</strong> (permite inscrições públicas)
+                                    </label>
+                                </div>
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Data/Hora de Abertura</label>
+                                        <input type="datetime-local" class="form-control" id="configDataAberturaAcolhimento">
+                                        <small class="text-muted">Deixe em branco para abrir assim que ativar.</small>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Data/Hora de Fechamento</label>
+                                        <input type="datetime-local" class="form-control" id="configDataFechamentoAcolhimento">
+                                        <small class="text-muted">Deixe em branco para não ter prazo de encerramento.</small>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Aviso exibido na página pública</label>
+                                    <input type="text" class="form-control" id="configAvisoAcolhimento" placeholder="Ex.: Inscrições até 30/11 às 18h">
+                                </div>
+                                <button class="btn btn-primary" id="btnSalvarConfigAcolhimento">
+                                    <i class="fas fa-save me-1"></i> Salvar configuração
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header bg-white d-flex flex-wrap gap-2 align-items-center">
+                                <h5 class="mb-0 flex-grow-1"><i class="fas fa-list me-2"></i>Inscrições de Acolhedores</h5>
+                                <select id="filtroStatusAcolhedor" class="form-select" style="width:auto;">
+                                    <option value="">Todos os status</option>
+                                    <option value="pendente">Pendentes</option>
+                                    <option value="aprovado">Aprovados</option>
+                                    <option value="rejeitado">Rejeitados</option>
+                                </select>
+                                <input type="text" id="filtroBuscaAcolhedor" class="form-control" style="width:240px;" placeholder="Buscar por nome/matrícula...">
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-hover mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Nome</th>
+                                                <th>Turma</th>
+                                                <th>Curso</th>
+                                                <th>Telefone</th>
+                                                <th>Status</th>
+                                                <th>Data</th>
+                                                <th>Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tabelaAcolhedores">
+                                            <tr><td colspan="7" class="text-center text-muted py-3">Nenhum acolhedor encontrado</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ATENDIMENTO -->
+                    <div class="tab-pane fade" id="tab-atendimento" role="tabpanel">
+                        <div id="content">
+                            <!-- O conteúdo dinâmico do módulo será renderizado aqui -->
                         </div>
                     </div>
 
@@ -565,8 +694,7 @@
                                                 <p class="text-muted small mb-0">Permite alunos se inscreverem nos clubes</p>
                                             </div>
                                             <div class="form-check form-switch">
-                                                <input class="form-check-input" type="checkbox" id="configInscricoes"
-                                                       onchange="atualizarConfiguracao()">
+                                                <input class="form-check-input" type="checkbox" id="configInscricoes" onchange="atualizarConfiguracao()">
                                             </div>
                                         </div>
 
@@ -576,8 +704,7 @@
                                                 <p class="text-muted small mb-0">Habilita a votação na página pública</p>
                                             </div>
                                             <div class="form-check form-switch">
-                                                <input class="form-check-input" type="checkbox" id="configEleicao"
-                                                       onchange="atualizarConfiguracao()">
+                                                <input class="form-check-input" type="checkbox" id="configEleicao" onchange="atualizarConfiguracao()">
                                             </div>
                                         </div>
 
@@ -587,8 +714,17 @@
                                                 <p class="text-muted small mb-0">Mostra os tutores na página pública</p>
                                             </div>
                                             <div class="form-check form-switch">
-                                                <input class="form-check-input" type="checkbox" id="configTutoria"
-                                                       onchange="atualizarConfiguracao()">
+                                                <input class="form-check-input" type="checkbox" id="configTutoria" onchange="atualizarConfiguracao()">
+                                            </div>
+                                        </div>
+
+                                        <div class="config-item">
+                                            <div>
+                                                <strong>Acolhimento Aberto</strong>
+                                                <p class="text-muted small mb-0">Permite inscrições de acolhedores na página pública</p>
+                                            </div>
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="configAcolhimentoTab" onchange="atualizarConfiguracao()">
                                             </div>
                                         </div>
                                     </div>
@@ -603,10 +739,12 @@
                                     <div class="card-body">
                                         <div class="mb-3">
                                             <label class="form-label">Mensagem de aviso</label>
-                                            <textarea id="configAviso" class="form-control" rows="4"
-                                                      placeholder="Ex: As inscrições encerram em 30/11..."></textarea>
+                                            <textarea id="configAviso" class="form-control" rows="4" placeholder="Ex: As inscrições encerram em 30/11..."></textarea>
                                         </div>
-
+                                        <div class="mb-3">
+                                            <label class="form-label">Aviso do Acolhimento</label>
+                                            <textarea id="configAvisoAcolhimentoTab" class="form-control" rows="2" placeholder="Ex: Inscrições de acolhedores até 30/11..."></textarea>
+                                        </div>
                                         <button class="btn btn-primary" onclick="atualizarConfiguracao()">
                                             <i class="fas fa-save"></i> Salvar Aviso
                                         </button>
@@ -615,7 +753,6 @@
                             </div>
                         </div>
 
-                        <!-- Config de Aniversários inline -->
                         <div class="row mt-4">
                             <div class="col-12">
                                 <div class="card">
@@ -636,6 +773,7 @@
         </div>
     </div>
 
+    <!-- MODAIS -->
     <!-- MODAL CLUBE -->
     <div class="modal fade" id="modalClube" tabindex="-1">
         <div class="modal-dialog modal-lg">
@@ -652,8 +790,7 @@
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Descrição <span class="text-danger">*</span></label>
-                            <textarea id="clubeDescricao" class="form-control" rows="3"
-                                      placeholder="Descreva as atividades do clube..."></textarea>
+                            <textarea id="clubeDescricao" class="form-control" rows="3" placeholder="Descreva as atividades do clube..."></textarea>
                         </div>
                         <div class="row">
                             <div class="col-md-6 mb-3">
@@ -800,13 +937,11 @@
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Slogan</label>
-                            <input type="text" id="candidatoSlogan" class="form-control"
-                                   placeholder="Ex: Juntos somos mais fortes!">
+                            <input type="text" id="candidatoSlogan" class="form-control" placeholder="Ex: Juntos somos mais fortes!">
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Proposta</label>
-                            <textarea id="candidatoProposta" class="form-control" rows="3"
-                                      placeholder="O que você pretende fazer se eleito..."></textarea>
+                            <textarea id="candidatoProposta" class="form-control" rows="3" placeholder="O que você pretende fazer se eleito..."></textarea>
                         </div>
                     </form>
                 </div>
@@ -834,39 +969,14 @@
                     <p style="color: #6b7280; font-size: 14px; margin-bottom: 20px;">
                         Peça para os alunos escanearem este QR Code para acessar a página de inscrição e votação!
                     </p>
-
-                    <div id="qrCodeContainer" style="
-                        background: white;
-                        padding: 20px;
-                        border-radius: 20px;
-                        border: 3px solid #e11d48;
-                        display: inline-block;
-                        margin-bottom: 20px;
-                    ">
-                        <div id="qrCodeLoading" style="
-                            width: 280px; height: 280px;
-                            display: flex; align-items: center; justify-content: center;
-                            flex-direction: column;
-                        ">
+                    <div id="qrCodeContainer" style="background: white; padding: 20px; border-radius: 20px; border: 3px solid #e11d48; display: inline-block; margin-bottom: 20px;">
+                        <div id="qrCodeLoading" style="width: 280px; height: 280px; display: flex; align-items: center; justify-content: center; flex-direction: column;">
                             <div class="loading-spinner"></div>
                             <p style="color: #6b7280; margin-top: 15px; font-size: 13px;">Gerando QR Code...</p>
                         </div>
-                        <img id="qrCodeImg" src="" alt="QR Code"
-                            style="width: 280px; height: 280px; display: none; border-radius: 8px;">
+                        <img id="qrCodeImg" src="" alt="QR Code" style="width: 280px; height: 280px; display: none; border-radius: 8px;">
                     </div>
-
-                    <div style="
-                        background: #f3f4f6;
-                        border-radius: 12px;
-                        padding: 12px 16px;
-                        display: flex;
-                        align-items: center;
-                        gap: 10px;
-                        max-width: 400px;
-                        margin: 0 auto;
-                        font-size: 12px;
-                        word-break: break-all;
-                    ">
+                    <div style="background: #f3f4f6; border-radius: 12px; padding: 12px 16px; display: flex; align-items: center; gap: 10px; max-width: 400px; margin: 0 auto; font-size: 12px; word-break: break-all;">
                         <i class="fas fa-link" style="color: #e11d48;"></i>
                         <span id="qrCodeUrlTexto" style="color: #4b5563; flex: 1; text-align: left;"></span>
                     </div>
@@ -899,30 +1009,21 @@
                         <input type="hidden" id="aniversarioId">
                         <input type="hidden" id="aniversarioUsuarioId">
 
-                        <!-- 🔍 PICKER DE USUÁRIO DO BANCO (SELECT + BUSCA) -->
                         <div class="mb-4" style="background:#fdf2f8;padding:14px;border-radius:10px;border:2px dashed #ec4899;">
                             <label class="form-label" style="font-weight:600;color:#be185d;">
                                 <i class="fas fa-users me-1"></i> Selecionar perfil do banco (opcional)
                             </label>
-                            
                             <select id="selectUsuarioAniversario" class="form-select mb-2" onchange="selecionarPerfilPorSelect(this.value)">
                                 <option value="">Carregando perfis...</option>
                             </select>
-
                             <div class="d-flex align-items-center gap-2 mt-2">
                                 <hr class="flex-grow-1 m-0">
                                 <small class="text-muted text-nowrap">ou busque digitando</small>
                                 <hr class="flex-grow-1 m-0">
                             </div>
-
-                            <input type="text" id="buscaUsuarioAniversario" class="form-control mt-2"
-                                placeholder="Digite nome, email ou matrícula..."
-                                autocomplete="off">
-                            <small class="text-muted d-block mt-1">
-                                Selecione um perfil para preencher automaticamente. Deixe em branco para cadastro manual.
-                            </small>
-                            <div id="resultadosBuscaUsuario" class="list-group mt-2"
-                                style="max-height:200px;overflow-y:auto;display:none;"></div>
+                            <input type="text" id="buscaUsuarioAniversario" class="form-control mt-2" placeholder="Digite nome, email ou matrícula..." autocomplete="off">
+                            <small class="text-muted d-block mt-1">Selecione um perfil para preencher automaticamente. Deixe em branco para cadastro manual.</small>
+                            <div id="resultadosBuscaUsuario" class="list-group mt-2" style="max-height:200px;overflow-y:auto;display:none;"></div>
                         </div>
 
                         <div class="mb-3">
@@ -944,8 +1045,7 @@
                                 <input type="tel" id="aniversarioTelefone" class="form-control">
                             </div>
                         </div>
-                        
-                        <!-- CAMPOS OPCIONAIS (aluno) -->
+
                         <div class="row" id="camposAlunoAniversario">
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Turma <small class="text-muted">(opcional)</small></label>
@@ -995,7 +1095,6 @@
                             <input type="time" id="cfgAnivHorario" class="form-control">
                         </div>
                     </div>
-
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <div class="form-check form-switch">
@@ -1012,7 +1111,6 @@
                             <small class="text-muted">Ex: 30 = 30 minutos antes; 1440 = 1 dia antes.</small>
                         </div>
                     </div>
-
                     <div class="config-section-title mt-4">
                         <i class="fas fa-users me-2"></i> Quem notificar
                     </div>
@@ -1036,7 +1134,6 @@
                             </div>
                         </div>
                     </div>
-
                     <div class="config-section-title mt-4">
                         <i class="fas fa-envelope me-2"></i> Canais extras
                     </div>
@@ -1044,13 +1141,11 @@
                         <input class="form-check-input" type="checkbox" id="cfgAnivEnviarEmail">
                         <label class="form-check-label" for="cfgAnivEnviarEmail">Enviar também por e-mail</label>
                     </div>
-
                     <div class="config-section-title mt-4">
                         <i class="fas fa-comment-alt me-2"></i> Mensagem padrão
                     </div>
                     <div class="mb-3">
-                        <textarea id="cfgAnivMensagem" class="form-control" rows="3"
-                                  placeholder="Use {nome} para o nome do aniversariante"></textarea>
+                        <textarea id="cfgAnivMensagem" class="form-control" rows="3" placeholder="Use {nome} para o nome do aniversariante"></textarea>
                         <small class="text-muted">Exemplo: "🎉 Feliz aniversário, {nome}! Que seu dia seja especial!"</small>
                     </div>
                 </div>
@@ -1075,10 +1170,7 @@
                 <div class="modal-body text-center p-4">
                     <div id="detalheAniversarioAvatar" class="mb-3"></div>
                     <h4 id="detalheAniversarioNome" class="fw-bold text-dark mb-1"></h4>
-                    
-                    <div id="detalheAniversarioInfo" class="mt-4 p-3 rounded" style="background: #fdf2f8; border: 1px dashed #fbcfe8;">
-                        <!-- Informações preenchidas via JS -->
-                    </div>
+                    <div id="detalheAniversarioInfo" class="mt-4 p-3 rounded" style="background: #fdf2f8; border: 1px dashed #fbcfe8;"></div>
                 </div>
                 <div class="modal-footer justify-content-center border-0 pb-4">
                     <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">
@@ -1089,14 +1181,138 @@
         </div>
     </div>
 
+    <!-- MODAL DETALHES DO ACOLHEDOR -->
+    <div class="modal fade" id="modalDetalhesAcolhedor" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-user-check me-2"></i>Detalhes do Acolhedor</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="modalDetalhesAcolhedorConteudo"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="js/protagonismo.js"></script>
     <script src="js/protagonismo-header.js"></script>
-
-    <!-- Scripts de aniversários -->
     <script src="js/protagonismo-aniversarios.js"></script>
+    <script src="js/protagonismo-acolhimento.js"></script>
+    <script src="js/protagonismo-atendimento.js"></script>
 
-    <!-- Escalonamento Mobile -->
+<!-- ========================================================= -->
+<!-- INICIALIZAÇÃO DO MÓDULO DE ATENDIMENTO (SIMPLIFICADA)    -->
+<!-- ========================================================= -->
+<script>
+(function() {
+    'use strict';
+
+    console.log('🚀 [Atendimento] Bootstrap de inicialização carregado.');
+
+    // ============================================
+    // 🔥 A aba de Atendimento agora usa data-bs-toggle como as outras.
+    // O único trabalho aqui é chamar o init() do módulo quando ela for mostrada.
+    // ============================================
+    function inicializarModuloAtendimento() {
+        const content = document.getElementById('content');
+        if (!content) {
+            console.error('❌ [Atendimento] #content não encontrado!');
+            return;
+        }
+
+        const jaRenderizado = content.querySelector('.prot-container') !== null;
+
+        if (!jaRenderizado) {
+            let tentativas = 0;
+            const tentarInit = () => {
+                if (window.AtendimentoProtagonismoModule &&
+                    typeof window.AtendimentoProtagonismoModule.init === 'function') {
+                    console.log('🚀 [Atendimento] Chamando init()...');
+                    try {
+                        window.AtendimentoProtagonismoModule.init();
+                    } catch (err) {
+                        console.error('❌ [Atendimento] Erro no init():', err);
+                        content.innerHTML = '<div class="alert alert-danger m-3">Erro ao carregar o módulo. Veja o console.</div>';
+                    }
+                } else if (tentativas < 10) {
+                    tentativas++;
+                    setTimeout(tentarInit, 300);
+                } else {
+                    console.error('❌ [Atendimento] Módulo não encontrado após 10 tentativas.');
+                    content.innerHTML = '<div class="alert alert-warning m-3"><strong>Módulo não carregado.</strong><br>Verifique <code>js/protagonismo-atendimento.js</code>.</div>';
+                }
+            };
+            tentarInit();
+        } else {
+            // Já renderizado: só re-inicializa (o init() do módulo cuida de reativar as sub-abas)
+            console.log('ℹ️ [Atendimento] Já renderizado. Chamando init() para reativar...');
+            try {
+                window.AtendimentoProtagonismoModule.init();
+            } catch (e) {
+                console.warn('⚠️ [Atendimento] Erro ao re-init:', e);
+            }
+        }
+    }
+
+    // ============================================
+    // Escuta o evento Bootstrap de "aba mostrada"
+    // ============================================
+    document.addEventListener('shown.bs.tab', function(event) {
+        const id = event.target && event.target.id;
+        if (id === 'aba-atendimento') {
+            console.log('📌 [Atendimento] Aba mostrada (shown.bs.tab) — inicializando...');
+            inicializarModuloAtendimento();
+        }
+    });
+
+    // ============================================
+    // Fallback: se por algum motivo o evento não disparar,
+    // escuta o clique direto no botão.
+    // ============================================
+    document.addEventListener('click', function(event) {
+        const btn = event.target.closest('#aba-atendimento');
+        if (!btn) return;
+        console.log('👆 [Atendimento] Clique detectado no botão.');
+        // setTimeout pra deixar o Bootstrap terminar a transição
+        setTimeout(inicializarModuloAtendimento, 150);
+    }, true);
+
+    // ============================================
+    // Caso o painel já esteja aberto no carregamento inicial
+    // (ex: via hash na URL), inicializa também.
+    // ============================================
+    window.addEventListener('load', function() {
+        setTimeout(function() {
+            const paneAtend = document.getElementById('tab-atendimento');
+            if (paneAtend && paneAtend.classList.contains('active')) {
+                console.log('📌 [Atendimento] Aba já ativa no load — inicializando...');
+                inicializarModuloAtendimento();
+            }
+        }, 500);
+    });
+
+    // Expõe para uso manual se precisar
+    window.abrirAtendimentoManual = function(event) {
+        if (event) event.preventDefault();
+        const btn = document.getElementById('aba-atendimento');
+        if (btn) {
+            try {
+                new bootstrap.Tab(btn).show();
+            } catch (e) {
+                // fallback: força via classes
+                btn.click();
+            }
+        }
+    };
+})();
+</script>
+
+    <!-- Escalonamento Mobile e Service Worker -->
     <script>
         (function() {
             if (window.innerWidth > 768) return;
@@ -1119,9 +1335,7 @@
                 }, 100);
             });
         })();
-    </script>
 
-    <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(registrations => {
                 registrations.forEach(reg => reg.unregister());

@@ -27,146 +27,6 @@
     <script src="js/dialog-helper.js"></script>
 
     <link rel="stylesheet" href="css/protagonismo-publico.css">
-
-    <!-- Estilo do Botão de Download -->
-    <style>
-        /* ============================================
-           CARD DE DOWNLOAD DO APLICATIVO
-           ============================================ */
-        .download-app-card {
-            margin: 30px auto;
-            max-width: 600px;
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            border-radius: 20px;
-            padding: 25px 30px;
-            display: flex;
-            align-items: center;
-            gap: 20px;
-            box-shadow: 0 10px 30px rgba(16, 185, 129, 0.35);
-            text-decoration: none;
-            color: white;
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .download-app-card::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            right: -20%;
-            width: 200px;
-            height: 200px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 50%;
-            pointer-events: none;
-        }
-
-        .download-app-card::after {
-            content: '';
-            position: absolute;
-            bottom: -30%;
-            left: -10%;
-            width: 150px;
-            height: 150px;
-            background: rgba(255, 255, 255, 0.08);
-            border-radius: 50%;
-            pointer-events: none;
-        }
-
-        .download-app-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 40px rgba(16, 185, 129, 0.5);
-            color: white;
-            text-decoration: none;
-        }
-
-        .download-app-icon {
-            width: 70px;
-            height: 70px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 18px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 32px;
-            flex-shrink: 0;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            position: relative;
-            z-index: 2;
-        }
-
-        .download-app-content {
-            flex: 1;
-            position: relative;
-            z-index: 2;
-        }
-
-        .download-app-content h3 {
-            margin: 0 0 5px 0;
-            font-size: 1.25rem;
-            font-weight: 700;
-            color: white;
-        }
-
-        .download-app-content p {
-            margin: 0;
-            font-size: 0.9rem;
-            opacity: 0.9;
-            color: white;
-        }
-
-        .download-app-arrow {
-            width: 45px;
-            height: 45px;
-            background: white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #10b981;
-            font-size: 18px;
-            flex-shrink: 0;
-            transition: all 0.3s ease;
-            position: relative;
-            z-index: 2;
-        }
-
-        .download-app-card:hover .download-app-arrow {
-            transform: translateX(5px) scale(1.1);
-            background: #f0fdf4;
-        }
-
-        @media (max-width: 768px) {
-            .download-app-card {
-                flex-direction: column;
-                text-align: center;
-                padding: 25px 20px;
-                gap: 15px;
-            }
-
-            .download-app-icon {
-                width: 60px;
-                height: 60px;
-                font-size: 26px;
-            }
-
-            .download-app-content h3 {
-                font-size: 1.1rem;
-            }
-
-            .download-app-content p {
-                font-size: 0.85rem;
-            }
-
-            .download-app-arrow {
-                width: 40px;
-                height: 40px;
-                font-size: 16px;
-            }
-        }
-    </style>
 </head>
 <body>
     <!-- Fundo animado -->
@@ -177,7 +37,7 @@
     </div>
 
     <div class="container-public">
-        
+
         <!-- HERO / CABEÇALHO -->
         <div class="hero-section">
             <div class="hero-icon">
@@ -185,12 +45,16 @@
             </div>
             <h1>Protagonismo Estudantil</h1>
             <p>Inscreva-se em clubes e participe das eleições de líderes!</p>
-            
+
             <div class="hero-status" id="heroStatus">
                 <span class="status-pill" id="statusInscricoes">
                     <i class="fas fa-circle"></i> Verificando...
                 </span>
                 <span class="status-pill" id="statusEleicao">
+                    <i class="fas fa-circle"></i> Verificando...
+                </span>
+                <!-- 🆕 NOVO PILL: ACOLHIMENTO -->
+                <span class="status-pill" id="statusAcolhimentoHome">
                     <i class="fas fa-circle"></i> Verificando...
                 </span>
             </div>
@@ -241,6 +105,16 @@
                 <p>Verifique seu status</p>
                 <span class="action-arrow"><i class="fas fa-arrow-right"></i></span>
             </button>
+
+            <!-- 🆕 NOVO CARD: ACOLHIMENTO -->
+            <button class="action-card" id="cardAcolhimento" onclick="mostrarSecao('acolhimento')">
+                <div class="action-icon acolhimento">
+                    <i class="fas fa-hand-holding-heart"></i>
+                </div>
+                <h3>Quero ser Acolhedor</h3>
+                <p>Inscreva-se para acolher colegas</p>
+                <span class="action-arrow"><i class="fas fa-arrow-right"></i></span>
+            </button>
         </div>
 
         <!-- ============================================
@@ -254,7 +128,6 @@
                 <h2><i class="fas fa-users"></i> Inscrever em Clube</h2>
             </div>
 
-            <!-- Clubes disponíveis -->
             <div class="clubes-disponiveis-header">
                 <h3>Escolha seu clube favorito</h3>
                 <span class="badge-count" id="countClubesDisponiveis">0 clubes</span>
@@ -263,7 +136,6 @@
                 <div class="loading-state"><div class="spinner"></div><p>Carregando clubes...</p></div>
             </div>
 
-            <!-- Formulário de inscrição -->
             <div class="form-public" id="formInscricaoContainer" style="display: none;">
                 <div class="form-header">
                     <h3><i class="fas fa-clipboard-list"></i> Preencha seus dados</h3>
@@ -273,7 +145,7 @@
                 <form id="formInscricao" onsubmit="event.preventDefault(); enviarInscricao();">
                     <div class="form-group">
                         <label><i class="fas fa-user"></i> Nome Completo *</label>
-                        <input type="text" id="inscricaoNome" class="form-input" 
+                        <input type="text" id="inscricaoNome" class="form-input"
                                placeholder="Digite seu nome completo" required minlength="5">
                     </div>
 
@@ -300,7 +172,7 @@
 
                     <div class="form-group">
                         <label><i class="fas fa-id-card"></i> Matrícula (opcional)</label>
-                        <input type="text" id="inscricaoMatricula" class="form-input" 
+                        <input type="text" id="inscricaoMatricula" class="form-input"
                                placeholder="Digite sua matrícula">
                     </div>
 
@@ -336,7 +208,7 @@
                 <form id="formIdentificacao" onsubmit="event.preventDefault(); carregarCandidatosParaVotar();">
                     <div class="form-group">
                         <label><i class="fas fa-user"></i> Nome Completo *</label>
-                        <input type="text" id="votoNome" class="form-input" 
+                        <input type="text" id="votoNome" class="form-input"
                                placeholder="Digite seu nome completo" required minlength="5">
                     </div>
 
@@ -358,7 +230,6 @@
                 </form>
             </div>
 
-            <!-- Candidatos (aparece após identificar) -->
             <div id="candidatosVotacaoContainer" style="display: none;">
                 <div class="voto-progress">
                     <div class="progress-step" id="stepLider">
@@ -401,7 +272,7 @@
                     </div>
                 </div>
 
-                <button class="btn-submit btn-confirmar-voto" id="btnConfirmarVoto" 
+                <button class="btn-submit btn-confirmar-voto" id="btnConfirmarVoto"
                         onclick="confirmarVoto()" disabled>
                     <i class="fas fa-check-double"></i> Confirmar Voto
                 </button>
@@ -462,10 +333,240 @@
         </section>
 
         <!-- ============================================
+             🆕 SEÇÃO: ACOLHIMENTO (ACOLHEDORES)
+             ============================================ -->
+        <section class="section-content" id="secaoAcolhimento">
+            <div class="section-header">
+                <button class="btn-voltar" onclick="voltarHome()">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2><i class="fas fa-hand-holding-heart"></i> Quero ser Acolhedor</h2>
+            </div>
+
+            <!-- Aviso de fechado -->
+            <div id="acolhimentoFechado" class="alert-warning-box" style="display: none;">
+                <i class="fas fa-lock"></i>
+                <span id="avisoAcolhimentoTexto">Acolhimento fechado no momento.</span>
+            </div>
+
+            <!-- 🆕 NOVO BANNER DE PRAZO -->
+            <div id="acolhimentoPrazoBanner" class="alert-warning-box" style="display: none; background: #fff7ed; border: 1px solid #f97316; color: #ea580c; margin-bottom: 20px;">
+                <i class="fas fa-clock"></i>
+                <span id="textoPrazoAcolhimento"></span>
+            </div>
+
+            <div id="acolhimentoConteudo" style="display: none;">
+
+                <!-- ETAPA 1: Buscar aluno -->
+                <div id="acolhimentoEtapa1">
+                    <div class="form-public">
+                        <div class="form-header">
+                            <h3><i class="fas fa-search"></i> 1. Encontre seu nome</h3>
+                            <p class="text-muted">Selecione sua turma, curso ou digite seu nome para se localizar.</p>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label><i class="fas fa-users-class"></i> Turma</label>
+                                <select id="acolhimentoTurma" class="form-input">
+                                    <option value="">Todas as turmas</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label><i class="fas fa-graduation-cap"></i> Curso</label>
+                                <select id="acolhimentoCurso" class="form-input">
+                                    <option value="">Todos os cursos</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label><i class="fas fa-user"></i> Seu nome</label>
+                            <input type="text" id="acolhimentoBusca" class="form-input"
+                                   placeholder="Digite pelo menos 3 letras...">
+                        </div>
+
+                        <button type="button" class="btn-submit" id="btnBuscarAlunos">
+                            <i class="fas fa-search"></i> Buscar
+                        </button>
+
+                        <div id="acolhimentoListaAlunos" class="acolhimento-lista-alunos"></div>
+                    </div>
+                </div>
+
+                <!-- ETAPA 2: Formulário -->
+                <div id="acolhimentoEtapa2" style="display: none;">
+                    <div class="form-public">
+                        <div class="form-header">
+                            <h3><i class="fas fa-user-check"></i> 2. Confirme seus dados e assine</h3>
+                            <div class="clube-escolhido" id="acolhimentoAlunoSelecionado"></div>
+                        </div>
+
+                        <form id="formAcolhedor" novalidate>
+
+                            <h4 class="acolhimento-secao-titulo">Dados pessoais</h4>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label><i class="fas fa-user"></i> Nome completo *</label>
+                                    <input type="text" class="form-input" id="acNome" required>
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-calendar"></i> Data de nascimento *</label>
+                                    <input type="date" class="form-input" id="acDataNasc" required>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label><i class="fas fa-id-card"></i> Matrícula</label>
+                                    <input type="text" class="form-input" id="acMatricula">
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-users-class"></i> Turma *</label>
+                                    <input type="text" class="form-input" id="acTurma" required>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-graduation-cap"></i> Curso *</label>
+                                <input type="text" class="form-input" id="acCurso" required>
+                            </div>
+
+                            <h4 class="acolhimento-secao-titulo">Contato</h4>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label><i class="fas fa-envelope"></i> E-mail</label>
+                                    <input type="email" class="form-input" id="acEmail">
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-phone"></i> Telefone</label>
+                                    <input type="tel" class="form-input" id="acTelefone">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fab fa-whatsapp"></i> WhatsApp</label>
+                                <input type="tel" class="form-input" id="acWhatsapp">
+                            </div>
+
+                            <div class="acolhimento-checkbox-linha">
+                                <input type="checkbox" id="acMenor">
+                                <label for="acMenor">
+                                    Sou <strong>menor de 18 anos</strong> (necessário dados e assinatura do responsável)
+                                </label>
+                            </div>
+
+                            <div id="acResponsavelBox" class="acolhimento-resp-box" style="display: none;">
+                                <h4 class="acolhimento-secao-titulo">Dados do responsável</h4>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Nome do responsável *</label>
+                                        <input type="text" class="form-input" id="acRespNome">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Telefone *</label>
+                                        <input type="tel" class="form-input" id="acRespTelefone">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Parentesco</label>
+                                    <input type="text" class="form-input" id="acRespParentesco" placeholder="Mãe, pai, etc.">
+                                </div>
+                            </div>
+
+                            <h4 class="acolhimento-secao-titulo">Sobre você</h4>
+                            <div class="form-group">
+                                <label>Por que quer ser acolhedor(a)?</label>
+                                <textarea class="form-input" id="acPorque" rows="3" placeholder="Conte um pouco..."></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label>Disponibilidade</label>
+                                <div class="acolhimento-disponibilidade">
+                                    <label class="acolhimento-disp-item">
+                                        <input type="checkbox" value="manha" id="dispManha"> Manhã
+                                    </label>
+                                    <label class="acolhimento-disp-item">
+                                        <input type="checkbox" value="tarde" id="dispTarde"> Tarde
+                                    </label>
+                                    <label class="acolhimento-disp-item">
+                                        <input type="checkbox" value="noite" id="dispNoite"> Noite
+                                    </label>
+                                    <label class="acolhimento-disp-item">
+                                        <input type="checkbox" value="integral" id="dispIntegral"> Integral
+                                    </label>
+                                </div>
+                            </div>
+
+                            <h4 class="acolhimento-secao-titulo">Termos</h4>
+                            <div class="acolhimento-checkbox-linha">
+                                <input type="checkbox" id="acAceitaTermos" required>
+                                <label for="acAceitaTermos">
+                                    Declaro que as informações são verdadeiras e aceito participar como <strong>acolhedor(a)</strong>.
+                                </label>
+                            </div>
+                            <div class="acolhimento-checkbox-linha">
+                                <input type="checkbox" id="acAceitaLgpd" required>
+                                <label for="acAceitaLgpd">
+                                    Autorizo o uso dos meus dados pessoais conforme a <strong>LGPD</strong>, exclusivamente para fins de organização do Protagonismo.
+                                </label>
+                            </div>
+
+                            <h4 class="acolhimento-secao-titulo">Assinatura</h4>
+
+                            <div class="acolhimento-assinatura-bloco">
+                                <label>Assinatura do aluno *</label>
+                                <div class="acolhimento-canvas-wrap">
+                                    <canvas id="canvasAssinaturaAluno" class="sig-canvas" width="600" height="180"></canvas>
+                                </div>
+                                <button type="button" class="btn-limpar-assinatura" data-limpar="aluno">
+                                    <i class="fas fa-eraser"></i> Limpar
+                                </button>
+                            </div>
+
+                            <div id="assinaturaRespBox" class="acolhimento-assinatura-bloco" style="display: none;">
+                                <label>Assinatura do responsável *</label>
+                                <div class="acolhimento-canvas-wrap">
+                                    <canvas id="canvasAssinaturaResp" class="sig-canvas" width="600" height="180"></canvas>
+                                </div>
+                                <button type="button" class="btn-limpar-assinatura" data-limpar="resp">
+                                    <i class="fas fa-eraser"></i> Limpar
+                                </button>
+                            </div>
+
+                            <div class="acolhimento-acoes">
+                                <button type="submit" class="btn-submit" id="btnEnviarAcolhedor">
+                                    <i class="fas fa-paper-plane"></i> Enviar inscrição
+                                </button>
+                                <button type="button" class="btn-voltar-acolhimento" id="btnVoltarAcolhimento">
+                                    <i class="fas fa-arrow-left"></i> Voltar
+                                </button>
+                            </div>
+
+                            <div id="acolhedorMsg" class="acolhimento-msg"></div>
+                        </form>
+                    </div>
+                </div>
+                <!-- ETAPA 3: Sucesso -->
+                <div id="acolhimentoEtapa3" style="display: none;">
+                    <div class="form-public acolhimento-sucesso">
+                        <div class="acolhimento-sucesso-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <h3>Inscrição enviada!</h3>
+                        <p class="text-muted">Sua inscrição como acolhedor(a) foi registrada e será analisada pelo Protagonismo.</p>
+                        <div id="acolhedorResumo" class="acolhimento-resumo"></div>
+                        <button type="button" class="btn-submit" id="btnVoltarHomeAcolhimento" onclick="voltarHomeAcolhimento()">
+                            <i class="fas fa-home"></i> Voltar ao início
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ============================================
              CARD: BAIXAR APLICATIVO
              ============================================ -->
-        <a href="https://drive.google.com/file/d/1q1V6K4EVN3R3cINpP8iZfWqHx_U4q45Y/view?usp=sharing" 
-           target="_blank" 
+        <a href="https://drive.google.com/file/d/1q1V6K4EVN3R3cINpP8iZfWqHx_U4q45Y/view?usp=sharing"
+           target="_blank"
            rel="noopener noreferrer"
            class="download-app-card">
             <div class="download-app-icon">
@@ -516,17 +617,13 @@
         </div>
     </div>
 
-    <!-- ============================================ -->
-    <!-- 🆕 BOTÃO FLUTUANTE DE AJUDA -->
-    <!-- ============================================ -->
+    <!-- BOTÃO FLUTUANTE DE AJUDA -->
     <button class="btn-ajuda-flutuante" onclick="abrirAjuda()" title="Preciso de Ajuda">
         <i class="fas fa-headset"></i>
         <span>Preciso de Ajuda</span>
     </button>
 
-    <!-- ============================================ -->
-    <!-- 🆕 MODAL DE AJUDA -->
-    <!-- ============================================ -->
+    <!-- MODAL DE AJUDA -->
     <div class="modal-ajuda-overlay" id="modalAjudaProtagonismo">
         <div class="modal-ajuda-content" role="dialog" aria-labelledby="modalAjudaProtagonismoTitulo" aria-modal="true">
             <button class="modal-ajuda-close" onclick="fecharAjuda()" title="Fechar">
@@ -593,45 +690,7 @@
         </div>
     </div>
 
-    <!-- Escalonamento Mobile -->
-    <script>
-        (function() {
-            if (window.innerWidth > 768) return;
-            function calcularEscalaMobile() {
-                const width = window.innerWidth;
-                if (width <= 320) return 0.55;
-                if (width <= 360) return 0.6;
-                if (width <= 400) return 0.65;
-                if (width <= 500) return 0.75;
-                if (width <= 600) return 0.85;
-                if (width <= 700) return 0.95;
-                return 1;
-            }
-            document.documentElement.style.setProperty('--scale-ratio', calcularEscalaMobile());
-            let timeout;
-            window.addEventListener('resize', () => {
-                clearTimeout(timeout);
-                timeout = setTimeout(() => {
-                    document.documentElement.style.setProperty('--scale-ratio', calcularEscalaMobile());
-                }, 100);
-            });
-        })();
-    </script>
-
-    <!-- Service Worker -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(registrations => {
-                registrations.forEach(reg => reg.unregister());
-            });
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                    .then(reg => console.log('✅ Service Worker ativo'))
-                    .catch(err => console.log('❌ Erro:', err));
-            });
-        }
-    </script>
-
+    <!-- Bootstrap -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="js/protagonismo-publico.js"></script>
 </body>
