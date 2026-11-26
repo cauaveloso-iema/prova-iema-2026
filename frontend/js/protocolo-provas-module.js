@@ -2,6 +2,11 @@
 // ============================================================================
 // MÓDULO: PROTOCOLO DE PROVAS
 // Registra o recebimento de provas dos professores
+//
+// 🆕 Inclui RASCUNHO AUTOMÁTICO: tudo que for preenchido é salvo no navegador
+//    e restaurado se a página recarregar, o navegador fechar ou a internet cair.
+// 🆕 Inclui ASSINATURA INLINE: no modal do QR Code há o botão "Assinar aqui mesmo",
+//    que abre um canvas para o professor assinar direto na tela (igual à 2ª Chamada).
 // ============================================================================
 
 const ProtocoloProvasModule = (function() {
@@ -15,7 +20,7 @@ const ProtocoloProvasModule = (function() {
         relatorioAtual: null,
         editandoId: null,
         professorSelecionado: null,
-        turmasAdicionadas: [], // [{ turma, quantidadeProvas, alunos: [] }]
+        turmasAdicionadas: [], // [{ turma, quantidadeProvas, alunosDisponiveis, alunosSelecionados }]
         charts: { tipo: null, periodo: null, professor: null },
         paginacao: { pagina: 1, porPagina: 10, total: 0, totalPaginas: 0 },
         filtros: {
@@ -29,7 +34,19 @@ const ProtocoloProvasModule = (function() {
             sessaoId: null,
             assinaturaCapturada: null,
             qrCodeDataUrl: null,
-            intervaloMonitoramento: null
+            intervaloMonitoramento: null,
+            modalInstance: null,
+            // 🆕 Canvas da assinatura inline
+            canvasInline: {
+                ctx: null, canvas: null, wrapper: null, placeholder: null,
+                desenhando: false, temAssinatura: false, lastX: 0, lastY: 0
+            }
+        },
+        // 🆕 Rascunho
+        rascunho: {
+            timer: null,
+            restaurando: false,
+            globaisVinculados: false
         }
     };
 
@@ -67,6 +84,328 @@ const ProtocoloProvasModule = (function() {
     }
 
     // ============================================
+    // 🆕 RASCUNHO DO PROTOCOLO (auto-save / restaurar)
+    // ============================================
+    const RASCUNHO_VERSAO = 1;
+    const RASCUNHO_INTERVALO_MS = 700;
+    const RASCUNHO_VALIDADE_MS = 7 * 24 * 60 * 60 * 1000; // 7 dias
+
+    function chaveRascunho() {
+        let uid = 'anon';
+        try {
+            const u = JSON.parse(localStorage.getItem('user_data') || '{}');
+            uid = u.id || u._id || u.email || u.nome || 'anon';
+        } catch (e) {}
+        return `pedagogico_rascunho_protocolo_provas_${uid}`;
+    }
+
+    function coletarDadosRascunho() {
+        const val = (id) => document.getElementById(id)?.value || '';
+        const p = state.professorSelecionado;
+
+        return {
+            versao: RASCUNHO_VERSAO,
+            salvoEm: Date.now(),
+            professor: p ? {
+                id: p.id,
+                nome: p.nome,
+                email: p.email,
+                matricula: p.matricula,
+                eixo: p.eixo
+                // fotoPerfil NÃO é salva (pode ser grande); ao restaurar usa a da lista
+            } : null,
+            data: val('protDataRecebimento'),
+            tipoProva: val('protTipoProva'),
+            tipoProvaOutros: val('protTipoProvaOutros'),
+            periodo: val('protPeriodo'),
+            observacoes: val('protObservacoes'),
+            turmas: state.turmasAdicionadas.map(t => ({
+                turma: t.turma,
+                quantidadeProvas: t.quantidadeProvas,
+                alunosDisponiveis: (t.alunosDisponiveis || []).map(a => ({
+                    id: a.id, nome: a.nome, matricula: a.matricula, curso: a.curso
+                })),
+                alunosSelecionados: (t.alunosSelecionados || []).map(a => ({
+                    id: a.id, nome: a.nome, matricula: a.matricula, curso: a.curso
+                }))
+            })),
+            precisaAssinatura: document.getElementById('protNecessitaAssinatura')?.checked || false,
+            assinaturaBase64: state.sessaoAssinatura.assinaturaCapturada || null
+        };
+    }
+
+    function salvarRascunhoAgora() {
+        if (state.rascunho.restaurando) return;
+        try {
+            // Formulário não está na tela (outro módulo aberto) → não mexe
+            if (!document.getElementById('protCardDados')) return;
+            // Editando protocolo existente → não é rascunho de "novo"
+            if (state.editandoId) return;
+            // Sem professor = nada começou. NÃO apaga o rascunho existente
+            // (assim um F5 antes de restaurar não perde o que estava salvo)
+            if (!state.professorSelecionado) return;
+
+            const dados = coletarDadosRascunho();
+            localStorage.setItem(chaveRascunho(), JSON.stringify(dados));
+            atualizarIndicadorRascunho(true, dados.salvoEm);
+        } catch (e) {
+            console.warn('[RASCUNHO PROTOCOLO]', e);
+            // Estourou a cota: tenta salvar sem assinatura e sem lista completa de alunos
+            try {
+                const dados = coletarDadosRascunho();
+                dados.assinaturaBase64 = null;
+                dados.turmas.forEach(t => { t.alunosDisponiveis = []; });
+                localStorage.setItem(chaveRascunho(), JSON.stringify(dados));
+            } catch (e2) {}
+        }
+    }
+
+    function agendarSalvarRascunho() {
+        if (state.rascunho.restaurando) return;
+        clearTimeout(state.rascunho.timer);
+        state.rascunho.timer = setTimeout(salvarRascunhoAgora, RASCUNHO_INTERVALO_MS);
+    }
+
+    function limparRascunho() {
+        try { localStorage.removeItem(chaveRascunho()); } catch (e) {}
+        clearTimeout(state.rascunho.timer);
+        atualizarIndicadorRascunho(false);
+        fecharBannerRascunho();
+    }
+
+    function obterRascunho() {
+        try {
+            const raw = localStorage.getItem(chaveRascunho());
+            if (!raw) return null;
+            const d = JSON.parse(raw);
+            if (!d || d.versao !== RASCUNHO_VERSAO) return null;
+            if (Date.now() - (d.salvoEm || 0) > RASCUNHO_VALIDADE_MS) {
+                localStorage.removeItem(chaveRascunho());
+                return null;
+            }
+            return d;
+        } catch (e) { return null; }
+    }
+
+    function atualizarIndicadorRascunho(ativo, timestamp) {
+        const el = document.getElementById('protIndicadorRascunho');
+        if (!el) return;
+        if (ativo && timestamp) {
+            const hora = new Date(timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            el.innerHTML = `<i class="fas fa-save"></i> Rascunho salvo às ${hora}`;
+            el.style.display = 'inline-flex';
+        } else {
+            el.style.display = 'none';
+        }
+    }
+
+    function vincularAutoSaveRascunho() {
+        const container = document.getElementById('prot-registrar');
+        if (container) {
+            const handler = () => agendarSalvarRascunho();
+            container.addEventListener('input', handler, true);
+            container.addEventListener('change', handler, true);
+        }
+
+        // Listeners globais só uma vez (a tela pode ser recarregada várias vezes)
+        if (!state.rascunho.globaisVinculados) {
+            state.rascunho.globaisVinculados = true;
+            window.addEventListener('beforeunload', salvarRascunhoAgora);
+            window.addEventListener('pagehide', salvarRascunhoAgora);
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'hidden') salvarRascunhoAgora();
+            });
+        }
+    }
+
+    // ---------------- BANNER ----------------
+    function mostrarBannerRascunho(dados) {
+        fecharBannerRascunho();
+        if (!dados) return;
+
+        const hora = new Date(dados.salvoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        const data = new Date(dados.salvoEm).toLocaleDateString('pt-BR');
+        const nome = dados.professor?.nome || 'Professor não definido';
+        const totalTurmas = (dados.turmas || []).length;
+        const resumo = totalTurmas > 0
+            ? `${totalTurmas} turma(s)`
+            : 'Nenhuma turma ainda';
+        const tipo = dados.tipoProva ? ` • ${dados.tipoProva}` : '';
+
+        const banner = document.createElement('div');
+        banner.id = 'protBannerRascunho';
+        banner.style.cssText = `
+            position: fixed; top: 70px; left: 50%; transform: translateX(-50%);
+            z-index: 99998; max-width: 640px; width: calc(100% - 32px);
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: #fff; border-radius: 14px; padding: 14px 16px;
+            box-shadow: 0 10px 30px rgba(30,60,114,.45);
+            display: flex; align-items: center; gap: 14px;
+            animation: slideDownBannerProt .35s ease;
+        `;
+        banner.innerHTML = `
+            <div style="font-size:28px;flex-shrink:0;">📝</div>
+            <div style="flex:1;min-width:0;">
+                <div style="font-weight:700;font-size:14px;margin-bottom:2px;">Você tem um protocolo em andamento</div>
+                <div style="font-size:12.5px;opacity:.92;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                    <strong>${escapeHtml(nome)}</strong>${escapeHtml(tipo)} • ${escapeHtml(resumo)}
+                </div>
+                <div style="font-size:11px;opacity:.8;margin-top:3px;">Salvo em ${data} às ${hora}</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-shrink:0;">
+                <button id="protBtnRestaurarRascunho" style="background:#fff;color:#1e3c72;border:none;border-radius:9px;padding:9px 14px;font-weight:700;font-size:12.5px;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;">
+                    <i class="fas fa-undo"></i> Restaurar
+                </button>
+                <button id="protBtnDescartarRascunho" title="Descartar" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:9px;padding:9px 11px;font-size:12.5px;cursor:pointer;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+        document.body.appendChild(banner);
+
+        if (!document.getElementById('protStyleBannerRascunho')) {
+            const st = document.createElement('style');
+            st.id = 'protStyleBannerRascunho';
+            st.textContent = `@keyframes slideDownBannerProt{from{opacity:0;transform:translate(-50%,-15px)}to{opacity:1;transform:translate(-50%,0)}}`;
+            document.head.appendChild(st);
+        }
+
+        document.getElementById('protBtnRestaurarRascunho')?.addEventListener('click', () => restaurarRascunho());
+        document.getElementById('protBtnDescartarRascunho')?.addEventListener('click', async () => {
+            // await funciona tanto com confirm nativo quanto com o dialog-helper (Promise)
+            const ok = await window.confirm('Descartar este protocolo em andamento? Os dados serão perdidos.');
+            if (ok) {
+                limparRascunho();
+                showToast('Rascunho descartado.', 'info');
+            }
+        });
+    }
+
+    function fecharBannerRascunho() {
+        document.getElementById('protBannerRascunho')?.remove();
+    }
+
+    // ---------------- RESTAURAR ----------------
+    async function restaurarRascunho() {
+        const dados = obterRascunho();
+        if (!dados) { fecharBannerRascunho(); return; }
+
+        state.rascunho.restaurando = true;
+        fecharBannerRascunho();
+
+        try {
+            if (!dados.professor?.id) {
+                showToast('Rascunho sem professor definido. Recomece o registro.', 'warning');
+                return;
+            }
+
+            // 1) Garante a aba "Registrar"
+            const aba = document.getElementById('prot-registrar-tab');
+            if (aba) { try { new bootstrap.Tab(aba).show(); } catch (e) { aba.click(); } }
+
+            // 2) Limpa o formulário (sem apagar o rascunho)
+            resetarFormulario({ manterRascunho: true });
+            state.editandoId = null;
+
+            // Botão volta ao modo "registrar" (caso estivesse em modo edição)
+            const btn = document.getElementById('protBtnRegistrar');
+            if (btn) {
+                btn.innerHTML = '<i class="fas fa-save me-2"></i> Registrar Protocolo';
+                btn.onclick = () => registrarProtocolo();
+            }
+
+            // 3) Professor: usa o da lista (se carregou) ou o guardado no rascunho
+            const profAtual = state.professores.find(p => p.id === dados.professor.id);
+            aplicarProfessorSelecionado(profAtual || dados.professor);
+
+            // 4) Campos da etapa 2
+            const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+            set('protDataRecebimento', dados.data || getDataLocalISO());
+            set('protTipoProva', dados.tipoProva);
+            set('protPeriodo', dados.periodo);
+            set('protTipoProvaOutros', dados.tipoProvaOutros);
+            const divOutros = document.getElementById('protTipoProvaOutrosDiv');
+            if (divOutros) divOutros.style.display = dados.tipoProva === 'OUTROS' ? 'block' : 'none';
+
+            // 5) Turmas e alunos selecionados
+            state.turmasAdicionadas = (dados.turmas || []).map(t => ({
+                turma: t.turma,
+                quantidadeProvas: t.quantidadeProvas,
+                alunosDisponiveis: t.alunosDisponiveis || [],
+                alunosSelecionados: t.alunosSelecionados || []
+            }));
+
+            // Se faltou a lista de alunos (rascunho reduzido) e há internet, rebusca
+            for (const t of state.turmasAdicionadas) {
+                if ((!t.alunosDisponiveis || t.alunosDisponiveis.length === 0) && navigator.onLine) {
+                    try {
+                        const r = await fetch(`/api/protocolo-provas/alunos-por-turma?turma=${encodeURIComponent(t.turma)}`, {
+                            headers: { 'Authorization': `Bearer ${getToken()}` }
+                        });
+                        const d = await r.json();
+                        if (d.success) t.alunosDisponiveis = d.alunos || [];
+                    } catch (e) { console.warn('Erro ao recarregar alunos:', t.turma, e); }
+                }
+                // Garante que os já selecionados apareçam mesmo sem lista completa
+                (t.alunosSelecionados || []).forEach(sel => {
+                    if (!t.alunosDisponiveis.some(a => a.id === sel.id)) t.alunosDisponiveis.push(sel);
+                });
+            }
+
+            // 6) Mostra as etapas na ordem certa
+            const etapa2Ok = !!(dados.data && dados.tipoProva && dados.periodo &&
+                (dados.tipoProva !== 'OUTROS' || (dados.tipoProvaOutros || '').trim()));
+
+            const cardTurmas = document.getElementById('protCardTurmas');
+            if (cardTurmas && (etapa2Ok || state.turmasAdicionadas.length > 0)) cardTurmas.style.display = 'block';
+
+            const cardFinal = document.getElementById('protCardFinal');
+            if (cardFinal && state.turmasAdicionadas.length > 0) cardFinal.style.display = 'block';
+
+            renderizarTurmasAdicionadas();
+            atualizarResumo();
+
+            // 7) Observações
+            set('protObservacoes', dados.observacoes);
+
+            // 8) Assinatura
+            const check = document.getElementById('protNecessitaAssinatura');
+            if (dados.assinaturaBase64) {
+                state.sessaoAssinatura.assinaturaCapturada = dados.assinaturaBase64;
+                if (check) check.checked = true;
+                mostrarAssinaturaCapturada({
+                    assinaturaBase64: dados.assinaturaBase64,
+                    assinadaPorNome: 'Professor',
+                    assinadaEm: new Date(dados.salvoEm).toISOString()
+                });
+            } else if (dados.precisaAssinatura) {
+                // A sessão/QR anterior não existe mais → precisa marcar de novo
+                if (check) check.checked = false;
+                showToast('Marque novamente "Necessita de assinatura" para gerar um novo QR Code.', 'info');
+            }
+
+            atualizarIndicadorRascunho(true, dados.salvoEm);
+            showToast('📝 Protocolo restaurado! Continue de onde parou.', 'success');
+
+            setTimeout(() => {
+                const alvo = document.getElementById('protCardFinal')?.style.display === 'block'
+                    ? document.getElementById('protCardTurmas')
+                    : (document.getElementById('protCardTurmas')?.style.display === 'block'
+                        ? document.getElementById('protCardTurmas')
+                        : document.getElementById('protCardDados'));
+                alvo?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 350);
+
+        } catch (e) {
+            console.error('[RASCUNHO PROTOCOLO] Erro ao restaurar:', e);
+            showToast('Não foi possível restaurar completamente.', 'warning');
+        } finally {
+            state.rascunho.restaurando = false;
+            agendarSalvarRascunho();
+        }
+    }
+
+    // ============================================
     // 🚀 INICIALIZAÇÃO
     // ============================================
     async function init() {
@@ -77,6 +416,14 @@ const ProtocoloProvasModule = (function() {
             console.error('❌ Container #content não encontrado');
             return;
         }
+
+        // 🆕 A tela é reconstruída do zero: zera o estado do formulário para não
+        //    ficar "professor selecionado" fantasma de uma visita anterior
+        state.professorSelecionado = null;
+        state.turmasAdicionadas = [];
+        state.editandoId = null;
+        state.sessaoAssinatura.assinaturaCapturada = null;
+        clearTimeout(state.rascunho.timer);
 
         content.innerHTML = `
             <div style="text-align: center; padding: 60px;">
@@ -93,6 +440,10 @@ const ProtocoloProvasModule = (function() {
 
         renderizarInterface();
         await carregarLista();
+
+        // 🆕 Se houver rascunho salvo, oferece restaurar
+        const rascunho = obterRascunho();
+        if (rascunho) mostrarBannerRascunho(rascunho);
     }
 
     // ============================================
@@ -156,7 +507,12 @@ const ProtocoloProvasModule = (function() {
                             <p>Registre o recebimento das provas dos professores</p>
                         </div>
                     </div>
-                    <div class="prot-header-actions">
+                    <div class="prot-header-actions" style="display: flex; align-items: center; gap: 12px;">
+                        <!-- 🆕 Indicador de rascunho -->
+                        <span id="protIndicadorRascunho"
+                              style="display:none;align-items:center;gap:5px;font-size:11px;font-weight:600;
+                                     color:#065f46;background:#d1fae5;border:1px solid #10b981;
+                                     padding:4px 12px;border-radius:20px;"></span>
                         <button class="prot-btn-refresh" onclick="ProtocoloProvasModule.recarregar()">
                             <i class="fas fa-sync-alt"></i>
                         </button>
@@ -318,7 +674,7 @@ const ProtocoloProvasModule = (function() {
                                         <label class="form-check-label" for="protNecessitaAssinatura" style="margin-left: 8px; cursor: pointer;">
                                             <strong><i class="fas fa-signature"></i> Necessita de assinatura do professor</strong>
                                             <p style="margin: 5px 0 0; font-size: 13px; color: #64748b;">
-                                                Marque para gerar um QR Code. O professor escaneia e assina no celular dele.
+                                                Marque para gerar um QR Code. O professor escaneia e assina no celular dele (ou assine direto aqui na tela).
                                             </p>
                                         </label>
                                     </div>
@@ -836,7 +1192,7 @@ const ProtocoloProvasModule = (function() {
                 }
                 
                 @media (max-width: 768px) {
-                    .prot-header { flex-direction: column; text-align: center; }
+                    .prot-header { flex-direction: column; text-align: center; gap: 12px; }
                     .prot-alunos-grid { grid-template-columns: 1fr; }
                 }
             </style>
@@ -847,6 +1203,8 @@ const ProtocoloProvasModule = (function() {
             configurarEventos();
             renderizarListaProfessores();
             verificarDadosParaHabilitarEtapas();
+            // 🆕 Auto-save do rascunho
+            vincularAutoSaveRascunho();
         }, 100);
     }
 
@@ -861,7 +1219,7 @@ const ProtocoloProvasModule = (function() {
             });
         }
 
-        // 🔥 NOVO: OUVIR MUDANÇAS NA ETAPA 2 PARA LIBERAR A ETAPA 3
+        // 🔥 OUVIR MUDANÇAS NA ETAPA 2 PARA LIBERAR A ETAPA 3
         ['protDataRecebimento', 'protTipoProva', 'protPeriodo'].forEach(id => {
             const el = document.getElementById(id);
             if (el) {
@@ -890,6 +1248,9 @@ const ProtocoloProvasModule = (function() {
     // ✅ VERIFICAR SE ETAPA 2 ESTÁ COMPLETA
     // ============================================
     function verificarEtapa2Completa() {
+        // 🆕 Durante a restauração do rascunho não mexe nas etapas nem apaga turmas
+        if (state.rascunho.restaurando) return;
+
         const data = document.getElementById('protDataRecebimento')?.value;
         const tipo = document.getElementById('protTipoProva')?.value;
         const tipoOutros = document.getElementById('protTipoProvaOutros')?.value || '';
@@ -983,10 +1344,10 @@ const ProtocoloProvasModule = (function() {
     }
 
     // ============================================
-    // ✅ SELECIONAR PROFESSOR
+    // ✅ APLICAR PROFESSOR SELECIONADO (box + esconde lista)
+    //    (usado ao clicar na lista e ao restaurar rascunho)
     // ============================================
-    function selecionarProfessor(id) {
-        const professor = state.professores.find(p => p.id === id);
+    function aplicarProfessorSelecionado(professor) {
         if (!professor) return;
 
         state.professorSelecionado = professor;
@@ -1027,9 +1388,27 @@ const ProtocoloProvasModule = (function() {
     }
 
     // ============================================
+    // ✅ SELECIONAR PROFESSOR
+    // ============================================
+    function selecionarProfessor(id) {
+        const professor = state.professores.find(p => p.id === id);
+        if (!professor) return;
+
+        // 🆕 Começou um novo protocolo: o banner do rascunho antigo sai da frente
+        fecharBannerRascunho();
+
+        aplicarProfessorSelecionado(professor);
+
+        agendarSalvarRascunho(); // 🆕
+    }
+
+    // ============================================
     // ❌ LIMPAR PROFESSOR
     // ============================================
     function limparProfessor() {
+        // 🆕 Se estava EDITANDO um protocolo existente, o rascunho de "novo" não é tocado
+        const estavaEditando = !!state.editandoId;
+
         state.professorSelecionado = null;
 
         const box = document.getElementById('protProfessorSelecionado');
@@ -1057,6 +1436,9 @@ const ProtocoloProvasModule = (function() {
         // Resetar dados
         state.turmasAdicionadas = [];
         state.editandoId = null;
+
+        // 🆕 Trocar o professor = recomeçar → descarta rascunho
+        if (!estavaEditando) limparRascunho();
     }
 
     // ============================================
@@ -1079,7 +1461,7 @@ const ProtocoloProvasModule = (function() {
             div.style.display = tipo === 'OUTROS' ? 'block' : 'none';
         }
         
-        // 🔥 NOVO: Verifica se a etapa 2 foi concluída
+        // 🔥 Verifica se a etapa 2 foi concluída
         verificarEtapa2Completa();
     }
 
@@ -1152,6 +1534,8 @@ const ProtocoloProvasModule = (function() {
             document.getElementById('protQuantidadeProvas').value = '';
 
             showToast(`✅ Turma ${turma} adicionada! Selecione os ${quantidade} aluno(s).`, 'success');
+
+            agendarSalvarRascunho(); // 🆕
 
             // Scroll para a turma adicionada
             setTimeout(() => {
@@ -1260,6 +1644,7 @@ const ProtocoloProvasModule = (function() {
 
         renderizarTurmasAdicionadas();
         atualizarResumo();
+        agendarSalvarRascunho(); // 🆕
     }
 
     // ============================================
@@ -1276,6 +1661,8 @@ const ProtocoloProvasModule = (function() {
             const cardFinal = document.getElementById('protCardFinal');
             if (cardFinal) cardFinal.style.display = 'none';
         }
+
+        agendarSalvarRascunho(); // 🆕
     }
 
     // ============================================
@@ -1390,7 +1777,7 @@ const ProtocoloProvasModule = (function() {
                 abrirModalQRCode(urlAssinatura);
                 iniciarMonitoramentoSessao(sessaoId);
 
-                showToast('📱 QR Code gerado! Peça para o professor escanear.', 'info');
+                showToast('📱 QR Code gerado! Peça para o professor escanear ou assine na tela.', 'info');
 
             } catch (error) {
                 console.error('❌ Erro ao criar sessão:', error);
@@ -1421,6 +1808,8 @@ const ProtocoloProvasModule = (function() {
             bloco.style.display = 'none';
             bloco.innerHTML = '';
             fecharModalQRCode();
+
+            agendarSalvarRascunho(); // 🆕
         }
     }
 
@@ -1461,13 +1850,14 @@ const ProtocoloProvasModule = (function() {
     }
 
     // ============================================
-    // 📱 ABRIR MODAL QR CODE
+    // 📱 ABRIR MODAL QR CODE  (🆕 com "Assinar aqui mesmo")
     // ============================================
     function abrirModalQRCode(urlAssinatura) {
         let modal = document.getElementById('protModalQRCode');
         if (modal) modal.remove();
 
-        const qrUrl = state.sessaoAssinatura.qrCodeDataUrl;
+        const qrUrl = state.sessaoAssinatura.qrCodeDataUrl ||
+            `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
 
         const modalHtml = `
             <div class="modal fade" id="protModalQRCode" tabindex="-1" data-bs-backdrop="static">
@@ -1479,36 +1869,103 @@ const ProtocoloProvasModule = (function() {
                             </h5>
                             <button type="button" class="btn-close btn-close-white" onclick="ProtocoloProvasModule.fecharModalQRCode()"></button>
                         </div>
+
                         <div class="modal-body" style="padding: 30px; text-align: center;">
-                            <div id="protModalQRStatus" style="margin-bottom: 20px;">
-                                <div style="background: #fef3c7; border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 12px; text-align: left;">
-                                    <div style="width: 40px; height: 40px; border-radius: 50%; border: 4px solid #f59e0b; border-top-color: transparent; animation: spinProt 1s linear infinite; flex-shrink: 0;"></div>
-                                    <div>
-                                        <strong style="color: #92400e;">Aguardando assinatura...</strong>
-                                        <p style="margin: 3px 0 0; font-size: 13px; color: #78350f;">
-                                            Peça para o professor escanear o QR Code
-                                        </p>
+
+                            <!-- ÁREA DO QR CODE -->
+                            <div id="protQrView">
+                                <div id="protModalQRStatus" style="margin-bottom: 20px;">
+                                    <div style="background: #fef3c7; border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 12px; text-align: left;">
+                                        <div style="width: 40px; height: 40px; border-radius: 50%; border: 4px solid #f59e0b; border-top-color: transparent; animation: spinProt 1s linear infinite; flex-shrink: 0;"></div>
+                                        <div>
+                                            <strong style="color: #92400e;">Aguardando assinatura...</strong>
+                                            <p style="margin: 3px 0 0; font-size: 13px; color: #78350f;">
+                                                Peça para o professor escanear o QR Code
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                            <div style="background: white; border: 2px solid #e2e8f0; border-radius: 16px; padding: 20px; display: inline-block;">
-                                <img src="${qrUrl}" alt="QR Code" style="width: 260px; height: 260px; display: block;">
-                                <p style="margin: 12px 0 0; font-size: 13px; color: #64748b;">
-                                    <i class="fas fa-mobile-alt"></i> Aponte a câmera do celular
-                                </p>
-                            </div>
-                            <div style="margin-top: 20px; padding: 14px; background: #f0f9ff; border-radius: 12px; font-size: 13px; color: #0369a1; text-align: left;">
-                                <div style="display: flex; gap: 8px;">
-                                    <i class="fas fa-info-circle"></i>
-                                    <span>O professor assina direto no celular dele. Assim que confirmar, você verá automaticamente.</span>
+
+                                <div style="background: white; border: 2px solid #e2e8f0; border-radius: 16px; padding: 20px; display: inline-block;">
+                                    <img src="${qrUrl}" alt="QR Code" id="protQrCodeImage" style="width: 260px; height: 260px; display: block;">
+                                    <p style="margin: 12px 0 0; font-size: 13px; color: #64748b;">
+                                        <i class="fas fa-mobile-alt"></i> Aponte a câmera do celular
+                                    </p>
+                                </div>
+
+                                <div style="margin-top: 20px; padding: 14px; background: #f0f9ff; border-radius: 12px; font-size: 13px; color: #0369a1; text-align: left;">
+                                    <div style="display: flex; gap: 8px;">
+                                        <i class="fas fa-info-circle"></i>
+                                        <span>O professor assina direto no celular dele. Assim que confirmar, você verá automaticamente.</span>
+                                    </div>
+                                </div>
+
+                                <div style="margin-top: 16px;">
+                                    <button onclick="ProtocoloProvasModule.copiarLinkAssinatura('${urlAssinatura}')" class="btn btn-sm btn-outline-secondary" style="border-radius: 10px;">
+                                        <i class="fas fa-link"></i> Copiar link
+                                    </button>
+                                </div>
+
+                                <!-- 🆕 LINK PARA ASSINAR AQUI -->
+                                <div style="margin-top: 14px; padding-top: 14px; border-top: 1px dashed #cbd5e1;">
+                                    <p style="margin: 0 0 8px; font-size: 12px; color: #64748b;">
+                                        Não consegue escanear?
+                                    </p>
+                                    <button type="button"
+                                            onclick="ProtocoloProvasModule.mostrarCanvasAssinaturaInline()"
+                                            style="background: transparent; border: none; color: #2a5298; font-weight: 600; font-size: 14px; cursor: pointer; text-decoration: underline; padding: 6px 10px; border-radius: 8px;">
+                                        <i class="fas fa-pen-fancy"></i> Assinar aqui mesmo
+                                    </button>
                                 </div>
                             </div>
-                            <div style="margin-top: 16px;">
-                                <button onclick="ProtocoloProvasModule.copiarLinkAssinatura('${urlAssinatura}')" class="btn btn-sm btn-outline-secondary" style="border-radius: 10px;">
-                                    <i class="fas fa-link"></i> Copiar link
-                                </button>
+
+                            <!-- 🆕 ÁREA DO CANVAS INLINE -->
+                            <div id="protCanvasView" style="display: none;">
+                                <div style="background: #f0f9ff; border-radius: 12px; padding: 14px; margin-bottom: 16px; text-align: left;">
+                                    <div style="display: flex; gap: 8px;">
+                                        <i class="fas fa-info-circle" style="color: #0369a1;"></i>
+                                        <span style="font-size: 13px; color: #0369a1;">
+                                            Peça para o professor assinar no espaço abaixo com o dedo ou mouse.
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div id="protModalCanvasWrapper"
+                                     style="position: relative; background: white; border: 3px dashed #cbd5e0; border-radius: 16px; overflow: hidden; height: 260px; margin-bottom: 14px; touch-action: none;">
+                                    <canvas id="protModalCanvas" style="width: 100%; height: 100%; display: block;"></canvas>
+                                    <div id="protModalPlaceholder"
+                                         style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #94a3b8; pointer-events: none; width: 100%;">
+                                        <i class="fas fa-pen-fancy" style="font-size: 28px; display: block; margin-bottom: 5px;"></i>
+                                        <span style="font-size: 13px;">Assine aqui</span>
+                                    </div>
+                                </div>
+
+                                <div style="display: flex; gap: 10px;">
+                                    <button type="button"
+                                            onclick="ProtocoloProvasModule.limparCanvasInline()"
+                                            style="flex: 1; padding: 12px; background: #f1f5f9; color: #475569; border: none; border-radius: 10px; font-weight: 600; font-size: 14px; cursor: pointer;">
+                                        <i class="fas fa-eraser"></i> Limpar
+                                    </button>
+                                    <button type="button"
+                                            id="protBtnConfirmarInline"
+                                            onclick="ProtocoloProvasModule.salvarAssinaturaInline()"
+                                            disabled
+                                            style="flex: 2; padding: 12px; background: #cbd5e0; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 14px; cursor: not-allowed;">
+                                        <i class="fas fa-check"></i> Confirmar Assinatura
+                                    </button>
+                                </div>
+
+                                <div style="margin-top: 14px;">
+                                    <button type="button"
+                                            onclick="ProtocoloProvasModule.voltarParaQRCode()"
+                                            style="background: transparent; border: none; color: #64748b; font-size: 13px; cursor: pointer; text-decoration: underline;">
+                                        <i class="fas fa-arrow-left"></i> Voltar para o QR Code
+                                    </button>
+                                </div>
                             </div>
+
                         </div>
+
                         <div class="modal-footer" style="border-top: 1px solid #e5e7eb; padding: 15px 25px; justify-content: space-between;">
                             <button type="button" class="btn btn-outline-secondary" onclick="ProtocoloProvasModule.fecharModalQRCode()" style="border-radius: 10px;">
                                 <i class="fas fa-eye-slash"></i> Ocultar
@@ -1520,11 +1977,24 @@ const ProtocoloProvasModule = (function() {
                     </div>
                 </div>
             </div>
+
+            <style>
+                @keyframes spinProt { to { transform: rotate(360deg); } }
+                @keyframes fadeInCanvasProt { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+            </style>
         `;
 
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         state.sessaoAssinatura.modalInstance = new bootstrap.Modal(document.getElementById('protModalQRCode'));
         state.sessaoAssinatura.modalInstance.show();
+
+        setTimeout(() => {
+            const img = document.getElementById('protQrCodeImage');
+            if (img && window.innerWidth < 500) {
+                img.style.width = '200px';
+                img.style.height = '200px';
+            }
+        }, 200);
     }
 
     // ============================================
@@ -1538,6 +2008,292 @@ const ProtocoloProvasModule = (function() {
             setTimeout(() => modal.remove(), 300);
         }
         state.sessaoAssinatura.modalInstance = null;
+    }
+
+    // ============================================
+    // 🆕 CANVAS INLINE — "ASSINAR AQUI MESMO"
+    // ============================================
+    function mostrarCanvasAssinaturaInline() {
+        const qrView = document.getElementById('protQrView');
+        const canvasView = document.getElementById('protCanvasView');
+        if (!qrView || !canvasView) return;
+
+        qrView.style.display = 'none';
+        canvasView.style.display = 'block';
+
+        setTimeout(() => inicializarCanvasInline(), 50);
+    }
+
+    function voltarParaQRCode() {
+        const qrView = document.getElementById('protQrView');
+        const canvasView = document.getElementById('protCanvasView');
+        if (!qrView || !canvasView) return;
+
+        canvasView.style.display = 'none';
+        qrView.style.display = 'block';
+    }
+
+    function inicializarCanvasInline() {
+        const canvas = document.getElementById('protModalCanvas');
+        const wrapper = document.getElementById('protModalCanvasWrapper');
+        const placeholder = document.getElementById('protModalPlaceholder');
+        if (!canvas || !wrapper) return;
+
+        const st = state.sessaoAssinatura.canvasInline;
+        st.canvas = canvas;
+        st.wrapper = wrapper;
+        st.placeholder = placeholder;
+        st.desenhando = false;
+        st.temAssinatura = false;
+
+        const rect = wrapper.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) {
+            setTimeout(() => inicializarCanvasInline(), 100);
+            return;
+        }
+
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        canvas.style.width = rect.width + 'px';
+        canvas.style.height = rect.height + 'px';
+
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#2a5298';
+        st.ctx = ctx;
+
+        const btn = document.getElementById('protBtnConfirmarInline');
+        if (btn) {
+            btn.disabled = true;
+            btn.style.background = '#cbd5e0';
+            btn.style.cursor = 'not-allowed';
+        }
+
+        if (placeholder) placeholder.style.opacity = '1';
+        wrapper.style.borderColor = '#cbd5e0';
+        wrapper.style.borderStyle = 'dashed';
+
+        // O canvas é recriado a cada abertura do modal → os listeners podem ser vinculados sempre
+        const getPos = (e) => {
+            const r = canvas.getBoundingClientRect();
+            let cx, cy;
+            if (e.touches?.length > 0) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
+            else if (e.changedTouches?.length > 0) { cx = e.changedTouches[0].clientX; cy = e.changedTouches[0].clientY; }
+            else { cx = e.clientX; cy = e.clientY; }
+            return { x: cx - r.left, y: cy - r.top };
+        };
+
+        const iniciar = (e) => {
+            e.preventDefault();
+            st.desenhando = true;
+            st.temAssinatura = true;
+            const p = getPos(e);
+            st.lastX = p.x;
+            st.lastY = p.y;
+            wrapper.style.borderColor = '#2a5298';
+            wrapper.style.borderStyle = 'solid';
+            if (placeholder) placeholder.style.opacity = '0';
+
+            const b = document.getElementById('protBtnConfirmarInline');
+            if (b) {
+                b.disabled = false;
+                b.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                b.style.cursor = 'pointer';
+            }
+        };
+
+        const desenhar = (e) => {
+            if (!st.desenhando) return;
+            e.preventDefault();
+            const p = getPos(e);
+            st.ctx.beginPath();
+            st.ctx.moveTo(st.lastX, st.lastY);
+            st.ctx.lineTo(p.x, p.y);
+            st.ctx.stroke();
+            st.lastX = p.x;
+            st.lastY = p.y;
+        };
+
+        const parar = (e) => {
+            if (e?.preventDefault) e.preventDefault();
+            st.desenhando = false;
+        };
+
+        canvas.addEventListener('touchstart', iniciar, { passive: false });
+        canvas.addEventListener('touchmove', desenhar, { passive: false });
+        canvas.addEventListener('touchend', parar, { passive: false });
+        canvas.addEventListener('touchcancel', parar, { passive: false });
+        canvas.addEventListener('mousedown', iniciar);
+        canvas.addEventListener('mousemove', desenhar);
+        canvas.addEventListener('mouseup', parar);
+        canvas.addEventListener('mouseleave', () => { if (st.desenhando) parar(); });
+    }
+
+    function limparCanvasInline() {
+        const st = state.sessaoAssinatura.canvasInline;
+        if (!st || !st.canvas || !st.ctx) return;
+
+        const rect = st.canvas.getBoundingClientRect();
+        st.ctx.clearRect(0, 0, rect.width, rect.height);
+        st.temAssinatura = false;
+
+        if (st.placeholder) st.placeholder.style.opacity = '1';
+        if (st.wrapper) {
+            st.wrapper.style.borderColor = '#cbd5e0';
+            st.wrapper.style.borderStyle = 'dashed';
+        }
+
+        const btn = document.getElementById('protBtnConfirmarInline');
+        if (btn) {
+            btn.disabled = true;
+            btn.style.background = '#cbd5e0';
+            btn.style.cursor = 'not-allowed';
+        }
+    }
+
+    async function salvarAssinaturaInline() {
+        const st = state.sessaoAssinatura.canvasInline;
+        if (!st || !st.temAssinatura || !st.canvas) {
+            showToast('⚠️ Assine antes de confirmar', 'warning');
+            return;
+        }
+
+        const sessaoId = state.sessaoAssinatura.sessaoId;
+        if (!sessaoId) {
+            showToast('⚠️ Sessão não encontrada', 'error');
+            return;
+        }
+
+        const btn = document.getElementById('protBtnConfirmarInline');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+        }
+
+        try {
+            const base64 = st.canvas.toDataURL('image/png');
+
+            // Rota pública (mesma usada pelo celular do professor)
+            const response = await fetch(`/api/sessoes-assinatura/${sessaoId}/assinar`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    assinaturaBase64: base64,
+                    assinanteNome: 'Professor'
+                })
+            });
+
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || 'Erro ao salvar');
+
+            state.sessaoAssinatura.assinaturaCapturada = base64;
+
+            // Para o monitoramento: já temos a assinatura
+            if (state.sessaoAssinatura.intervaloMonitoramento) {
+                clearInterval(state.sessaoAssinatura.intervaloMonitoramento);
+                state.sessaoAssinatura.intervaloMonitoramento = null;
+            }
+
+            // Tela de sucesso dentro do modal
+            const canvasView = document.getElementById('protCanvasView');
+            if (canvasView) {
+                const agora = new Date().toLocaleString('pt-BR');
+                canvasView.innerHTML = `
+                    <div style="animation: fadeInCanvasProt 0.3s ease;">
+                        <div style="background: linear-gradient(135deg, #10b981, #059669); border-radius: 14px; padding: 16px 20px; margin-bottom: 16px; display: flex; align-items: center; gap: 14px; color: white; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);">
+                            <div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.25); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                <i class="fas fa-check" style="font-size: 22px;"></i>
+                            </div>
+                            <div style="flex: 1; text-align: left;">
+                                <h4 style="margin: 0 0 2px; font-size: 16px; font-weight: 700;">Assinatura Registrada!</h4>
+                                <p style="margin: 0; font-size: 13px; opacity: 0.95;">Confirmada em ${agora}</p>
+                            </div>
+                        </div>
+                        <div style="text-align: left; margin-bottom: 10px;">
+                            <span style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;"><i class="fas fa-signature"></i> Assinatura capturada</span>
+                        </div>
+                        <div style="position: relative; background: #f0fdf4; border: 3px solid #10b981; border-radius: 16px; overflow: hidden; height: 220px; display: flex; align-items: center; justify-content: center; padding: 12px; box-sizing: border-box; box-shadow: inset 0 2px 8px rgba(16, 185, 129, 0.08);">
+                            <img src="${base64}" alt="Assinatura" style="max-width: 100%; max-height: 100%; object-fit: contain; display: block;">
+                            <div style="position: absolute; top: 10px; right: 10px; background: #10b981; color: white; padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 700; display: flex; align-items: center; gap: 4px; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);">
+                                <i class="fas fa-lock" style="font-size: 9px;"></i> VERIFICADA
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 10px; margin-top: 16px;">
+                            <button type="button" onclick="ProtocoloProvasModule.refazerAssinatura()" style="flex: 1; padding: 12px; background: #fef3c7; color: #92400e; border: 2px solid #f59e0b; border-radius: 10px; font-weight: 600; font-size: 13px; cursor: pointer;">
+                                <i class="fas fa-redo"></i> Refazer
+                            </button>
+                            <button type="button" onclick="ProtocoloProvasModule.fecharModalQRCode()" style="flex: 2; padding: 12px; background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 13px; cursor: pointer;">
+                                <i class="fas fa-check-circle"></i> Concluir
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Bloco verde na tela principal (também dispara o auto-save do rascunho)
+            mostrarAssinaturaCapturada({
+                assinaturaBase64: base64,
+                assinadaPorNome: 'Professor',
+                assinadaEm: new Date().toISOString()
+            });
+
+            showToast('✅ Assinatura registrada com sucesso!', 'success');
+
+        } catch (e) {
+            console.error('❌ Erro:', e);
+            showToast('❌ ' + e.message, 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Assinatura';
+            }
+        }
+    }
+
+    // ============================================
+    // 🔁 REFAZER ASSINATURA (gera nova sessão + QR)
+    // ============================================
+    async function refazerAssinatura() {
+        const ok = await window.confirm('Refazer a assinatura? A atual será descartada.');
+        if (!ok) return;
+
+        const sessaoId = state.sessaoAssinatura.sessaoId;
+        if (sessaoId) {
+            try {
+                await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${getToken()}` }
+                });
+            } catch (e) { console.warn(e); }
+        }
+
+        if (state.sessaoAssinatura.intervaloMonitoramento) {
+            clearInterval(state.sessaoAssinatura.intervaloMonitoramento);
+            state.sessaoAssinatura.intervaloMonitoramento = null;
+        }
+
+        state.sessaoAssinatura.sessaoId = null;
+        state.sessaoAssinatura.assinaturaCapturada = null;
+        state.sessaoAssinatura.qrCodeDataUrl = null;
+
+        fecharModalQRCode();
+
+        const bloco = document.getElementById('protBlocoAssinatura');
+        if (bloco) {
+            bloco.style.display = 'none';
+            bloco.innerHTML = '';
+        }
+
+        const check = document.getElementById('protNecessitaAssinatura');
+        if (check) {
+            check.checked = true;
+            // Pequena espera para o modal antigo terminar de fechar/remover
+            setTimeout(() => toggleAssinatura(), 350);
+        }
     }
 
     // ============================================
@@ -1626,8 +2382,16 @@ const ProtocoloProvasModule = (function() {
                 <div style="background: white; border-radius: 8px; padding: 8px; text-align: center;">
                     <img src="${sessao.assinaturaBase64}" style="max-width: 100%; max-height: 100px;" alt="Assinatura">
                 </div>
+                <button type="button"
+                        onclick="ProtocoloProvasModule.refazerAssinatura()"
+                        class="btn btn-sm btn-outline-danger w-100 mt-2"
+                        style="border-radius: 8px;">
+                    <i class="fas fa-redo"></i> Refazer Assinatura
+                </button>
             </div>
         `;
+
+        agendarSalvarRascunho(); // 🆕 assinatura mudou → salva
     }
 
     // ============================================
@@ -1663,6 +2427,8 @@ const ProtocoloProvasModule = (function() {
 
         fecharModalQRCode();
         showToast('Sessão cancelada', 'info');
+
+        agendarSalvarRascunho(); // 🆕
     }
 
     // ============================================
@@ -1764,6 +2530,9 @@ const ProtocoloProvasModule = (function() {
                 throw new Error(result.error || 'Erro ao registrar');
             }
 
+            // 🆕 Registrado com sucesso → rascunho não é mais necessário
+            limparRascunho();
+
             // Limpar sessão de assinatura
             if (state.sessaoAssinatura.sessaoId) {
                 try {
@@ -1776,7 +2545,9 @@ const ProtocoloProvasModule = (function() {
 
             if (state.sessaoAssinatura.intervaloMonitoramento) {
                 clearInterval(state.sessaoAssinatura.intervaloMonitoramento);
+                state.sessaoAssinatura.intervaloMonitoramento = null;
             }
+            state.sessaoAssinatura.sessaoId = null;
 
             showToast('✅ ' + result.message, 'success');
 
@@ -1809,8 +2580,12 @@ const ProtocoloProvasModule = (function() {
 
     // ============================================
     // 🔄 RESETAR FORMULÁRIO
+    //    opts.manterRascunho = true → limpa a tela mas NÃO apaga o rascunho salvo
+    //    (usado ao restaurar e ao editar um protocolo existente)
     // ============================================
-    function resetarFormulario() {
+    function resetarFormulario(opts) {
+        const manterRascunho = !!(opts && opts.manterRascunho === true);
+
         state.professorSelecionado = null;
         state.turmasAdicionadas = [];
         state.editandoId = null;
@@ -1866,6 +2641,14 @@ const ProtocoloProvasModule = (function() {
 
         renderizarListaProfessores();
         renderizarTurmasAdicionadas();
+
+        // 🆕 Cancelou / concluiu → descarta rascunho
+        if (manterRascunho) {
+            clearTimeout(state.rascunho.timer);
+            atualizarIndicadorRascunho(false);
+        } else {
+            limparRascunho();
+        }
     }
 
     // ============================================
@@ -2554,8 +3337,8 @@ const ProtocoloProvasModule = (function() {
             const registrarTab = document.getElementById('prot-registrar-tab');
             if (registrarTab) new bootstrap.Tab(registrarTab).show();
 
-            // Resetar formulário
-            resetarFormulario();
+            // Resetar formulário (🆕 sem apagar o rascunho de "novo protocolo")
+            resetarFormulario({ manterRascunho: true });
 
             // Setar estado de edição
             state.editandoId = id;
@@ -2701,7 +3484,9 @@ const ProtocoloProvasModule = (function() {
             showToast('✅ Protocolo atualizado!', 'success');
 
             await carregarLista();
-            resetarFormulario();
+
+            // 🆕 Não apaga o rascunho de "novo protocolo" que estava guardado
+            resetarFormulario({ manterRascunho: true });
 
             // Restaurar botão
             const btn = document.getElementById('protBtnRegistrar');
@@ -2713,11 +3498,16 @@ const ProtocoloProvasModule = (function() {
             const listaTab = document.getElementById('prot-lista-tab');
             if (listaTab) new bootstrap.Tab(listaTab).show();
 
+            // 🆕 Se havia um rascunho guardado antes da edição, oferece restaurar de novo
+            const rascunho = obterRascunho();
+            if (rascunho) mostrarBannerRascunho(rascunho);
+
         } catch (error) {
             console.error('❌ Erro:', error);
             showToast('❌ ' + error.message, 'error');
         }
     }
+
     // ============================================
     // 🗑️ EXCLUIR PROTOCOLO
     // ============================================
@@ -3025,6 +3815,12 @@ const ProtocoloProvasModule = (function() {
         cancelarSessaoAssinatura,
         copiarLinkAssinatura,
         fecharModalQRCode,
+        // 🆕 Assinatura inline
+        mostrarCanvasAssinaturaInline,
+        voltarParaQRCode,
+        limparCanvasInline,
+        salvarAssinaturaInline,
+        refazerAssinatura,
         registrarProtocolo,
         resetarFormulario,
         carregarLista,
