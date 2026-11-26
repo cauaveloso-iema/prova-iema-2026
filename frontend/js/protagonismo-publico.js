@@ -148,9 +148,16 @@ function atualizarStatusUI() {
     if (cardEleicao) cardEleicao.disabled = !statusSistema.eleicaoLiderAberta;
     if (cardTutores) cardTutores.disabled = !statusSistema.tutoriaVisivel;
     
-    // 🆕 Desabilita o card de acolhimento se estiver fechado (opcional)
-    // Se quiser que o aluno clique e veja a mensagem de fechado, deixe comentado:
-    // if (cardAcolhimento) cardAcolhimento.disabled = !statusSistema.acolhimentoAberto;
+    // 🆕 BLOQUEIA o card de acolhimento quando fechado (igual aos outros)
+    if (cardAcolhimento) {
+        const fechado = !statusSistema.acolhimentoAberto;
+        cardAcolhimento.disabled = fechado;
+        // dica visual (cursor + tooltip nativo)
+        cardAcolhimento.style.cursor = fechado ? 'not-allowed' : 'pointer';
+        cardAcolhimento.title = fechado
+            ? 'Acolhimento fechado no momento'
+            : 'Quero ser Acolhedor';
+    }
     
     // Aviso público
     if (statusSistema.avisoPublico) {
@@ -187,7 +194,8 @@ function mostrarSecao(secao) {
         'inscricao': 'secaoInscricao',
         'eleicao': 'secaoEleicao',
         'tutores': 'secaoTutores',
-        'verificar': 'secaoVerificar'
+        'verificar': 'secaoVerificar',
+        'acolhimento': 'secaoAcolhimento'
     };
     
     const secaoId = mapaSecoes[secao];

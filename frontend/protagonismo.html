@@ -1347,5 +1347,360 @@
             });
         }
     </script>
+<!-- ============================================================ -->
+<!-- MODO ASSINATURA — Protagonismo                                -->
+<!-- Ativado quando a URL tem ?assinatura=<sessaoId>              -->
+<!-- ============================================================ -->
+<div id="protModoAssinatura" style="display:none; position:fixed; inset:0; z-index:999999;
+     background: linear-gradient(135deg, #4c1d95, #7e22ce); padding: 20px;
+     align-items: center; justify-content: center; overflow-y: auto;">
+    <div style="background: white; border-radius: 20px; padding: 30px; max-width: 560px;
+                width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.3); margin: auto;">
+        <div id="protAssinaturaConteudo">
+            <div style="text-align:center; padding: 30px 10px;">
+                <div style="width:50px;height:50px;border:5px solid #f3f3f3;border-top:5px solid #4c1d95;
+                            border-radius:50%;margin:0 auto 20px;animation:protSpin 1s linear infinite;"></div>
+                <p style="color:#64748b;">Carregando atendimento...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    @keyframes protSpin { to { transform: rotate(360deg); } }
+    .prot-assinatura-header { text-align: center; margin-bottom: 25px; }
+    .prot-assinatura-header .icon {
+        width: 70px; height: 70px;
+        background: linear-gradient(135deg, #4c1d95, #7e22ce);
+        color: white; border-radius: 50%;
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: 30px; margin-bottom: 15px;
+    }
+    .prot-assinatura-header h1 { font-size: 22px; color: #4c1d95; margin: 0 0 6px; font-weight: 700; }
+    .prot-assinatura-header p { color: #64748b; font-size: 14px; margin: 0; }
+    .prot-assinatura-info {
+        background: #faf5ff; border: 1px solid #e9d5ff;
+        border-radius: 12px; padding: 14px 16px; margin-bottom: 20px;
+        font-size: 14px; color: #4c1d95;
+    }
+    .prot-assinatura-info strong { color: #7e22ce; }
+    .prot-assinatura-canvas-wrap {
+        position: relative; background: white;
+        border: 3px dashed #cbd5e0; border-radius: 16px;
+        overflow: hidden; height: 260px; margin-bottom: 14px;
+        touch-action: none;
+    }
+    .prot-assinatura-canvas-wrap.ativa { border-color: #4c1d95; border-style: solid; }
+    .prot-assinatura-canvas-wrap canvas { width: 100%; height: 100%; display: block; }
+    .prot-assinatura-placeholder {
+        position: absolute; top: 50%; left: 50%;
+        transform: translate(-50%, -50%); text-align: center;
+        color: #94a3b8; pointer-events: none; width: 100%;
+        transition: opacity 0.2s;
+    }
+    .prot-assinatura-placeholder.escondido { opacity: 0; }
+    .prot-assinatura-placeholder i { font-size: 28px; display: block; margin-bottom: 5px; }
+    .prot-assinatura-placeholder span { font-size: 13px; }
+    .prot-assinatura-botoes { display: flex; gap: 10px; }
+    .prot-assinatura-btn-limpar {
+        flex: 1; padding: 12px; background: #f1f5f9;
+        color: #475569; border: none; border-radius: 10px;
+        font-weight: 600; font-size: 14px; cursor: pointer;
+    }
+    .prot-assinatura-btn-confirmar {
+        flex: 2; padding: 12px; background: #cbd5e0;
+        color: white; border: none; border-radius: 10px;
+        font-weight: 600; font-size: 14px; cursor: not-allowed;
+    }
+    .prot-assinatura-btn-confirmar.ativo {
+        background: linear-gradient(135deg, #10b981, #059669);
+        cursor: pointer;
+    }
+    .prot-assinatura-estado { text-align: center; padding: 30px 10px; }
+    .prot-assinatura-estado .icon {
+        width: 70px; height: 70px; border-radius: 50%;
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: 32px; color: white; margin-bottom: 15px;
+    }
+    .prot-assinatura-estado .icon.erro { background: #ef4444; }
+    .prot-assinatura-estado .icon.sucesso { background: #10b981; }
+    .prot-assinatura-estado h2 { font-size: 20px; color: #1e293b; margin: 0 0 8px; }
+    .prot-assinatura-estado p { color: #64748b; font-size: 14px; margin: 0; }
+</style>
+
+<script>
+// ============================================================
+// MODO ASSINATURA — Protagonismo
+// Ativado quando a URL tem ?assinatura=<sessaoId>
+// Esconde o painel normal e mostra a tela de assinatura
+// ============================================================
+(function () {
+    'use strict';
+
+    const params = new URLSearchParams(window.location.search);
+    const sessaoId = params.get('assinatura');
+    if (!sessaoId) return; // modo normal do painel
+
+    const API = '/api/sessoes-assinatura';
+    const overlay = document.getElementById('protModoAssinatura');
+    const conteudo = document.getElementById('protAssinaturaConteudo');
+
+    if (!overlay || !conteudo) {
+        console.error('[prot-assinatura] overlay não encontrado');
+        return;
+    }
+
+    // Esconde o painel normal
+    const painelNormal = document.querySelector('body > .container');
+    if (painelNormal) painelNormal.style.display = 'none';
+    document.body.style.overflow = 'hidden';
+
+    overlay.style.display = 'flex';
+
+    let sessao = null;
+    let canvas = null;
+    let ctx = null;
+    let desenhando = false;
+    let temAssinatura = false;
+    let lastX = 0, lastY = 0;
+    let wrapper = null;
+    let placeholder = null;
+    let btnConfirmar = null;
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    // ---------- 1) Buscar dados da sessão ----------
+    async function carregarSessao() {
+        try {
+            const resp = await fetch(`${API}/${sessaoId}`);
+            if (!resp.ok) {
+                if (resp.status === 404) {
+                    renderizarErro('Sessão não encontrada', 'Esta sessão de assinatura expirou ou já foi concluída.');
+                    return;
+                }
+                throw new Error(`HTTP ${resp.status}`);
+            }
+            const data = await resp.json();
+            if (!data.success || !data.sessao) {
+                renderizarErro('Erro ao carregar', data.error || 'Não foi possível carregar a sessão.');
+                return;
+            }
+            if (data.sessao.status === 'assinado') {
+                renderizarSucesso(data.sessao);
+                return;
+            }
+            sessao = data.sessao;
+            renderizarCanvas();
+        } catch (e) {
+            console.error('[prot-assinatura] erro:', e);
+            renderizarErro('Erro de conexão', 'Não foi possível carregar a sessão. Verifique sua internet.');
+        }
+    }
+
+    // ---------- 2) Tela de erro ----------
+    function renderizarErro(titulo, mensagem) {
+        conteudo.innerHTML = `
+            <div class="prot-assinatura-estado">
+                <div class="icon erro"><i class="fas fa-times"></i></div>
+                <h2>${titulo}</h2>
+                <p>${mensagem}</p>
+            </div>
+        `;
+    }
+
+    // ---------- 3) Tela de sucesso ----------
+    function renderizarSucesso(s) {
+        conteudo.innerHTML = `
+            <div class="prot-assinatura-estado">
+                <div class="icon sucesso"><i class="fas fa-check"></i></div>
+                <h2>Assinatura já registrada</h2>
+                <p>Este atendimento já foi assinado em ${new Date(s.assinadaEm || Date.now()).toLocaleString('pt-BR')}.</p>
+            </div>
+        `;
+    }
+
+    // ---------- 4) Tela principal de assinatura ----------
+    function renderizarCanvas() {
+        const d = sessao.dadosAtendimento || {};
+        conteudo.innerHTML = `
+            <div class="prot-assinatura-header">
+                <div class="icon"><i class="fas fa-signature"></i></div>
+                <h1>Assinatura do Atendimento</h1>
+                <p>Protagonismo Estudantil</p>
+            </div>
+            <div class="prot-assinatura-info">
+                <div style="margin-bottom: 6px;">
+                    <i class="fas fa-user-graduate"></i>
+                    <strong>${escapeHtml(d.alunoNome || 'Aluno')}</strong>
+                    ${d.alunoTurma ? ' • ' + escapeHtml(d.alunoTurma) : ''}
+                    ${d.alunoCurso ? ' • ' + escapeHtml(d.alunoCurso) : ''}
+                </div>
+                <div style="font-size: 13px;">
+                    <i class="fas fa-clipboard-list"></i>
+                    ${escapeHtml(d.categoriaLabel || d.categoria || '')}
+                    ${d.dataFormatada ? ' • ' + escapeHtml(d.dataFormatada) : ''}
+                </div>
+            </div>
+            <div class="prot-assinatura-canvas-wrap" id="protCanvasWrapper">
+                <canvas id="protCanvasAssinatura"></canvas>
+                <div class="prot-assinatura-placeholder" id="protCanvasPlaceholder">
+                    <i class="fas fa-pen-fancy"></i>
+                    <span>Assine aqui</span>
+                </div>
+            </div>
+            <div class="prot-assinatura-botoes">
+                <button class="prot-assinatura-btn-limpar" id="protBtnLimpar">
+                    <i class="fas fa-eraser"></i> Limpar
+                </button>
+                <button class="prot-assinatura-btn-confirmar" id="protBtnConfirmar" disabled>
+                    <i class="fas fa-check"></i> Confirmar Assinatura
+                </button>
+            </div>
+        `;
+
+        wrapper = document.getElementById('protCanvasWrapper');
+        placeholder = document.getElementById('protCanvasPlaceholder');
+        btnConfirmar = document.getElementById('protBtnConfirmar');
+
+        inicializarCanvas();
+        document.getElementById('protBtnLimpar').addEventListener('click', limparCanvas);
+        btnConfirmar.addEventListener('click', confirmarAssinatura);
+    }
+
+    // ---------- 5) Canvas ----------
+    function inicializarCanvas() {
+        canvas = document.getElementById('protCanvasAssinatura');
+        if (!canvas) return;
+
+        const rect = wrapper.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) {
+            setTimeout(inicializarCanvas, 100);
+            return;
+        }
+
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        canvas.style.width = rect.width + 'px';
+        canvas.style.height = rect.height + 'px';
+
+        ctx = canvas.getContext('2d');
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#4c1d95';
+
+        const getPos = (e) => {
+            const r = canvas.getBoundingClientRect();
+            let cx, cy;
+            if (e.touches?.length > 0) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
+            else if (e.changedTouches?.length > 0) { cx = e.changedTouches[0].clientX; cy = e.changedTouches[0].clientY; }
+            else { cx = e.clientX; cy = e.clientY; }
+            return { x: cx - r.left, y: cy - r.top };
+        };
+
+        const iniciar = (e) => {
+            e.preventDefault();
+            desenhando = true;
+            temAssinatura = true;
+            const p = getPos(e);
+            lastX = p.x; lastY = p.y;
+            wrapper.classList.add('ativa');
+            placeholder.classList.add('escondido');
+            btnConfirmar.disabled = false;
+            btnConfirmar.classList.add('ativo');
+        };
+
+        const desenhar = (e) => {
+            if (!desenhando) return;
+            e.preventDefault();
+            const p = getPos(e);
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(p.x, p.y);
+            ctx.stroke();
+            lastX = p.x; lastY = p.y;
+        };
+
+        const parar = (e) => {
+            if (e?.preventDefault) e.preventDefault();
+            desenhando = false;
+        };
+
+        canvas.addEventListener('touchstart', iniciar, { passive: false });
+        canvas.addEventListener('touchmove', desenhar, { passive: false });
+        canvas.addEventListener('touchend', parar, { passive: false });
+        canvas.addEventListener('touchcancel', parar, { passive: false });
+        canvas.addEventListener('mousedown', iniciar);
+        canvas.addEventListener('mousemove', desenhar);
+        canvas.addEventListener('mouseup', parar);
+        canvas.addEventListener('mouseleave', () => { if (desenhando) parar(); });
+    }
+
+    function limparCanvas() {
+        if (!canvas || !ctx) return;
+        const rect = canvas.getBoundingClientRect();
+        ctx.clearRect(0, 0, rect.width, rect.height);
+        temAssinatura = false;
+        wrapper.classList.remove('ativa');
+        placeholder.classList.remove('escondido');
+        btnConfirmar.disabled = true;
+        btnConfirmar.classList.remove('ativo');
+    }
+
+    // ---------- 6) Confirmar ----------
+    async function confirmarAssinatura() {
+        if (!temAssinatura) return;
+
+        const base64 = canvas.toDataURL('image/png');
+        btnConfirmar.disabled = true;
+        btnConfirmar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+
+        try {
+            const resp = await fetch(`${API}/${sessaoId}/assinar`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    assinaturaBase64: base64,
+                    assinanteNome: sessao?.dadosAtendimento?.alunoNome || 'Aluno'
+                })
+            });
+            const data = await resp.json();
+            if (!data.success) throw new Error(data.error || 'Erro ao assinar');
+
+            conteudo.innerHTML = `
+                <div class="prot-assinatura-estado">
+                    <div class="icon sucesso"><i class="fas fa-check"></i></div>
+                    <h2>Assinatura registrada!</h2>
+                    <p>Obrigado. O painel do Protagonismo foi notificado automaticamente.</p>
+                    <p style="margin-top: 15px; font-size: 12px; color: #94a3b8;">
+                        Você já pode fechar esta página.
+                    </p>
+                </div>
+            `;
+        } catch (e) {
+            console.error('[prot-assinatura] erro:', e);
+            btnConfirmar.disabled = false;
+            btnConfirmar.classList.add('ativo');
+            btnConfirmar.innerHTML = '<i class="fas fa-check"></i> Confirmar Assinatura';
+            alert('Erro ao enviar assinatura: ' + e.message);
+        }
+    }
+
+    // ---------- 7) Boot ----------
+    // Pequeno delay para garantir que o resto do protagonismo.html já montou
+    setTimeout(carregarSessao, 200);
+})();
+</script>
 </body>
 </html>

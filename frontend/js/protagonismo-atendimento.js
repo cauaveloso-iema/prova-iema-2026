@@ -1270,7 +1270,7 @@
                 const data = await response.json();
                 if (!data.success) throw new Error(data.error || 'Erro ao criar sessão');
 
-                const urlAssinatura = `${window.location.origin}/setor-pedagogico.html?assinatura=${sessaoId}`;
+                const urlAssinatura = `${window.location.origin}/protagonismo.html?assinatura=${sessaoId}`;
 
                 try {
                     const qrResponse = await fetch('/api/qrcode/gerar', {
