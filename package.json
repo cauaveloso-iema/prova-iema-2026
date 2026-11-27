@@ -1,9 +1,11 @@
 {
   "dependencies": {
+    "@google-cloud/vision": "^6.2.0",
     "@simplewebauthn/server": "^9.0.3",
     "cors": "^2.8.5",
     "mammoth": "^1.13.0",
     "node-cron": "^4.6.0",
+    "openai": "^7.65.0",
     "resend": "^6.8.0",
     "web-push": "^3.6.7"
   }

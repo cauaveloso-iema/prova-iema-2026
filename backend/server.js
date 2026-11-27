@@ -2008,67 +2008,27 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
   }
 });
 
+const { moderateImageFile } = require('./services/image-moderation');
+
 app.post('/api/perfil/upload-foto', authenticateToken, uploadMiddleware.single('foto'), async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        error: 'Nenhuma imagem enviada'
-      });
+    if (!req.file) return res.status(400).json({ success: false, error: 'Nenhum arquivo enviado.' });
+
+    const moderation = await moderateImageFile(req.file.path);
+
+    if (!moderation.safe) {
+      fs.unlink(req.file.path, () => {});
+      return res.status(400).json({ success: false, error: moderation.reason || 'Imagem não permitida.' });
     }
 
-    const file = req.file;
+    const fotoUrl = `/uploads/${req.file.filename}`;
+    await User.findByIdAndUpdate(req.userId, { fotoPerfil: fotoUrl, fotoPerfilTipo: req.file.mimetype });
 
-    const tiposPermitidos = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!tiposPermitidos.includes(file.mimetype)) {
-      fs.unlinkSync(file.path);
-      return res.status(400).json({
-        success: false,
-        error: 'Tipo de imagem não suportado. Use JPEG, PNG, GIF ou WebP.'
-      });
-    }
-
-    if (file.size > 2 * 1024 * 1024) {
-      fs.unlinkSync(file.path);
-      return res.status(400).json({
-        success: false,
-        error: 'Imagem muito grande. Máximo 2MB.'
-      });
-    }
-
-    const imageBuffer = fs.readFileSync(file.path);
-    const base64Image = imageBuffer.toString('base64');
-    const dataUrl = `data:${file.mimetype};base64,${base64Image}`;
-
-    const user = await User.findByIdAndUpdate(
-      req.userId,
-      {
-        fotoPerfil: dataUrl,
-        fotoPerfilTipo: file.mimetype,
-        ultimaAtualizacaoPerfil: new Date()
-      },
-      { new: true }
-    ).select('fotoPerfil fotoPerfilTipo nome email');
-
-    fs.unlinkSync(file.path);
-
-    logger.info(`✅ Foto de perfil atualizada: ${user.nome} (${user.email})`);
-
-    res.json({
-      success: true,
-      message: 'Foto de perfil atualizada com sucesso!',
-      fotoPerfil: user.fotoPerfil,
-      fotoPerfilTipo: user.fotoPerfilTipo
-    });
+    return res.json({ success: true, fotoPerfil: fotoUrl });
   } catch (error) {
-    logger.error('❌ Erro no upload da foto:', error);
-    if (req.file && req.file.path && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
-    res.status(500).json({
-      success: false,
-      error: 'Erro ao fazer upload da foto: ' + error.message
-    });
+    if (req.file && req.file.path) fs.unlink(req.file.path, () => {});
+    console.error('❌ Erro no upload de foto:', error);
+    return res.status(500).json({ success: false, error: 'Erro interno.' });
   }
 });
 

@@ -824,13 +824,13 @@
             if (!file) return;
 
             if (file.size > 5 * 1024 * 1024) {
-                mostrarAlerta('A imagem deve ter no máximo 5MB', 'error');
+                mostrarModalAviso('A imagem deve ter no máximo 5MB.', 'error');
                 return;
             }
 
             const tiposPermitidos = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
             if (!tiposPermitidos.includes(file.type)) {
-                mostrarAlerta('Tipo de imagem não suportado. Use JPEG, PNG, GIF ou WebP.', 'error');
+                mostrarModalAviso('Tipo de imagem não suportado. Use JPEG, PNG, GIF ou WebP.', 'error');
                 return;
             }
 
@@ -838,25 +838,71 @@
             formData.append('foto', file);
 
             try {
-                mostrarAlerta('Enviando foto...', 'info');
+                // Mostra um aviso de "Enviando..."
+                const alertDiv = document.getElementById('alertMessage');
+                alertDiv.className = 'alert alert-info';
+                alertDiv.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Verificando e enviando foto...`;
+                alertDiv.style.display = 'block';
+
                 const token = localStorage.getItem('auth_token');
                 const response = await fetch('/api/perfil/upload-foto', {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` },
                     body: formData
                 });
+                
                 const data = await response.json();
+                alertDiv.style.display = 'none'; // Esconde o "Enviando..."
+
                 if (data.success) {
                     carregarFotoPerfil(data.fotoPerfil);
                     mostrarAlerta('Foto de perfil atualizada!', 'success');
                     if (leitorAtivo) falar('Foto de perfil atualizada');
                 } else {
+                    // Se a moderação barrou, mostra o modal
                     throw new Error(data.error || 'Erro ao enviar foto');
                 }
             } catch (error) {
                 console.error('Erro no upload:', error);
-                mostrarAlerta(error.message, 'error');
+                
+                // Exibe a mensagem detalhada da moderação no Modal
+                mostrarModalAviso(error.message, 'error');
+                
+                if (leitorAtivo) falar('Foto rejeitada. ' + error.message);
             }
+        }
+
+        // Função de Modal para mensagens longas
+        function mostrarModalAviso(mensagem, tipo = 'error') {
+            const corIcone = tipo === 'error' ? '#ef4444' : '#10b981';
+            const icone = tipo === 'error' ? 'fa-exclamation-triangle' : 'fa-check-circle';
+
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.6); display: flex; align-items: center;
+                justify-content: center; z-index: 999999; padding: 20px; box-sizing: border-box;
+                backdrop-filter: blur(3px);
+            `;
+            modal.innerHTML = `
+                <div style="background: white; border-radius: 16px; padding: 25px; max-width: 450px;
+                            width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center;">
+                    <div style="font-size: 45px; color: ${corIcone}; margin-bottom: 15px;">
+                        <i class="fas ${icone}"></i>
+                    </div>
+                    <h3 style="margin: 0 0 10px; color: #1f2937; font-size: 1.2rem;">Atenção</h3>
+                    <p style="margin: 0 0 20px; color: #4b5563; font-size: 0.95rem; line-height: 1.5; text-align: left;">
+                        ${mensagem}
+                    </p>
+                    <button onclick="this.closest('div').parentElement.remove()" 
+                            style="width: 100%; padding: 12px; background: #667eea; color: white;
+                            border: none; border-radius: 10px; font-size: 1rem;
+                            font-weight: 600; cursor: pointer; transition: 0.2s;">
+                        Entendi, vou escolher outra foto
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(modal);
         }
 
         async function removerFotoPerfil() {
