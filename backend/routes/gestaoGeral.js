@@ -858,10 +858,9 @@ router.get('/atraso/dashboard', authenticateToken, verificarGestaoGeral, async (
       { $limit: 8 }
     ]);
 
-    // Alunos reincidentes (últimos 30 dias)
+    // Alunos reincidentes (todo o histórico)
     const alunosReincidentes = await Atraso.aggregate([
       { $match: {
-          dataHora: { $gte: ultimos30Dias },
           alunoId: { $exists: true, $ne: null }
       }},
       { $sort: { dataHora: -1 } },

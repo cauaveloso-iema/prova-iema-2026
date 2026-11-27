@@ -1658,7 +1658,7 @@ function renderizarReincidentesAtrasos(lista) {
         reinc.innerHTML = `
             <p class="text-muted text-center py-3">
                 <i class="fas fa-check-circle text-success"></i>
-                Nenhum aluno com 3+ atrasos nos últimos 30 dias
+                Nenhum aluno com 3+ atrasos registrados
             </p>`;
         return;
     }
