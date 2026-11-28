@@ -97,6 +97,44 @@
         } catch (e) { return mesAno; }
     }
 
+    // ============ AVATAR DO ALUNO (FOTO OU INICIAIS) ============
+    function gerarAvatarAluno(aluno, tamanho = 48) {
+        if (!aluno) return '';
+        const nome = (aluno.nome || 'Aluno').trim();
+        const foto = aluno.fotoPerfil || null;
+
+        const partes = nome.split(/\s+/).filter(Boolean);
+        const iniciais = partes.length >= 2
+            ? (partes[0][0] + partes[partes.length - 1][0]).toUpperCase()
+            : nome.substring(0, 2).toUpperCase() || '?';
+
+        const paletaCores = ['#4c1d95', '#7e22ce', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#ef4444'];
+        let hash = 0;
+        for (let i = 0; i < nome.length; i++) {
+            hash = nome.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        const cor = paletaCores[Math.abs(hash) % paletaCores.length];
+
+        // Se tiver foto → mostra a foto
+        if (foto) {
+            return `
+                <div class="prot-prof-avatar" style="width:${tamanho}px;height:${tamanho}px;border-radius:50%;overflow:hidden;background:#f3f4f6;flex-shrink:0;">
+                    <img src="${foto}" alt="${escapeHtml(nome)}"
+                        style="width:100%;height:100%;object-fit:cover;display:block;"
+                        onerror="this.onerror=null; this.parentElement.outerHTML='<div class=\\'prot-prof-avatar\\' style=\\'width:${tamanho}px;height:${tamanho}px;border-radius:50%;background:${cor};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:${Math.round(tamanho * 0.4)}px;flex-shrink:0;\\'>${iniciais}</div>';">
+                </div>
+            `;
+        }
+
+        // Sem foto → iniciais com cor determinística
+        return `
+            <div class="prot-prof-avatar"
+                style="width:${tamanho}px;height:${tamanho}px;border-radius:50%;background:${cor};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:${Math.round(tamanho * 0.4)}px;flex-shrink:0;">
+                ${iniciais}
+            </div>
+        `;
+    }
+
     // ============================================
     // RASCUNHO DO ATENDIMENTO
     // ============================================
@@ -1142,7 +1180,7 @@
                     const id = a._id || a.id;
                     return `
                         <div class="prot-professor-item" data-aluno-id="${escapeHtml(id)}">
-                            <div class="prot-prof-avatar">${(a.nome || '?').charAt(0).toUpperCase()}</div>
+                            ${gerarAvatarAluno(a)}
                             <div class="prot-prof-info">
                                 <div class="prot-prof-nome">${escapeHtml(a.nome)}</div>
                                 <div class="prot-prof-detalhes">
@@ -1187,7 +1225,7 @@
             box.style.display = 'block';
             box.innerHTML = `
                 <div class="prot-professor-box-content">
-                    <div class="prot-professor-box-avatar">${(aluno.nome || '?').charAt(0).toUpperCase()}</div>
+                    ${gerarAvatarAluno(aluno, 60)}
                     <div class="prot-professor-box-info">
                         <h5>${escapeHtml(aluno.nome)}</h5>
                         ${aluno.matricula ? `<p><i class="fas fa-id-card"></i> Matrícula: ${escapeHtml(aluno.matricula)}</p>` : ''}
