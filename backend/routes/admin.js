@@ -12,6 +12,8 @@
 //   - 🔥 DELETE /turmas/:id/alunos/:alunoId limpa aluno.turma (string)
 //   - 🔥 GET /turmas retorna totalAlunos calculado pelo array
 //   - 🆕 Fuso horário BRT em /dashboard e /historico-conexoes
+//   - 🔥 MULTER no topo (antes de qualquer rota que use `upload`)
+//   - 🔥 UPLOAD_DIR = backend/uploads (com try/catch)
 // ============================================================================
 
 const express = require('express');
@@ -20,6 +22,7 @@ const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 const path = require('path');
 const fs = require('fs');
+const multer = require('multer');   // 🔥 precisa vir ANTES das rotas
 const { promisify } = require('util');
 
 const readdir = promisify(fs.readdir);
@@ -166,10 +169,53 @@ try {
 
 const OMR_DEBUG_FOLDER = path.join(__dirname, '..', 'debug_omr');
 
-if (!fs.existsSync(OMR_DEBUG_FOLDER)) {
-  fs.mkdirSync(OMR_DEBUG_FOLDER, { recursive: true });
-  logger.info('📁 Pasta debug_omr criada em:', OMR_DEBUG_FOLDER);
+try {
+  if (!fs.existsSync(OMR_DEBUG_FOLDER)) {
+    fs.mkdirSync(OMR_DEBUG_FOLDER, { recursive: true });
+    logger.info('📁 Pasta debug_omr criada em:', OMR_DEBUG_FOLDER);
+  }
+} catch (err) {
+  logger.error('❌ Erro ao criar pasta debug_omr:', err.message);
 }
+
+// ============================================================================
+// 🔥 CONFIGURAÇÃO MULTER — DEVE VIR ANTES DE QUALQUER router.put QUE USE `upload`
+// ============================================================================
+const UPLOAD_DIR = path.join(__dirname, '..', 'uploads');
+
+try {
+  if (!fs.existsSync(UPLOAD_DIR)) {
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    logger.info(`📁 [Admin] Diretório de upload criado: ${UPLOAD_DIR}`);
+  } else {
+    logger.info(`✅ [Admin] Diretório de upload existe: ${UPLOAD_DIR}`);
+  }
+} catch (err) {
+  logger.error(`❌ [Admin] Falha ao criar/verificar ${UPLOAD_DIR}:`, err.message);
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+    const nomeSeguro = `user_${req.params.id || 'new'}_${Date.now()}${ext}`;
+    cb(null, nomeSeguro);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    const permitidos = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!permitidos.includes(file.mimetype)) {
+      return cb(new Error('Formato de imagem inválido. Use JPG, PNG ou WEBP.'));
+    }
+    cb(null, true);
+  }
+});
+
+logger.info('✅ [Admin] Multer configurado para upload de foto de perfil');
 
 // ============================================================================
 // MIDDLEWARES LOCAIS
@@ -210,8 +256,8 @@ const authenticateTokenLocal = (req, res, next) => {
         });
       }
 
-      User.findByIdAndUpdate(decoded.id, { 
-        lastActive: new Date() 
+      User.findByIdAndUpdate(decoded.id, {
+        lastActive: new Date()
       }).catch(() => {});
 
     } catch (dbError) {
@@ -1051,7 +1097,8 @@ router.get('/usuarios', authenticateTokenLocal, isSuperAdmin, async (req, res) =
 
     const [usuarios, total] = await Promise.all([
       User.find(query)
-        .select('nome email cpf telefone matricula role eixo curso turma periodo departamento titulacao ativo forcePasswordChange precisaAcessibilidade condicaoAcessibilidade dataSolicitacaoAcessibilidade twoFactorEnabled telefoneVerificado createdAt updatedAt qrCodeUsuario qrCodeUsuarioGeradoEm qrCodeUsuarioTipo')
+        // 🔥 ADICIONADO: fotoPerfil e fotoPerfilTipo
+        .select('nome email cpf telefone matricula role eixo curso turma periodo departamento titulacao ativo forcePasswordChange precisaAcessibilidade condicaoAcessibilidade dataSolicitacaoAcessibilidade twoFactorEnabled telefoneVerificado createdAt updatedAt qrCodeUsuario qrCodeUsuarioGeradoEm qrCodeUsuarioTipo fotoPerfil fotoPerfilTipo')
         .sort({ nome: 1 })
         .skip(skip)
         .limit(parseInt(limit))
@@ -1085,7 +1132,10 @@ router.get('/usuarios', authenticateTokenLocal, isSuperAdmin, async (req, res) =
       updatedAt: user.updatedAt,
       qrCodeUsuario: user.qrCodeUsuario || null,
       qrCodeUsuarioGeradoEm: user.qrCodeUsuarioGeradoEm || null,
-      qrCodeUsuarioTipo: user.qrCodeUsuarioTipo || null
+      qrCodeUsuarioTipo: user.qrCodeUsuarioTipo || null,
+      // 🔥 ADICIONADO
+      fotoPerfil: user.fotoPerfil || null,
+      fotoPerfilTipo: user.fotoPerfilTipo || null
     }));
 
     res.json({
@@ -1221,9 +1271,8 @@ router.post('/usuarios', authenticateTokenLocal, isSuperAdmin, verificarPermissa
 });
 
 // ============================================================================
-// USUÁRIOS — :id (SEMPRE POR ÚLTIMO)
+// GET /usuarios/:id — Buscar usuário específico (com foto e acessibilidade)
 // ============================================================================
-
 router.get('/usuarios/:id', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -1239,18 +1288,19 @@ router.get('/usuarios/:id', authenticateTokenLocal, isSuperAdmin, async (req, re
 
     // 🔥 SINCRONIZAÇÃO COM O AEE: Se for 'outra', mostra o texto real
     let condicaoParaAdmin = user.condicaoAcessibilidade || null;
-    
+
     if (condicaoParaAdmin && condicaoParaAdmin.toLowerCase() === 'outra') {
-        condicaoParaAdmin = user.outraCondicao || 'Outra Condição';
+      condicaoParaAdmin = user.outraCondicao || 'Outra Condição';
     } else if (condicaoParaAdmin && user.outraCondicao) {
-        condicaoParaAdmin += ` - ${user.outraCondicao}`;
+      condicaoParaAdmin += ` - ${user.outraCondicao}`;
     }
 
     logger.info('📦 Dados do usuário retornados:', {
       nome: user.nome,
       email: user.email,
       condicaoExibida: condicaoParaAdmin,
-      temQRCode: !!user.qrCodeUsuario
+      temQRCode: !!user.qrCodeUsuario,
+      temFoto: !!user.fotoPerfil
     });
 
     res.json({
@@ -1312,107 +1362,186 @@ router.get('/usuarios/:id', authenticateTokenLocal, isSuperAdmin, async (req, re
 });
 
 // ============================================================
-// 🔥 PUT /usuarios/:id — COM SINCRONIZAÇÃO turma.alunos
+// 🔥 PUT /usuarios/:id — COM UPLOAD DE FOTO + SINCRONIZAÇÃO turma.alunos
+// Aceita multipart/form-data (com foto) E application/json (sem foto)
 // ============================================================
-router.put('/usuarios/:id', authenticateTokenLocal, isSuperAdmin, verificarPermissaoSuperAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updates = req.body;
+router.put(
+  '/usuarios/:id',
+  authenticateTokenLocal,
+  isSuperAdmin,
+  verificarPermissaoSuperAdmin,
+  upload.single('foto'),   // 🔥 aceita foto opcional
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = { ...req.body };
+      const arquivo = req.file;
 
-    logger.info(`✏️ Admin ${req.userId} editando usuário ${id}`);
+      logger.info(`✏️ Admin ${req.userId} editando usuário ${id}`);
+      if (arquivo) logger.info(`📸 Nova foto recebida: ${arquivo.filename}`);
 
-    if (req.userRole === 'admin' && updates.role === 'super_admin') {
-      return res.status(403).json({ success: false, error: 'Administradores não podem criar Super Admins' });
-    }
-
-    delete updates.password;
-
-    if (updates.email && !updates.email.toLowerCase().endsWith('@iemasaoluiscentro.net')) {
-      return res.status(400).json({ success: false, error: 'Somente emails institucionais (@iemasaoluiscentro.net) são permitidos' });
-    }
-
-    const existingUser = await User.findById(id);
-    if (!existingUser) {
-      return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
-    }
-
-    if (req.userRole === 'admin' && existingUser.role === 'super_admin') {
-      return res.status(403).json({ success: false, error: 'Administradores não podem modificar dados de Super Admins' });
-    }
-
-    if (updates.email && updates.email !== existingUser.email) {
-      const emailExists = await User.findOne({ email: updates.email });
-      if (emailExists) {
-        return res.status(400).json({ success: false, error: 'Email já está em uso por outro usuário' });
+      // ============ PROTEÇÕES ============
+      if (req.userRole === 'admin' && updates.role === 'super_admin') {
+        return res.status(403).json({ success: false, error: 'Administradores não podem criar Super Admins' });
       }
-    }
 
-    if (updates.cpf) {
-      const cpfNumeros = updates.cpf.replace(/\D/g, '');
-      if (cpfNumeros !== existingUser.cpf) {
-        const cpfExists = await User.findOne({ cpf: cpfNumeros });
-        if (cpfExists) {
-          return res.status(400).json({ success: false, error: 'CPF já está em uso por outro usuário' });
+      delete updates.password;
+
+      // ============ CONVERSÃO DE TIPOS (FormData vem tudo string) ============
+      if (updates.ativo !== undefined) {
+        updates.ativo = updates.ativo === 'true' || updates.ativo === true;
+      }
+      if (updates.precisaAcessibilidade !== undefined) {
+        updates.precisaAcessibilidade =
+          updates.precisaAcessibilidade === 'true' || updates.precisaAcessibilidade === true;
+      }
+
+      // Arrays vindos como `campo[]` (FormData) ou como array JSON
+      if (req.body['refeicoesParticipa[]'] !== undefined) {
+        const raw = req.body['refeicoesParticipa[]'];
+        updates.refeicoesParticipa = Array.isArray(raw) ? raw : [raw];
+      } else if (typeof updates.refeicoesParticipa === 'string') {
+        try {
+          updates.refeicoesParticipa = JSON.parse(updates.refeicoesParticipa);
+        } catch {
+          updates.refeicoesParticipa = [updates.refeicoesParticipa];
         }
       }
-      updates.cpf = cpfNumeros;
-    }
 
-    if (updates.telefone) {
-      updates.telefone = updates.telefone.replace(/\D/g, '');
-    }
+      // ============ FOTO ============
+      if (arquivo) {
+        updates.fotoPerfil = `/uploads/${arquivo.filename}`;
+        updates.fotoPerfilTipo = arquivo.mimetype;
+        logger.info(`📸 Nova foto: ${updates.fotoPerfil}`);
+      } else if (updates.removerFoto === 'true' || updates.removerFoto === true) {
+        // Buscar foto antiga para apagar do disco
+        const userAntigo = await User.findById(id).select('fotoPerfil').lean();
+        if (userAntigo?.fotoPerfil) {
+          const caminhoAntigo = path.join(__dirname, '..', userAntigo.fotoPerfil);
+          if (fs.existsSync(caminhoAntigo)) {
+            try { fs.unlinkSync(caminhoAntigo); } catch (e) {
+              logger.warn('Erro ao deletar foto antiga:', e.message);
+            }
+          }
+        }
+        updates.fotoPerfil = null;
+        updates.fotoPerfilTipo = null;
+        logger.info(`🗑️ Foto removida do usuário ${id}`);
+      }
+      delete updates.removerFoto;
 
-    // 🔥 CONSENSO DE SALVAMENTO: Protege o Enum e salva o texto no lugar certo
-    if (updates.condicaoAcessibilidade) {
+      // ============ VALIDAÇÕES ============
+      if (updates.email && !updates.email.toLowerCase().endsWith('@iemasaoluiscentro.net')) {
+        return res.status(400).json({
+          success: false,
+          error: 'Somente emails institucionais (@iemasaoluiscentro.net) são permitidos'
+        });
+      }
+
+      const existingUser = await User.findById(id);
+      if (!existingUser) {
+        return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
+      }
+
+      if (req.userRole === 'admin' && existingUser.role === 'super_admin') {
+        return res.status(403).json({
+          success: false,
+          error: 'Administradores não podem modificar dados de Super Admins'
+        });
+      }
+
+      if (updates.email && updates.email !== existingUser.email) {
+        const emailExists = await User.findOne({ email: updates.email });
+        if (emailExists) {
+          return res.status(400).json({ success: false, error: 'Email já está em uso por outro usuário' });
+        }
+      }
+
+      if (updates.cpf) {
+        const cpfNumeros = updates.cpf.replace(/\D/g, '');
+        if (cpfNumeros !== existingUser.cpf) {
+          const cpfExists = await User.findOne({ cpf: cpfNumeros });
+          if (cpfExists) {
+            return res.status(400).json({ success: false, error: 'CPF já está em uso por outro usuário' });
+          }
+        }
+        updates.cpf = cpfNumeros;
+      }
+
+      if (updates.telefone) {
+        updates.telefone = updates.telefone.replace(/\D/g, '');
+      }
+
+      // ============ ACESSIBILIDADE (enum + texto livre) ============
+      if (updates.condicaoAcessibilidade) {
         const textoDigitado = updates.condicaoAcessibilidade.trim();
-        const categoriasValidas = ['visual', 'baixa_visao', 'cegueira', 'auditiva', 'deficiencia_auditiva', 'motora', 'deficiencia_fisica', 'intelectual', 'dislexia', 'discalculia', 'tdah', 'tea', 'altas_habilidades', 'deficiencia_multipla', 'surdocegueira', 'outra', 'nao_especificada'];
-        
-        // Se o texto digitado NÃO for uma palavra exata da lista (ex: "TEA + TDAH + TOC")
+        const categoriasValidas = [
+          'visual', 'baixa_visao', 'cegueira', 'auditiva', 'deficiencia_auditiva',
+          'motora', 'deficiencia_fisica', 'intelectual', 'dislexia', 'discalculia',
+          'tdah', 'tea', 'altas_habilidades', 'deficiencia_multipla', 'surdocegueira',
+          'outra', 'nao_especificada'
+        ];
+
         if (!categoriasValidas.includes(textoDigitado.toLowerCase())) {
-            updates.outraCondicao = textoDigitado; // Salva o texto aqui
-            updates.condicaoAcessibilidade = 'outra'; // Engana o banco com o Enum válido
+          updates.outraCondicao = textoDigitado;
+          updates.condicaoAcessibilidade = 'outra';
         }
-    }
-
-    // 🔥 GUARDAR VALORES ANTES DE ATUALIZAR
-    const turmaAntiga = (existingUser.turma || '').toString().trim();
-    const turmaNova = updates.turma !== undefined ? (updates.turma || '').toString().trim() : turmaAntiga;
-    const mudouTurma = updates.turma !== undefined && turmaAntiga !== turmaNova;
-    const eraAluno = existingUser.role === 'aluno';
-    const continuaAluno = (updates.role || existingUser.role) === 'aluno';
-
-    const user = await User.findByIdAndUpdate(id, updates, { new: true })
-      .select('-password -twoFactorSecret -twoFactorBackupCodes -twoFactorTempSecret');
-
-    // 🔥 SINCRONIZAR ARRAY turma.alunos SE A TURMA MUDOU
-    if (mudouTurma && eraAluno && continuaAluno && Turma) {
-      try {
-        await sincronizarTurmaDoAluno(existingUser._id, turmaAntiga, turmaNova);
-      } catch (syncError) {
-        logger.error('❌ Erro ao sincronizar turma.alunos:', syncError);
       }
-    }
 
-    logger.info(`✅ Usuário ${id} atualizado com sucesso`);
+      // ============ GUARDAR VALORES ANTES DE ATUALIZAR ============
+      const turmaAntiga = (existingUser.turma || '').toString().trim();
+      const turmaNova = updates.turma !== undefined
+        ? (updates.turma || '').toString().trim()
+        : turmaAntiga;
+      const mudouTurma = updates.turma !== undefined && turmaAntiga !== turmaNova;
+      const eraAluno = existingUser.role === 'aluno';
+      const continuaAluno = (updates.role || existingUser.role) === 'aluno';
 
-    res.json({
-      success: true,
-      message: 'Usuário atualizado com sucesso!',
-      user: {
-        id: user._id,
-        nome: user.nome,
-        email: user.email,
-        role: user.role,
-        ativo: user.ativo,
-        turma: user.turma
+      // ============ ATUALIZAR ============
+      const user = await User.findByIdAndUpdate(id, updates, { new: true })
+        .select('-password -twoFactorSecret -twoFactorBackupCodes -twoFactorTempSecret');
+
+      // ============ SINCRONIZAR turma.alunos ============
+      if (mudouTurma && eraAluno && continuaAluno && Turma) {
+        try {
+          await sincronizarTurmaDoAluno(existingUser._id, turmaAntiga, turmaNova);
+        } catch (syncError) {
+          logger.error('❌ Erro ao sincronizar turma.alunos:', syncError);
+        }
       }
-    });
 
-  } catch (error) {
-    logger.error('❌ Erro ao atualizar usuário:', error);
-    res.status(500).json({ success: false, error: 'Erro ao atualizar usuário: ' + error.message });
+      logger.info(`✅ Usuário ${id} atualizado com sucesso`);
+
+      res.json({
+        success: true,
+        message: 'Usuário atualizado com sucesso!',
+        user: {
+          id: user._id,
+          nome: user.nome,
+          email: user.email,
+          role: user.role,
+          ativo: user.ativo,
+          turma: user.turma,
+          fotoPerfil: user.fotoPerfil || null,
+          fotoPerfilTipo: user.fotoPerfilTipo || null
+        }
+      });
+
+    } catch (error) {
+      logger.error('❌ Erro ao atualizar usuário:', error);
+
+      // Se o erro veio do multer (fileFilter), retorna 400 amigável
+      if (error.message && error.message.includes('Formato de imagem')) {
+        return res.status(400).json({ success: false, error: error.message });
+      }
+      if (error.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ success: false, error: 'Imagem muito grande. Máximo 5MB.' });
+      }
+
+      res.status(500).json({ success: false, error: 'Erro ao atualizar usuário: ' + error.message });
+    }
   }
-});
+);
 
 router.post('/usuarios/:id/reset-password', authenticateTokenLocal, isSuperAdmin, verificarPermissaoSuperAdmin, async (req, res) => {
   try {

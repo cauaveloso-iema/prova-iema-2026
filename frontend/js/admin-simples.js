@@ -2498,6 +2498,38 @@ class AdminSimples {
             return '<tr><td colspan="8" class="empty-state">Nenhum usuário encontrado</td></tr>';
         }
 
+        // 🔥 Helper para gerar o Avatar (Foto ou Iniciais) — vindo do admin.js
+        const gerarAvatar = (user) => {
+            const nome = (user.nome || 'Usuário').trim();
+            const foto = user.fotoPerfil || null;
+
+            const partes = nome.split(/\s+/).filter(Boolean);
+            const iniciais = partes.length >= 2
+                ? (partes[0][0] + partes[partes.length - 1][0]).toUpperCase()
+                : nome.substring(0, 2).toUpperCase() || '?';
+
+            const paletaCores = ['#1e3a8a', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#ef4444', '#6366f1'];
+            let hash = 0;
+            for (let i = 0; i < nome.length; i++) {
+                hash = nome.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const cor = paletaCores[Math.abs(hash) % paletaCores.length];
+
+            if (foto) {
+                return `
+                    <div style="width: 38px; height: 38px; border-radius: 50%; overflow: hidden; flex-shrink: 0; border: 2px solid #e5e7eb; background: #f3f4f6;">
+                        <img src="${foto}" alt="${nome}" style="width: 100%; height: 100%; object-fit: cover; display: block;" onerror="this.onerror=null; this.parentElement.outerHTML='<div style=\\'width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:${cor};color:#fff;font-weight:600;font-size:13px;flex-shrink:0;border:2px solid #e5e7eb;\\'>${iniciais}</div>';">
+                    </div>
+                `;
+            }
+
+            return `
+                <div style="width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: ${cor}; color: #fff; font-weight: 600; font-size: 13px; flex-shrink: 0; border: 2px solid #e5e7eb;">
+                    ${iniciais}
+                </div>
+            `;
+        };
+
         return usuariosFiltrados.map(u => {
             const cpfFormatado = u.cpf ? u.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : '-';
             const telefoneFormatado = u.telefone ? u.telefone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3') : '-';
@@ -2527,7 +2559,15 @@ class AdminSimples {
 
             return `
                 <tr>
-                    <td><strong>${this.escapeHtml(u.nome) || 'N/A'}</strong></td>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            ${gerarAvatar(u)}
+                            <div style="display: flex; flex-direction: column; justify-content: center;">
+                                <strong>${this.escapeHtml(u.nome) || 'N/A'}</strong>
+                                ${u.role === 'aluno' && u.turma ? `<div style="font-size: 11px; color: #6b7280; margin-top: 4px;">Turma: ${u.turma}</div>` : ''}
+                            </div>
+                        </div>
+                    </td>
                     <td>${this.escapeHtml(u.email) || '-'}</td>
                     <td>${roleBadge}</td>
                     <td>${this.escapeHtml(u.matricula) || '-'}</td>
@@ -3062,8 +3102,12 @@ class AdminSimples {
             .replace(/\n/g, '\\n');
     }
 
-    // ============ ABRIR MODAL USUÁRIO (CURSOS + EIXOS DO BANCO) ============
+    // ============ ABRIR MODAL USUÁRIO (CURSOS + EIXOS + FOTO) ============
     async abrirModalUsuario(usuarioId = null) {
+        // 🔥 Reset de estado de foto
+        this._fotoParaUpload = null;
+        this._removerFoto = false;
+
         let usuario = null;
 
         if (usuarioId) {
@@ -3072,9 +3116,7 @@ class AdminSimples {
                 const response = await fetch(`/api/admin/usuarios/${usuarioId}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-
                 const data = await response.json();
-
                 if (data.success) {
                     usuario = data.user;
                 } else {
@@ -3138,11 +3180,13 @@ class AdminSimples {
         const departamento = usuario?.departamento || '';
         const titulacao = usuario?.titulacao || '';
         const precisaAcessibilidade = usuario?.precisaAcessibilidade || false;
-        // 🔥 USA O CAMPO CORRETO DO BANCO
         const condicaoAcessibilidade = usuario?.condicaoAcessibilidade || '';
         const atribuicoes = usuario?.atribuicoes || '';
         const perfilAlimentar = usuario?.perfilAlimentar || 'nao_informado';
         const refeicoesQueParticipa = usuario?.refeicoesParticipa || [];
+
+        // 🔥 FOTO
+        const fotoAtual = usuario?.fotoPerfil || null;
 
         const escapeStr = (str) => String(str || '').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 
@@ -3183,6 +3227,40 @@ class AdminSimples {
 
         modalBody.innerHTML = `
             <form id="userForm" style="padding: 20px;">
+                <!-- 🔥 FOTO DE PERFIL (vindo do admin.js) -->
+                <div class="form-group" style="text-align: center; margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 10px; font-weight: 600;">
+                        <i class="fas fa-camera"></i> Foto de Perfil
+                    </label>
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+                        <div id="fotoPreviewContainer" style="width: 110px; height: 110px;">
+                            ${fotoAtual ? `
+                                <img id="fotoPreview" src="${fotoAtual}" alt="Foto atual"
+                                    style="width: 110px; height: 110px; border-radius: 50%; object-fit: cover; border: 3px solid #1e3a8a; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                            ` : `
+                                <div id="fotoPreview" style="width: 110px; height: 110px; border-radius: 50%; background: #e5e7eb; display: flex; align-items: center; justify-content: center; border: 3px dashed #9ca3af; color: #6b7280;">
+                                    <i class="fas fa-user" style="font-size: 40px;"></i>
+                                </div>
+                            `}
+                        </div>
+                        <input type="file" id="userFotoInput" accept="image/png,image/jpeg,image/jpg,image/webp" style="display: none;">
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button"
+                                    onclick="document.getElementById('userFotoInput').click()"
+                                    style="padding: 6px 14px; border-radius: 8px; border: 1px solid #d1d5db; background: white; cursor: pointer; font-size: 13px;">
+                                <i class="fas fa-upload"></i> ${fotoAtual ? 'Trocar foto' : 'Escolher foto'}
+                            </button>
+                            ${fotoAtual ? `
+                                <button type="button" id="btnRemoverFoto"
+                                        style="padding: 6px 14px; border-radius: 8px; border: 1px solid #fca5a5; background: #fef2f2; color: #dc2626; cursor: pointer; font-size: 13px;">
+                                    <i class="fas fa-trash"></i> Remover
+                                </button>
+                            ` : ''}
+                        </div>
+                        <small style="color: #6b7280; font-size: 11px;">JPG, PNG ou WEBP · Máx. 5MB</small>
+                    </div>
+                </div>
+
                 <div class="form-group">
                     <label><i class="fas fa-user"></i> Nome Completo</label>
                     <input type="text" id="userNome" class="form-control" value="${escapeStr(nome)}" required>
@@ -3288,7 +3366,6 @@ class AdminSimples {
                         </div>
                     </div>
 
-                    <!-- 🔥 ACESSIBILIDADE COM DESCRIÇÃO (condicaoAcessibilidade) -->
                     <div class="checkbox-group" style="margin: 10px 0;">
                         <input type="checkbox" id="userAcessibilidade" ${precisaAcessibilidade ? 'checked' : ''}>
                         <label for="userAcessibilidade"><i class="fas fa-wheelchair"></i> Necessita de acessibilidade</label>
@@ -3634,7 +3711,6 @@ class AdminSimples {
 
             if (chkAcess && campoDesc) {
                 campoDesc.style.display = chkAcess.checked ? 'block' : 'none';
-
                 chkAcess.addEventListener('change', function() {
                     campoDesc.style.display = this.checked ? 'block' : 'none';
                     if (!this.checked && txtDesc) {
@@ -3642,6 +3718,57 @@ class AdminSimples {
                     } else if (this.checked && txtDesc) {
                         setTimeout(() => txtDesc.focus(), 150);
                     }
+                });
+            }
+
+            // 🔥 LISTENER DE UPLOAD DE FOTO (vindo do admin.js)
+            const fotoInput = document.getElementById('userFotoInput');
+            const fotoPreviewContainer = document.getElementById('fotoPreviewContainer');
+
+            if (fotoInput && fotoPreviewContainer) {
+                fotoInput.addEventListener('change', function(e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+
+                    const tiposPermitidos = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+                    if (!tiposPermitidos.includes(file.type)) {
+                        adminSimples.showToast('❌ Formato inválido. Use JPG, PNG ou WEBP.', 'error');
+                        fotoInput.value = '';
+                        return;
+                    }
+                    if (file.size > 5 * 1024 * 1024) {
+                        adminSimples.showToast('❌ Imagem muito grande. Máximo 5MB.', 'error');
+                        fotoInput.value = '';
+                        return;
+                    }
+
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                        fotoPreviewContainer.innerHTML = `
+                            <img id="fotoPreview" src="${ev.target.result}" alt="Preview"
+                                style="width: 110px; height: 110px; border-radius: 50%; object-fit: cover; border: 3px solid #10b981; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                        `;
+                    };
+                    reader.readAsDataURL(file);
+
+                    adminSimples._fotoParaUpload = file;
+                    adminSimples._removerFoto = false;
+                });
+            }
+
+            // 🔥 BOTÃO REMOVER FOTO (vindo do admin.js)
+            const btnRemover = document.getElementById('btnRemoverFoto');
+            if (btnRemover) {
+                btnRemover.addEventListener('click', function() {
+                    fotoPreviewContainer.innerHTML = `
+                        <div id="fotoPreview" style="width: 110px; height: 110px; border-radius: 50%; background: #e5e7eb; display: flex; align-items: center; justify-content: center; border: 3px dashed #9ca3af; color: #6b7280;">
+                            <i class="fas fa-user" style="font-size: 40px;"></i>
+                        </div>
+                    `;
+                    if (fotoInput) fotoInput.value = '';
+                    adminSimples._fotoParaUpload = null;
+                    adminSimples._removerFoto = true;
+                    adminSimples.showToast('🗑️ Foto marcada para remoção (salve para confirmar)', 'info');
                 });
             }
         }, 100);
@@ -3759,7 +3886,7 @@ class AdminSimples {
                 ativo: document.getElementById('userStatus').value === 'true'
             };
 
-            // Campos específicos por role
+            // Campos específicos por role (mantidos 100% iguais ao simples)
             if (role === 'aluno') {
                 dados.curso = document.getElementById('userCurso').value;
                 dados.turma = document.getElementById('userTurma').value;
@@ -3780,98 +3907,131 @@ class AdminSimples {
                 dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.atribuicoes = document.getElementById('userAtribuicoes')?.value || undefined;
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
-            } else if (role === 'coordenador_patio') {
+            } else if (role === 'coordenacao_patio') {
                 dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.atribuicoes = document.getElementById('userAtribuicoes')?.value || undefined;
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
-
             } else if (role === 'admin') {
                 dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.atribuicoes = document.getElementById('userAtribuicoes')?.value || undefined;
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
-
             } else if (role === 'cozinha') {
                 dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.atribuicoes = document.getElementById('userAtribuicoes')?.value || undefined;
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
-
             } else if (role === 'enfermaria') {
                 dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.especialidade = document.getElementById('userEspecialidade')?.value || undefined;
                 dados.coren = document.getElementById('userCoren')?.value || undefined;
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
-
             } else if (role === 'supervisao') {
                 dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
-
             } else if (role === 'psicologia') {
                 dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.especialidade = document.getElementById('userEspecialidade')?.value || undefined;
                 dados.crp = document.getElementById('userCrp')?.value || undefined;
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
-
             } else if (role === 'assistente-social') {
                 dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.cress = document.getElementById('userCress')?.value || undefined;
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
-
             } else if (role === 'protagonismo') {
                 dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
-
             } else if (role === 'biblioteca') {
                 dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
-
             } else if (role === 'secretaria') {
                 dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
-
             } else if (role === 'recepcao') {
                 dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
-
             } else if (role === 'gestao-adm') {
                 dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
-
             } else if (role === 'gestao_geral') {
-                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.departamento = document.getElementById('departamentoUsuario')?.value
+                                || document.getElementById('userDepartamento')?.value || undefined;
                 dados.atribuicoes = document.getElementById('userAtribuicoes')?.value || undefined;
-                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
+                dados.matricula = document.getElementById('matriculaUsuario')?.value
+                            || document.getElementById('userMatricula')?.value || undefined;
             }
 
-            // Se for criação (sem ID), adicionar senha
             if (!id) {
                 dados.password = document.getElementById('userPassword').value;
                 dados.forcePasswordChange = true;
             }
 
+            // ============================================================
+            // 🔥 DETECTA SE PRECISA ENVIAR FOTO (lógica do admin.js)
+            // ============================================================
+            const temNovaFoto = this._fotoParaUpload instanceof File;
+            const removerFoto = this._removerFoto === true;
+            const precisaFormData = temNovaFoto || removerFoto;
+
             console.log('📤 Dados a serem enviados:', dados);
+            console.log('📸 Foto:', temNovaFoto ? 'NOVA' : (removerFoto ? 'REMOVER' : 'NENHUMA'));
 
             const url = id ? `/api/admin/usuarios/${id}` : `/api/admin/usuarios`;
             const method = id ? 'PUT' : 'POST';
+            const token = localStorage.getItem('auth_token');
 
-            const response = await fetch(url, {
-                method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-                },
-                body: JSON.stringify(dados)
-            });
+            // Desabilita botão durante salvamento
+            const btnSalvar = document.getElementById('modalSaveBtn');
+            if (btnSalvar) {
+                btnSalvar.disabled = true;
+                btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+            }
+
+            let response;
+
+            if (precisaFormData) {
+                // 🔥 COM FOTO → FormData (multipart/form-data)
+                const formData = new FormData();
+
+                Object.keys(dados).forEach(k => {
+                    const valor = dados[k];
+                    if (Array.isArray(valor)) {
+                        valor.forEach(v => formData.append(`${k}[]`, v));
+                    } else if (valor !== undefined && valor !== null) {
+                        formData.append(k, valor);
+                    }
+                });
+
+                if (temNovaFoto) formData.append('foto', this._fotoParaUpload);
+                if (removerFoto) formData.append('removerFoto', 'true');
+
+                response = await fetch(url, {
+                    method,
+                    headers: {
+                        // ⚠️ NÃO envia Content-Type — o browser define com boundary do multipart
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+            } else {
+                // 🔥 SEM FOTO → JSON puro
+                response = await fetch(url, {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(dados)
+                });
+            }
 
             const data = await response.json();
 
             if (data.success) {
+                this._fotoParaUpload = null;
+                this._removerFoto = false;
+
                 this.showToast(id ? 'Usuário atualizado com sucesso!' : 'Usuário criado com sucesso!', 'success');
                 this.fecharModal();
-
-                // 🔥 INVALIDA TODOS OS CACHES (não chama carregarDashboard!)
                 this.invalidarCacheUsuarios();
-
-                // 🔥 Recarrega a lista de usuários (mantém na tela de usuários)
                 await this.carregarUsuarios(1);
             } else {
                 throw new Error(data.error || 'Erro ao salvar usuário');
@@ -3880,6 +4040,12 @@ class AdminSimples {
         } catch (error) {
             console.error('❌ Erro ao salvar usuário:', error);
             this.showToast('Erro: ' + error.message, 'error');
+
+            const btnSalvar = document.getElementById('modalSaveBtn');
+            if (btnSalvar) {
+                btnSalvar.disabled = false;
+                btnSalvar.innerHTML = '<i class="fas fa-save"></i> Salvar';
+            }
         }
     }
 

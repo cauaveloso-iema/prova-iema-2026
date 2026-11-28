@@ -10755,13 +10755,51 @@ class AdminPanel {
         `;
     }
 
+    // ============================================================================
+    // ✅ GERA LINHAS DA TABELA DE USUÁRIOS (COM FOTO DE PERFIL AO LADO DO NOME)
+    // ============================================================================
     gerarLinhasUsuarios(usuarios) {
         if (!usuarios || usuarios.length === 0) {
             return `<tr><td colspan="10" style="text-align: center; padding: 40px;">Nenhum usuário encontrado</td></tr>`;
         }
 
+        // Helper para gerar o Avatar (Foto ou Iniciais)
+        const gerarAvatar = (user) => {
+            const nome = (user.nome || 'Usuário').trim();
+            const foto = user.fotoPerfil || null;
+
+            // Pega as iniciais (ex: "Adrianne Velozo" -> "AV")
+            const partes = nome.split(/\s+/).filter(Boolean);
+            const iniciais = partes.length >= 2
+                ? (partes[0][0] + partes[partes.length - 1][0]).toUpperCase()
+                : nome.substring(0, 2).toUpperCase() || '?';
+
+            // Cores para o fallback (caso não tenha foto)
+            const paletaCores = ['#1e3a8a', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#ef4444', '#6366f1'];
+            let hash = 0;
+            for (let i = 0; i < nome.length; i++) {
+                hash = nome.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const cor = paletaCores[Math.abs(hash) % paletaCores.length];
+
+            // Se tiver foto, mostra a foto
+            if (foto) {
+                return `
+                    <div style="width: 38px; height: 38px; border-radius: 50%; overflow: hidden; flex-shrink: 0; border: 2px solid #e5e7eb; background: #f3f4f6;">
+                        <img src="${foto}" alt="${nome}" style="width: 100%; height: 100%; object-fit: cover; display: block;" onerror="this.onerror=null; this.parentElement.outerHTML='<div style=\\'width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:${cor};color:#fff;font-weight:600;font-size:13px;flex-shrink:0;border:2px solid #e5e7eb;\\'>${iniciais}</div>';">
+                    </div>
+                `;
+            }
+
+            // Se não tiver foto, mostra as iniciais
+            return `
+                <div style="width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: ${cor}; color: #fff; font-weight: 600; font-size: 13px; flex-shrink: 0; border: 2px solid #e5e7eb;">
+                    ${iniciais}
+                </div>
+            `;
+        };
+
         return usuarios.map(user => {
-            // Badges de Perfil
             let roleBadge = `<span class="role-badge">${user.role}</span>`;
             if (user.role === 'aluno') roleBadge = '<span class="role-badge aluno"><i class="fas fa-user-graduate"></i> Aluno</span>';
             if (user.role === 'professor') roleBadge = '<span class="role-badge professor"><i class="fas fa-chalkboard-teacher"></i> Professor</span>';
@@ -10779,8 +10817,14 @@ class AdminPanel {
             return `
                 <tr data-user-id="${user._id}">
                     <td class="col-nome">
-                        <strong>${user.nome || 'N/A'}</strong>
-                        ${user.role === 'aluno' && user.turma ? `<div style="font-size: 11px; color: #6b7280; margin-top: 4px;">Turma: ${user.turma}</div>` : ''}
+                        <!-- 🔥 AQUI ESTÁ A ÚNICA MUDANÇA: A div flex envolvendo o avatar e o nome -->
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            ${gerarAvatar(user)}
+                            <div style="display: flex; flex-direction: column; justify-content: center;">
+                                <strong>${user.nome || 'N/A'}</strong>
+                                ${user.role === 'aluno' && user.turma ? `<div style="font-size: 11px; color: #6b7280; margin-top: 4px;">Turma: ${user.turma}</div>` : ''}
+                            </div>
+                        </div>
                     </td>
                     <td class="col-email">${user.email || '-'}</td>
                     <td class="col-role">${roleBadge}</td>
@@ -11729,19 +11773,21 @@ class AdminPanel {
 
     // ============ MODAL USUÁRIO ============
 
-    // ============ ABRIR MODAL USUÁRIO (CURSOS + EIXOS DO BANCO) ============
+    // ============ ABRIR MODAL USUÁRIO (CURSOS + EIXOS + FOTO) ============
     async abrirModalUsuario(usuarioId = null) {
+        // 🔥 Reset de estado de foto
+        this._fotoParaUpload = null;
+        this._removerFoto = false;
+
         let usuario = null;
-        
+
         if (usuarioId) {
             try {
                 const token = localStorage.getItem('auth_token');
                 const response = await fetch(`/api/admin/usuarios/${usuarioId}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                
                 const data = await response.json();
-                
                 if (data.success) {
                     usuario = data.user;
                 } else {
@@ -11805,14 +11851,16 @@ class AdminPanel {
         const departamento = usuario?.departamento || '';
         const titulacao = usuario?.titulacao || '';
         const precisaAcessibilidade = usuario?.precisaAcessibilidade || false;
-        // 🔥 USA O CAMPO CORRETO DO BANCO
         const condicaoAcessibilidade = usuario?.condicaoAcessibilidade || '';
         const atribuicoes = usuario?.atribuicoes || '';
         const perfilAlimentar = usuario?.perfilAlimentar || 'nao_informado';
         const refeicoesQueParticipa = usuario?.refeicoesParticipa || [];
-        
+
+        // 🔥 FOTO
+        const fotoAtual = usuario?.fotoPerfil || null;
+
         const escapeStr = (str) => String(str || '').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-        
+
         const gerarOpcoesCursos = () => {
             if (!cursosDoBanco || cursosDoBanco.length === 0) {
                 return '<option value="">Nenhum curso disponível</option>';
@@ -11832,7 +11880,7 @@ class AdminPanel {
                 return '<option value="">Nenhum eixo cadastrado</option>';
             }
             let options = '<option value="">Selecione um eixo...</option>';
-            const eixosOrdenados = [...eixosDoBanco].sort((a, b) => 
+            const eixosOrdenados = [...eixosDoBanco].sort((a, b) =>
                 (a.label || a.nome).localeCompare(b.label || b.nome)
             );
             eixosOrdenados.forEach(item => {
@@ -11845,21 +11893,55 @@ class AdminPanel {
             });
             return options;
         };
-        
+
         const modalBody = document.getElementById('modalBody');
-        
+
         modalBody.innerHTML = `
             <form id="userForm" style="padding: 20px;">
+                <!-- 🔥 FOTO DE PERFIL -->
+                <div class="form-group" style="text-align: center; margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 10px; font-weight: 600;">
+                        <i class="fas fa-camera"></i> Foto de Perfil
+                    </label>
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+                        <div id="fotoPreviewContainer" style="width: 110px; height: 110px;">
+                            ${fotoAtual ? `
+                                <img id="fotoPreview" src="${fotoAtual}" alt="Foto atual"
+                                    style="width: 110px; height: 110px; border-radius: 50%; object-fit: cover; border: 3px solid #1e3a8a; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                            ` : `
+                                <div id="fotoPreview" style="width: 110px; height: 110px; border-radius: 50%; background: #e5e7eb; display: flex; align-items: center; justify-content: center; border: 3px dashed #9ca3af; color: #6b7280;">
+                                    <i class="fas fa-user" style="font-size: 40px;"></i>
+                                </div>
+                            `}
+                        </div>
+                        <input type="file" id="userFotoInput" accept="image/png,image/jpeg,image/jpg,image/webp" style="display: none;">
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button"
+                                    onclick="document.getElementById('userFotoInput').click()"
+                                    style="padding: 6px 14px; border-radius: 8px; border: 1px solid #d1d5db; background: white; cursor: pointer; font-size: 13px;">
+                                <i class="fas fa-upload"></i> ${fotoAtual ? 'Trocar foto' : 'Escolher foto'}
+                            </button>
+                            ${fotoAtual ? `
+                                <button type="button" id="btnRemoverFoto"
+                                        style="padding: 6px 14px; border-radius: 8px; border: 1px solid #fca5a5; background: #fef2f2; color: #dc2626; cursor: pointer; font-size: 13px;">
+                                    <i class="fas fa-trash"></i> Remover
+                                </button>
+                            ` : ''}
+                        </div>
+                        <small style="color: #6b7280; font-size: 11px;">JPG, PNG ou WEBP · Máx. 5MB</small>
+                    </div>
+                </div>
+
                 <div class="form-group">
                     <label><i class="fas fa-user"></i> Nome Completo</label>
                     <input type="text" id="userNome" class="form-control" value="${escapeStr(nome)}" required>
                 </div>
-                
+
                 <div class="form-group">
                     <label><i class="fas fa-envelope"></i> Email</label>
                     <input type="email" id="userEmail" class="form-control" value="${escapeStr(email)}" required>
                 </div>
-                
+
                 <div class="form-row">
                     <div class="form-group">
                         <label><i class="fas fa-user-tag"></i> Perfil</label>
@@ -11883,7 +11965,7 @@ class AdminPanel {
                             <option value="recepcao" ${role === 'recepcao' ? 'selected' : ''}>Recepção</option>
                         </select>
                     </div>
-                    
+
                     <div class="form-group">
                         <label><i class="fas fa-circle"></i> Status</label>
                         <select id="userStatus" class="form-control">
@@ -11892,7 +11974,7 @@ class AdminPanel {
                         </select>
                     </div>
                 </div>
-                
+
                 <div class="form-row">
                     <div class="form-group">
                         <label><i class="fas fa-id-card"></i> CPF</label>
@@ -11903,12 +11985,12 @@ class AdminPanel {
                         <input type="text" id="userTelefone" class="form-control" value="${telefone}" oninput="formatarTelefone(this)" maxlength="15" required>
                     </div>
                 </div>
-                
+
                 <div class="form-group">
                     <label><i class="fas fa-hashtag"></i> Matrícula</label>
                     <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
                 </div>
-                
+
                 <!-- ALUNO -->
                 <div id="alunoFields" class="role-specific" style="${role === 'aluno' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
@@ -11924,7 +12006,7 @@ class AdminPanel {
                             <input type="text" id="userTurma" class="form-control" value="${escapeStr(turma)}" placeholder="Ex: 101, 102">
                         </div>
                     </div>
-                    
+
                     <div style="margin-top: 15px; padding: 15px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
                         <h4 style="margin: 0 0 10px 0; font-size: 0.9rem; color: #334155;">
                             <i class="fas fa-utensils"></i> Preferências Alimentares
@@ -11938,7 +12020,7 @@ class AdminPanel {
                                 <option value="nao_informado" ${perfilAlimentar === 'nao_informado' ? 'selected' : ''}>❓ Prefiro não informar</option>
                             </select>
                         </div>
-                        
+
                         <div id="refeicoesDiv" style="${perfilAlimentar === 'sempre' || perfilAlimentar === 'as_vezes' ? 'display: block;' : 'display: none;'}">
                             <label>Quais refeições participa?</label>
                             <div style="display: flex; gap: 15px; margin-top: 8px;">
@@ -11954,13 +12036,12 @@ class AdminPanel {
                             </div>
                         </div>
                     </div>
-                    
-                    <!-- 🔥 ACESSIBILIDADE COM DESCRIÇÃO (condicaoAcessibilidade) -->
+
                     <div class="checkbox-group" style="margin: 10px 0;">
                         <input type="checkbox" id="userAcessibilidade" ${precisaAcessibilidade ? 'checked' : ''}>
                         <label for="userAcessibilidade"><i class="fas fa-wheelchair"></i> Necessita de acessibilidade</label>
                     </div>
-                    
+
                     <div id="campoDescricaoAcessibilidade" style="display: ${precisaAcessibilidade ? 'block' : 'none'}; margin: 12px 0 0 0; background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 10px; padding: 15px;">
                         <label for="userCondicaoAcessibilidade" style="font-weight: 600; font-size: 13px; color: #5b21b6; display: block; margin-bottom: 8px;">
                             <i class="fas fa-pen"></i> Descreva a acessibilidade
@@ -11975,7 +12056,7 @@ class AdminPanel {
                         </small>
                     </div>
                 </div>
-                
+
                 <!-- PROFESSOR -->
                 <div id="professorFields" class="role-specific" style="${role === 'professor' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
@@ -11986,7 +12067,7 @@ class AdminPanel {
                             </select>
                             ${eixosDoBanco.length === 0 ? `
                                 <small style="color: #ef4444; font-size: 11px;">
-                                    <i class="fas fa-exclamation-triangle"></i> Nenhum eixo cadastrado. 
+                                    <i class="fas fa-exclamation-triangle"></i> Nenhum eixo cadastrado.
                                     <a href="#" onclick="admin.closeModal(); admin.loadEixos(); return false;" style="color: #3b82f6;">
                                         Cadastrar eixos
                                     </a>
@@ -12003,7 +12084,7 @@ class AdminPanel {
                         <input type="text" id="userTitulacao" class="form-control" value="${escapeStr(titulacao)}">
                     </div>
                 </div>
-                
+
                 <!-- SETOR PEDAGÓGICO -->
                 <div id="setorPedagogicoFields" class="role-specific" style="${role === 'setor_pedagogico' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
@@ -12070,14 +12151,14 @@ class AdminPanel {
                     </div>
                     <div class="form-group">
                         <label><i class="fas fa-brain"></i> Especialidade</label>
-                        <input type="text" id="userEspecialidade" class="form-control" 
-                            value="${escapeStr(usuario?.especialidade || '')}" 
+                        <input type="text" id="userEspecialidade" class="form-control"
+                            value="${escapeStr(usuario?.especialidade || '')}"
                             placeholder="Ex: Psicologia Clínica, Psicopedagogia...">
                     </div>
                     <div class="form-group">
                         <label><i class="fas fa-id-badge"></i> CRP</label>
-                        <input type="text" id="userCrp" class="form-control" 
-                            value="${escapeStr(usuario?.crp || '')}" 
+                        <input type="text" id="userCrp" class="form-control"
+                            value="${escapeStr(usuario?.crp || '')}"
                             placeholder="Ex: CRP 06/123456">
                     </div>
                     <div class="info-card" style="background: #ccfbf1; margin-top: 10px;">
@@ -12100,8 +12181,8 @@ class AdminPanel {
                     </div>
                     <div class="form-group">
                         <label><i class="fas fa-id-badge"></i> CRESS</label>
-                        <input type="text" id="userCress" class="form-control" 
-                            value="${escapeStr(usuario?.cress || '')}" 
+                        <input type="text" id="userCress" class="form-control"
+                            value="${escapeStr(usuario?.cress || '')}"
                             placeholder="Ex: CRESS 12345">
                     </div>
                     <div class="info-card" style="background: #ede9fe; margin-top: 10px;">
@@ -12235,7 +12316,7 @@ class AdminPanel {
                         <span>A Enfermaria gerencia atendimentos de alunos, registrando queixas e desfechos.</span>
                     </div>
                 </div>
-                
+
                 <!-- COZINHA -->
                 <div id="cozinhaFields" class="role-specific" style="${role === 'cozinha' ? 'display: block;' : 'display: none;'}">
                     <div class="form-group">
@@ -12247,7 +12328,7 @@ class AdminPanel {
                         <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
                     </div>
                 </div>
-                
+
                 ${!id ? `
                 <div class="form-group">
                     <label><i class="fas fa-key"></i> Senha Temporária</label>
@@ -12260,7 +12341,7 @@ class AdminPanel {
                     <small style="color: #6c757d;">O usuário usará esta senha para fazer login</small>
                 </div>
                 ` : ''}
-                
+
                 <div class="info-card" style="background: #eef2ff; padding: 10px; border-radius: 8px; margin-top: 10px;">
                     <i class="fas fa-info-circle"></i>
                     <span>Email institucional (@iemasaoluiscentro.net) é obrigatório</span>
@@ -12268,22 +12349,22 @@ class AdminPanel {
             </form>
         `;
 
-        document.getElementById('modalTitle').innerHTML = usuario ? 
-            '<i class="fas fa-edit"></i> Editar Usuário' : 
+        document.getElementById('modalTitle').innerHTML = usuario ?
+            '<i class="fas fa-edit"></i> Editar Usuário' :
             '<i class="fas fa-user-plus"></i> Novo Usuário';
-        
+
         setTimeout(() => {
             const modalSaveBtn = document.getElementById('modalSaveBtn');
             if (modalSaveBtn) {
                 modalSaveBtn.onclick = () => this.salvarUsuario(id);
                 modalSaveBtn.style.display = 'inline-block';
             }
-            
+
             const roleSelect = document.getElementById('userRole');
             if (roleSelect) {
                 roleSelect.addEventListener('change', () => this.toggleCamposRole());
             }
-            
+
             const perfilSelect = document.getElementById('userPerfilAlimentar');
             if (perfilSelect) {
                 perfilSelect.addEventListener('change', () => {
@@ -12301,7 +12382,6 @@ class AdminPanel {
 
             if (chkAcess && campoDesc) {
                 campoDesc.style.display = chkAcess.checked ? 'block' : 'none';
-
                 chkAcess.addEventListener('change', function() {
                     campoDesc.style.display = this.checked ? 'block' : 'none';
                     if (!this.checked && txtDesc) {
@@ -12311,8 +12391,59 @@ class AdminPanel {
                     }
                 });
             }
+
+            // 🔥 LISTENER DE UPLOAD DE FOTO
+            const fotoInput = document.getElementById('userFotoInput');
+            const fotoPreviewContainer = document.getElementById('fotoPreviewContainer');
+
+            if (fotoInput && fotoPreviewContainer) {
+                fotoInput.addEventListener('change', function(e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+
+                    const tiposPermitidos = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+                    if (!tiposPermitidos.includes(file.type)) {
+                        admin.showToast('❌ Formato inválido. Use JPG, PNG ou WEBP.', 'error');
+                        fotoInput.value = '';
+                        return;
+                    }
+                    if (file.size > 5 * 1024 * 1024) {
+                        admin.showToast('❌ Imagem muito grande. Máximo 5MB.', 'error');
+                        fotoInput.value = '';
+                        return;
+                    }
+
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                        fotoPreviewContainer.innerHTML = `
+                            <img id="fotoPreview" src="${ev.target.result}" alt="Preview"
+                                style="width: 110px; height: 110px; border-radius: 50%; object-fit: cover; border: 3px solid #10b981; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                        `;
+                    };
+                    reader.readAsDataURL(file);
+
+                    admin._fotoParaUpload = file;
+                    admin._removerFoto = false;
+                });
+            }
+
+            // 🔥 BOTÃO REMOVER FOTO
+            const btnRemover = document.getElementById('btnRemoverFoto');
+            if (btnRemover) {
+                btnRemover.addEventListener('click', function() {
+                    fotoPreviewContainer.innerHTML = `
+                        <div id="fotoPreview" style="width: 110px; height: 110px; border-radius: 50%; background: #e5e7eb; display: flex; align-items: center; justify-content: center; border: 3px dashed #9ca3af; color: #6b7280;">
+                            <i class="fas fa-user" style="font-size: 40px;"></i>
+                        </div>
+                    `;
+                    if (fotoInput) fotoInput.value = '';
+                    admin._fotoParaUpload = null;
+                    admin._removerFoto = true;
+                    admin.showToast('🗑️ Foto marcada para remoção (salve para confirmar)', 'info');
+                });
+            }
         }, 100);
-        
+
         this.openModal();
     }
 
@@ -12464,9 +12595,9 @@ class AdminPanel {
     async salvarUsuario(id = null) {
         try {
             console.log('💾 Salvando usuário. ID:', id);
-            
+
             const role = document.getElementById('userRole').value;
-            
+
             const dados = {
                 nome: document.getElementById('userNome').value,
                 email: document.getElementById('userEmail').value,
@@ -12477,20 +12608,20 @@ class AdminPanel {
                 ativo: document.getElementById('userStatus').value === 'true'
             };
 
-            // Campos específicos por role
+            // ============ CAMPOS POR ROLE (mantidos 100% iguais) ============
             if (role === 'aluno') {
                 dados.curso = document.getElementById('userCurso').value;
                 dados.turma = document.getElementById('userTurma').value;
-                
+
                 // 🔥 ACESSIBILIDADE — USA condicaoAcessibilidade (campo real do banco)
                 const chkAcess = document.getElementById('userAcessibilidade');
                 const txtCond = document.getElementById('userCondicaoAcessibilidade');
-                
+
                 dados.precisaAcessibilidade = chkAcess ? chkAcess.checked : false;
                 dados.condicaoAcessibilidade = (chkAcess && chkAcess.checked && txtCond)
                     ? (txtCond.value || '').trim()
                     : '';
-                    
+
             } else if (role === 'professor') {
                 dados.eixo = document.getElementById('userEixo').value;
                 dados.departamento = document.getElementById('userDepartamento').value || undefined;
@@ -12508,7 +12639,7 @@ class AdminPanel {
                 dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.atribuicoes = document.getElementById('userAtribuicoes')?.value || undefined;
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
-            
+
             } else if (role === 'cozinha') {
                 dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.atribuicoes = document.getElementById('userAtribuicoes')?.value || undefined;
@@ -12538,7 +12669,7 @@ class AdminPanel {
             } else if (role === 'protagonismo') {
                 dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
-            
+
             } else if (role === 'biblioteca') {
                 dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
@@ -12554,36 +12685,91 @@ class AdminPanel {
             } else if (role === 'gestao-adm') {
                 dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
-            
+
             } else if (role === 'gestao_geral') {
                 dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.atribuicoes = document.getElementById('userAtribuicoes')?.value || undefined;
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
             }
-            
+
             // Se for criação (sem ID), adicionar senha
             if (!id) {
                 dados.password = document.getElementById('userPassword').value;
                 dados.forcePasswordChange = true;
             }
 
+            // ============================================================
+            // 🔥 NOVO: DETECTA SE PRECISA ENVIAR FOTO
+            // ============================================================
+            const temNovaFoto = this._fotoParaUpload instanceof File;
+            const removerFoto = this._removerFoto === true;
+            const precisaFormData = temNovaFoto || removerFoto;
+
             console.log('📤 Dados a serem enviados:', dados);
+            console.log('📸 Foto:', temNovaFoto ? 'NOVA' : (removerFoto ? 'REMOVER' : 'NENHUMA'));
 
             const url = id ? `${this.apiBase}/usuarios/${id}` : `${this.apiBase}/usuarios`;
             const method = id ? 'PUT' : 'POST';
+            const token = localStorage.getItem('auth_token');
 
-            const response = await fetch(url, {
-                method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-                },
-                body: JSON.stringify(dados)
-            });
+            // ============ DESABILITA BOTÃO DURANTE SALVAMENTO ============
+            const btnSalvar = document.getElementById('modalSaveBtn');
+            const textoOriginalBtn = btnSalvar?.innerHTML;
+            if (btnSalvar) {
+                btnSalvar.disabled = true;
+                btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+            }
+
+            let response;
+
+            if (precisaFormData) {
+                // 🔥 COM FOTO → envia via FormData (multipart/form-data)
+                const formData = new FormData();
+
+                // Adiciona todos os campos (arrays tratados com [])
+                Object.keys(dados).forEach(k => {
+                    const valor = dados[k];
+                    if (Array.isArray(valor)) {
+                        valor.forEach(v => formData.append(`${k}[]`, v));
+                    } else if (valor !== undefined && valor !== null) {
+                        formData.append(k, valor);
+                    }
+                });
+
+                if (temNovaFoto) {
+                    formData.append('foto', this._fotoParaUpload);
+                }
+                if (removerFoto) {
+                    formData.append('removerFoto', 'true');
+                }
+
+                response = await fetch(url, {
+                    method,
+                    headers: {
+                        // ⚠️ NÃO envia Content-Type — o browser define com boundary do multipart
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+            } else {
+                // 🔥 SEM FOTO → JSON puro (comportamento original preservado)
+                response = await fetch(url, {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(dados)
+                });
+            }
 
             const data = await response.json();
 
             if (data.success) {
+                // Limpa estado de foto
+                this._fotoParaUpload = null;
+                this._removerFoto = false;
+
                 this.showToast(id ? 'Usuário atualizado com sucesso!' : 'Usuário criado com sucesso!', 'success');
                 this.closeModal();
                 this.invalidarCacheUsuarios();
@@ -12596,6 +12782,13 @@ class AdminPanel {
         } catch (error) {
             console.error('❌ Erro ao salvar usuário:', error);
             this.showToast('Erro: ' + error.message, 'error');
+
+            // 🔥 REABILITA BOTÃO EM CASO DE ERRO
+            const btnSalvar = document.getElementById('modalSaveBtn');
+            if (btnSalvar) {
+                btnSalvar.disabled = false;
+                btnSalvar.innerHTML = '<i class="fas fa-save"></i> Salvar';
+            }
         }
     }
     
